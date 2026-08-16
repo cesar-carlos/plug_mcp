@@ -4,18 +4,45 @@ Servidor MCP remoto (Streamable HTTP) que permite a uma IA consultar o ERP Se7e 
 
 ## Requisitos
 
-- Node.js 22+
+- Node.js 24.19.0+ (LTS Krypton; `.nvmrc`)
 - PostgreSQL (produção). Testes unitários usam repositórios in-memory.
 
 ## Setup
 
+### Produção neste servidor (PM2)
+
+Postgres e Redis ficam no Docker. O processo Node é gerenciado pelo PM2 (mesmo daemon de `plug_server` / Chatwoot), em `fork` com 1 instância — sessões MCP são in-memory e não suportam cluster.
+
+```bash
+nvm use
+npm install
+npm run build
+docker compose up -d postgres redis
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Para o container Node em vez do PM2: `docker compose --profile container up --build -d mcp`.
+
+### Local (Node + Postgres no Docker)
+
 ```bash
 cp .env.example .env
+nvm use
+docker compose up -d postgres redis
 npm install
 npm run db:migrate
 npm run db:seed
 npm run dev
 ```
+
+### Stack completo no Docker
+
+```bash
+docker compose up --build
+```
+
+Sobe PostgreSQL 16 (porta do host `5433`, para não colidir com um Postgres local na `5432`), Redis só na rede interna (rate limit de `/mcp`) e o MCP. O entrypoint aplica as migrations antes de escutar. Credenciais do Client de serviço (`PLUG_SERVER_CLIENT_EMAIL` / `PLUG_SERVER_CLIENT_PASSWORD`) vêm de um `.env` na raiz, se existir.
 
 Health: `GET http://127.0.0.1:3333/health`
 
@@ -38,7 +65,7 @@ Todos os scripts que rodam o servidor ou scripts de banco carregam `.env` automa
 | `npm run db:migrate`   | Ledger `_mcp_migrations`: aplica `drizzle/*.sql` na ordem                       |
 | `npm run db:seed`      | Reconcilia o catálogo por slug (`aplicarSeed`)                                  |
 
-Docker: `Dockerfile` multi-stage (`node:22-alpine`). CI: `.github/workflows/ci.yml` roda lint, format:check, tsc e `npm test` (nunca `test:live`).
+Docker: `Dockerfile` multi-stage (`node:24.19.0-alpine`) + `docker-compose.yml` (Postgres, Redis, MCP). CI: `.github/workflows/ci.yml` lê `.nvmrc`, roda lint, format:check, tsc e `npm test` (nunca `test:live`).
 
 ## Testes live contra o plug-server real
 

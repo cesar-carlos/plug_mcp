@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: se7e_mcp
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d se7e_mcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mcp:
+    profiles: ["container"]
+    build: .
+    ports:
+      - "127.0.0.1:3333:3333"
+    environment:
+      NODE_ENV: production
+      HOST: "0.0.0.0"
+      PORT: "3333"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://mcp.se7esistemassinop.com.br}
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/se7e_mcp
+      REDIS_URL: redis://redis:6379
+      MCP_JWT_SECRET: ${MCP_JWT_SECRET:-change-me-mcp-jwt-secret-min-32-chars}
+      MCP_JWT_ISSUER: ${MCP_JWT_ISSUER:-se7e-mcp}
+      MCP_ENCRYPTION_KEY: ${MCP_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      MCP_SESSION_SECRET: ${MCP_SESSION_SECRET:-change-me-session-secret-min-32-chars}
+      PLUG_SERVER_BASE_URL: ${PLUG_SERVER_BASE_URL:-https://plug-server.se7esistemassinop.com.br}
+      PLUG_SERVER_CLIENT_EMAIL: ${PLUG_SERVER_CLIENT_EMAIL:-}
+      PLUG_SERVER_CLIENT_PASSWORD: ${PLUG_SERVER_CLIENT_PASSWORD:-}
+      MCP_DEV_BEARER_TOKEN: ${MCP_DEV_BEARER_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

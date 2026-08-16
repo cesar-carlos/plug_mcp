@@ -3,5 +3,6 @@ dist/
 coverage/
 .env
 *.log
+logs/
 .DS_Store
 drizzle/meta/

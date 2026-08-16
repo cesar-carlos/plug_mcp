@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import pg from "pg";
 import { loadConfig } from "../../config/env.js";
 import * as schema from "../persistence/schema.js";
@@ -39,7 +39,7 @@ const run = async (): Promise<void> => {
         texto: schema.fonteAnotacao.texto,
       })
       .from(schema.fonteAnotacao)
-      .where(isNull(schema.fonteAnotacao.embedding));
+      .where(sql`embedding is null`);
     const consultas = await db
       .select({
         id: schema.consultaMemoria.id,
@@ -49,7 +49,7 @@ const run = async (): Promise<void> => {
         observacao: schema.consultaMemoria.observacao,
       })
       .from(schema.consultaMemoria)
-      .where(isNull(schema.consultaMemoria.embedding));
+      .where(sql`embedding is null`);
 
     let indexadas = 0;
     for (const nota of notas) {

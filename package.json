@@ -5,7 +5,7 @@
   "description": "Servidor MCP Se7e: catálogo semântico e consultas SQL via plug-server",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=24.19.0"
   },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
@@ -45,7 +45,7 @@
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.23",
-    "@types/node": "^22.17.1",
+    "@types/node": "^24.13.3",
     "@types/pg": "^8.15.5",
     "@types/supertest": "^6.0.3",
     "drizzle-kit": "^0.31.4",

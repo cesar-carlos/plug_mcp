@@ -20,14 +20,10 @@ const tsvector = customType<{ data: string }>({
 });
 
 /**
- * pgvector column from optional drizzle/optional/0007_pgvector.sql.
- * Declared so drizzle-kit does not treat it as unknown; the MCP writes via raw SQL.
+ * `embedding vector(1536)` is optional (`drizzle/optional/0007_pgvector.sql`).
+ * Do not declare it on pgTable: Drizzle would emit the column on every INSERT
+ * and seed/boot would fail without pgvector. Read/write goes through raw SQL.
  */
-const embeddingVector = customType<{ data: number[] | null }>({
-  dataType() {
-    return "vector(1536)";
-  },
-});
 
 export const dialetoEnum = pgEnum("dialeto", ["mssql", "sybase", "postgres", "firebird"]);
 export const statusAcessoEnum = pgEnum("status_acesso", ["pending", "approved", "revoked"]);
@@ -69,7 +65,6 @@ export const fonte = pgTable(
     mcpAccountId: uuid("mcp_account_id").references(() => mcpAccount.id, { onDelete: "cascade" }),
     agentId: uuid("agent_id"),
     tsv: tsvector("tsv"),
-    embedding: embeddingVector("embedding"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -154,7 +149,6 @@ export const fonteAnotacao = pgTable(
     titulo: text("titulo").notNull().default(""),
     texto: text("texto").notNull(),
     tsv: tsvector("tsv"),
-    embedding: embeddingVector("embedding"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -174,7 +168,6 @@ export const consultaMemoria = pgTable(
     fonteSlug: text("fonte_slug"),
     observacao: text("observacao").notNull().default(""),
     tsv: tsvector("tsv"),
-    embedding: embeddingVector("embedding"),
     aprovadoEm: timestamp("aprovado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("consulta_memoria_conta_agent_idx").on(t.mcpAccountId, t.agentId)],

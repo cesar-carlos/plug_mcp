@@ -21,8 +21,9 @@ const closeHttpServer = (
 const main = async (): Promise<void> => {
   const config = loadConfig();
   const { app, logger, close } = await compose(config);
-  const server = app.listen(config.PORT, () => {
+  const server = app.listen(config.PORT, config.HOST, () => {
     logger.info("se7e-mcp-server listening", {
+      host: config.HOST,
       port: config.PORT,
       publicBaseUrl: config.PUBLIC_BASE_URL,
       mcp: config.mcpResourceUrl,

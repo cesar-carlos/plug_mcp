@@ -8,7 +8,7 @@ alwaysApply: true
 
 ## Runtime e linguagem
 
-- Node.js 22 LTS, TypeScript, ESModules (`"type": "module"`, `moduleResolution: NodeNext`).
+- Node.js 24 LTS (Krypton, `.nvmrc` = 24.19.0), TypeScript, ESModules (`"type": "module"`, `moduleResolution: NodeNext`).
 - Imports internos sempre com extensão `.js` (exigência de NodeNext/ESM).
 
 ## Dependências de produção
