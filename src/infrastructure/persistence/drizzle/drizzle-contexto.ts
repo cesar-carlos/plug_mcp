@@ -148,6 +148,19 @@ export class DrizzleMemoriaConsultaRepository implements MemoriaConsultaReposito
   }
 }
 
+/** Same token-OR semantics as `InMemoryIndiceContexto`: any term may hit. */
+const orTsQuery = (raw: string): string | null => {
+  const terms = raw
+    .toLowerCase()
+    .split(/\s+/u)
+    .map((term) => term.replace(/[^a-z0-9]/gu, ""))
+    .filter((term) => term.length > 1);
+  if (terms.length === 0) {
+    return null;
+  }
+  return terms.join(" | ");
+};
+
 export class DrizzleIndiceContexto implements IndiceContextoPort {
   constructor(private readonly db: Db) {}
 
@@ -160,6 +173,10 @@ export class DrizzleIndiceContexto implements IndiceContextoPort {
     if (query.length < 2) {
       return [];
     }
+    const fts = orTsQuery(query);
+    if (fts === null) {
+      return [];
+    }
     const like = `%${query}%`;
     const fontes = await this.db.execute<{
       id: string;
@@ -168,11 +185,11 @@ export class DrizzleIndiceContexto implements IndiceContextoPort {
       score: number;
     }>(sql`
       SELECT id, slug, descricao AS trecho,
-        ts_rank(tsv, plainto_tsquery('simple', ${query})) AS score
+        ts_rank(tsv, to_tsquery('simple', ${fts})) AS score
       FROM fonte
       WHERE ativo = true
         AND (mcp_account_id IS NULL OR (mcp_account_id = ${escopo.mcpAccountId} AND agent_id = ${escopo.agentId}))
-        AND (tsv @@ plainto_tsquery('simple', ${query}) OR nome ILIKE ${like})
+        AND (tsv @@ to_tsquery('simple', ${fts}) OR nome ILIKE ${like})
       ORDER BY score DESC
       LIMIT ${limite}
     `);
@@ -182,11 +199,11 @@ export class DrizzleIndiceContexto implements IndiceContextoPort {
       score: number;
     }>(sql`
       SELECT id, left(texto, 240) AS trecho,
-        ts_rank(tsv, plainto_tsquery('simple', ${query})) AS score
+        ts_rank(tsv, to_tsquery('simple', ${fts})) AS score
       FROM fonte_anotacao
       WHERE mcp_account_id = ${escopo.mcpAccountId}
         AND agent_id = ${escopo.agentId}
-        AND tsv @@ plainto_tsquery('simple', ${query})
+        AND tsv @@ to_tsquery('simple', ${fts})
       ORDER BY score DESC
       LIMIT ${limite}
     `);
@@ -197,11 +214,11 @@ export class DrizzleIndiceContexto implements IndiceContextoPort {
       score: number;
     }>(sql`
       SELECT id, fonte_slug AS slug, pergunta AS trecho,
-        ts_rank(tsv, plainto_tsquery('simple', ${query})) AS score
+        ts_rank(tsv, to_tsquery('simple', ${fts})) AS score
       FROM consulta_memoria
       WHERE mcp_account_id = ${escopo.mcpAccountId}
         AND agent_id = ${escopo.agentId}
-        AND tsv @@ plainto_tsquery('simple', ${query})
+        AND tsv @@ to_tsquery('simple', ${fts})
       ORDER BY score DESC
       LIMIT ${limite}
     `);
