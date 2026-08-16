@@ -1,0 +1,40 @@
+---
+description: "Padrões de código universais"
+globs: ["src/**/*.ts", "tests/**/*.ts"]
+alwaysApply: true
+---
+
+# Padrões de código
+
+Regras de prioridade mais alta (segurança, arquitetura, camada de domínio) prevalecem sobre este arquivo.
+
+## Legibilidade e responsabilidade
+
+- Prefira módulos simples e funções pequenas. Evite abstrações prematuras.
+- Mantenha arquivos focados em uma responsabilidade. Quebre controllers, services ou middlewares grandes antes que se tornem difíceis de ler.
+- Use nomes descritivos do domínio ou do contexto: `consultarDados`, `ambienteId`, `dialeto`.
+- Siga o padrão de nomenclatura do projeto de forma consistente; prefira nomes que revelem feature + responsabilidade.
+- Substitua literais com significado de negócio por constantes nomeadas (timeouts, limites, thresholds, counts de retry).
+
+## Comentários
+
+- Comentários explicam intenção não óbvia ou trade-offs — não restatingem o código.
+- Código comentado fora de uso, blocos `catch` vazios e exports sem uso devem ser removidos.
+- Nomes de variáveis, funções e arquivos podem ser em português (alinhado ao domínio ERP). Comentários técnicos podem ser em inglês ou português, desde que consistentes no arquivo.
+
+## Falhas e controle de fluxo
+
+- Trate falhas explicitamente — nunca engula erros silenciosamente.
+- Prefira retornos antecipados (`early return`) sobre nesting profundo.
+- Sempre use chaves em `if`/`else`/`for`/`while` (`curly: all`). Compare com `===` (`eqeqeq`; `== null` permitido para nullish).
+- Erros de domínio usam `DomainError` com `code`, `message`, `hint`, `retryable`. Nunca lance strings ou erros genéricos de dentro de casos de uso.
+- Logs de aplicação passam por `LoggerPort`. Não use `console.*` em `src/` (exceto `main.ts` e scripts CLI de migrate/seed).
+- Não gere arquivos de documentação standalone (README, changelogs, wikis) a não ser que o usuário solicite explicitamente.
+
+## Coesão e anti-padrões
+
+- Um módulo deve ter uma razão primária para mudar. Se um arquivo detém workflows não relacionados, divida.
+- Prefira extrair um novo caso de uso, serviço, helper ou mapper a estender um módulo grande "só mais uma vez".
+- Mantenha funções em um único nível de abstração: orquestração *ou* detalhe, nunca os dois.
+- Evite Feature Envy: não navegue pela estrutura de outro módulo para tomar decisões; pergunte ao tipo dono ou a uma policy dedicada.
+- Evite Long Parameter Lists: introduza um objeto de params tipado quando vários valores sempre andam juntos.

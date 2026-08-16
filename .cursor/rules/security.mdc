@@ -1,0 +1,60 @@
+---
+description: "Segurança: tokens, credenciais e modelo de identidade do se7e-mcp-server"
+globs: ["src/**/*.ts"]
+alwaysApply: true
+---
+
+# Segurança
+
+## Modelo de identidade (3 camadas — nunca confundir)
+
+1. **JWT de conta MCP** (`Authorization: Bearer`): identifica o usuário humano no MCP. Emitido por `McpJwtService` com `jose`. Validado em toda chamada de tool.
+2. **JWT de serviço no plug-server** (`accessToken`/`refreshToken`): credencial do MCP como `Client` no plug-server. Gerenciado pelo `ServiceTokenManager`. Nunca exposto ao usuário final nem a logs.
+3. **`client_token` de ambiente**: token opaco de autorização SQL no `plug_agente`. Pertence ao administrador do ERP. Armazenado criptografado (`AES-256-GCM`) em `ambiente.client_token_encriptado`. Nunca incluído em respostas de tool, nunca logado, nunca enviado ao modelo.
+
+## Regras rígidas de token
+
+- Nunca logar `access_token`, `refresh_token`, `client_token`, `password`, `password_hash`, `authorization` header, cookie de sessão.
+- O logger Pino tem redact configurado para esses campos e wildcards (`*.password_hash`, `*.access_token`, `*.refresh_token`, `*.client_token`, `req.headers.authorization`, `req.headers.cookie`) — mantenha a lista atualizada.
+- `client_token` é descriptografado em memória só no momento de montar o body do `sql.execute`; não persiste em variável de escopo amplo.
+- Senha do plug-server (serviço): lida de `PLUG_SERVER_CLIENT_EMAIL/PASSWORD` via `env.ts`; nunca aparece em código, log ou resposta.
+- `MCP_ENCRYPTION_KEY` (AES-256 para client_token): mínimo 32 chars; rotacionar exige re-criptografar tokens existentes.
+
+## OAuth 2.1 (AS próprio)
+
+- PKCE (S256) obrigatório em todos os flows de Authorization Code. Sem fallback para `plain`. Comparação do `code_verifier` sempre com `timingSafeEqual` (nunca `===`).
+- DCR (`POST /oauth/register`) aceita qualquer redirect_uri mas não cria credencial de cliente sem `redirect_uris`.
+- Código de autorização: TTL de 10 minutos, consumo único (deletado ao trocar por token).
+- Refresh token: armazenado como hash SHA-256 — nunca o valor bruto no banco. Rotação a cada refresh (single-use).
+- Se um client confidencial (`clientSecretHash` presente) trocar código ou refresh token, o `client_secret` deve ser validado contra o hash armazenado — não valide apenas `client_id`.
+- Session cookie de login (`mcp_session`): `HttpOnly`, `SameSite=lax`, `Secure` em produção, assinado com HMAC-SHA256 (`signSession`/`readSession` em `jwt.ts`). Não é JWT. A comparação da assinatura deve usar `timingSafeEqual`, igual ao verificador PKCE.
+- `/oauth/login`, `/oauth/signup`, `/oauth/token`, `/oauth/register` e `/oauth/revoke` têm rate limiting por IP (`createRateLimiter` em `infrastructure/http/rate-limit.ts`) contra brute-force. Ao adicionar endpoint de autenticação novo, aplique o mesmo middleware.
+- `POST|GET|DELETE /mcp` tem rate limiting (`createRateLimiter`) antes do handler MCP: chave = hash SHA-256 do `Authorization` (16 hex) ou IP se o header ausente. Store em memória, ou Redis se `REDIS_URL` estiver setado. Defaults: `MCP_RATE_LIMIT_WINDOW_MS=60000`, `MCP_RATE_LIMIT_MAX=120`. Não logar a chave nem o Bearer.
+- Redirect pós-login só aceita path relativo no mesmo origin (`safeNext`): rejeita `//evil.com`, `/\...` e URLs com scheme.
+
+## Credenciais de teste "live" (`E2E_*`)
+
+- `E2E_CLIENT_EMAIL`/`E2E_CLIENT_PASSWORD`/`E2E_CLIENT_TOKEN`/`E2E_AGENT_ID` (ver `testing.mdc`) são credenciais reais de uma conta de TESTE no plug-server, usadas só por `tests/live/`. Vivem exclusivamente em `.env` (já no `.gitignore`) — nunca com valor real em `.env.example`, nunca logadas (o `ConsoleTestLogger` em `tests/helpers/console-logger.ts` segue a mesma lista de redact do Pino).
+- Nunca reutilize a conta de serviço de produção (`PLUG_SERVER_CLIENT_EMAIL/PASSWORD`) como conta `E2E_*` — são identidades diferentes; misturar as duas dificulta auditoria de quem fez o quê no plug-server.
+
+## Validação de entrada
+
+- Todo parâmetro de tool validado com Zod no schema de registro (`register-tools.ts`).
+- `agentId` deve ser UUID válido; dialeto deve ser um dos 4 enums; `clientToken` máximo 512 chars.
+- Variáveis de ambiente validadas ao iniciar via `loadConfig()` (Zod); falha rápido se incompleto.
+- Nunca confie em `req.body` antes de validação; nunca trate tipo `any` como dado confiável.
+
+## Autorização SQL
+
+- O MCP **não** adiciona camada de autorização SQL própria. O `client_token` no `plug_agente` é a autoridade.
+- O MCP **não** valida se o SQL é SELECT-only. A autorização fica 100% no plug-server/agente.
+- O modelo de acesso (Client → Agent → `ClientAgentAccess`) garante que o MCP só envia SQL para agentes aprovados.
+# Catálogo por conta + agentId: `listar_fontes` / `obter_fonte` / mutações / anotações / memória de consulta só enxergam seed global + dados da conta autenticada naquele `agentId`. Nunca resolva slug nem devolva nota de outra conta ou de outro agente da mesma conta.
+- Em `explorar_tabelas` / `descrever_tabela`, o nome da tabela vai como param nomeado (`:tabela`, `:filtro`), nunca concatenado no SQL. Validação extra por regex de identificador.
+- SQL de fonte registrada pelo usuário continua sob a autoridade do `client_token`; o MCP não passa a validar verbo SQL.
+
+## Erros — não vaze detalhes internos
+
+- Respostas de erro de tool seguem `DomainError.toJson()`: `{ success: false, error: { code, message, hint, retryable } }`.
+- Nunca inclua stack trace, query SQL completa, estrutura interna de tabela, ou detalhes do banco em respostas à IA ou ao usuário final.
+- Em erros inesperados, use código `INTERNAL_ERROR` com mensagem genérica.

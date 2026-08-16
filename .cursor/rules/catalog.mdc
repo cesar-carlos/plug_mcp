@@ -1,0 +1,66 @@
+---
+description: "Catálogo semântico: estrutura, dialetos, seed e orientações para a IA"
+globs: ["src/domain/**/*.ts", "src/application/use-cases/listar-fontes.ts", "src/application/use-cases/obter-fonte.ts", "src/application/use-cases/registrar-fonte.ts", "src/application/use-cases/atualizar-fonte.ts", "src/application/use-cases/remover-fonte.ts", "src/application/use-cases/explorar-tabelas.ts", "src/application/use-cases/descrever-tabela.ts", "src/application/use-cases/anotar-fonte.ts", "src/application/use-cases/adicionar-relacionamento.ts", "src/application/use-cases/listar-anotacoes.ts", "src/application/use-cases/salvar-consulta.ts", "src/application/use-cases/buscar-contexto.ts", "src/infrastructure/persistence/seed/**/*.ts", "src/infrastructure/persistence/schema.ts"]
+alwaysApply: true
+---
+
+# Catálogo semântico
+
+O catálogo é o mecanismo central que permite ao modelo de IA construir queries SQL corretas sem conhecer o esquema do banco ERP.
+
+## Modelo de dados do catálogo
+
+- **`Fonte`**: representa uma consulta SQL de negócio (ex.: "Vendas por período"). Tem nome, descrição, e `sqlBase` default.
+- **`FonteSqlVariant`**: variante do SQL para um dialeto específico (`mssql`, `sybase`, `postgres`, `firebird`). Referencia uma `Fonte` e um dialeto.
+- **`FonteColuna`**: descreve cada coluna do resultado (nome, tipo, descrição de negócio, se é filtrável, se é agregável).
+- **`FonteRelacionamento`**: join desta fonte com outra fonte do catálogo **ou** com uma tabela crua do ERP (`destino` discriminado `fonte` | `tabela`).
+- **`RegraNegocio`**: restrições ou orientações de negócio para a IA (ex.: "sempre filtrar por status ativo para evitar dados cancelados").
+- **`FonteAnotacao`**: nota incremental do usuário, sempre com `EscopoCatalogo { mcpAccountId, agentId }`. `fonteId` nulo = glossário daquele agente (não da conta). Tipos: `uso | codigo | alerta | glossario | preferencia`.
+- **`ConsultaMemoria`**: pergunta em linguagem natural + SQL que o usuário aprovou, no mesmo escopo. Nunca guarda linhas de resultado.
+
+## Resolução de dialeto em `obter_fonte`
+
+- Ao retornar uma `Fonte`, resolva o SQL para o dialeto do ambiente ativo (`ambiente.dialeto`) via `CatalogoRepositoryPort.obterDetalhe(slug, dialeto, escopo)`.
+- Leituras recebem `EscopoCatalogo { mcpAccountId, agentId }`. Fontes da conta naquele agente têm precedência sobre o seed com o mesmo slug (sombra).
+- Se a fonte existir mas não houver `FonteSqlVariant` para aquele dialeto, retorne `DomainError` com `code: DIALECT_VARIANT_MISSING`. Se a fonte não existir, use `code: FONTE_NOT_FOUND`.
+- O campo `sql_base` no retorno de `obter_fonte` contém o SQL pronto (subquery/CTE) para o dialeto do ambiente.
+
+## `orientacoes_ia`
+
+- `obter_fonte` devolve regras `{ nome, descricao, expressao }`, sinônimos `{ termo, descricao }`, relacionamentos com destino discriminado e anotações deste `agentId`.
+- `orientacoes_ia` combina anotações tipo `uso`/`preferencia` do escopo com as dicas estáticas de `orientacoesBase`.
+
+## Seed inicial
+
+- O seed em `infrastructure/persistence/seed/catalogo.seed.ts` cobre as 3 áreas principais:
+  - **Vendas**: pedidos, itens, totais por período.
+  - **Produtos**: estoque, preço, categorias.
+  - **Clientes**: cadastro, histórico, inadimplência.
+- Cada fonte no seed atual (`vendas`, `produtos`, `clientes`) já cobre os 4 dialetos (`mssql`, `sybase`, `postgres`, `firebird`); mantenha essa paridade ao adicionar fontes novas.
+- `catalogo.seedIfEmpty()` é chamado uma vez em `compose()` no boot e só semeia se não houver fonte global (`mcp_account_id IS NULL`). `npm run db:seed` chama `aplicarSeed()`: upsert por slug das fontes globais dentro de transação, recria filhos, e marca `ativo=false` só fontes globais que saíram do seed — nunca desativa fonte de usuário.
+
+## Fontes do usuário (por conta + agentId)
+
+- O usuário logado registra consultas via tools: `explorar_tabelas` → `descrever_tabela` → `testar_sql` (amostra + `colunasCodigo`) → pergunta significado e dicionário de códigos ao usuário → `registrar_fonte` (com `confirmado=true`).
+- Manutenção: `atualizar_fonte` (substituição total), `anotar_fonte` (nota incremental, sem dry run), `adicionar_relacionamento` (join incremental) e `remover_fonte` (hard delete; se havia sombra, o seed volta a valer). A IA deve persistir correções e joins ensinados pelo usuário a cada turno (`anotar_fonte` / `adicionar_relacionamento` / `salvar_consulta`) — a base deste `agentId` evolui; não deixar conhecimento só na conversa.
+- `listar_anotacoes` faz o browse direto do glossário/notas de um `agentId` (com ou sem `fonteId`), sem precisar de um texto de busca como `buscar_contexto` exige.
+- Relacionamento com tabela ainda não registrada: `tabelaDestino` em `registrar_fonte` / `adicionar_relacionamento`. Não inventar o join.
+- Fonte de usuário tem uma variante SQL só, no dialeto do ambiente — o dialeto nunca vem da IA.
+- Dry run obrigatório: `executeSql` com `maxRows: 1` antes de persistir; colunas declaradas precisam existir no resultado (comparação case-insensitive). `testar_sql` usa até 20 linhas só para a IA ler estrutura/códigos — não confundir com o dry run de persistência.
+- `aplicarSeed()` opera só em `mcp_account_id IS NULL`.
+- Significado de negócio das colunas e dicionários de código (`Status='A'`) vêm do usuário; a IA não inventa semântica a partir do tipo do banco nem da letra da amostra.
+
+## Adicionando novas fontes (seed global)
+
+1. Definir a `Fonte` com `sqlBase`, `orientacoes_ia` e `FonteColuna` descrevendo cada campo.
+2. Criar `FonteSqlVariant` para cada dialeto do ambiente de produção.
+3. Adicionar ao seed (`catalogo.seed.ts`) e executar `npm run db:seed`.
+4. Documentar em `docs/data/catalog.md` com exemplos de queries derivadas.
+5. Se a fonte usa join com outra, criar `FonteRelacionamento` bidirecional.
+
+## Filtros e paginação — orientação para a IA
+
+- O SQL base deve incluir placeholders comentados para filtros opcionais: `-- WHERE :filtro`.
+- A IA substitui esses placeholders na construção do SQL final conforme a pergunta do usuário.
+- Para paginação: instruir a IA a usar `OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY` (MSSQL/Sybase) ou `LIMIT :limit OFFSET :offset` (Postgres/Firebird).
+- `max_rows` padrão em `consultar_dados` é 500 (teto absoluto 5.000, ver `performance.mdc`); a IA pode reduzir para consultas de agregação.

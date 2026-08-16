@@ -1,0 +1,18 @@
+---
+description: "Performance e eficiência de runtime Node.js"
+globs: ["src/**/*.ts"]
+alwaysApply: true
+---
+
+# Performance
+
+- Otimize só depois de identificar o hot path, gargalo ou limite operacional sendo endereçado.
+- Handlers de request devem ser não-bloqueantes. Evite trabalho CPU-heavy, loops síncronos grandes e I/O bloqueante em hot paths.
+- Para resultados SQL grandes, respeite `max_rows` em `consultar_dados` (default 500 via `QUERY_DEFAULT_MAX_ROWS`, teto absoluto 5.000 via `QUERY_ABSOLUTE_MAX_ROWS`). Nunca aumente o teto sem lembrar que o MCP monta a resposta inteira em memória antes de devolver — não dependa só do limite do plug-server.
+- `testar_sql` usa `TESTAR_SQL_MAX_ROWS` (20) só para a IA ler estrutura e códigos da amostra; o dry run de `registrar_fonte` continua com `maxRows: 1`. Não suba o teto de `testar_sql` sem necessidade — a resposta inteira vai ao modelo.
+- Reutilize serializers, validators e helpers de transport em hot paths em vez de recriar lógica equivalente por feature.
+- Evite trabalho quadrático acidental em mappers e serializers que processam listas (ex.: N+1 em resolução de dialetos do catálogo). `obterDetalhe` filtra destinos e regras em SQL (`inArray` / `isNull`), nunca carrega a tabela inteira para filtrar em JS.
+- Respostas de tool usam `JSON.stringify(payload)` sem indentação — pretty-print infla tokens em `consultar_dados`.
+- `ServiceTokenManager`: o refresh de token deve ser executado proativamente antes do vencimento, nunca em cascata durante uma chamada de tool — use margem de 60 s antes do `exp`.
+- Sessões MCP (`StreamableHTTPServerTransport`) são mantidas em memória por `sessionId` em `mcp-http.ts`; um sweep periódico já fecha sessões ociosas por mais que `MCP_SESSION_IDLE_TIMEOUT_MS` (default 30 min) — ao tocar em `mcp-http.ts`, preserve esse sweep para não reintroduzir o memory leak. Sessões não são compartilhadas entre processos (uma réplica ou sticky em `Mcp-Session-Id`).
+- Documente a premissa sendo otimizada e verifique com medição quando uma mudança visa performance.

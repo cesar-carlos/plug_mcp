@@ -1,0 +1,86 @@
+---
+description: "Estrutura de pastas do se7e-mcp-server"
+globs: ["src/**/*.ts", "tests/**/*.ts"]
+alwaysApply: true
+---
+
+# Estrutura de pastas
+
+Esta regra descreve onde cada tipo de código vive neste projeto específico.
+
+## `src/`
+
+```
+src/
+  domain/
+    entities/       ← Ambiente, Fonte, Anotacao, ConsultaMemoria, Conta, AuditLog, Dialeto
+    ports/          ← interfaces: AmbienteRepositoryPort, CatalogoRepositoryPort,
+                       AnotacaoRepositoryPort, MemoriaConsultaRepositoryPort,
+                       IndiceContextoPort, EmbeddingPort, ContaRepositoryPort,
+                       PlugServerGatewayPort, AuditLogPort, CryptoPort, LoggerPort
+    errors/         ← DomainError, ErrorCode (error-codes.ts)
+
+  application/
+    use-cases/      ← um arquivo por caso de uso: listar-ambientes.ts,
+                       conectar-ambiente.ts, configurar-client-token.ts,
+                       verificar-status-ambiente.ts, listar-fontes.ts,
+                       obter-fonte.ts, consultar-dados.ts, conta.ts,
+                       desconectar-ambiente.ts, registrar-fonte.ts,
+                       atualizar-fonte.ts, remover-fonte.ts,
+                       explorar-tabelas.ts, descrever-tabela.ts, testar-sql.ts,
+                       anotar-fonte.ts, adicionar-relacionamento.ts, remover-anotacao.ts,
+                       listar-anotacoes.ts, salvar-consulta.ts, buscar-contexto.ts
+      shared/       ← guards.ts, fonte-definicao.ts, schema-introspection.ts,
+                       amostra-sql.ts
+
+  infrastructure/
+    http/           ← create-app.ts (Express app factory), rate-limit.ts
+                       (createRateLimiter, MemoryRateLimitStore; OAuth e /mcp),
+                       redis-rate-limit.store.ts (store Redis só se REDIS_URL)
+    mcp/            ← mcp-http.ts, register-tools.ts, mappers.ts, account-context.ts,
+                       tool-result.ts, server-instructions.ts
+    oauth/          ← bearer-auth.ts, oauth-router.ts, jwt.ts, oauth-store.port.ts,
+                       memory-oauth-store.ts, drizzle-oauth-store.ts
+    plug-server/    ← plug-server-rest.adapter.ts, token-manager.ts,
+                       map-plug-error.ts
+    persistence/
+      schema.ts     ← schema Drizzle (todas as tabelas)
+      migrate.ts    ← runner de migration SQL manual
+      drizzle/      ← db.ts, drizzle-conta.ts, drizzle-ambiente.ts, drizzle-catalogo.ts,
+                       drizzle-audit.ts, drizzle-repos.ts (barrel), drizzle-contexto.ts
+      memory/       ← repos in-memory por agregado + memory-repos.ts (barrel)
+      seed/         ← catalogo.seed.ts, run-seed.ts
+    crypto/         ← node-crypto.adapter.ts
+    embedding/      ← http-embedding.adapter.ts, reindex-contexto.ts (`npm run db:reindex-embeddings`)
+    logging/        ← pino-logger.adapter.ts
+
+  composition/
+    compose.ts      ← composition root; só arquivo que instancia adapters
+
+  config/
+    env.ts          ← loadConfig(), testConfig() via Zod
+
+  main.ts           ← bootstrap HTTP
+```
+
+## `tests/`
+
+```
+tests/
+  unit/             ← testes sem I/O: use cases com fake repos, map-plug-error
+  integration/      ← testes com supertest + app composta (OAuth, REST adapter)
+  e2e/              ← protocolo MCP ponta a ponta via HTTP em memória (FakePlugServer)
+  live/             ← opcional: contra o plug-server REAL com conta de teste
+                       (npm run test:live, nunca no npm test padrão — ver testing.mdc)
+  helpers/          ← FakePlugServer, oauthLoginAndToken, getLiveEnv, ConsoleTestLogger
+```
+
+## Regras de localização
+
+- Novo caso de uso → arquivo em `application/use-cases/`.
+- Nova tool MCP → registrada em `infrastructure/mcp/register-tools.ts` referenciando o caso de uso.
+- Novo port → arquivo em `domain/ports/`.
+- Novo adapter concreto → pasta adequada em `infrastructure/`; instanciação só em `composition/compose.ts`.
+- Nunca colocar lógica de negócio em `infrastructure/` ou `composition/`.
+- Nunca colocar acesso a banco, fetch, ou SDK em `domain/` ou `application/`.
+- Scripts de utilidade (seed, migrate) ficam em `infrastructure/persistence/` ou `infrastructure/persistence/seed/`.

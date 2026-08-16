@@ -1,0 +1,31 @@
+---
+description: "EditorConfig, Prettier e ESLint — quem formata o quê e como configurar"
+globs: ["eslint.config.js", ".prettierrc.json", ".editorconfig", ".vscode/**", "src/**/*.ts", "tests/**/*.ts"]
+alwaysApply: true
+---
+
+# Lint e formatação
+
+Três camadas, sem sobreposição. Não copie regra de estilo do Prettier para o ESLint.
+
+| Camada | Arquivo | Responsabilidade |
+| ------ | ------- | ---------------- |
+| **EditorConfig** | `.editorconfig` | Bytes do arquivo em qualquer editor: UTF-8, LF, 2 espaços, newline final |
+| **Prettier** | `.prettierrc.json` | Estilo: aspas duplas, `;`, trailing comma, `printWidth` 100 |
+| **ESLint** | `eslint.config.js` (flat, ESLint 9) | Correção: tipos, promises, `import type`, `eqeqeq`, `no-explicit-any` |
+
+`eslint-config-prettier` é **sempre o último** item de `eslint.config.js`. Não adicione `.eslintrc*` — o projeto usa só flat config.
+
+## O que o agente deve fazer
+
+- Rodar `npm run format` nos arquivos tocados (ou deixar o format-on-save do editor).
+- Rodar `npm run lint` e zerar erros introduzidos pela tarefa.
+- Não desligar `@typescript-eslint/no-explicit-any` nem typed linting (`recommendedTypeChecked`) para “passar o lint”.
+- Exceção de `require-await` só em fakes in-memory (`persistence/memory`, `memory-oauth-store`) e em `tests/` — ports async sem I/O. Não espalhe `eslint-disable` no domínio.
+- `no-console` é erro em `src/` (use `LoggerPort`). Permitido em `main.ts`, scripts de migrate/seed e testes.
+- Funções **exportadas** e métodos públicos levam tipo de retorno explícito (`explicit-module-boundary-types`).
+- Imports só-tipo: `import type` ou `import { type X }` (autofix do ESLint).
+
+## Editor
+
+`.vscode/settings.json` formata com Prettier no save e aplica `source.fixAll.eslint`. Extensões em `.vscode/extensions.json`. Não recoloque settings de outras stacks (Dart/Flutter) neste repo.

@@ -1,0 +1,49 @@
+---
+description: "Arquitetura hexagonal do se7e-mcp-server: camadas, direção de dependências e composition root"
+globs: ["src/**/*.ts"]
+alwaysApply: true
+---
+
+# Arquitetura hexagonal — se7e-mcp-server
+
+Este projeto segue o padrão Ports & Adapters (hexagonal). As camadas e direções de importação são rígidas.
+
+## Camadas e responsabilidades
+
+- **`src/domain`**: entidades, ports (interfaces), `DomainError`. Nunca importa Express, Drizzle, MCP SDK, `fetch`, `jose`, ou qualquer framework. É a única camada que define as interfaces de repositório e gateway.
+- **`src/application/use-cases`**: um caso de uso por ação de negócio. Depende apenas de ports do domínio. Nunca importa adapters concretos, MCP SDK, ou Express.
+- **`src/infrastructure`**: adapters que implementam os ports. Subpastas por tecnologia: `persistence/` (Drizzle), `plug-server/` (REST), `oauth/`, `mcp/`, `http/`, `crypto/`, `logging/`.
+- **`src/composition/compose.ts`**: único ponto onde adapters concretos são instanciados e injetados nos casos de uso. É o composition root.
+- **`src/config/env.ts`**: parsing e validação de variáveis de ambiente com Zod.
+- **`src/main.ts`**: bootstrap do servidor HTTP.
+
+## Direção de importação (inward only)
+
+```
+infrastructure  →  application  →  domain
+     ↓                   ↓             ↓
+  (implements ports)    (uses ports)  (defines ports)
+```
+
+- `domain` nunca importa nada fora de si mesmo.
+- `application` importa só `domain` (entities, ports, errors).
+- `infrastructure` importa `application` e `domain`, mas nunca depende de outro adapter da infraestrutura via importação direta — comunica-se apenas pelos ports.
+- `composition` importa tudo para montar o grafo de dependências.
+
+## Composition root
+
+- Toda instanciação de adapter concreto acontece em `src/composition/compose.ts`.
+- Casos de uso recebem dependências por injeção (constructor ou factory function). Nunca usam `new ConcreteAdapter()` internamente.
+- `compose` aceita `overrides` opcionais para facilitar testes sem banco ou plug-server real.
+
+## Transport MCP
+
+- O handler MCP (`src/infrastructure/mcp/mcp-http.ts`) é um adapter de infraestrutura; ele chama casos de uso via `ToolUseCases`.
+- A identidade do usuário autenticado (`accountId`) fica no `AsyncLocalStorage` (`src/infrastructure/mcp/account-context.ts`) só na borda MCP. `register-tools.ts` lê `currentAccountId()` e passa `mcpAccountId` explícito aos casos de uso. Application e domain não importam ALS.
+- Cada tool MCP corresponde a exatamente um caso de uso de aplicação.
+
+## Regras de colaboração
+
+- Evite train wrecks: não acesse `a.b.c.d` atravessando agregados estrangeiros.
+- Mapeamento entre shape de transport e domain vive em adapters ou mappers, nunca em casos de uso.
+- Não crie dependência circular entre camadas. Se dois módulos se precisam mutuamente, extraia um port ou type inward.

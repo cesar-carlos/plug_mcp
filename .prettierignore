@@ -1,0 +1,5 @@
+dist
+node_modules
+coverage
+drizzle/*.sql
+package-lock.json

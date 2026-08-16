@@ -1,0 +1,54 @@
+---
+description: "Protocolo MCP: Streamable HTTP, registro de tools, formato de resposta e contexto de conta"
+globs: ["src/infrastructure/mcp/**/*.ts", "src/application/use-cases/**/*.ts"]
+alwaysApply: true
+---
+
+# Protocolo MCP
+
+## Transport: Streamable HTTP
+
+- O endpoint MCP é `POST|GET|DELETE /mcp`. Suporta tanto JSON simples quanto `text/event-stream`.
+- Cada sessão recebe um `mcp-session-id` gerado no `initialize`. Sessões vivem em memória no `Map<sessionId, Session>` em `mcp-http.ts`, com `lastActivityAt` atualizado a cada request. O `StreamableHTTPServerTransport` é in-process (SSE); as sessões **não** são compartilhadas entre processos — deploy com uma réplica ou sticky session em `Mcp-Session-Id`.
+- Requests `initialize` criam nova sessão. Requests subsequentes com `mcp-session-id` reutilizam a sessão existente.
+- `DELETE /mcp` encerra e remove a sessão do Map. Sessões ociosas por mais que `MCP_SESSION_IDLE_TIMEOUT_MS` são fechadas (`transport.close()`) e removidas por uma varredura periódica — nunca remova esse sweep achando que o cliente sempre manda `DELETE /mcp`.
+- Nunca processe um request MCP antes de autenticar o Bearer token (chamada a `authenticateBearer`).
+- Clientes MCP que rodam no browser precisam ler o header `Mcp-Session-Id` (e `mcp-protocol-version`) de uma resposta cross-origin; o middleware `cors` em `create-app.ts` deve sempre listar esses headers em `exposedHeaders` (ver `express_api.mdc`/`project_stack.mdc`).
+
+## Autenticação de Bearer no handler MCP
+
+- `401` com header `WWW-Authenticate: Bearer realm="se7e-mcp", resource_metadata="<url>/.well-known/oauth-protected-resource"` quando o token ausente ou inválido.
+- Sucesso: `accountId` armazenado no `AsyncLocalStorage` para durar o ciclo do request.
+
+## Contexto de conta — `AsyncLocalStorage`
+
+- `account-context.ts` exporta `accountContext: AsyncLocalStorage<string | undefined>` e o helper `currentAccountId()`.
+- O handler MCP (`mcp-http.ts`) grava o `accountId` no store depois de autenticar o Bearer, para durar o ciclo do request.
+- `register-tools.ts` lê `currentAccountId()` na borda e passa `mcpAccountId` explícito para cada caso de uso. Application e domain **não** importam `account-context` nem leem ALS.
+
+## Registro de tools
+
+- Cada tool é registrada em `src/infrastructure/mcp/register-tools.ts` com:
+  - `name`: snake_case, em português.
+  - `description`: em português, voltada para o modelo de IA entender quando usar.
+  - `inputSchema`: Zod schema com todos os parâmetros validados (campos opcionais quando a ausência deve gerar um erro de validação orientado, não uma falha de schema).
+  - Handler que delega a `runTool("nome_da_tool", () => useCases.x.execute(...))` via `createToolRunner(config, logger)` — nunca chame `jsonResult`/`errorResult` diretamente no handler.
+- Nunca coloque lógica de negócio em `register-tools.ts`; delegue ao caso de uso.
+- O `McpServer` recebe `instructions` (`server-instructions.ts`) no `initialize`: playbook de sessão. Pergunta de dados: `buscar_contexto` → `obter_fonte` → `consultar_dados`. A IA deve manter a base deste `agentId` atualizada: se o usuário confirmar, `salvar_consulta`; se ensinar regra ou código, `anotar_fonte`; se ensinar join, `adicionar_relacionamento`. Cadastro: `testar_sql` lê estrutura/`colunasCodigo` → a IA pergunta dicionário de códigos ao usuário → `registrar_fonte` com `confirmado=true`. Sem isso o modelo só vê descrições isoladas de cada tool.
+
+## Formato de resposta de tool
+
+- `createToolRunner` (`tool-result.ts`) executa o caso de uso e mapeia o resultado: sucesso vira `jsonResult(payload)` → `{ content: [{ type: "text", text: JSON.stringify(payload) }] }` (sem pretty-print); erro vira `errorResult` → `{ isError: true, content: [...], _meta? }`.
+- `errorResult` sempre serializa via `DomainError.toJson()`: `{ success: false, error: { code, message, hint, retryable, retryAfterMs } }`. Erros não-`DomainError` viram `INTERNAL_ERROR` com mensagem genérica ("Erro interno.") — o detalhe real vai para `LoggerPort.error({ tool, error, stack })`, nunca para o modelo.
+- `createExpressApp` deve expor `dispose()` do handler MCP (sweep de sessões) e o `close()` do `compose` precisa chamá-lo.
+- Quando o erro é `UNAUTHENTICATED`, `errorResult` adiciona `_meta["mcp/www_authenticate"]` com o header `WWW-Authenticate` — não duplique essa lógica em outro lugar.
+- Sempre inclua `success: boolean` no payload raiz para que o modelo possa detectar falha sem parsing extra.
+
+## Onboarding sem elicitation formal (Fase 1)
+
+- Esta fase **não** usa `elicitInput` do SDK MCP. Campos obrigatórios ausentes (`agentId`, `dialeto`, `clientToken`, etc.) são declarados opcionais no Zod `inputSchema` e validados dentro do caso de uso, que lança `DomainError` com `code: VALIDATION_ERROR` e um `hint` que orienta a IA a perguntar ao usuário e chamar a tool de novo.
+- Se uma fase futura adotar `server.server.elicitInput(...)`, documente aqui o novo contrato antes de usá-lo em qualquer tool — não implemente elicitation ad hoc em um único caso de uso.
+
+## Adicionando nova tool
+
+Checklist completo em `governance.mdc` ("Adicionando novas tools MCP"). Resumo: caso de uso → port (se novo) → registro em `register-tools.ts` → `ToolUseCases` → `compose.ts` → testes → `docs/mcp/tools.md`.
