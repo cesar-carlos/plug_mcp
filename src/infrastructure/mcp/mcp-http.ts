@@ -5,8 +5,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
-import { authenticateBearer, wwwAuthenticate } from "../oauth/bearer-auth.js";
-import type { McpJwtService } from "../oauth/jwt.js";
+import { wwwAuthenticate, readBearer } from "./mcp-auth.js";
 import { accountContext } from "./account-context.js";
 import { registerTools, type ToolUseCases } from "./register-tools.js";
 import { MCP_SERVER_INSTRUCTIONS } from "./server-instructions.js";
@@ -15,16 +14,27 @@ interface Session {
   transport: StreamableHTTPServerTransport;
   server: McpServer;
   lastActivityAt: number;
+  bootstrap: boolean;
 }
 
-/** Cap the sweep interval so short idle timeouts (tests) are still honored promptly. */
 const MAX_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+const rpcName = (body: unknown): { method?: string; tool?: string } => {
+  if (typeof body !== "object" || body === null) {
+    return {};
+  }
+  const rec = body as Record<string, unknown>;
+  const method = typeof rec.method === "string" ? rec.method : undefined;
+  const params = rec.params as Record<string, unknown> | undefined;
+  const tool = typeof params?.name === "string" ? params.name : undefined;
+  return { method, tool };
+};
 
 export const createMcpHttpHandler = (input: {
   config: AppConfig;
-  jwt: McpJwtService;
   useCases: ToolUseCases;
   logger: LoggerPort;
+  resolveUsuarioId: (token: string) => Promise<string | null>;
 }): {
   handle: (req: Request, res: Response) => Promise<void>;
   sessions: Map<string, Session>;
@@ -33,34 +43,33 @@ export const createMcpHttpHandler = (input: {
   const sessions = new Map<string, Session>();
   const idleTimeoutMs = input.config.MCP_SESSION_IDLE_TIMEOUT_MS;
 
-  const createSession = (): Session => {
+  const createSession = (bootstrap: boolean): Session => {
     const server = new McpServer(
-      {
-        name: "se7e-mcp-server",
-        version: "0.1.0",
-      },
+      { name: "se7e-mcp-server", version: "0.1.0" },
       { instructions: MCP_SERVER_INSTRUCTIONS },
     );
-    registerTools(server, input.config, input.useCases, input.logger);
+    registerTools(server, input.config, input.useCases, input.logger, { bootstrapOnly: bootstrap });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sid) => {
-        sessions.set(sid, { transport, server, lastActivityAt: Date.now() });
+        sessions.set(sid, { transport, server, lastActivityAt: Date.now(), bootstrap });
       },
     });
     transport.onclose = () => {
       const sid = transport.sessionId;
-      if (sid) sessions.delete(sid);
+      if (sid) {
+        sessions.delete(sid);
+      }
     };
-    return { transport, server, lastActivityAt: Date.now() };
+    return { transport, server, lastActivityAt: Date.now(), bootstrap };
   };
 
-  // Sessions live in memory keyed by sessionId; without eviction, a client that never
-  // sends DELETE /mcp leaks a session (and its McpServer/transport) forever.
   const sweepIdleSessions = (): void => {
     const now = Date.now();
     for (const [sessionId, session] of sessions) {
-      if (now - session.lastActivityAt <= idleTimeoutMs) continue;
+      if (now - session.lastActivityAt <= idleTimeoutMs) {
+        continue;
+      }
       sessions.delete(sessionId);
       session.transport.close().catch((error: unknown) => {
         input.logger.warn("failed to close idle mcp session", {
@@ -74,11 +83,28 @@ export const createMcpHttpHandler = (input: {
   sweepTimer.unref();
 
   const handle = async (req: Request, res: Response): Promise<void> => {
-    const accountId = await authenticateBearer(req, input.config, input.jwt);
-    if (!accountId) {
-      res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));
-      res.status(401).json({ error: "invalid_token" });
-      return;
+    const bearer = readBearer(req);
+    let usuarioId: string | null = null;
+    if (bearer) {
+      usuarioId = await input.resolveUsuarioId(bearer);
+      if (!usuarioId) {
+        res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));
+        res.status(401).json({ error: "invalid_token" });
+        return;
+      }
+    } else {
+      const { method, tool } = rpcName(req.body);
+      const allowed =
+        req.method !== "POST" ||
+        method === "initialize" ||
+        method === "notifications/initialized" ||
+        method === "tools/list" ||
+        (method === "tools/call" && tool === "registrar_acesso");
+      if (!allowed) {
+        res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));
+        res.status(401).json({ error: "invalid_token" });
+        return;
+      }
     }
 
     const sessionId = req.header("mcp-session-id") ?? undefined;
@@ -86,7 +112,7 @@ export const createMcpHttpHandler = (input: {
 
     const run = async (session: Session): Promise<void> => {
       session.lastActivityAt = Date.now();
-      await accountContext.run(accountId, async () => {
+      await accountContext.run(usuarioId ?? undefined, async () => {
         await session.transport.handleRequest(req, res, req.body);
       });
     };
@@ -97,7 +123,7 @@ export const createMcpHttpHandler = (input: {
     }
 
     if (req.method === "POST" && isInitializeRequest(req.body)) {
-      const session = createSession();
+      const session = createSession(!usuarioId);
       await session.server.connect(session.transport);
       await run(session);
       return;

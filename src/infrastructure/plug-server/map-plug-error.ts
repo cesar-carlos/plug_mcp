@@ -82,13 +82,13 @@ const rpcMap: Record<
   [-32001]: {
     code: ERROR_CODES.MISSING_CLIENT_TOKEN,
     message: "O agente recusou a consulta por falta de client_token.",
-    hint: "Configure o client_token com configurar_client_token. Sem esse token o agente recusa sql.execute.",
+    hint: "Grave o client_token no acesso (registrar_acesso / adicionar_acesso). Sem esse token o agente recusa sql.execute.",
     retryable: false,
   },
   [-32002]: {
     code: ERROR_CODES.ACCESS_REVOKED,
     message: "Acesso SQL recusado ou token revogado neste agente.",
-    hint: "Token SQL revogado ou sem permissão. Chame verificar_status_ambiente e peça um client_token válido ao admin do ERP.",
+    hint: "client_token revogado ou sem permissão. Confira o acesso (verificar_acesso) e peça um client_token válido ao admin do ERP.",
     retryable: false,
   },
   [-32008]: {
@@ -100,7 +100,7 @@ const rpcMap: Record<
   [-32009]: {
     code: ERROR_CODES.INVALID_SQL,
     message: "O SQL enviado foi recusado pelo agente.",
-    hint: "Corrija o SQL no dialeto do ambiente. Use sql_base de obter_fonte como subquery. Declare ORDER BY se usar page/page_size.",
+    hint: "Corrija o SQL no dialeto do agentId. Use o sqlModelo de obter_skill e declare ORDER BY se paginar. Não invente SQL a partir do grafo.",
     retryable: false,
   },
   [-32013]: {
@@ -157,17 +157,26 @@ export const mapPlugServerFailure = (
 
   if (failure.status === 401) {
     return new DomainError({
-      code: ERROR_CODES.SERVICE_AUTH_EXPIRED,
-      message: "JWT de serviço do MCP no plug-server recusado.",
-      hint: "O TokenManager deve renovar e repetir. Se persistir, confira PLUG_SERVER_CLIENT_EMAIL/PASSWORD.",
+      code: ERROR_CODES.USER_AUTH_EXPIRED,
+      message: "JWT do Client no plug-server recusado.",
+      hint: "O MCP tenta refresh e, se falhar, login de novo com e-mail/senha do cofre. Se persistir, chame atualizar_credencial_plug.",
       retryable: true,
     });
   }
   if (failure.status === 403) {
+    const blob = JSON.stringify(failure.body ?? {}).toLowerCase();
+    const clientInactive = /pending|blocked|inactive|not active|não ativ/.test(blob);
+    if (clientInactive) {
+      return new DomainError({
+        code: ERROR_CODES.CLIENT_NOT_ACTIVE,
+        message: "O Client existe no plug-server mas não está ativo.",
+        hint: "Peça ao dono do ERP para ativar o Client. Não trate como senha errada.",
+      });
+    }
     return new DomainError({
       code: ERROR_CODES.AGENT_ACCESS_DENIED,
-      message: "Client de serviço sem acesso aprovado a este agente.",
-      hint: "Chame verificar_status_ambiente. O User dono do Agent precisa aprovar o pedido.",
+      message: "Client sem acesso aprovado a este agente.",
+      hint: "Peça ao dono do Agent para ativar o Client e aprovar o acesso. Não trate como senha errada.",
     });
   }
   if (failure.status === 429) {
@@ -199,7 +208,7 @@ export const mapPlugServerFailure = (
     return new DomainError({
       code: ERROR_CODES.PERMISSION_DENIED,
       message: "O client_token não autoriza esta operação.",
-      hint: "O client_token não cobre esta tabela/operação. Peça liberação no ERP ou mude a fonte/SQL.",
+      hint: "O client_token não cobre esta tabela/operação. Peça liberação no ERP ou ajuste o SQL.",
     });
   }
 

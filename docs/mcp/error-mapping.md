@@ -1,60 +1,46 @@
 # Mapeamento de erros
 
-Formato único devolvido às tools:
+Envelope das tools:
 
 ```json
 {
   "success": false,
   "error": {
     "code": "PERMISSION_DENIED",
-    "message": "Sem permissão para a tabela ITEMVENDA neste ambiente.",
-    "hint": "Peça ao administrador do ERP para liberar esta tabela no client_token, ou use outra fonte.",
+    "message": "O client_token não cobre uma ou mais tabelas deste SQL.",
+    "hint": "Peça um client_token que inclua essas tabelas.",
     "retryable": false,
     "retryAfterMs": null
   }
 }
 ```
 
-- `retryable: true` → a IA pode repetir (com backoff se `retryAfterMs`).
-- `retryable: false` → replanejar SQL, pedir dado ao usuário ou repassar a decisão.
+Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 
-Envelope REST vs JSON-RPC e quando o SQL é inclassificável: [`../plug-server/communication.md`](../plug-server/communication.md).
+## Hub / RPC
 
-## JSON-RPC do agente / hub
+| Origem                      | `code`                                      | hint típico                                                    |
+| --------------------------- | ------------------------------------------- | -------------------------------------------------------------- |
+| JSON-RPC `-32001`           | `MISSING_CLIENT_TOKEN`                      | Configure o `client_token` no acesso.                          |
+| `-32002` + "classification" | `ACCESS_REVOKED`                            | SQL sem FROM classificável; ajuste o SQL, não peça token novo. |
+| HTTP 403 Client inativo     | `CLIENT_NOT_ACTIVE` / `AGENT_ACCESS_DENIED` | Ativar o Client; **não** tratar como senha errada.             |
+| HTTP 429                    | `RATE_LIMITED`                              | `Retry-After`.                                                 |
+| HTTP 503                    | `AGENT_UNAVAILABLE`                         | Agente offline; retry.                                         |
+| HTTP 401                    | `USER_AUTH_EXPIRED`                         | Refresh/login com a senha do cofre.                            |
+| abort HTTP                  | `PLUG_SERVER_TIMEOUT`                       | Retryable.                                                     |
 
-| Código RPC | reason típico                                   | `code` MCP             | retryable |
-| ---------- | ----------------------------------------------- | ---------------------- | --------- |
-| `-32001`   | `authentication_failed`, `missing_client_token` | `MISSING_CLIENT_TOKEN` | false     |
-| `-32002`   | `unauthorized`, `token_revoked`                 | `ACCESS_REVOKED`       | false     |
-| `-32008`   | `timeout`                                       | `QUERY_TIMEOUT`        | true      |
-| `-32009`   | `invalid_payload`                               | `INVALID_SQL`          | false     |
-| `-32013`   | rate limit no agente                            | `RATE_LIMITED`         | true      |
-| `-32000`   | `agent_offline`                                 | `AGENT_UNAVAILABLE`    | true      |
+## Domínio
 
-## HTTP do bridge
-
-| HTTP               | `code` MCP             | hint                                                                         |
-| ------------------ | ---------------------- | ---------------------------------------------------------------------------- |
-| 401                | `SERVICE_AUTH_EXPIRED` | Token de serviço será renovado; retry interno. Se persistir, checar secrets. |
-| 403                | `AGENT_ACCESS_DENIED`  | Ambiente sem aprovação. Rodar `verificar_status_ambiente`.                   |
-| 429                | `RATE_LIMITED`         | Respeitar `Retry-After` / `RateLimit-Reset`.                                 |
-| 503                | `AGENT_UNAVAILABLE`    | Agente offline ou fila cheia. Tentar de novo.                                |
-| abort/timeout HTTP | `PLUG_SERVER_TIMEOUT`  | A conexão MCP→plug-server estourou `PLUG_SERVER_HTTP_TIMEOUT_MS`. Retryable. |
-
-`verificar_status_ambiente`: HTTP 200 em `GET /client/me/agents/{id}` = `approved`. HTTP 403 dispara `GET /client/me/agent-access-requests`; `pending` permanece pending; `rejected`/`revoked`/`expired` viram `revoked` local; ausência de pedido = `unknown` (não degrada o status local).
-
-## Domínio MCP
-
-| `code`                    | Quando                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------- |
-| `UNAUTHENTICATED`         | Sem Bearer da conta MCP                                                         |
-| `AMBIENTE_NOT_FOUND`      | `ambienteId` inexistente ou de outra conta                                      |
-| `FONTE_NOT_FOUND`         | slug desconhecido                                                               |
-| `FONTE_JA_EXISTE`         | slug já registrado nesta conta e agente                                         |
-| `FONTE_READONLY`          | tentativa de editar/apagar fonte do seed, ou relacionamento incremental no seed |
-| `ANOTACAO_NOT_FOUND`      | anotação inexistente neste `agentId`                                            |
-| `DIALECT_VARIANT_MISSING` | Fonte sem SQL para o dialeto do ambiente                                        |
-| `AGENT_ACCESS_PENDING`    | Pedido de acesso ainda `pending`                                                |
-| `VALIDATION_ERROR`        | Parâmetro inválido (uuid, dialeto, etc.)                                        |
-| `INTERNAL_ERROR`          | Falha inesperada; mensagem genérica ao modelo                                   |
-| `PLUG_SERVER_TIMEOUT`     | Abort HTTP contra o plug-server                                                 |
+| `code`                                   | Quando                                           |
+| ---------------------------------------- | ------------------------------------------------ |
+| `UNAUTHENTICATED`                        | Sem Bearer (fora do bootstrap) ou token inválido |
+| `VALIDATION_ERROR`                       | Parâmetro ausente/inválido                       |
+| `ACESSO_NOT_FOUND`                       | `acessoId` de outro usuário                      |
+| `AGENT_ACCESS_PENDING`                   | Pedido ainda pending                             |
+| `DIALECT_CONFLICT`                       | Segundo dialeto no mesmo `agentId`               |
+| `CONFLICT`                               | Acesso/skill duplicado                           |
+| `CREDENTIAL_STALE`                       | Senha do Client recusada                         |
+| `PERMISSION_DENIED`                      | Policy do `client_token`                         |
+| `USER_AUTH_EXPIRED`                      | JWT do Client recusado (401)                     |
+| `INVALID_SQL`                            | `SELECT *`, mutação no treino, FROM sem JOIN     |
+| `SKILL_NOT_FOUND` / `ANOTACAO_NOT_FOUND` | Id inexistente neste `agentId`                   |

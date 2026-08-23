@@ -1,43 +1,17 @@
 ---
-description: "Camadas de domínio e aplicação: responsabilidades, ports e anti-padrões"
+description: "Camada de domínio: ports, DomainError, grafo"
 globs: ["src/domain/**/*.ts", "src/application/**/*.ts"]
-alwaysApply: true
+alwaysApply: false
 ---
 
-# Camada de domínio e aplicação
+# Domínio
 
-## Responsabilidades
+Domain não importa application/infrastructure/Express/Drizzle/MCP SDK/`fetch`.
 
-- `src/domain`: modela a linguagem do negócio (ERP, consultas SQL, ambientes, catálogo). Contém entidades, value objects, ports e `DomainError`. Nenhuma dependência de framework.
-- `src/application/use-cases`: modela ações de negócio. Cada caso de uso representa uma tool MCP. Coordena ports, nunca acessa adapters concretos.
+Falhas: `throw new DomainError({ code, message, hint, retryable })` com `ERROR_CODES`.
 
-## Regras de camada
+Identidade nas tools autenticadas: `usuarioId` explícito. Application não lê ALS.
 
-- Domain nunca importa `application`, `infrastructure`, Express, Drizzle, MCP SDK, `fetch`, ou `jose`.
-- Application nunca importa adapters concretos (repositórios Drizzle, `plug-server-rest.adapter`, etc.). Depende apenas de ports.
-- Transport e persistence DTOs não pertencem ao `domain`.
+Grafo: lock por `agentId`. Dialeto no primeiro merge. Precedência de origem no merge.
 
-## Entidades e value objects
-
-- Entidades protegem invariantes e identidade.
-- Value objects são imutáveis, auto-validáveis e comparados por valor.
-- Prefira comportamento rico quando a regra verdadeiramente pertence à entidade. Evite tanto entidades anêmicas (só campos) quanto entidades inchadas com lógica de infra.
-
-## Casos de uso
-
-- Cada caso de uso representa uma ação de negócio e expõe um contrato de input/output pequeno.
-- O nome do caso de uso corresponde à tool MCP que o invoca (ex.: `ConsultarDados` ↔ tool `consultar_dados`).
-- Nomeie com "And" apenas como sinal de que precisa ser dividido.
-- Falhas são sinalizadas via `throw new DomainError(...)` — não via código de retorno booleano.
-
-## Ports e segregação de interfaces
-
-- Interfaces de repositório e gateway pertencem ao `domain/ports/` e usam linguagem de domínio, não SQL ou transport.
-- Prefira ports focados: métodos que os casos de uso realmente precisam, não um mega-port parcialmente utilizado por cada caller.
-- Adapters em `infrastructure` implementam o port rigorosamente: mesma nulabilidade, mesmos erros, mesma idempotência.
-
-## DomainError
-
-- Use sempre `DomainError` com um `ERROR_CODES` bem definido para sinalizar falhas esperadas.
-- Inclua `hint` (orientação para a IA tomar a próxima decisão) e `retryable` em todos os erros.
-- Regras sobre o que pode/não pode aparecer em `message`/`hint` (stack trace, SQL, detalhes internos) vivem em `security.mdc` — não as reafirme aqui, apenas siga-as.
+SQL de treino: SELECT nomeado; JOIN se >1 tabela; merge só após execute + policy.

@@ -6,7 +6,6 @@ import {
   randomUUID,
   scryptSync,
 } from "node:crypto";
-import bcrypt from "bcryptjs";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 
 const VERSION = "v1";
@@ -23,14 +22,6 @@ export class NodeCryptoAdapter implements CryptoPort {
 
   constructor(encryptionSecret: string) {
     this.key = keyFromSecret(encryptionSecret);
-  }
-
-  async hashPassword(plain: string): Promise<string> {
-    return bcrypt.hash(plain, 10);
-  }
-
-  async verifyPassword(plain: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(plain, hash);
   }
 
   encrypt(plain: string): string {
@@ -62,6 +53,10 @@ export class NodeCryptoAdapter implements CryptoPort {
 
   randomId(): string {
     return randomUUID();
+  }
+
+  randomToken(bytes = 32): string {
+    return randomBytes(bytes).toString("base64url");
   }
 
   sha256Hex(value: string): string {

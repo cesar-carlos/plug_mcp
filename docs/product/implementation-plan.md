@@ -1,57 +1,20 @@
-# Plano de implementação — Fase 1
+# Plano de implementação (escopo atual)
 
-## Objetivo
+O MCP é cofre + grafo de treino + **skills como bússola da consulta**. Fora de escopo: Authorization Server próprio, JWT de conta MCP, Client de serviço no `.env`, catálogo pronto (`vendas`/`produtos`/`clientes`), SQL ad-hoc derivado do grafo. Norte: [objective.md](objective.md).
 
-Entregar o `se7e-mcp-server`: servidor MCP remoto (Streamable HTTP) com OAuth 2.1 próprio, catálogo multi-dialeto, onboarding conversacional e execução SQL via REST no `plug-server`.
+## Entrega
 
-## Dentro do escopo
-
-- Servidor MCP Streamable HTTP (`POST /mcp`).
-- Authorization Server OAuth 2.1 + PKCE + DCR e uma tela de login/registro.
-- Cliente REST do `plug-server` (login de serviço, refresh, agents, `sql.execute`).
-- Catálogo semântico com variantes SQL para `mssql`, `sybase`, `postgres` e `firebird`.
-- Tools de onboarding, catálogo e consulta.
-- Erros estruturados (`code`, `message`, `hint`, `retryable`).
-- Auditoria de consultas. Sem painel administrativo.
-
-## Fora do escopo (Fase 2)
-
-- Apps SDK / widgets de UI no ChatGPT.
-- Adapter Socket/relay do `plug-server`.
-- Publicação no diretório de apps da OpenAI.
-
-## Decisões
-
-| Tema                            | Escolha                                              |
-| ------------------------------- | ---------------------------------------------------- |
-| Acesso ao banco ERP             | Somente via `plug-server`                            |
-| Canal MCP ↔ plug-server         | REST (`POST /api/v1/agents/commands`)                |
-| Identidade no plug-server       | MCP é um `Client` de serviço (não `Agent`)           |
-| Identidade no MCP               | Conta própria + JWT OAuth (`sub` = `mcp_account.id`) |
-| Dialeto                         | Informado pelo usuário ao conectar o ambiente        |
-| Restrição extra a SELECT no MCP | Não. Autorização fica no `client_token`              |
-| Painel admin                    | Não. Tudo via tools / seed                           |
-| Transporte MCP                  | Streamable HTTP                                      |
-| HTTP                            | Express                                              |
-| Persistência                    | PostgreSQL + Drizzle                                 |
-
-## Ordem de entrega
-
-1. Documentação em `docs/`.
-2. Scaffold TypeScript / Express / hexagonal.
-3. OAuth 2.1.
-4. Adapter REST do plug-server + TokenManager.
-5. Mapeamento de erros.
-6. Persistência e repositórios.
-7. Tools de onboarding.
-8. Tools de catálogo + seed.
-9. Tool `consultar_dados`.
-10. Testes unitários e de integração.
-11. Validação ponta a ponta do protocolo MCP (HTTP in-process) e guia de conexão em clientes reais.
+- Cofre: `usuario_mcp` + `acesso` (N pares `agentId`/`client_token`).
+- Tool pré-auth `registrar_acesso` + `GET /setup/{code}`.
+- `UsuarioTokenManager` com e-mail/senha cifrados; login/refresh no hub por usuário.
+- Grafo compartilhado por `agentId` (tabela/coluna/relacionamento com proveniência).
+- `treinar_com_sql`: SELECT nomeado, JOIN se >1 tabela, merge só após `sql.execute` + policy.
+- Skills (rascunho → validada → publicada): são o que a IA usa na pergunta do usuário. Treino sem skill publicada não habilita consulta.
+- Postgres+pgvector obrigatório em produção; Redis para cache de JWT/policy/rate-limit.
 
 ## Critérios de sucesso
 
-- Usuário conecta ambiente (`agentId` + dialeto + `client_token`) pelo chat.
-- IA descobre fontes, obtém SQL base no dialeto certo, consulta e recebe erro acionável quando falhar.
-- Nenhuma senha de terceiros do `plug-server` passa pelo chat.
-- Trocar REST por Socket no futuro altera só o adapter (`PlugServerGatewayPort`).
+- Bootstrap sem Bearer só com `registrar_acesso`; token MCP nunca na resposta da tool.
+- Dois usuários no mesmo `agentId` leem o mesmo grafo; policy recorta a leitura.
+- Dialeto travado no primeiro treino; conflito vira `DIALECT_CONFLICT`.
+- Sem `jose`/`bcryptjs`/`cookie-parser` no runtime.

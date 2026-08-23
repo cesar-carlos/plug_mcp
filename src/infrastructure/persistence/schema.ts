@@ -1,248 +1,178 @@
-import { sql } from "drizzle-orm";
-import {
-  boolean,
-  customType,
-  index,
-  integer,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
-/** FTS column owned by Postgres (GENERATED ALWAYS AS in drizzle/0006_indice_busca.sql). */
-const tsvector = customType<{ data: string }>({
-  dataType() {
-    return "tsvector";
-  },
-});
-
-/**
- * `embedding vector(1536)` is optional (`drizzle/optional/0007_pgvector.sql`).
- * Do not declare it on pgTable: Drizzle would emit the column on every INSERT
- * and seed/boot would fail without pgvector. Read/write goes through raw SQL.
- */
-
-export const dialetoEnum = pgEnum("dialeto", ["mssql", "sybase", "postgres", "firebird"]);
-export const statusAcessoEnum = pgEnum("status_acesso", ["pending", "approved", "revoked"]);
-
-export const mcpAccount = pgTable("mcp_account", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+};
 
-export const ambiente = pgTable(
-  "ambiente",
+export const usuarioMcp = pgTable(
+  "usuario_mcp",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    mcpAccountId: uuid("mcp_account_id")
-      .notNull()
-      .references(() => mcpAccount.id, { onDelete: "cascade" }),
-    nomeAmigavel: text("nome_amigavel").notNull(),
-    agentId: uuid("agent_id").notNull(),
-    dialeto: dialetoEnum("dialeto").notNull(),
-    clientTokenEncriptado: text("client_token_encriptado"),
-    statusAcesso: statusAcessoEnum("status_acesso").notNull().default("pending"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("ambiente_account_agent_idx").on(t.mcpAccountId, t.agentId)],
-);
-
-export const fonte = pgTable(
-  "fonte",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    slug: text("slug").notNull(),
-    nome: text("nome").notNull(),
-    descricao: text("descricao").notNull(),
-    ativo: boolean("ativo").notNull().default(true),
-    mcpAccountId: uuid("mcp_account_id").references(() => mcpAccount.id, { onDelete: "cascade" }),
-    agentId: uuid("agent_id"),
-    tsv: tsvector("tsv"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    emailEnc: text("email_enc").notNull(),
+    emailHash: text("email_hash").notNull(),
+    senhaEnc: text("senha_enc").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    ...timestamps,
   },
   (t) => [
-    uniqueIndex("fonte_slug_global_idx")
-      .on(t.slug)
-      .where(sql`${t.mcpAccountId} is null`),
-    uniqueIndex("fonte_slug_conta_agent_idx").on(t.mcpAccountId, t.agentId, t.slug),
-    index("fonte_conta_agent_idx").on(t.mcpAccountId, t.agentId),
+    uniqueIndex("usuario_mcp_email_hash_uidx").on(t.emailHash),
+    uniqueIndex("usuario_mcp_token_hash_uidx").on(t.tokenHash),
   ],
 );
 
-export const fonteSqlVariant = pgTable(
-  "fonte_sql_variant",
+export const acesso = pgTable(
+  "acesso",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    fonteId: uuid("fonte_id")
+    usuarioId: uuid("usuario_id")
       .notNull()
-      .references(() => fonte.id, { onDelete: "cascade" }),
-    dialeto: dialetoEnum("dialeto").notNull(),
-    sqlBase: text("sql_base").notNull(),
-    observacoesDialeto: text("observacoes_dialeto").notNull().default(""),
+      .references(() => usuarioMcp.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id").notNull(),
+    dialeto: text("dialeto").notNull(),
+    nomeAmigavel: text("nome_amigavel").notNull(),
+    clientTokenEnc: text("client_token_enc").notNull(),
+    clientTokenHash: text("client_token_hash").notNull(),
+    statusAcesso: text("status_acesso").notNull().default("pending"),
+    ...timestamps,
   },
-  (t) => [uniqueIndex("fonte_sql_variant_fonte_dialeto_idx").on(t.fonteId, t.dialeto)],
+  (t) => [
+    uniqueIndex("acesso_usuario_agent_token_uidx").on(t.usuarioId, t.agentId, t.clientTokenHash),
+    index("acesso_usuario_idx").on(t.usuarioId),
+    index("acesso_agent_idx").on(t.agentId),
+  ],
 );
 
-export const fonteColuna = pgTable(
-  "fonte_coluna",
+export const grafoDialeto = pgTable("grafo_dialeto", {
+  agentId: uuid("agent_id").primaryKey(),
+  dialeto: text("dialeto").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const tabelaGrafo = pgTable(
+  "tabela_grafo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    fonteId: uuid("fonte_id")
-      .notNull()
-      .references(() => fonte.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id").notNull(),
     nome: text("nome").notNull(),
-    tipo: text("tipo").notNull(),
-    descricao: text("descricao").notNull(),
-    regraNegocio: text("regra_negocio"),
-    ordem: integer("ordem").notNull().default(0),
+    descricao: text("descricao"),
+    origem: text("origem").notNull(),
+    status: text("status").notNull().default("vigente"),
+    autorUsuarioId: uuid("autor_usuario_id"),
+    ...timestamps,
   },
-  (t) => [index("fonte_coluna_fonte_idx").on(t.fonteId)],
+  (t) => [
+    uniqueIndex("tabela_grafo_agent_nome_uidx").on(t.agentId, t.nome),
+    index("tabela_grafo_agent_idx").on(t.agentId),
+  ],
 );
 
-export const fonteRelacionamento = pgTable(
-  "fonte_relacionamento",
+export const colunaGrafo = pgTable(
+  "coluna_grafo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    fonteOrigemId: uuid("fonte_origem_id")
+    tabelaId: uuid("tabela_id")
       .notNull()
-      .references(() => fonte.id, { onDelete: "cascade" }),
+      .references(() => tabelaGrafo.id, { onDelete: "cascade" }),
+    nome: text("nome").notNull(),
+    tipo: text("tipo"),
+    descricao: text("descricao"),
+    dicionario: text("dicionario"),
+    origem: text("origem").notNull(),
+    status: text("status").notNull().default("vigente"),
+    autorUsuarioId: uuid("autor_usuario_id"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("coluna_grafo_tabela_nome_uidx").on(t.tabelaId, t.nome)],
+);
+
+export const relacionamentoGrafo = pgTable(
+  "relacionamento_grafo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id").notNull(),
+    tabelaOrigemId: uuid("tabela_origem_id")
+      .notNull()
+      .references(() => tabelaGrafo.id, { onDelete: "cascade" }),
     colunaOrigem: text("coluna_origem").notNull(),
-    fonteDestinoId: uuid("fonte_destino_id").references(() => fonte.id, { onDelete: "cascade" }),
-    tabelaDestino: text("tabela_destino"),
+    tabelaDestinoId: uuid("tabela_destino_id")
+      .notNull()
+      .references(() => tabelaGrafo.id, { onDelete: "cascade" }),
     colunaDestino: text("coluna_destino").notNull(),
     tipoJoin: text("tipo_join").notNull().default("inner"),
-    descricao: text("descricao").notNull().default(""),
+    descricao: text("descricao"),
+    origem: text("origem").notNull(),
+    status: text("status").notNull().default("vigente"),
+    autorUsuarioId: uuid("autor_usuario_id"),
+    ...timestamps,
   },
-  (t) => [index("fonte_relacionamento_origem_idx").on(t.fonteOrigemId)],
+  (t) => [
+    uniqueIndex("rel_grafo_uidx").on(
+      t.agentId,
+      t.tabelaOrigemId,
+      t.colunaOrigem,
+      t.tabelaDestinoId,
+      t.colunaDestino,
+    ),
+    index("rel_grafo_agent_idx").on(t.agentId),
+  ],
 );
 
-export const regraNegocio = pgTable(
-  "regra_negocio",
+export const skill = pgTable(
+  "skill",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    fonteId: uuid("fonte_id").references(() => fonte.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id").notNull(),
+    slug: text("slug").notNull(),
     nome: text("nome").notNull(),
     descricao: text("descricao").notNull(),
-    expressao: text("expressao"),
+    sqlModelo: text("sql_modelo").notNull(),
+    versao: integer("versao").notNull().default(1),
+    status: text("status").notNull().default("rascunho"),
+    autorUsuarioId: uuid("autor_usuario_id"),
+    ...timestamps,
   },
-  (t) => [index("regra_negocio_fonte_idx").on(t.fonteId)],
+  (t) => [
+    uniqueIndex("skill_agent_slug_uidx").on(t.agentId, t.slug),
+    index("skill_agent_idx").on(t.agentId),
+  ],
 );
 
-export const fonteAnotacao = pgTable(
-  "fonte_anotacao",
+export const anotacaoGrafo = pgTable(
+  "anotacao_grafo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    mcpAccountId: uuid("mcp_account_id")
-      .notNull()
-      .references(() => mcpAccount.id, { onDelete: "cascade" }),
     agentId: uuid("agent_id").notNull(),
-    fonteId: uuid("fonte_id").references(() => fonte.id, { onDelete: "cascade" }),
+    tabelaId: uuid("tabela_id").references(() => tabelaGrafo.id, { onDelete: "set null" }),
     tipo: text("tipo").notNull(),
-    titulo: text("titulo").notNull().default(""),
+    titulo: text("titulo").notNull(),
     texto: text("texto").notNull(),
-    tsv: tsvector("tsv"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    autorUsuarioId: uuid("autor_usuario_id"),
+    ...timestamps,
   },
-  (t) => [index("fonte_anotacao_conta_agent_fonte_idx").on(t.mcpAccountId, t.agentId, t.fonteId)],
-);
-
-export const consultaMemoria = pgTable(
-  "consulta_memoria",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    mcpAccountId: uuid("mcp_account_id")
-      .notNull()
-      .references(() => mcpAccount.id, { onDelete: "cascade" }),
-    agentId: uuid("agent_id").notNull(),
-    pergunta: text("pergunta").notNull(),
-    sqlExecutado: text("sql_executado").notNull(),
-    fonteSlug: text("fonte_slug"),
-    observacao: text("observacao").notNull().default(""),
-    tsv: tsvector("tsv"),
-    aprovadoEm: timestamp("aprovado_em", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("consulta_memoria_conta_agent_idx").on(t.mcpAccountId, t.agentId)],
-);
-
-export const sinonimo = pgTable(
-  "sinonimo",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    fonteId: uuid("fonte_id")
-      .notNull()
-      .references(() => fonte.id, { onDelete: "cascade" }),
-    termo: text("termo").notNull(),
-    descricao: text("descricao").notNull().default(""),
-  },
-  (t) => [index("sinonimo_fonte_idx").on(t.fonteId)],
+  (t) => [index("anotacao_grafo_agent_idx").on(t.agentId)],
 );
 
 export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    mcpAccountId: uuid("mcp_account_id")
-      .notNull()
-      .references(() => mcpAccount.id, { onDelete: "cascade" }),
-    ambienteId: uuid("ambiente_id").references(() => ambiente.id, { onDelete: "set null" }),
+    usuarioId: uuid("usuario_id"),
+    acessoId: uuid("acesso_id"),
     tool: text("tool").notNull(),
     sqlEnviado: text("sql_enviado"),
-    sucesso: boolean("sucesso").notNull(),
+    sucesso: integer("sucesso").notNull(),
     codigoErro: text("codigo_erro"),
     linhasRetornadas: integer("linhas_retornadas"),
-    duracaoMs: integer("duracao_ms").notNull(),
+    duracaoMs: integer("duracao_ms"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("audit_log_account_created_idx").on(t.mcpAccountId, t.createdAt)],
+  (t) => [
+    index("audit_log_usuario_idx").on(t.usuarioId),
+    index("audit_log_created_idx").on(t.createdAt),
+  ],
 );
 
-export const oauthClient = pgTable("oauth_client", {
-  clientId: text("client_id").primaryKey(),
-  clientSecretHash: text("client_secret_hash"),
-  clientName: text("client_name").notNull(),
-  redirectUris: text("redirect_uris").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+export const grafoLock = pgTable("grafo_lock", {
+  agentId: uuid("agent_id").primaryKey(),
 });
-
-export const oauthAuthCode = pgTable(
-  "oauth_auth_code",
-  {
-    code: text("code").primaryKey(),
-    clientId: text("client_id")
-      .notNull()
-      .references(() => oauthClient.clientId, { onDelete: "cascade" }),
-    accountId: uuid("account_id")
-      .notNull()
-      .references(() => mcpAccount.id, { onDelete: "cascade" }),
-    redirectUri: text("redirect_uri").notNull(),
-    codeChallenge: text("code_challenge").notNull(),
-    resource: text("resource"),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  },
-  (t) => [index("oauth_auth_code_expires_idx").on(t.expiresAt)],
-);
-
-export const oauthRefreshToken = pgTable(
-  "oauth_refresh_token",
-  {
-    tokenHash: text("token_hash").primaryKey(),
-    clientId: text("client_id")
-      .notNull()
-      .references(() => oauthClient.clientId, { onDelete: "cascade" }),
-    accountId: uuid("account_id")
-      .notNull()
-      .references(() => mcpAccount.id, { onDelete: "cascade" }),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  },
-  (t) => [index("oauth_refresh_token_expires_idx").on(t.expiresAt)],
-);

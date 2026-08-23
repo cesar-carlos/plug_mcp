@@ -1,63 +1,57 @@
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
-import type { Ambiente } from "../../../domain/entities/ambiente.js";
-import type { AmbienteRepositoryPort } from "../../../domain/ports/ambiente-repository.port.js";
+import type { Acesso } from "../../../domain/entities/acesso.js";
+import type { AcessoRepositoryPort } from "../../../domain/ports/acesso-repository.port.js";
 
-export type AmbienteConsultavel = Ambiente & { readonly clientTokenEncriptado: string };
-
-/** Guard clauses compartilhadas por todos os casos de uso que dependem de conta/ambiente autenticados. */
-export const requireAccount = (mcpAccountId: string | undefined): string => {
-  if (!mcpAccountId) {
+export const requireUsuario = (usuarioId: string | undefined): string => {
+  if (!usuarioId) {
     throw DomainError.unauthenticated();
   }
-  return mcpAccountId;
+  return usuarioId;
 };
 
-export const requireAmbiente = async (
-  ambientes: AmbienteRepositoryPort,
-  ambienteId: string,
-  mcpAccountId: string,
-): Promise<Ambiente> => {
-  if (!ambienteId?.trim()) {
+export const requireAcesso = async (
+  acessos: AcessoRepositoryPort,
+  acessoId: string | undefined,
+  usuarioId: string,
+): Promise<Acesso> => {
+  if (!acessoId?.trim()) {
+    const lista = await acessos.listByUsuario(usuarioId);
+    if (lista.length === 1 && lista[0]) {
+      return lista[0];
+    }
     throw new DomainError({
       code: ERROR_CODES.VALIDATION_ERROR,
-      message: "ambienteId é obrigatório.",
-      hint: "Chame listar_ambientes e use o id retornado, ou conectar_ambiente se ainda não houver ambiente.",
+      message: "acessoId é obrigatório.",
+      hint: "Chame listar_acessos e passe o id. Com um único acesso, o MCP usa esse automaticamente.",
     });
   }
-  const ambiente = await ambientes.findByIdForAccount(ambienteId, mcpAccountId);
-  if (!ambiente) {
+  const acesso = await acessos.findByIdForUsuario(acessoId, usuarioId);
+  if (!acesso) {
     throw new DomainError({
-      code: ERROR_CODES.AMBIENTE_NOT_FOUND,
-      message: "Ambiente não encontrado nesta conta.",
-      hint: "Confira o ambienteId com listar_ambientes. O id pertence à conta autenticada.",
+      code: ERROR_CODES.ACESSO_NOT_FOUND,
+      message: "Acesso não encontrado para este token MCP.",
+      hint: "Confira o acessoId com listar_acessos. O token identifica o usuário; o acesso é o trio agentId + client_token.",
     });
   }
-  return ambiente;
+  return acesso;
 };
 
-export const requireAmbienteConsultavel = (ambiente: Ambiente): AmbienteConsultavel => {
-  if (ambiente.statusAcesso === "pending") {
+export const requireAcessoAprovado = (acesso: Acesso): Acesso => {
+  if (acesso.statusAcesso === "pending") {
     throw new DomainError({
       code: ERROR_CODES.AGENT_ACCESS_PENDING,
-      message: "Ambiente ainda aguarda aprovação de acesso no plug-server.",
-      hint: "Chame verificar_status_ambiente e oriente o usuário a aprovar o pedido.",
+      message: "Acesso ao agente ainda aguarda aprovação no plug-server.",
+      hint: "Chame verificar_acesso. Peça ao dono do Agent para aprovar o Client. Não faça polling agressivo.",
       retryable: true,
     });
   }
-  if (ambiente.statusAcesso === "revoked") {
+  if (acesso.statusAcesso === "revoked") {
     throw new DomainError({
       code: ERROR_CODES.ACCESS_REVOKED,
       message: "Acesso ao agente está revogado.",
-      hint: "Reabra o pedido com conectar_ambiente.",
+      hint: "Reabra o pedido com adicionar_acesso ou registrar_acesso.",
     });
   }
-  if (!ambiente.clientTokenEncriptado) {
-    throw new DomainError({
-      code: ERROR_CODES.MISSING_CLIENT_TOKEN,
-      message: "Este ambiente não tem client_token configurado.",
-      hint: "Chame configurar_client_token pedindo o token ao administrador do ERP.",
-    });
-  }
-  return ambiente as AmbienteConsultavel;
+  return acesso;
 };

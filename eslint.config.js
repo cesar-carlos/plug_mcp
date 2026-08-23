@@ -62,10 +62,7 @@ export default tseslint.config(
     },
   },
   {
-    files: [
-      "src/infrastructure/persistence/memory/**/*.ts",
-      "src/infrastructure/oauth/memory-oauth-store.ts",
-    ],
+    files: ["src/infrastructure/persistence/memory/**/*.ts"],
     rules: {
       // Fakes implementam ports async sem I/O — `async` no contrato, sem await no corpo.
       "@typescript-eslint/require-await": "off",
@@ -86,12 +83,7 @@ export default tseslint.config(
     },
   },
   {
-    files: [
-      "src/main.ts",
-      "src/infrastructure/persistence/migrate.ts",
-      "src/infrastructure/persistence/seed/run-seed.ts",
-      "src/infrastructure/embedding/reindex-contexto.ts",
-    ],
+    files: ["src/main.ts", "src/infrastructure/persistence/migrate.ts"],
     rules: {
       "no-console": "off",
     },

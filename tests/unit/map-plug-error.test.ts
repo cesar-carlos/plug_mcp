@@ -9,7 +9,7 @@ describe("mapPlugServerFailure", () => {
     });
     expect(err.code).toBe("MISSING_CLIENT_TOKEN");
     expect(err.retryable).toBe(false);
-    expect(err.hint).toContain("configurar_client_token");
+    expect(err.hint).toContain("registrar_acesso");
   });
 
   it("maps -32013 with retryAfterMs", () => {
@@ -54,7 +54,7 @@ describe("mapPlugServerFailure", () => {
   it("maps HTTP 403 to AGENT_ACCESS_DENIED", () => {
     const err = mapPlugServerFailure({ status: 403, body: { code: "AGENT_ACCESS_DENIED" } });
     expect(err.code).toBe("AGENT_ACCESS_DENIED");
-    expect(err.hint).toContain("verificar_status_ambiente");
+    expect(err.hint).toContain("ativar o Client");
   });
 
   it("dá um hint específico quando -32002 é SQL não classificável (ex.: SELECT sem FROM)", () => {
@@ -94,5 +94,13 @@ describe("mapPlugServerFailure", () => {
     expect(err.code).toBe("PLUG_SERVER_ERROR");
     expect(err.message).toBe("Falha ao comunicar com o plug-server.");
     expect(err.message).not.toContain("ClienteSecreto");
+  });
+  it("maps HTTP 403 pending Client to CLIENT_NOT_ACTIVE", () => {
+    const err = mapPlugServerFailure({
+      status: 403,
+      body: { code: "pending", message: "Client is pending" },
+    });
+    expect(err.code).toBe("CLIENT_NOT_ACTIVE");
+    expect(err.hint).toMatch(/ativar o Client/i);
   });
 });

@@ -48,8 +48,8 @@ export class DomainError extends Error {
   static unauthenticated(): DomainError {
     return new DomainError({
       code: ERROR_CODES.UNAUTHENTICATED,
-      message: "Sessão da conta MCP ausente ou inválida.",
-      hint: "Faça login no Authorization Server deste MCP (OAuth) e envie Authorization: Bearer.",
+      message: "Token MCP ausente ou inválido.",
+      hint: "Chame registrar_acesso sem Bearer, abra o setupCode em GET /setup/{code}, copie o token e envie Authorization: Bearer.",
     });
   }
 }

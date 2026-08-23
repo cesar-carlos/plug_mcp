@@ -2,7 +2,7 @@
   "name": "se7e-mcp-server",
   "version": "0.1.0",
   "private": true,
-  "description": "Servidor MCP Se7e: catálogo semântico e consultas SQL via plug-server",
+  "description": "Servidor MCP Se7e: cofre de credenciais do Client e grafo compartilhado por agentId",
   "type": "module",
   "engines": {
     "node": ">=24.19.0"
@@ -18,20 +18,15 @@
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=.env src/infrastructure/persistence/seed/run-seed.ts",
-    "db:reindex-embeddings": "tsx --env-file-if-exists=.env src/infrastructure/embedding/reindex-contexto.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
-    "bcryptjs": "^3.0.2",
     "compression": "^1.8.1",
-    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
     "helmet": "^8.3.0",
-    "jose": "^6.0.12",
     "pg": "^8.16.3",
     "pino": "^9.9.0",
     "pino-http": "^10.5.0",
@@ -40,9 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
-    "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",
-    "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.23",
     "@types/node": "^24.13.3",

@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -25,8 +25,6 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_mcp_test
-      MCP_JWT_SECRET: ci-mcp-jwt-secret-min-32-characters!!
-      MCP_SESSION_SECRET: ci-session-secret-min-32-characters
       MCP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       PLUG_SERVER_BASE_URL: http://plug-server.test
     steps:

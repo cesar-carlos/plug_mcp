@@ -2,7 +2,7 @@ import { DomainError, isDomainError } from "../../domain/errors/domain-error.js"
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AppConfig } from "../../config/env.js";
-import { wwwAuthenticate } from "../oauth/bearer-auth.js";
+import { wwwAuthenticate } from "./mcp-auth.js";
 
 export interface ToolResult {
   [key: string]: unknown;

@@ -1,68 +1,21 @@
 ---
-description: "Integração com plug-server: gateway port, token manager e mapeamento de erros"
+description: "Integração com o plug-server: gateway, token por usuário e erros"
 globs: ["src/infrastructure/plug-server/**/*.ts", "src/domain/ports/plug-server-gateway.port.ts", "src/application/use-cases/**/*.ts"]
-alwaysApply: true
+alwaysApply: false
 ---
 
-# Integração com plug-server
+# Plug-server
 
-Documentação de produto (contrato do hub, sem código): `docs/plug-server/`.
+O MCP autentica **como o Client do usuário** (e-mail/senha do cofre). Não cadastra User/Client/Agent.
 
-## Responsabilidade do MCP perante o plug-server
+`PlugServerGatewayPort`: `login`, `refresh`, `requestAgentAccess`, `getAgentAccessStatus`, `putClientToken`, `getClientTokenPolicy`, `executeSql`.
 
-- O MCP **não re-implementa** autenticação SQL, autorização, ou execução de query. Delega 100% ao plug-server.
-- O MCP é responsável por: autenticar-se como serviço (`Client`), renovar tokens automaticamente, mapear erros do plug-server para `DomainError`, e passar o `client_token` do ambiente para o `plug_agente` correto.
+Rotas (prefixo `/api/v1`): `POST /client-auth/login|refresh`, `POST /client/me/agents`, `GET /client/me/agents/{id}`, `GET /client/me/agent-access-requests?search=`, `PUT .../client-token`, `POST /agents/commands`.
 
-## `PlugServerGatewayPort`
+RPCs: `sql.execute` com `execution_mode: preserve`; `client_token.getPolicy`. Contrato vivo: `D:/Developer/plug_database/plug_server/docs` e `GET /docs` no hub.
 
-- Interface em `src/domain/ports/plug-server-gateway.port.ts`.
-- Métodos: `requestAgentAccess`, `getAgentAccessStatus`, `putClientToken`, `executeSql`.
-- Casos de uso dependem apenas desta interface — nunca de `PlugServerRestAdapter` diretamente.
-- `FakePlugServer` em `tests/helpers/fake-plug-server.ts` implementa o port para testes unitários.
+`UsuarioTokenManager`: JWT por `usuarioId`, refresh ~60s antes do `exp`, `inflight` por usuário, fallback login com senha cifrada.
 
-## `ServiceTokenManager` (token manager)
+429: `Retry-After` / `RateLimit-Reset`. Cache de policy (memória + Redis) por `agentId` + hash do `client_token`.
 
-- Gerencia o par `accessToken` / `refreshToken` do MCP como serviço no plug-server.
-- **Proativo**: verifica expiração com margem de 60 s antes do `exp` e faz refresh preventivo.
-- **Thread-safe por promessa**: usa uma única `Promise<string>` pendente (`inflight`) para evitar N logins/refreshes simultâneos.
-- Se o refresh falhar, cai de volta para login completo (`loginOrRefresh`); se as credenciais de serviço não estiverem configuradas, lança `DomainError` com `code: SERVICE_AUTH_EXPIRED`.
-- Regras de logging de token (nunca o valor bruto, no máximo `accessTokenLen` para correlação) seguem `security.mdc` — aplicam-se a todo log deste adapter.
-
-## `PlugServerRestAdapter`
-
-- Única implementação concreta de `PlugServerGatewayPort`.
-- Toda chamada HTTP ao plug-server passa por `ServiceTokenManager.getAccessToken()` para obter o Bearer token antes do request.
-- Em caso de `401` do plug-server (token expirado mid-request), faz um refresh e tenta novamente uma vez antes de falhar.
-- Toda chamada usa `AbortSignal.timeout(PLUG_SERVER_HTTP_TIMEOUT_MS)` (default 35 s). Abort vira `PLUG_SERVER_TIMEOUT`.
-- `GET /client/me/agents/{id}` 200 = `state: approved`. 403 consulta `GET /client/me/agent-access-requests` para discriminar `pending` / `rejected` / `revoked` / `expired` / `unknown`.
-- Mapeia respostas de erro via `mapPlugServerFailure` antes de propagar — nunca relance o erro HTTP bruto.
-
-## Mapeamento de erros (`map-plug-error.ts`)
-
-- `mapPlugServerFailure` traduz erros JSON-RPC (`code` numérico, ex.: -32001..-32013) e HTTP status (401/403/429/503) do plug-server para `DomainError`.
-- Sempre inclua `hint` explicando ao modelo o que fazer: tentar novamente, solicitar novo `client_token`, verificar permissões.
-- Erros com `retryable: true` devem ter `retryAfterMs` (via `parseRetryAfterMs`, lendo `Retry-After`/`RateLimit-Reset`).
-- Erros HTTP não mapeados caem em `PLUG_SERVER_ERROR` (ou `PERMISSION_DENIED` se a mensagem contiver "permission"/"denied"), com `retryable` só quando `status >= 500`.
-
-## `client_token` — fluxo neste adapter
-
-- O usuário fornece o `client_token` via tool `configurar_client_token`; o MCP o armazena criptografado (`ambiente.client_token_encriptado`) e o usa de forma transparente nas consultas subsequentes, descriptografando só no momento de montar o body de `sql.execute`.
-- Regras de exposição (nunca em resposta de tool, log, ou mensagem de erro) e detalhes de criptografia (`AES-256-GCM` via `CryptoPort`) vivem em `security.mdc` — este arquivo trata apenas de onde o fluxo se encaixa na chamada ao plug-server.
-
-## Dialeto SQL e agentId
-
-- Cada `Ambiente` tem um `dialeto` (`mssql | sybase | postgres | firebird`) e um `agentId` (UUID do plug_agente), ambos fornecidos pelo usuário em `conectar_ambiente` — nunca inferidos pela IA.
-- Em `obter_fonte`, o SQL base da `Fonte` é resolvido para o dialeto do ambiente via `fonte_sql_variant` antes de devolver à IA.
-- Nunca envie SQL de dialeto errado; retorne `DomainError` com `code: DIALECT_VARIANT_MISSING` se não houver variante disponível para aquele dialeto.
-
-## SQL precisa ser classificável pelo agente (`FROM` obrigatório)
-
-- Confirmado via teste live contra plug-server de produção (`tests/live/`): o pipeline de autorização do `plug_agente` classifica o SQL recebido para decidir se o `client_token` autoriza aquele acesso. Um `SELECT` sem `FROM` referenciando uma tabela/view real (ex.: `SELECT 1`) não é classificável e é negado com `-32002`/"Not authorized" — **mesmo** com um `client_token` totalmente permissivo (`all_tables: true`, `all_permissions: true`).
-- Toda `Fonte.sqlBase`/`FonteSqlVariant` do catálogo já referencia tabelas reais do ERP, então isso não afeta o uso normal de `consultar_dados`/`obter_fonte`. Só importa para smoke tests ou qualquer SQL ad-hoc de diagnóstico — sempre referencie uma tabela/view real (catálogo de sistema é seguro: `sysobjects`/`sys.objects`/`pg_catalog.pg_class`/`RDB$RELATIONS`).
-- `map-plug-error.ts` já detecta esse padrão (`technical_message` contendo "classification") e substitui o hint genérico de `ACCESS_REVOKED` por um que orienta a IA a ajustar o SQL em vez de pedir um novo `client_token`.
-
-## Introspecção de schema (`explorar_tabelas` / `descrever_tabela`)
-
-- SQL por dialeto em `application/use-cases/shared/schema-introspection.ts`: `sys.objects` / `sysobjects` / `pg_catalog.pg_class` / `RDB$RELATIONS` (e o equivalente de colunas). O dialeto sai de `ambiente.dialeto`.
-- Nome de tabela e filtro vão como params (`:tabela`, `:schema`, `:filtro`), nunca interpolados.
-- O `client_token` pode não autorizar o catálogo de sistema. `PERMISSION_DENIED` / `ACCESS_REVOKED` nessas tools ganham hint para a IA pedir os nomes ao usuário em vez de insistir. O MCP não ganha autorização SQL própria.
+`isHubConnected` é snapshot — `false` não prova agente offline; tente o SQL e mapeie o erro.

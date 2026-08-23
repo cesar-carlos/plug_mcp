@@ -1,30 +1,29 @@
 # Se7e MCP Server — Documentação
 
-Servidor MCP remoto que conecta clientes de IA (ChatGPT, Claude, Cursor e outros) aos dados do ERP Se7e através do `plug-server`. A IA descobre fontes, lê o significado das colunas, monta SQL no dialeto do ambiente e envia a consulta ao `plug-server`. Autorização, limites e execução SQL permanecem no `plug-server`.
+O MCP **não** cadastra User/Client/Agent e **não** tem Authorization Server próprio. O usuário já é Client no plug-server. O MCP guarda as quatro credenciais (e-mail, senha cifrada, `agentId`, `client_token`), emite **um** token MCP opaco e dá **contexto à IA** via skills publicadas (grafo de schema só no treino).
 
-## Documentos por área
+Norte de produto: [product/objective.md](product/objective.md). Comunicação com o hub: [plug-server/README.md](plug-server/README.md). Histórico de mudanças: [`../CHANGELOG.md`](../CHANGELOG.md).
 
-Organizado em subpastas por tema, para abrir só o que for relevante à implementação em questão.
+## Documentos
 
-| Área                            | Documento                                                           | Conteúdo                                                          |
-| ------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [`product/`](product)           | [implementation-plan.md](product/implementation-plan.md)            | Plano da Fase 1, escopo, decisões e critérios de sucesso          |
-| [`architecture/`](architecture) | [hexagonal-architecture.md](architecture/hexagonal-architecture.md) | Arquitetura hexagonal, camadas, SOLID e composição                |
-| [`auth/`](auth)                 | [identity-and-oauth.md](auth/identity-and-oauth.md)                 | Identidade em 3 camadas, OAuth 2.1 do MCP e tokens do plug-server |
-| [`data/`](data)                 | [data-model.md](data/data-model.md)                                 | Modelo Postgres, entidades e seed do catálogo                     |
-| [`mcp/`](mcp)                   | [tools.md](mcp/tools.md)                                            | Contratos das tools MCP (onboarding, catálogo, consulta)          |
-| [`mcp/`](mcp)                   | [error-mapping.md](mcp/error-mapping.md)                            | Códigos de erro estruturados para a IA decidir                    |
-| [`plug-server/`](plug-server)   | [README.md](plug-server/README.md)                                  | Índice: auth do hub, canais REST/Socket, adapter deste MCP        |
-| [`plug-server/`](plug-server)   | [auth.md](plug-server/auth.md)                                      | JWT de Client, aprovação Agent, `client_token`                    |
-| [`plug-server/`](plug-server)   | [communication.md](plug-server/communication.md)                    | Envelope JSON-RPC, REST vs Socket, classificação SQL              |
-| [`plug-server/`](plug-server)   | [rest-integration.md](plug-server/rest-integration.md)              | Endpoints e TokenManager que este MCP implementa hoje             |
-| [`clients/`](clients)           | [connecting-clients.md](clients/connecting-clients.md)              | Como plugar o MCP em Cursor, Claude e ChatGPT                     |
+| Área                            | Documento                                                                                                              | Conteúdo                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| [`product/`](product)           | [objective.md](product/objective.md)                                                                                   | Norte: skill como bússola; sem inventar         |
+| [`product/`](product)           | [implementation-plan.md](product/implementation-plan.md)                                                               | Escopo: cofre, grafo de treino, skills          |
+| [`architecture/`](architecture) | [hexagonal-architecture.md](architecture/hexagonal-architecture.md)                                                    | Hexágono, ports, composição                     |
+| [`auth/`](auth)                 | [vault-and-mcp-token.md](auth/vault-and-mcp-token.md)                                                                  | Cofre, token MCP, bootstrap, setupCode          |
+| [`data/`](data)                 | [data-model.md](data/data-model.md)                                                                                    | `usuario_mcp`, `acesso`, grafo, skill           |
+| [`mcp/`](mcp)                   | [tools.md](mcp/tools.md)                                                                                               | Tools de cofre, treino, schema, consulta        |
+| [`mcp/`](mcp)                   | [error-mapping.md](mcp/error-mapping.md)                                                                               | Códigos de erro para a IA                       |
+| [`plug-server/`](plug-server)   | [README.md](plug-server/README.md) · [communication.md](plug-server/communication.md) · [auth.md](plug-server/auth.md) | REST/JSON-RPC como Client; sem Socket na Fase 1 |
+| [`clients/`](clients)           | [connecting-clients.md](clients/connecting-clients.md)                                                                 | Bearer do token MCP                             |
 
 ## Princípios
 
-- O MCP **não** acessa SQL Server, Sybase, PostgreSQL ou Firebird do cliente.
-- O MCP **não** duplica autorização SQL. O `client_token` do ambiente é a autoridade no agente.
-- O usuário final **nunca** informa senha do `plug-server`. Informa `agentId`, dialeto e `client_token`.
-- Não existe painel administrativo. Onboarding é conversacional (tools + elicitation).
-- Novas tools entram como caso de uso + registro MCP, sem alterar o domínio.
-- O catálogo evolui por `agentId`: anotações, relacionamentos e consultas aprovadas (`anotar_fonte`, `salvar_consulta`) nunca cruzam agentes, mesmo na mesma conta.
+- O usuário **informa** e-mail/senha/`agentId`/`client_token` (+ dialeto). O MCP não cria essa conta.
+- Um token MCP por usuário. Acessos extras não pedem senha de novo.
+- Consulta ao ERP **só com skill publicada**. Sem skill capaz (dado ou cruzamento): não inventar; orientar o cadastro.
+- Grafo compartilhado por `agentId` apoia o **treino**. Leitura filtrada pela policy do `client_token`.
+- Sem seed `Fonte`. Sem Client de serviço no `.env`. Sem JWT de conta MCP.
+- Autorização SQL permanece 100% no `client_token` / `plug_agente`.
+- Com o hub: **só REST** (`POST /api/v1/agents/commands`, `sql.execute`). O MCP não abre Socket `/consumers` nem `/agents`.

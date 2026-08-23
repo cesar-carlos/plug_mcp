@@ -10,4 +10,6 @@ Fonte canónica no repositório irmão `plug_server/docs` (índice `docs/README.
 | [communication.md](communication.md)       | REST vs Socket, envelope JSON-RPC, classificação SQL                |
 | [rest-integration.md](rest-integration.md) | O que **este** MCP chama hoje (adapter + TokenManager)              |
 
-Contrato de erro devolvido à IA: [`../mcp/error-mapping.md`](../mcp/error-mapping.md). Identidade no MCP (OAuth próprio): [`../auth/identity-and-oauth.md`](../auth/identity-and-oauth.md).
+O MCP autentica **como o Client do usuário** (e-mail/senha do cofre), não como um Client de serviço no `.env`.
+
+Contrato de erro: [`../mcp/error-mapping.md`](../mcp/error-mapping.md). Cofre e token MCP: [`../auth/vault-and-mcp-token.md`](../auth/vault-and-mcp-token.md).

@@ -1,57 +1,21 @@
 ---
-description: "Governança de regras e workflow de verificação antes de concluir uma tarefa"
+description: "Governança e verificação antes de concluir"
 globs: ["src/**/*.ts", "tests/**/*.ts"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Governança
 
-## Precedência entre regras
+Precedência: product_objective > security > architecture/domain > mcp_protocol/plug_server_client > catalog/express > changelog_and_docs > performance > typescript/lint > testing > coding_standards.
 
-Resolver conflitos nesta ordem (maior prioridade primeiro):
+Não inverter o objetivo: consulta ao ERP via skill publicada; grafo só no treino; sem skill, não inventar SQL.
 
-1. `security.mdc`
-2. `architecture.mdc` + `domain_layer.mdc`
-3. `mcp_protocol.mdc` + `plug_server_client.mdc`
-4. `catalog.mdc` + `express_api.mdc`
-5. `performance.mdc`
-6. `typescript.mdc` + `lint_format.mdc`
-7. `testing.mdc`
-8. `coding_standards.mdc`
-9. Regras organizacionais: `project_structure.mdc`, `project_stack.mdc`, `git_workflow.mdc`
+Antes de concluir mudança de produção:
 
-Quando dois critérios puderem ser satisfeitos simultaneamente, escolha o mais restritivo. Nunca enfraqueça uma regra de prioridade superior para cumprir uma inferior.
+1. `npm run lint`
+2. `npm run format:check` (ou `npm run format`)
+3. `npx tsc -p tsconfig.json --noEmit`
+4. `npm test` se use-case, adapter, erros, MCP ou HTTP mudaram
+5. `CHANGELOG.md` (Unreleased) e `docs/` se comportamento, contrato, tools, erros ou env mudaram (ver `changelog_and_docs`)
 
-## Tipos de regra
-
-- **Universais**: `coding_standards`, `domain_layer`, `testing`, `git_workflow`, `governance`.
-- **Específicas do projeto**: `architecture`, `project_structure`, `security`.
-- **Específicas da stack**: `project_stack`, `typescript`, `lint_format`, `performance`, `express_api`, `mcp_protocol`, `plug_server_client`, `catalog`.
-
-## Workflow de verificação antes de concluir
-
-Antes de encerrar qualquer tarefa que altere código de produção:
-
-1. **`npm run lint`** — resolver todos os erros e warnings introduzidos pela tarefa atual.
-2. **`npm run format:check`** (ou `npm run format` para corrigir) — sem issues de formatação Prettier nos arquivos tocados.
-3. **`npx tsc -p tsconfig.json --noEmit`** — nenhum erro de tipos em `src/` **e** `tests/`. Obrigatório quando tipos compartilhados, ports, ou contratos de tool mudaram. Emit de build continua em `tsconfig.build.json`.
-4. **`npm test`** — todos os testes passando. Obrigatório quando: lógica de caso de uso, adapter, mapeamento de erros, OAuth, ou protocolo MCP mudou.
-
-Se `npm test` não puder ser executado (banco indisponível, dependência externa), execute pelo menos `npm run lint` e o typecheck. Documente explicitamente o que não foi verificado e por quê.
-
-## Exceções e compatibilidade
-
-- Toda exceção arquitetural (shim de compatibilidade, desvio de convenção) deve ser: local, nomeada, coberta por teste, e documentada com motivo e condição de remoção.
-- Não espalhe uma preocupação de compatibilidade por múltiplas camadas.
-
-## Adicionando novas tools MCP
-
-Checklist ao criar uma nova tool:
-
-1. Criar caso de uso em `application/use-cases/`.
-2. Criar ou reutilizar ports em `domain/ports/`.
-3. Registrar a tool em `infrastructure/mcp/register-tools.ts`.
-4. Adicionar ao tipo `ToolUseCases`.
-5. Instanciar o caso de uso em `composition/compose.ts`.
-6. Escrever testes unitários com `FakePlugServer` e repos in-memory.
-7. Documentar o contrato em `docs/mcp/tools.md`.
+Não reintroduzir login próprio do MCP, JWT de conta, Client de serviço no `.env`, catálogo pronto, nem devolver token MCP na tool.

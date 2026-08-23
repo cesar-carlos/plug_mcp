@@ -14,7 +14,7 @@ Fonte: `plug_server/docs/api/client_agent_business_rules.md` e `plug_server/docs
 
 JWT traz `principal_type: "user" | "client"` (agente usa role de namespace `/agents`). Token de `client` **não** acessa rotas de `user` e vice-versa.
 
-O MCP **nunca** faz `auth/login` nem `agent-login`. Credenciais de serviço: `PLUG_SERVER_CLIENT_EMAIL` / `PLUG_SERVER_CLIENT_PASSWORD` (conta `Client` já `active`).
+O MCP **nunca** faz `auth/login` nem `agent-login` nem `client-auth/register`. Login/refresh usam e-mail e senha **do usuário no cofre**. O Client precisa já estar `active`; 403 de Client pendente/bloqueado **não** é senha errada.
 
 ## Três checagens em cascata
 
@@ -42,11 +42,11 @@ Rotas (prefixo `/api/v1`):
 Regras:
 
 - Só conta `Client` com status `active` autentica. `pending` / `rejected` / `blocked` falham no login, no refresh e em rotas Bearer (`403`).
-- Cadastro público (`/client-auth/register`) nasce `pending` e exige aprovação do `User` dono (`ownerEmail`). O MCP **não** registra Clients em runtime — a conta de serviço já existe.
+- Cadastro público (`/client-auth/register`) nasce `pending` e exige aprovação do `User` dono (`ownerEmail`). O MCP **não** registra Clients — o usuário já é Client `active`.
 - Toda chamada autenticada: `Authorization: Bearer <accessToken>`.
-- `ServiceTokenManager` guarda o par em memória, refresca ~60 s antes do `exp`, e em HTTP `401` invalida e tenta de novo uma vez.
+- `UsuarioTokenManager` guarda o par JWT por `usuarioId`, refresca ~60 s antes do `exp`, e em HTTP `401` invalida e tenta login de novo com a senha do cofre.
 
-Rate limits do hub (produção, ordem de grandeza — confirmar em `limites_acesso_e_quotas.md` do plug-server): login por IP; refresh tem janela própria mais folgada; `POST /agents/commands` conta por JWT `sub`. Headers `Retry-After` / `RateLimit-Reset` devem ser respeitados (`RATE_LIMITED`).
+Rate limits do hub (produção, ordem de grandeza — confirmar em `plug_server/docs/limits/limites_acesso_e_quotas.md`): login por IP; refresh tem janela própria mais folgada; `POST /agents/commands` conta por JWT `sub`. Headers `Retry-After` / `RateLimit-Reset` devem ser respeitados (`RATE_LIMITED`).
 
 ## 2. Acesso Client → Agent (`ClientAgentAccess`)
 
@@ -70,7 +70,7 @@ MCP                         plug-server                      User (dono)
 | POST   | `/client/me/agents`                        | Pedir acesso. Idempotente se já aprovado (`alreadyApproved`).                 |
 | GET    | `/client/me/agents/{agentId}`              | `200` se aprovado; `403` se não. Inclui `hasClientToken`, `isHubConnected`.   |
 | PUT    | `/client/me/agents/{agentId}/client-token` | Grava o token SQL no hub (opcional para o agente; o MCP também envia no RPC). |
-| GET    | `/client/me/agent-access-requests`         | Pedidos `pending` / `approved` / `rejected` / `expired` / `revoked`.          |
+| GET    | `/client/me/agent-access-requests?search=` | Pedidos `pending` / `approved` / `rejected` / `expired` / `revoked`.          |
 
 `isHubConnected` é um **instantâneo desta réplica** do hub (agente registado em `/agents` neste processo). Com várias instâncias, pode ser `false` mesmo com o agente online noutra réplica.
 
@@ -96,8 +96,8 @@ SQL precisa ser **classificável**: o agente identifica tabela/view no `FROM`. `
 
 Informa, via tools MCP: `agentId`, `dialeto`, `client_token`.
 
-Não informa: senha do `plug-server`, JWT de serviço, senha do banco ERP. Ver [`../auth/identity-and-oauth.md`](../auth/identity-and-oauth.md).
+Não informe senha, JWT do hub, `client_token` ou token MCP em log/tool. Ver [`../auth/vault-and-mcp-token.md`](../auth/vault-and-mcp-token.md).
 
 ## Conta bloqueada
 
-`User` ou `Client` `blocked`: login/refresh `403` (`Account is blocked`); Bearer ainda válido é recusado após lookup da conta; sockets `/consumers` deixam de autorizar eventos (e o hub desconecta no bloqueio). O MCP mapeia persistência disso para `SERVICE_AUTH_EXPIRED` / `AGENT_ACCESS_DENIED` conforme o status HTTP — não tente “consertar” com retry cego.
+`User` ou `Client` `blocked`: login/refresh `403` (`Account is blocked`); Bearer ainda válido é recusado após lookup da conta; sockets `/consumers` deixam de autorizar eventos (e o hub desconecta no bloqueio). O MCP mapeia persistência disso para `USER_AUTH_EXPIRED` / `AGENT_ACCESS_DENIED` conforme o status HTTP — não tente “consertar” com retry cego.

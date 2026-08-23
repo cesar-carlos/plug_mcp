@@ -1,0 +1,16 @@
+---
+description: "Objetivo de produto: skills como bússola da consulta; cofre; um token MCP"
+alwaysApply: true
+---
+
+# Objetivo de produto
+
+O MCP dá contexto à IA do usuário final. Consulta ao ERP **só** via skill publicada daquele `agentId`. Permissão SQL não se define aqui.
+
+- Cofre: e-mail, senha, `agentId`, `client_token` (+ dialeto). Não cadastrar User/Client/Agent. Um token MCP opaco por usuário; nunca na resposta da tool.
+- Treino (`treinar_com_sql`) atualiza o grafo compartilhado e **fecha com skill** (`criar_skill` → `validar_skill` → `publicar_skill`).
+- Pergunta de dados: `buscar_contexto` / `listar_skills` / `obter_skill` → `consultar_dados` com o `sqlModelo` da skill (params nomeados). **Não** derivar SQL ad-hoc do grafo.
+- Sem skill capaz do dado ou do cruzamento: não inventar. Admitir a lacuna e orientar o usuário a treinar e cadastrar a skill.
+- Autorização: só `client_token` / `plug_agente` no plug-server.
+
+Não reintroduzir OAuth/JWT de conta MCP, Client de serviço no `.env`, catálogo `Fonte`/seed, nem “consultar_dados a partir do grafo”.

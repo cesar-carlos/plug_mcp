@@ -1,51 +1,15 @@
 ---
-description: "Estratégia de testes do se7e-mcp-server"
-globs: ["tests/**/*.ts", "**/*.test.ts", "**/*.spec.ts"]
-alwaysApply: true
+description: "Estratégia de testes: unitário, HTTP, live"
+globs: ["tests/**/*.ts"]
+alwaysApply: false
 ---
 
 # Testes
 
-## Pirâmide de testes
+- Unitário (`tests/unit`): casos de uso com repos in-memory e `FakePlugServer`. Sem I/O.
+- Integração (`tests/integration`): `supertest` na app de `compose()` com overrides. Bootstrap sem Bearer, rate limit, `GET /setup/:code`.
+- Live (`tests/live`, `npm run test:live`): adapter real contra o hub. `describe.skipIf(!getLiveEnv())`. Credenciais `E2E_*` só no `.env`. Nunca a conta de um Client real de produção. SQL só SELECT com FROM em catálogo de sistema. Sem mutação.
 
-- **Unitários** (`tests/unit/`): casos de uso com repos in-memory e `FakePlugServer`. Sem I/O, sem banco, sem fetch real. Rápidos.
-- **Integração** (`tests/integration/`): `supertest` na app composta (via `compose()` com overrides). Cobre OAuth AS, rotas HTTP, e adapter REST do plug-server.
-- **E2E** (`tests/e2e/`): protocolo MCP ponta a ponta (OAuth DCR + PKCE → `initialize` → `tools/list` → tool de onboarding → `consultar_dados`), tudo em memória via `FakePlugServer`.
-- **Live** (`tests/live/`, opcional): os mesmos adapters reais (`PlugServerRestAdapter` + `ServiceTokenManager`), mas contra o plug-server de **produção/staging real**, autenticando com uma conta de TESTE dedicada (`E2E_*` no `.env` — nunca a conta de serviço principal `PLUG_SERVER_CLIENT_EMAIL/PASSWORD`). Config separada (`vitest.live.config.ts`), script dedicado `npm run test:live` — **nunca** roda dentro de `npm test`/CI por padrão. Se pula automaticamente (`describe.skipIf`) quando as credenciais `E2E_*` não estão no ambiente (`tests/helpers/live-env.ts`), então é seguro deixar o arquivo em qualquer máquina/CI.
+Cobrir: `registrar_acesso` sem token na resposta; dois usuários no mesmo `agentId` acumulam grafo; `DIALECT_CONFLICT`; policy recorta leitura; 403 Client inativo ≠ senha; `SELECT *` recusado no treino.
 
-## Ferramentas
-
-- **Vitest**: runner. Configure em `vitest.config.ts` (exclui `tests/live/**`) e `vitest.live.config.ts` (só `tests/live/**`, timeout maior por ser rede real). Use `beforeEach`/`afterEach` para reset de estado.
-- **supertest**: testes HTTP. Passe a `app` do `compose()` — não suba um servidor real com porta.
-- **`tests/helpers/`**: funções reutilizáveis (`oauthLoginAndToken`, `FakePlugServer`, `getLiveEnv`, `ConsoleTestLogger`). Nunca duplique setup complexo entre suítes.
-
-## Convenções
-
-- Agrupe testes unitários por feature/fluxo (`use-cases.test.ts`, `fonte-registro.test.ts`, `contexto-consulta.test.ts`), não um arquivo por caso de uso. Módulo isolado (bearer, redact, map-plug-error) continua em arquivo próprio. O caminho do teste deve deixar o alvo óbvio.
-- Use AAA e nomenclatura descritiva: `deve retornar AMBIENTE_NAO_ENCONTRADO quando id não existe`.
-- Reset de dados e mocks entre testes; nenhum teste depende da ordem de execução.
-- Mocks em testes unitários; prefira entidades e value objects reais mesmo em testes unitários.
-- Adapters `FakePlugServer` devem honrar o contrato do `PlugServerGatewayPort` completamente.
-
-## Testes live — regras específicas
-
-- `E2E_AGENT_ID`/`E2E_CLIENT_TOKEN`/`E2E_CLIENT_EMAIL`/`E2E_CLIENT_PASSWORD`/`E2E_DIALETO` vivem só em `.env` (gitignored, nunca em `.env.example` com valor real) e são lidas por `tests/helpers/live-env.ts` — uma exceção local e nomeada a "env só via `config/env.ts`" (`project_stack.mdc`), porque não fazem parte do `AppConfig` de runtime, só do harness de teste.
-- Use sempre uma conta de teste dedicada no plug-server, nunca a conta de serviço de produção nem credenciais de um Client real.
-- SQL de smoke test em `tests/live/` deve sempre referenciar uma tabela/view real (catálogo de sistema, ex.: `sysobjects`/`sys.objects`/`pg_catalog.pg_class`/`RDB$RELATIONS`) — **nunca** um `SELECT` sem `FROM`. O pipeline de autorização do `plug_agente` não consegue classificar SQL sem referência de tabela e nega com `-32002`/"Not authorized" mesmo com um `client_token` totalmente permissivo (ver hint correspondente em `map-plug-error.ts`).
-- Nunca execute SQL mutante (`INSERT`/`UPDATE`/`DELETE`/DDL) em `tests/live/` — mesmo com um `client_token` de teste permissivo, o objetivo é só validar o round-trip de auth + protocolo, não gerar side effects em produção.
-- Cadastro de fonte live (`tests/live/fonte-contas-receber.live.test.ts`): usa o catálogo **in-memory** (`compose(testConfig())`) para não gravar no Postgres do MCP; `remover_fonte` no `afterAll`. O SQL do ERP é só SELECT/SUM.
-
-## Cobertura de contratos
-
-- Toda tool MCP deve ter ao menos um teste unitário de caminho feliz e um de caminho de erro mapeado. `desconectar_ambiente` cobre remoção local mesmo quando `putClientToken(null)` falha no hub.
-- Fontes do usuário (`tests/unit/fonte-registro.test.ts`): registro com dry run, SQL sem FROM, coluna ausente, isolamento entre contas/agentes, `FONTE_JA_EXISTE` / `FONTE_READONLY`, sombra do seed, `aplicarSeed()` não desativa fonte de usuário, introspecção com param nomeado e teto de linhas, `testar_sql` (válido / sem FROM / erro do ERP / detecção de código tipo Status), `registrar_fonte` exige `confirmado`.
-- Contexto de consulta (`tests/unit/contexto-consulta.test.ts`): mesma conta com dois `agentId` — anotação, glossário e `salvar_consulta` de um agente invisíveis no outro, em `obter_fonte` e `buscar_contexto`; `adicionar_relacionamento` com `tabelaDestino`; relacionamento incremental em seed → `FONTE_READONLY`.
-- OAuth: cobrir DCR, authorization code + PKCE, token refresh, revogação, consumo único do code e rejeição de open redirect (`next=//evil.com`).
-- INTERNAL_ERROR: regressão de que a mensagem ao modelo é genérica e o detalhe vai ao logger.
-- Qualquer alias de compatibilidade ou shim deve ter teste de regressão.
-- Ao mudar um port (interface de domínio), atualizar todos os fakes/mocks correspondentes e os testes que os usam.
-
-## MCP tool response
-
-- Respostas de tool têm formato `{ result: { content: [{ type: "text", text: JSON.stringify(...) }] } }`.
-- Use o helper `toolJson()` (de `tests/e2e/`) para extrair o payload tipado das respostas de tool em testes.
+Helpers em `tests/helpers`. Não reintroduzir login próprio do MCP nem catálogo pronto.

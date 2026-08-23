@@ -29,7 +29,7 @@ Regras de prioridade mais alta (segurança, arquitetura, camada de domínio) pre
 - Sempre use chaves em `if`/`else`/`for`/`while` (`curly: all`). Compare com `===` (`eqeqeq`; `== null` permitido para nullish).
 - Erros de domínio usam `DomainError` com `code`, `message`, `hint`, `retryable`. Nunca lance strings ou erros genéricos de dentro de casos de uso.
 - Logs de aplicação passam por `LoggerPort`. Não use `console.*` em `src/` (exceto `main.ts` e scripts CLI de migrate/seed).
-- Não gere arquivos de documentação standalone (README, changelogs, wikis) a não ser que o usuário solicite explicitamente.
+- Não crie README/wiki/changelog **extra**. O changelog canônico é `CHANGELOG.md`; a docs viva é `docs/`. Mantenha os dois atualizados (rule `changelog_and_docs`).
 
 ## Coesão e anti-padrões
 

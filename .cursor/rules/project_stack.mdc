@@ -1,45 +1,19 @@
 ---
 description: "Stack e bibliotecas do se7e-mcp-server"
 globs: ["src/**/*.ts", "tests/**/*.ts"]
-alwaysApply: true
+alwaysApply: false
 ---
 
-# Stack do projeto
+# Stack
 
-## Runtime e linguagem
+Node.js 24 LTS (Krypton, `.nvmrc` = 24.19.0), TypeScript ESM (`NodeNext`, imports com `.js`).
 
-- Node.js 24 LTS (Krypton, `.nvmrc` = 24.19.0), TypeScript, ESModules (`"type": "module"`, `moduleResolution: NodeNext`).
-- Imports internos sempre com extensão `.js` (exigência de NodeNext/ESM).
+Produção: `@modelcontextprotocol/sdk`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`.
 
-## Dependências de produção
+Não usar: `jose`, `bcryptjs`, `cookie-parser`, `jsonwebtoken`, `dotenv`, `uuid`, `moment`.
 
-- **`@modelcontextprotocol/sdk`**: protocolo MCP. Use `McpServer`, `StreamableHTTPServerTransport`, `isInitializeRequest`. Não acople casos de uso ao SDK diretamente.
-- **`express`**: framework HTTP. Somente em `infrastructure/http/` e `infrastructure/oauth/`.
-- **`cors`**: habilita CORS no `createExpressApp()` (`infrastructure/http/create-app.ts`), expondo `Mcp-Session-Id`/`mcp-protocol-version` — exigido por clientes MCP web (ver `mcp_protocol.mdc`). Origens permitidas configuráveis via `MCP_ALLOWED_ORIGINS` (vazio = reflete o `Origin` da requisição).
-- **`compression`**: gzip nas respostas HTTP (`consultar_dados` pode devolver até `QUERY_ABSOLUTE_MAX_ROWS` linhas em JSON). O `filter` em `create-app.ts` sempre exclui `text/event-stream` — nunca comprima o canal SSE do transport MCP.
-- **`zod`**: validação de input (schemas de tools, env, parâmetros). Schema de validação junto ao ponto de entrada.
-- **`pino`** + **`pino-http`**: logs estruturados. `pino-http` monta em `create-app.ts` (ignora `/health`; desligado em `NODE_ENV=test`). Use via `LoggerPort` no domínio/aplicação; nunca chame `pino` diretamente em `domain/` ou `application/`. Não adicione `morgan`.
-- **`helmet`**: headers HTTP e CSP nas telas `/oauth/*`. `crossOriginResourcePolicy` e `crossOriginOpenerPolicy` desligados para não quebrar clientes MCP no browser.
-- **`drizzle-orm`** (>= 0.45.2) + **`pg`**: acesso ao Postgres. Somente em `infrastructure/persistence/`. Advisories `moderate` restantes vêm de `esbuild` via `drizzle-kit` (dev-only); não forçar `drizzle-kit@1.0.0-beta` até o kit estável incorporar o patch.
-- **`jose`**: única lib de JWT do projeto (MCP OAuth AS: `SignJWT`, `jwtVerify`). Use via `McpJwtService` em `infrastructure/oauth/jwt.ts`. Não adicione `jsonwebtoken` — duas libs de JWT no mesmo projeto é inconsistência arquitetural, não uma escolha de conveniência.
-- **`bcryptjs`**: hash de senha de conta MCP. Use via `CryptoPort` / `NodeCryptoAdapter`.
-- **`cookie-parser`**: cookies de sessão do OAuth login.
-- **`redis`**: store opcional do rate limit de `/mcp` quando `REDIS_URL` está setado (`RedisRateLimitStore`). OAuth continua com store em memória. Não use Redis para sessões MCP (`StreamableHTTPServerTransport` é in-process).
+Env só em `src/config/env.ts`. `.env` via `--env-file-if-exists`.
 
-## Dependências de desenvolvimento
+UUID: `crypto.randomUUID()`. Crypto: AES-256-GCM + SHA-256 nativos.
 
-- **`vitest`**: runner de testes. Arquivo de configuração: `vitest.config.ts`.
-- **`supertest`**: testes HTTP.
-- **`tsx`**: execução TypeScript em dev (`npm run dev`) e scripts.
-- **`drizzle-kit`**: geração de migrations (`npm run db:generate`).
-- **`eslint`** + **`typescript-eslint`**: lint. Única config: `eslint.config.js` (flat config ESLint 9). Presets `recommendedTypeChecked` + `stylisticTypeChecked` com `parserOptions.projectService`. Não adicione `.eslintrc*`.
-- **`prettier`** + **`eslint-config-prettier`**: formatação. `npm run format` / `format:check`. `eslint-config-prettier` deve ser sempre o último item em `eslint.config.js` (desliga regras de estilo conflitantes).
-- **EditorConfig** (`.editorconfig`, sem pacote npm): UTF-8, LF, 2 espaços, newline final. Prettier lê o EditorConfig; `.gitattributes` força `eol=lf` no Git (dev Windows).
-
-## Convenções de uso
-
-- Identificadores únicos internos: `crypto.randomUUID()` nativo do Node — não instale o pacote `uuid`.
-- Datas: `new Date()` e métodos nativos; não instale `moment` ou `dayjs`.
-- Carregamento de `.env` em dev/scripts: flag nativa `--env-file-if-exists=.env` do Node (ver scripts em `package.json`) — não instale `dotenv`.
-- Variáveis de ambiente: lidas e validadas exclusivamente em `src/config/env.ts` com Zod. Nenhum `process.env` direto fora desse arquivo.
-- Mantenha dependências de terceiros atrás de adapters quando melhorar testabilidade (ex.: `CryptoPort`, `LoggerPort`).
+Postgres em produção. Redis opcional (`REDIS_URL`): rate limit e cache de policy. Sessão MCP fica in-process (sticky `mcp-session-id`).

@@ -2,7 +2,7 @@
 
 O hub é um proxy: o consumer (MCP) manda um comando; o hub valida, empacota em `PayloadFrame` e despacha JSON-RPC 2.0 para o `plug_agente` no namespace Socket `/agents`. A resposta volta pelo **mesmo canal** em que o consumer entrou.
 
-Fonte: `plug_server/docs/PROJECT_OVERVIEW.md` e `plug_server/docs/api/api_rest_bridge.md`. OpenAPI vivo: `GET /docs`.
+Fonte: `plug_server/docs/PROJECT_OVERVIEW.md` e `plug_server/docs/api/api_rest_bridge.md`. OpenAPI vivo: `GET /docs` / `GET /docs.json`.
 
 ## Canais
 
@@ -17,7 +17,7 @@ REST é o canal certo para tool MCP: cada `tools/call` é um request isolado, se
 Auth, catálogo, CRUD e métricas do hub **não** existem no Socket — só HTTP.
 
 ```text
-IA ──MCP tools──► se7e-mcp-server ──REST + JWT Client──► plug-server
+IA ──MCP tools──► se7e-mcp-server ──REST + JWT do Client do usuário──► plug-server
                                                          │  rpc:request
                                                          ▼
                                                     plug_agente ──SQL──► ERP
@@ -41,7 +41,7 @@ Header obrigatório: `Authorization: Bearer <accessToken do Client>`.
       "sql": "SELECT ... FROM ...",
       "params": { "dataInicio": "2026-08-01" },
       "client_token": "<opaco>",
-      "options": { "max_rows": 500 }
+      "options": { "max_rows": 500, "execution_mode": "preserve" }
     }
   }
 }

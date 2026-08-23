@@ -1,11 +1,14 @@
 # Se7e MCP Server
 
-Servidor MCP remoto (Streamable HTTP) que permite a uma IA consultar o ERP Se7e via [`plug-server`](https://plug-server.se7esistemassinop.com.br/docs). Documentação de produto e arquitetura: [`docs/README.md`](docs/README.md). Padrão de auth e comunicação com o plug-server: [`docs/plug-server/README.md`](docs/plug-server/README.md).
+Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + skills**: guarda as quatro credenciais do Client, emite **um** token MCP opaco, e dá contexto à IA via skills publicadas (o grafo de schema existe para o treino, não para inventar SQL).
+
+Não há login próprio, Authorization Server, catálogo pronto com seed, nem Client de serviço no `.env`.
 
 ## Requisitos
 
 - Node.js 24.19.0+ (LTS Krypton; `.nvmrc`)
 - PostgreSQL (produção). Testes unitários usam repositórios in-memory.
+- Redis opcional (rate limit + cache de policy)
 
 ## Setup
 
@@ -32,45 +35,42 @@ nvm use
 docker compose up -d postgres redis
 npm install
 npm run db:migrate
-npm run db:seed
 npm run dev
 ```
 
-### Stack completo no Docker
+O Compose publica o Postgres na porta `5433` do host (para não colidir com um Postgres local na `5432`). Ajuste `DATABASE_URL` no `.env` para essa porta.
 
-```bash
-docker compose up --build
-```
+Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fechar numa skill publicada — é ela que a IA usa na consulta.
 
-Sobe PostgreSQL 16 (porta do host `5433`, para não colidir com um Postgres local na `5432`), Redis só na rede interna (rate limit de `/mcp`) e o MCP. O entrypoint aplica as migrations antes de escutar. Credenciais do Client de serviço (`PLUG_SERVER_CLIENT_EMAIL` / `PLUG_SERVER_CLIENT_PASSWORD`) vêm de um `.env` na raiz, se existir.
+- Health: `GET http://127.0.0.1:3333/health`
+- MCP: `POST http://127.0.0.1:3333/mcp`
+- Token MCP (one-shot): `GET http://127.0.0.1:3333/setup/{code}`
 
-Health: `GET http://127.0.0.1:3333/health`
+## Bootstrap
 
-MCP: `POST http://127.0.0.1:3333/mcp`
-
-Todos os scripts que rodam o servidor ou scripts de banco carregam `.env` automaticamente via `--env-file-if-exists` (nativo do Node 22+, sem depender do pacote `dotenv`).
+1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
+2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**
+3. A tool devolve `setupCode` + `setupUrl`. O usuário abre a URL, copia o token e cola em `Authorization: Bearer`.
+4. Demais tools exigem Bearer. Novos acessos: `adicionar_acesso` (sem senha de novo).
 
 ## Scripts
 
-| Script                 | Função                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| `npm run dev`          | Sobe com `tsx watch`                                                            |
-| `npm test`             | Vitest — unit + integration + e2e (tudo in-memory, sem rede real)               |
-| `npm run test:watch`   | Vitest em modo watch                                                            |
-| `npm run test:live`    | Vitest contra o plug-server **real** (precisa de `E2E_*` no `.env`, ver abaixo) |
-| `npm run lint`         | ESLint 9 flat config (`eslint.config.js`, type-checked)                         |
-| `npm run format`       | Prettier (aplica formatação; alinhado ao `.editorconfig`)                       |
-| `npm run format:check` | Prettier (só verifica, não altera)                                              |
-| `npm run build`        | `tsc`                                                                           |
-| `npm run db:migrate`   | Ledger `_mcp_migrations`: aplica `drizzle/*.sql` na ordem                       |
-| `npm run db:seed`      | Reconcilia o catálogo por slug (`aplicarSeed`)                                  |
+| Script                    | Função                     |
+| ------------------------- | -------------------------- |
+| `npm run dev`             | `tsx watch`                |
+| `npm test`                | Vitest in-memory           |
+| `npm run test:live`       | plug-server real (`E2E_*`) |
+| `npm run lint` / `format` | ESLint + Prettier          |
+| `npm run db:migrate`      | Aplica `drizzle/*.sql`     |
 
-Docker: `Dockerfile` multi-stage (`node:24.19.0-alpine`) + `docker-compose.yml` (Postgres, Redis, MCP). CI: `.github/workflows/ci.yml` lê `.nvmrc`, roda lint, format:check, tsc e `npm test` (nunca `test:live`).
+Docker: `Dockerfile` multi-stage (`node:24.19.0-alpine`) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
 
 ## Testes live contra o plug-server real
 
-`npm run test:live` roda `tests/live/`, que autentica com uma conta de TESTE dedicada no plug-server (nunca a conta de serviço de produção) e chama a API real. Requer as variáveis `E2E_AGENT_ID`, `E2E_CLIENT_TOKEN`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD` e `E2E_DIALETO` no `.env` (ver `.env.example`). Sem essas variáveis, a suíte se pula sozinha — nunca falha por falta de credenciais, e nunca roda como parte de `npm test`.
+`npm run test:live` roda `tests/live/`, que autentica com uma conta de teste dedicada no plug-server (nunca uma conta de produção) e chama a API real. Requer as variáveis `E2E_AGENT_ID`, `E2E_CLIENT_TOKEN`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD` e `E2E_DIALETO` no `.env` (ver `.env.example`). Sem essas variáveis, a suíte se pula sozinha — nunca falha por falta de credenciais, e nunca roda como parte de `npm test`.
 
 ## Conectar um cliente
 
 Ver [docs/clients/connecting-clients.md](docs/clients/connecting-clients.md).
+
+Documentação: [`docs/README.md`](docs/README.md). Histórico: [`CHANGELOG.md`](CHANGELOG.md).

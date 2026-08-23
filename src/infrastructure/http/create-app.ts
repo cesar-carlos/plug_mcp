@@ -1,4 +1,3 @@
-import cookieParser from "cookie-parser";
 import cors from "cors";
 import compression from "compression";
 import express, { type Express } from "express";
@@ -7,18 +6,20 @@ import { pinoHttp } from "pino-http";
 import type { Logger as PinoLogger } from "pino";
 import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
-import { createOAuthRouter, type OAuthDeps } from "../oauth/oauth-router.js";
+import type { UsuarioRepositoryPort } from "../../domain/ports/usuario-repository.port.js";
+import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import { createMcpHttpHandler } from "../mcp/mcp-http.js";
 import type { ToolUseCases } from "../mcp/register-tools.js";
-import type { McpJwtService } from "../oauth/jwt.js";
 import { createRateLimiter, mcpRateLimitKey, type RateLimitStore } from "./rate-limit.js";
+import type { SetupCodeStore } from "./setup-code-store.js";
 
 export const createExpressApp = (input: {
   config: AppConfig;
   logger: LoggerPort;
-  oauth: OAuthDeps;
-  jwt: McpJwtService;
   useCases: ToolUseCases;
+  usuarios: UsuarioRepositoryPort;
+  crypto: CryptoPort;
+  setup: SetupCodeStore;
   pino?: PinoLogger;
   mcpRateLimitStore?: RateLimitStore;
 }): { app: Express; dispose: () => void } => {
@@ -46,14 +47,10 @@ export const createExpressApp = (input: {
     app.use(
       pinoHttp({
         logger: input.pino,
-        autoLogging: {
-          ignore: (req: { url?: string }) => req.url === "/health",
-        },
+        autoLogging: { ignore: (req: { url?: string }) => req.url === "/health" },
       }),
     );
   }
-  // Clientes MCP no browser (e o handshake OAuth) precisam ler Mcp-Session-Id/mcp-protocol-version
-  // de respostas cross-origin; sem exposedHeaders o SDK MCP falha ao inicializar a sessão no cliente web.
   app.use(
     cors({
       origin: input.config.allowedOrigins.length > 0 ? [...input.config.allowedOrigins] : true,
@@ -62,9 +59,6 @@ export const createExpressApp = (input: {
       exposedHeaders: ["Mcp-Session-Id", "mcp-protocol-version"],
     }),
   );
-  // Respostas de consultar_dados podem ter até QUERY_ABSOLUTE_MAX_ROWS linhas em JSON; comprimir
-  // reduz bytes na rede. Nunca comprima text/event-stream — quebraria o streaming incremental
-  // do transport MCP (SSE precisa de flush imediato, não de buffer do gzip).
   app.use(
     compression({
       filter: (req, res) => {
@@ -78,19 +72,32 @@ export const createExpressApp = (input: {
   );
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: false }));
-  app.use(cookieParser());
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: "se7e-mcp-server" });
   });
 
-  app.use(createOAuthRouter(input.oauth));
+  app.get("/setup/:code", (req, res) => {
+    const token = input.setup.consume(req.params.code ?? "");
+    if (!token) {
+      res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
+      return;
+    }
+    res
+      .type("html")
+      .send(
+        `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${token}</pre></body></html>`,
+      );
+  });
 
   const mcp = createMcpHttpHandler({
     config: input.config,
-    jwt: input.jwt,
     useCases: input.useCases,
     logger: input.logger,
+    resolveUsuarioId: async (token) => {
+      const usuario = await input.usuarios.findByTokenHash(input.crypto.sha256Hex(token));
+      return usuario?.id ?? null;
+    },
   });
 
   const mcpRateLimiter = createRateLimiter({
@@ -100,9 +107,27 @@ export const createExpressApp = (input: {
     store: input.mcpRateLimitStore,
   });
 
-  app.all("/mcp", mcpRateLimiter, (req, res) => {
-    void mcp.handle(req, res);
+  const bootstrapLimiter = createRateLimiter({
+    windowMs: input.config.MCP_RATE_LIMIT_WINDOW_MS,
+    max: input.config.MCP_BOOTSTRAP_RATE_LIMIT_MAX,
+    keyGenerator: (req) => `boot:${req.ip ?? "unknown"}`,
+    store: input.mcpRateLimitStore,
   });
+
+  app.all(
+    "/mcp",
+    (req, res, next) => {
+      const auth = req.header("authorization");
+      if (!auth) {
+        bootstrapLimiter(req, res, next);
+        return;
+      }
+      mcpRateLimiter(req, res, next);
+    },
+    (req, res) => {
+      void mcp.handle(req, res);
+    },
+  );
 
   return { app, dispose: mcp.dispose };
 };

@@ -1,63 +1,30 @@
-# Arquitetura
-
-## Visão
+# Arquitetura hexagonal
 
 ```text
-ChatGPT / Claude / Cursor
-        │  Streamable HTTP + OAuth Bearer
-        ▼
-Se7e MCP Server (Express)
-  ├── Authorization Server (login da conta MCP)
-  ├── Tools MCP → casos de uso
-  └── Catálogo (Postgres)
-        │  REST + JWT de serviço (Client)
-        ▼
-   plug-server
-        │  Agent + client_token
-        ▼
-   plug_agente / ERP
+Cliente MCP
+   │  Streamable HTTP
+   │  Bearer token MCP  (ou bootstrap sem Bearer)
+   ▼
+Express  /mcp  /setup/:code  /health
+   │
+use-cases  →  ports  ←  adapters (Drizzle, REST plug-server, crypto)
 ```
 
-O MCP é inteligência + integração. O `plug-server` é autoridade de acesso, execução e limites.
+- **domain**: entidades (`UsuarioMcp`, `Acesso`, grafo, skill), ports, `DomainError`.
+- **application**: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `skills`).
+- **infrastructure**: HTTP, MCP SDK, Drizzle, adapter REST, Pino.
+- **composition**: `compose.ts` escolhe memória ou Postgres (`DATABASE_URL`).
 
-## Hexágono
+## Identidade
 
-```text
-infrastructure/http + mcp     →  application/use-cases  →  domain
-        ▲                                                      │
-        └──────── adapters implementam ports ◄─────────────────┘
-```
+Bearer MCP → hash SHA-256 → `usuario_mcp`. ALS só na borda (`currentAccountId()`). Casos de uso recebem `usuarioId`.
 
-- **domain**: entidades, ports e `DomainError`. Sem Express, Drizzle ou SDK MCP.
-- **application**: um caso de uso por tool. Depende só de ports.
-- **infrastructure**: Express, OAuth, MCP SDK, Drizzle, cliente REST, Pino, embedding (opcional, atrás de `IndiceContextoPort`).
-- **composition**: `compose.ts` monta o grafo de dependências.
+## Plug-server
 
-## SOLID na prática
+`PlugServerGatewayPort`: `login`, `refresh`, `requestAgentAccess`, `getAgentAccessStatus`, `putClientToken`, `getClientTokenPolicy`, `executeSql`. JWT do hub por usuário (`UsuarioTokenManager`). Cache de policy por hash do `client_token`. Canal da Fase 1: REST `POST /api/v1/agents/commands` (`sql.execute`, `client_token.getPolicy`, `execution_mode: preserve`). Socket fica fora desta fase.
 
-- **S**: mapeamento de erro não vive na tool; a tool só serializa `DomainError`.
-- **O**: nova tool = novo caso de uso + registro em `infrastructure/mcp/register-tools.ts`.
-- **L**: adapters in-memory e Drizzle satisfazem o mesmo port.
-- **I**: ports pequenos (`AmbienteRepositoryPort`, `CatalogoRepositoryPort`, …).
-- **D**: `PlugServerGatewayPort` esconde REST; Socket pode entrar depois.
+## Grafo e skills
 
-## Estrutura
+Escrita do grafo com `withAgentLock`. Dialeto no primeiro merge. Leitura filtrada por `getClientTokenPolicy`.
 
-```text
-src/
-  domain/{entities,ports,errors}
-  application/use-cases
-  infrastructure/{http,oauth,mcp,plug-server,persistence,logging,crypto,embedding}
-  config
-  composition
-  main.ts
-tests/{unit,integration,e2e}
-```
-
-## Transporte MCP
-
-- Endpoint: `POST /mcp` (Streamable HTTP). `GET /mcp` e `DELETE /mcp` para SSE/sessão.
-- Sessões identificadas por `mcp-session-id`, mantidas em memória em `mcp-http.ts`. O transport Streamable HTTP é in-process (SSE): as sessões não são compartilhadas entre processos — uma réplica ou sticky session em `Mcp-Session-Id`.
-- Sessões sem atividade por mais de `MCP_SESSION_IDLE_TIMEOUT_MS` (default 30 min) são encerradas e removidas automaticamente por uma varredura periódica, evitando leak de memória com clientes que nunca enviam `DELETE /mcp`.
-- Chamadas autenticadas exigem `Authorization: Bearer <access_token>` da conta MCP.
-- Sem token: HTTP 401 + `WWW-Authenticate` apontando para `/.well-known/oauth-protected-resource`.
+O grafo apoia o treino. A consulta na sessão usa skill publicada (`sqlModelo`). Sem skill capaz, a IA admite a lacuna — não deriva SQL do grafo.

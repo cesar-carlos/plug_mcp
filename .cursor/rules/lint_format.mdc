@@ -21,8 +21,8 @@ Três camadas, sem sobreposição. Não copie regra de estilo do Prettier para o
 - Rodar `npm run format` nos arquivos tocados (ou deixar o format-on-save do editor).
 - Rodar `npm run lint` e zerar erros introduzidos pela tarefa.
 - Não desligar `@typescript-eslint/no-explicit-any` nem typed linting (`recommendedTypeChecked`) para “passar o lint”.
-- Exceção de `require-await` só em fakes in-memory (`persistence/memory`, `memory-oauth-store`) e em `tests/` — ports async sem I/O. Não espalhe `eslint-disable` no domínio.
-- `no-console` é erro em `src/` (use `LoggerPort`). Permitido em `main.ts`, scripts de migrate/seed e testes.
+- Exceção de `require-await` só em fakes in-memory (`persistence/memory`) e em `tests/` — ports async sem I/O. Não espalhe `eslint-disable` no domínio.
+- `no-console` é erro em `src/` (use `LoggerPort`). Permitido em `main.ts`, scripts de migrate e testes.
 - Funções **exportadas** e métodos públicos levam tipo de retorno explícito (`explicit-module-boundary-types`).
 - Imports só-tipo: `import type` ou `import { type X }` (autofix do ESLint).
 

@@ -1,13 +1,7 @@
-export interface PasswordHasherPort {
-  hashPassword(plain: string): Promise<string>;
-  verifyPassword(plain: string, hash: string): Promise<boolean>;
-}
-
-export interface TokenEncryptorPort {
+export interface CryptoPort {
   encrypt(plain: string): string;
   decrypt(payload: string): string;
   randomId(): string;
+  randomToken(bytes?: number): string;
   sha256Hex(value: string): string;
 }
-
-export interface CryptoPort extends PasswordHasherPort, TokenEncryptorPort {}
