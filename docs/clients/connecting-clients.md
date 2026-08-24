@@ -25,4 +25,6 @@ O cliente MCP usa `Authorization: Bearer <token_mcp>`. Este servidor não public
 
 Conectores que **exigem** Authorization Server de terceiros (alguns custom connectors ChatGPT) ficam fora desta fase.
 
+Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS` > 0): o servidor responde 401 com `WWW-Authenticate` RFC 6750 (`error="invalid_token"`) e aponta `GET /setup/{code}`. `Origin` fora de `MCP_ALLOWED_ORIGINS` (quando a lista não é vazia) responde **403**. Existe `GET /.well-known/oauth-protected-resource` descrevendo o recurso **sem** `authorization_servers`.
+
 Exemplo: [cursor-mcp.example.json](cursor-mcp.example.json).

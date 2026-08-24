@@ -14,6 +14,7 @@ import type {
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
+import type { Skill } from "../../domain/entities/skill.js";
 import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { bindNamedParams, parseSqlModelo } from "./shared/sql-modelo.js";
 import {
@@ -348,7 +349,8 @@ export class BuscarContexto {
   ): Promise<{
     success: true;
     consultaPermitida: boolean;
-    skillsPublicadas: readonly unknown[];
+    skillsPublicadas: readonly Skill[];
+    skillsParaTreino: readonly Skill[];
     grafoParaTreino: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     gap?: { code: "SKILL_GAP"; hint: string };
   }> {
@@ -367,17 +369,19 @@ export class BuscarContexto {
       agentId: acesso.agentId,
       clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
     });
-    const [tabelas, skillHits, notas] = await Promise.all([
+    const [tabelas, skillsPublicadas, skillHits, notas] = await Promise.all([
       this.grafo.buscar(acesso.agentId, query, 12),
+      this.skills.buscar(acesso.agentId, query, 8, "publicada"),
       this.skills.buscar(acesso.agentId, query, 8),
       this.anotacoes.buscar(acesso.agentId, query, 8),
     ]);
-    const skillsPublicadas = skillHits.filter((skill) => skill.status === "publicada");
+    const skillsParaTreino = skillHits.filter((skill) => skill.status !== "publicada");
     const consultaPermitida = skillsPublicadas.length > 0;
     return {
       success: true as const,
       consultaPermitida,
       skillsPublicadas,
+      skillsParaTreino,
       grafoParaTreino: {
         tabelas: tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy)),
         anotacoes: notas,

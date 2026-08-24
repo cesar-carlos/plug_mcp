@@ -21,6 +21,13 @@ export interface RelacionamentoSql {
   readonly on: string | null;
 }
 
+export interface JoinEquality {
+  readonly leftAlias: string;
+  readonly leftColumn: string;
+  readonly rightAlias: string;
+  readonly rightColumn: string;
+}
+
 export interface SqlModelo {
   readonly sql: string;
   readonly tabelas: readonly TabelaSql[];
@@ -140,7 +147,7 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
   }
 
   const selectList = extractSelectList(sql);
-  const colunas = selectList.map(parseSelectItem).filter((c): c is ColunaSql => c !== null);
+  const colunas = selectList.map((item) => parseSelectItem(item));
   if (colunas.length === 0) {
     throw new DomainError({
       code: ERROR_CODES.INVALID_SQL,
@@ -188,9 +195,15 @@ const extractSelectList = (sql: string): string[] => {
   return items;
 };
 
-const parseSelectItem = (item: string): ColunaSql | null => {
+const looksLikeExpression = (item: string): boolean => /[()+\-*/%]/.test(item.replace(/\./g, ""));
+
+const parseSelectItem = (item: string): ColunaSql => {
   if (!item || item === "*") {
-    return null;
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "SELECT * não treina o grafo.",
+      hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
+    });
   }
   const asMatch = /^([\s\S]+?)\s+as\s+("?[\w$#]+"?)$/i.exec(item);
   if (asMatch?.[1] && asMatch[2]) {
@@ -203,7 +216,41 @@ const parseSelectItem = (item: string): ColunaSql | null => {
       return { expr: trailing[1].trim(), alias: maybeAlias };
     }
   }
+  if (looksLikeExpression(item)) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "Expressão no SELECT precisa de alias explícito.",
+      hint: "Use AS (ex.: SUM(qtd) AS total). Sem alias o grafo gravaria um nome inválido.",
+    });
+  }
   return { expr: item, alias: lastIdent(item) };
+};
+
+/** Igualdades `alias.coluna = alias.coluna` extraídas de um ON (AND/OR no meio são ignorados). */
+export const parseJoinEqualities = (on: string | null | undefined): readonly JoinEquality[] => {
+  if (!on) {
+    return [];
+  }
+  const re =
+    /([A-Za-z_][A-Za-z0-9_$#]*)\.([A-Za-z_][A-Za-z0-9_$#]*)\s*=\s*([A-Za-z_][A-Za-z0-9_$#]*)\.([A-Za-z_][A-Za-z0-9_$#]*)/g;
+  const out: JoinEquality[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(on)) !== null) {
+    const leftAlias = match[1];
+    const leftColumn = match[2];
+    const rightAlias = match[3];
+    const rightColumn = match[4];
+    if (leftAlias && leftColumn && rightAlias && rightColumn) {
+      out.push({ leftAlias, leftColumn, rightAlias, rightColumn });
+    }
+  }
+  return out;
+};
+
+/** Qualificador de `alias.coluna`; expressões compostas devolvem null. */
+export const columnQualifier = (expr: string): string | null => {
+  const match = /^([A-Za-z_][A-Za-z0-9_$#]*)\.([A-Za-z_][A-Za-z0-9_$#]*)$/.exec(expr.trim());
+  return match?.[1] ?? null;
 };
 
 const dedupeTabelas = (tabelas: TabelaSql[]): TabelaSql[] => {
@@ -272,6 +319,20 @@ export const bindNamedParams = (
       message: `Params ausentes: ${missing.join(", ")}.`,
       hint: "Passe params nomeados iguais aos placeholders :nome ou @nome do sqlModelo.",
     });
+  }
+  return bound;
+};
+
+/** Bind tolerante: placeholder ausente vira `null` (treino/validação de schema, não consulta). */
+export const bindParamsForValidation = (
+  sql: string,
+  provided: Record<string, unknown> | undefined,
+): Record<string, unknown> => {
+  const names = extractNamedParams(sql);
+  const source = provided ?? {};
+  const bound: Record<string, unknown> = {};
+  for (const name of names) {
+    bound[name] = Object.prototype.hasOwnProperty.call(source, name) ? source[name] : null;
   }
   return bound;
 };

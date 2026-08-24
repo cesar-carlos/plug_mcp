@@ -28,6 +28,7 @@ import type {
   SkillRepositoryPort,
 } from "../../../domain/ports/skill-repository.port.js";
 import type { AuditLogPort } from "../../../domain/ports/audit-log.port.js";
+import { rankByTerms, tokenizeQuery } from "../busca-termos.js";
 import type { AuditLogEntry, NewAuditLog } from "../../../domain/entities/audit-log.js";
 
 const now = (): Date => new Date();
@@ -406,14 +407,12 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   }
 
   async buscar(agentId: string, query: string, limite: number): Promise<readonly TabelaGrafo[]> {
-    const q = lower(query);
-    return [...this.tabelas.values()]
-      .filter(
-        (row) =>
-          row.agentId === agentId &&
-          (lower(row.nome).includes(q) || lower(row.descricao ?? "").includes(q)),
-      )
-      .slice(0, limite);
+    return rankByTerms(
+      [...this.tabelas.values()].filter((row) => row.agentId === agentId),
+      tokenizeQuery(query),
+      (row) => `${row.nome} ${row.descricao ?? ""}`,
+      limite,
+    );
   }
 }
 
@@ -476,17 +475,20 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
     return [...this.rows.values()].filter((row) => row.agentId === agentId);
   }
 
-  async buscar(agentId: string, query: string, limite: number): Promise<readonly Skill[]> {
-    const q = lower(query);
-    return [...this.rows.values()]
-      .filter(
-        (row) =>
-          row.agentId === agentId &&
-          (lower(row.nome).includes(q) ||
-            lower(row.descricao).includes(q) ||
-            lower(row.slug).includes(q)),
-      )
-      .slice(0, limite);
+  async buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+    status?: StatusSkill,
+  ): Promise<readonly Skill[]> {
+    return rankByTerms(
+      [...this.rows.values()].filter(
+        (row) => row.agentId === agentId && (status === undefined || row.status === status),
+      ),
+      tokenizeQuery(query),
+      (row) => `${row.nome} ${row.descricao} ${row.slug}`,
+      limite,
+    );
   }
 }
 
@@ -526,14 +528,12 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
   }
 
   async buscar(agentId: string, query: string, limite: number): Promise<readonly AnotacaoGrafo[]> {
-    const q = lower(query);
-    return [...this.rows.values()]
-      .filter(
-        (row) =>
-          row.agentId === agentId &&
-          (lower(row.titulo).includes(q) || lower(row.texto).includes(q)),
-      )
-      .slice(0, limite);
+    return rankByTerms(
+      [...this.rows.values()].filter((row) => row.agentId === agentId),
+      tokenizeQuery(query),
+      (row) => `${row.titulo} ${row.texto}`,
+      limite,
+    );
   }
 }
 

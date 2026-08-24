@@ -220,4 +220,54 @@ describe("cofre e treino", () => {
       }),
     ).rejects.toMatchObject({ code: "DIALECT_CONFLICT" });
   });
+
+  it("liga coluna ao alias dono e grava chaves reais do JOIN", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+    };
+    const treinar = new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit);
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
+    });
+    const tabelas = await grafo.listTabelas(agentId);
+    const produto = tabelas.find((t) => t.nome.toLowerCase() === "produto");
+    const cliente = tabelas.find((t) => t.nome.toLowerCase() === "cliente");
+    expect(produto).toBeDefined();
+    expect(cliente).toBeDefined();
+    const colsProduto = await grafo.listColunas(produto!.id);
+    const colsCliente = await grafo.listColunas(cliente!.id);
+    expect(colsProduto.some((c) => c.nome.toLowerCase() === "codprod")).toBe(true);
+    expect(colsProduto.some((c) => c.nome.toLowerCase() === "nome")).toBe(false);
+    expect(colsCliente.some((c) => c.nome.toLowerCase() === "nome")).toBe(true);
+    const rels = await grafo.listRelacionamentos(agentId);
+    expect(rels).toHaveLength(1);
+    expect(rels[0]?.colunaOrigem.toLowerCase()).toBe("codcli");
+    expect(rels[0]?.colunaDestino.toLowerCase()).toBe("codcli");
+    expect(rels[0]?.tabelaOrigemId).toBe(cliente!.id);
+    expect(rels[0]?.tabelaDestinoId).toBe(produto!.id);
+  });
 });

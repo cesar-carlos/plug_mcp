@@ -4,7 +4,7 @@ import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AppConfig } from "../../config/env.js";
 import type { RateLimitStore } from "../http/rate-limit.js";
 import { wwwAuthenticate } from "./mcp-auth.js";
-import { currentAccountId } from "./account-context.js";
+import { currentAccountId, currentClientIp } from "./account-context.js";
 
 export interface ToolResult {
   [key: string]: unknown;
@@ -96,7 +96,7 @@ export const createToolRunner = (
 ): ToolRunner => {
   return async (tool: string, fn: () => Promise<unknown>): Promise<ToolResult> => {
     if (extra?.rateLimit) {
-      const principal = currentAccountId() ?? extra.clientIp?.() ?? "anon";
+      const principal = currentAccountId() ?? currentClientIp() ?? extra.clientIp?.() ?? "anon";
       const hit = await extra.rateLimit.hit(
         `tool:${principal}:${tool}`,
         config.MCP_RATE_LIMIT_WINDOW_MS,

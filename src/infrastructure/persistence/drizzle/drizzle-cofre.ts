@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { rankByTerms, tokenizeQuery } from "../busca-termos.js";
 import type { Db } from "./db.js";
 import * as schema from "../schema.js";
 import type { Acesso, NovoAcesso, StatusAcesso } from "../../../domain/entities/acesso.js";
@@ -550,18 +551,25 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
   }
 
   async buscar(agentId: string, query: string, limite: number): Promise<readonly TabelaGrafo[]> {
-    const like = `%${query}%`;
+    const terms = tokenizeQuery(query);
+    if (terms.length === 0) {
+      return [];
+    }
+    const likes = terms.flatMap((term) => {
+      const like = `%${term}%`;
+      return [ilike(schema.tabelaGrafo.nome, like), ilike(schema.tabelaGrafo.descricao, like)];
+    });
     const rows = await this.conn()
       .select()
       .from(schema.tabelaGrafo)
-      .where(
-        and(
-          eq(schema.tabelaGrafo.agentId, agentId),
-          or(ilike(schema.tabelaGrafo.nome, like), ilike(schema.tabelaGrafo.descricao, like)),
-        ),
-      )
-      .limit(limite);
-    return rows.map(toTabela);
+      .where(and(eq(schema.tabelaGrafo.agentId, agentId), or(...likes)))
+      .limit(Math.max(limite * 4, 32));
+    return rankByTerms(
+      rows.map(toTabela),
+      terms,
+      (row) => `${row.nome} ${row.descricao ?? ""}`,
+      limite,
+    );
   }
 }
 
@@ -622,23 +630,41 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
     return rows.map((row) => this.toSkill(row));
   }
 
-  async buscar(agentId: string, query: string, limite: number): Promise<readonly Skill[]> {
-    const like = `%${query}%`;
+  async buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+    status?: StatusSkill,
+  ): Promise<readonly Skill[]> {
+    const terms = tokenizeQuery(query);
+    if (terms.length === 0) {
+      return [];
+    }
+    const likes = terms.flatMap((term) => {
+      const like = `%${term}%`;
+      return [
+        ilike(schema.skill.nome, like),
+        ilike(schema.skill.descricao, like),
+        ilike(schema.skill.slug, like),
+      ];
+    });
     const rows = await this.db
       .select()
       .from(schema.skill)
       .where(
         and(
           eq(schema.skill.agentId, agentId),
-          or(
-            ilike(schema.skill.nome, like),
-            ilike(schema.skill.descricao, like),
-            ilike(schema.skill.slug, like),
-          ),
+          status ? eq(schema.skill.status, status) : undefined,
+          or(...likes),
         ),
       )
-      .limit(limite);
-    return rows.map((row) => this.toSkill(row));
+      .limit(Math.max(limite * 4, 32));
+    return rankByTerms(
+      rows.map((row) => this.toSkill(row)),
+      terms,
+      (row) => `${row.nome} ${row.descricao} ${row.slug}`,
+      limite,
+    );
   }
 
   private toSkill(row: typeof schema.skill.$inferSelect): Skill {
@@ -708,18 +734,25 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
   }
 
   async buscar(agentId: string, query: string, limite: number): Promise<readonly AnotacaoGrafo[]> {
-    const like = `%${query}%`;
+    const terms = tokenizeQuery(query);
+    if (terms.length === 0) {
+      return [];
+    }
+    const likes = terms.flatMap((term) => {
+      const like = `%${term}%`;
+      return [ilike(schema.anotacaoGrafo.titulo, like), ilike(schema.anotacaoGrafo.texto, like)];
+    });
     const rows = await this.db
       .select()
       .from(schema.anotacaoGrafo)
-      .where(
-        and(
-          eq(schema.anotacaoGrafo.agentId, agentId),
-          or(ilike(schema.anotacaoGrafo.titulo, like), ilike(schema.anotacaoGrafo.texto, like)),
-        ),
-      )
-      .limit(limite);
-    return rows.map((row) => this.toAnotacao(row));
+      .where(and(eq(schema.anotacaoGrafo.agentId, agentId), or(...likes)))
+      .limit(Math.max(limite * 4, 32));
+    return rankByTerms(
+      rows.map((row) => this.toAnotacao(row)),
+      terms,
+      (row) => `${row.titulo} ${row.texto}`,
+      limite,
+    );
   }
 
   private toAnotacao(row: typeof schema.anotacaoGrafo.$inferSelect): AnotacaoGrafo {

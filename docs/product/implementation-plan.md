@@ -10,7 +10,7 @@ O MCP é cofre + grafo de treino + **skills como bússola da consulta**. Fora de
 - Grafo compartilhado por `agentId` (tabela/coluna/relacionamento com proveniência).
 - `treinar_com_sql`: SELECT nomeado, JOIN se >1 tabela, merge só após `sql.execute` + policy.
 - Skills (rascunho → validada → publicada): são o que a IA usa na pergunta do usuário. Treino sem skill publicada não habilita consulta.
-- Postgres+pgvector obrigatório em produção; Redis para cache de JWT/policy/rate-limit.
+- Postgres obrigatório em produção. Redis opcional para rate limit e cache de policy (JWT do hub fica em `Map` no processo).
 
 ## Critérios de sucesso
 

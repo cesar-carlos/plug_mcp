@@ -5,14 +5,14 @@ Cliente MCP
    │  Streamable HTTP
    │  Bearer token MCP  (ou bootstrap sem Bearer)
    ▼
-Express  /mcp  /setup/:code  /health
+Express  /mcp  /setup/:code  /health  /.well-known/oauth-protected-resource
    │
 use-cases  →  ports  ←  adapters (Drizzle, REST plug-server, crypto)
 ```
 
 - **domain**: entidades (`UsuarioMcp`, `Acesso`, grafo, skill), ports, `DomainError`.
 - **application**: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `skills`).
-- **infrastructure**: HTTP, MCP SDK, Drizzle, adapter REST, Pino.
+- **infrastructure**: HTTP, MCP SDK, Drizzle, adapter REST, Pino. Catálogo dinâmico: tools `skill_*` por sessão, resource `skill://`, prompts.
 - **composition**: `compose.ts` escolhe memória ou Postgres (`DATABASE_URL`).
 
 ## Identidade

@@ -18,24 +18,33 @@ Consulta ao ERP na sessão do usuário: **só** com `sqlModelo` de skill publica
 
 ## Treino e schema
 
-| Tool                                                     | Função                                                                                                                     |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `treinar_com_sql`                                        | Parse + policy + `sql.execute` (amostra) + merge no grafo. Proíbe `SELECT *`. JOIN se >1 tabela. Depois, cadastre a skill. |
-| `explorar_tabelas`                                       | Catálogo de sistema do dialeto.                                                                                            |
-| `mapear_tabela`                                          | Colunas no ERP → merge `inferido`.                                                                                         |
-| `confirmar_coluna`                                       | Significado/dicionário (`confirmado_usuario`).                                                                             |
-| `buscar_contexto`                                        | Busca skills/grafo/notas; na pergunta de dados priorize skills publicadas.                                                 |
-| `resolver_conflito`                                      | Resolve fato em `conflito`.                                                                                                |
-| `anotar_grafo` / `listar_anotacoes` / `remover_anotacao` | Notas incrementais.                                                                                                        |
+| Tool                                                     | Função                                                                                                                                                                                                |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `treinar_com_sql`                                        | Parse + policy + `sql.execute` (amostra) + merge no grafo. Proíbe `SELECT *`. JOIN se >1 tabela. `params` opcionais para placeholders. Origem do fato: `validado_execucao`. Depois, cadastre a skill. |
+| `explorar_tabelas`                                       | Catálogo de sistema do dialeto.                                                                                                                                                                       |
+| `mapear_tabela`                                          | Colunas no ERP → merge `inferido`.                                                                                                                                                                    |
+| `confirmar_coluna`                                       | Significado/dicionário (`confirmado_usuario`).                                                                                                                                                        |
+| `buscar_contexto`                                        | Busca skills/grafo/notas por termos; na pergunta de dados priorize skills publicadas.                                                                                                                 |
+| `resolver_conflito`                                      | Resolve fato em `conflito`.                                                                                                                                                                           |
+| `anotar_grafo` / `listar_anotacoes` / `remover_anotacao` | Notas incrementais.                                                                                                                                                                                   |
 
 ## Skills
 
-`buscar_contexto` devolve `consultaPermitida`. Se for `false`, vem `gap.code = SKILL_GAP`: **não** chame `consultar_dados`. Oriente `treinar_com_sql` → `criar_skill` → `validar_skill` → `publicar_skill`. O grafo em `grafoParaTreino` é material de treino, não licença de SQL.
+`buscar_contexto` devolve `consultaPermitida`. Se for `false`, vem `gap.code = SKILL_GAP`: **não** chame `consultar_dados`. Oriente `treinar_com_sql` → `criar_skill` → `validar_skill` → `publicar_skill`. O grafo em `grafoParaTreino` é material de treino, não licença de SQL. Rascunhos/validadas vêm em `skillsParaTreino`.
+
+| Tool              | Função                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| `criar_skill`     | Nomeia um SQL de negócio já treinado (`sqlModelo` com placeholders `:nome`/`@nome`).             |
+| `atualizar_skill` | Atualiza nome/descrição/SQL e volta para rascunho; dispara `tools/list_changed` se já publicada. |
+| `validar_skill`   | Envelope vazio (sem ler dado); `params` opcionais (ausentes → `null`). Marca como validada.      |
+| `publicar_skill`  | Publica skill validada; registra tool dinâmica `skill_{slug}`.                                   |
+| `listar_skills`   | Lista skills do `agentId` do acesso.                                                             |
+| `obter_skill`     | Obtém por `skillId` ou `slug`.                                                                   |
 
 Cada skill publicada também vira tool `skill_{slug}` (e `skill_{slug}_{prefixoAgentId}` se houver colisão de slug entre agentIds do mesmo usuário). Resources `skill://{agentId}/{slug}`. Prompts `consultar_com_skill` e `cadastrar_skill`.
 
 ## Consulta
 
-`consultar_dados`: **só** `acessoId` + `skillId` + `params` nomeados. **Não** aceita `sql`. Executa o `sqlModelo` persistido da skill **publicada** (re-parse SELECT, bind `:nome`/`@nome`). Autorização = `client_token`. Respeite `max_rows`. Sem skill capaz (incluindo cruzamento), não invente SQL.
+`consultar_dados`: **só** `acessoId` + `skillId` + `params` nomeados. **Não** aceita `sql`. Executa o `sqlModelo` persistido da skill **publicada** (re-parse SELECT, bind `:nome`/`@nome`). Autorização = `client_token`. Options: `max_rows`, `page`, `page_size`, `timeout_ms`. Sem skill capaz (incluindo cruzamento), não invente SQL.
 
-Resposta tabular: `columns`, `rows`, `truncated`, `maxRowsApplied` em JSON e em `structuredContent`. Células string são truncadas. SQL não é ecoado no sucesso.
+Resposta tabular: `columns`, `rows`, `rowCount`, `truncated`, `maxRowsApplied` em JSON e em `structuredContent`. Células string são truncadas. SQL não é ecoado no sucesso.

@@ -7,7 +7,7 @@ import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { RateLimitStore } from "../http/rate-limit.js";
 import { wwwAuthenticate, readBearer } from "./mcp-auth.js";
-import { accountContext } from "./account-context.js";
+import { accountContext, currentClientIp } from "./account-context.js";
 import { registerTools, type ToolUseCases } from "./register-tools.js";
 import { MCP_SERVER_INSTRUCTIONS } from "./server-instructions.js";
 import { createToolRunner } from "./tool-result.js";
@@ -49,12 +49,11 @@ export const createMcpHttpHandler = (input: {
 } => {
   const sessions = new Map<string, Session>();
   const idleTimeoutMs = input.config.MCP_SESSION_IDLE_TIMEOUT_MS;
-  let requestIp: string | undefined;
 
   const runner = (): ReturnType<typeof createToolRunner> =>
     createToolRunner(input.config, input.logger, {
       rateLimit: input.rateLimit,
-      clientIp: () => requestIp,
+      clientIp: () => currentClientIp(),
     });
 
   const refreshSkillTools = async (session: Session, usuarioId: string): Promise<void> => {
@@ -69,9 +68,23 @@ export const createMcpHttpHandler = (input: {
   };
 
   const notifyUsuario = async (usuarioId: string): Promise<void> => {
+    const publisherAcessos = await input.catalog.acessos.listByUsuario(usuarioId);
+    const agentIds = new Set(publisherAcessos.map((acesso) => acesso.agentId));
+    const matchingUsuarios = new Set<string>();
+    const checked = new Set<string>();
     for (const session of sessions.values()) {
-      if (session.usuarioId === usuarioId && !session.bootstrap) {
-        await refreshSkillTools(session, usuarioId);
+      if (session.bootstrap || !session.usuarioId || checked.has(session.usuarioId)) {
+        continue;
+      }
+      checked.add(session.usuarioId);
+      const sessionAcessos = await input.catalog.acessos.listByUsuario(session.usuarioId);
+      if (sessionAcessos.some((acesso) => agentIds.has(acesso.agentId))) {
+        matchingUsuarios.add(session.usuarioId);
+      }
+    }
+    for (const session of sessions.values()) {
+      if (session.usuarioId && matchingUsuarios.has(session.usuarioId) && !session.bootstrap) {
+        await refreshSkillTools(session, session.usuarioId);
       }
     }
   };
@@ -96,7 +109,7 @@ export const createMcpHttpHandler = (input: {
       bootstrapOnly: bootstrap,
       catalog: bootstrap ? undefined : input.catalog,
       rateLimit: input.rateLimit,
-      clientIp: () => requestIp,
+      clientIp: () => currentClientIp(),
       onSkillsChanged: notifyUsuario,
     });
     const transport = new StreamableHTTPServerTransport({
@@ -134,7 +147,6 @@ export const createMcpHttpHandler = (input: {
   sweepTimer.unref();
 
   const handle = async (req: Request, res: Response): Promise<void> => {
-    requestIp = req.ip;
     const bearer = readBearer(req);
     let usuarioId: string | null = null;
     if (bearer) {
@@ -167,9 +179,12 @@ export const createMcpHttpHandler = (input: {
       if (usuarioId) {
         session.usuarioId = usuarioId;
       }
-      await accountContext.run(usuarioId ?? undefined, async () => {
-        await session.transport.handleRequest(req, res, req.body);
-      });
+      await accountContext.run(
+        { usuarioId: usuarioId ?? undefined, clientIp: req.ip },
+        async () => {
+          await session.transport.handleRequest(req, res, req.body);
+        },
+      );
       if (usuarioId && !session.bootstrap && isInitializeRequest(req.body)) {
         await refreshSkillTools(session, usuarioId);
       }

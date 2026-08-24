@@ -12,7 +12,7 @@ O MCP não tem tela de login nem OAuth 2.1 próprio. Identidade:
 
 ## Bootstrap
 
-`POST /mcp` **sem** Bearer só aceita `initialize`, `tools/list` (catálogo mínimo) e `tools/call` de `registrar_acesso`. Rate limit de bootstrap é mais apertado.
+`POST /mcp` **sem** Bearer só aceita `initialize`, `notifications/initialized`, `tools/list` (catálogo mínimo) e `tools/call` de `registrar_acesso`. Rate limit de bootstrap é mais apertado.
 
 `registrar_acesso` **não** devolve o token MCP (vaza no transcript). Devolve `setupCode` + `setupUrl`. O usuário abre `GET /setup/{code}` (HTML, one-shot) e copia o token.
 

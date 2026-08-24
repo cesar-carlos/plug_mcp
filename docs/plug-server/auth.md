@@ -86,7 +86,7 @@ Revogação (owner ou o próprio Client) derruba o acesso imediato. Socket `/con
 Não é o JWT do Client. É um token **opaco** (ou JWT próprio do agente) emitido pelo admin do ERP. O `plug_agente` classifica o SQL e aplica a política (`all_tables`, regras por tabela, permissões read/update/delete/ddl).
 
 - Obrigatório em `sql.execute` quando `enableClientTokenAuthorization` está ativo no agente (aliases aceitos pelo hub: `client_token`, `clientToken`, `auth`).
-- O MCP persiste criptografado (`ambiente.client_token_encriptado`) e só descriptografa ao montar o body do RPC.
+- O MCP persiste criptografado (`acesso.client_token_enc`) e só descriptografa ao montar o body do RPC.
 - Nunca vai para log, resposta de tool ou `hint` de erro.
 - Introspecção **sem SQL**: RPC `client_token.getPolicy` no mesmo `POST /agents/commands`.
 

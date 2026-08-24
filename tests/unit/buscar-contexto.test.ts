@@ -46,15 +46,7 @@ describe("BuscarContexto", () => {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
     };
-    const buscar = new BuscarContexto(
-      acessos,
-      grafo,
-      skills,
-      anotacoes,
-      plug,
-      sessions,
-      crypto,
-    );
+    const buscar = new BuscarContexto(acessos, grafo, skills, anotacoes, plug, sessions, crypto);
     return { buscar, created, skills };
   };
 
@@ -97,5 +89,35 @@ describe("BuscarContexto", () => {
     expect(result.consultaPermitida).toBe(true);
     expect(result.gap).toBeUndefined();
     expect(result.skillsPublicadas).toHaveLength(1);
+  });
+
+  it("casa pergunta em linguagem natural com skill publicada", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "faturamento-cliente",
+      nome: "Faturamento por cliente",
+      descricao: "Total faturado no mês por cliente",
+      sqlModelo: "SELECT c.nome FROM cliente c",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    for (let i = 0; i < 8; i += 1) {
+      await skills.create({
+        agentId,
+        slug: `rascunho-${String(i)}`,
+        nome: `Rascunho ${String(i)}`,
+        descricao: "Ainda não publica",
+        sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+        autorUsuarioId: created.usuarioId,
+      });
+    }
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "faturamento por cliente no mês",
+    });
+    expect(result.consultaPermitida).toBe(true);
+    expect(result.skillsPublicadas.some((s) => s.id === published.id)).toBe(true);
+    expect(result.skillsParaTreino?.length ?? 0).toBeGreaterThanOrEqual(0);
   });
 });

@@ -185,11 +185,11 @@ export const registerTools = (
 
   server.tool(
     "treinar_com_sql",
-    "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Executa o SQL (amostra) e respeita a policy do client_token.",
+    "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais para placeholders. Executa o SQL (amostra) e respeita a policy do client_token. Origem do fato: validado_execucao.",
     {
       acessoId: z.string().optional(),
       sql: z.string().optional(),
-      confirmadoUsuario: z.boolean().optional(),
+      params: z.record(z.unknown()).optional(),
     },
     writeWorld,
     async (args) =>
@@ -310,8 +310,12 @@ export const registerTools = (
 
   server.tool(
     "validar_skill",
-    "Executa o SQL da skill (amostra) e marca como validada.",
-    { acessoId: z.string().optional(), skillId: z.string().optional() },
+    "Valida o sqlModelo da skill com envelope vazio (sem ler dado). Params nomeados opcionais; placeholders ausentes vão como null. Marca como validada.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      params: z.record(z.unknown()).optional(),
+    },
     writeWorld,
     async (args) =>
       run("validar_skill", () => useCases.validarSkill.execute(currentAccountId(), args)),

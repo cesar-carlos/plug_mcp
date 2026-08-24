@@ -23,8 +23,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 ### Changed
 
 - `consultar_dados` exige `skillId` de skill **publicada** e recusa SQL solto; o `sqlModelo` é revalidado na execução.
-- `buscar_contexto` devolve `consultaPermitida` e `gap.code = SKILL_GAP` quando não há skill publicada capaz (o grafo fica só em `grafoParaTreino`).
+- `buscar_contexto` devolve `consultaPermitida` e `gap.code = SKILL_GAP` quando não há skill publicada capaz (o grafo fica só em `grafoParaTreino`). Rascunhos vêm em `skillsParaTreino`.
 - Consulta ao ERP é **enforced** por skill; grafo não licencia SQL ad-hoc.
+- `buscar_contexto` casa a pergunta por termos (OR + ranking), não mais `ILIKE` da frase inteira.
+- `treinar_com_sql` sempre grava origem `validado_execucao` após execução; `confirmadoUsuario` saiu da tool (`confirmar_coluna` segue para significado).
+- `validar_skill` / `treinar_com_sql` aceitam `params` nomeados (ausentes → `null` na validação).
 
 ### Removed
 
@@ -32,6 +35,16 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Authorization Server / OAuth 2.1 próprio do MCP.
 - Catálogo seed `Fonte` (`vendas` / `produtos` / `clientes`).
 - Client de serviço (`PLUG_SERVER_CLIENT_*`) no ambiente de runtime.
+- Variáveis `EMBEDDING_*` (config morta; busca semântica não está implementada).
+- Código `ACESSO_PENDING` (nunca lançado; o real é `AGENT_ACCESS_PENDING`).
+
+### Fixed
+
+- Skill parametrizada (`:nome` / `@nome`) passa em `validar_skill` (envelope vazio) e pode ser publicada.
+- Colunas de JOIN vão para a tabela dona (alias/qualificador); chaves do `ON` entram no relacionamento.
+- Expressão no SELECT sem `AS` é recusada em vez de gravar alias lixo no grafo.
+- `tools/list_changed` notifica sessões que compartilham o `agentId`, não só o usuário que publicou.
+- Rate limit por tool lê o IP no AsyncLocalStorage (sem corrida entre requests).
 
 ### Security
 

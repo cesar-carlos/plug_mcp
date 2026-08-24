@@ -28,6 +28,8 @@ Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 | HTTP 503                    | `AGENT_UNAVAILABLE`                         | Agente offline; retry.                                         |
 | HTTP 401                    | `USER_AUTH_EXPIRED`                         | Refresh/login com a senha do cofre.                            |
 | abort HTTP                  | `PLUG_SERVER_TIMEOUT`                       | Retryable.                                                     |
+| JSON-RPC `-32008`           | `QUERY_TIMEOUT`                             | Query estourou o timeout do agente; retry ou reduza o SQL.     |
+| HTTP 5xx / RPC genérico     | `PLUG_SERVER_ERROR`                         | Falha no hub; veja hint. Retry se `retryable`.                 |
 
 ## Domínio
 
@@ -42,8 +44,11 @@ Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 | `CREDENTIAL_STALE`                       | Senha do Client recusada                         |
 | `PERMISSION_DENIED`                      | Policy do `client_token`                         |
 | `USER_AUTH_EXPIRED`                      | JWT do Client recusado (401 do hub)          |
-| `INVALID_SQL`                            | `SELECT *`, mutação, segundo comando         |
+| `INVALID_SQL`                            | `SELECT *`, mutação, segundo comando, expressão sem AS |
 | `SKILL_NOT_FOUND` / `ANOTACAO_NOT_FOUND` | Id inexistente neste `agentId`               |
 | `SKILL_NOT_PUBLISHED`                    | Skill em rascunho/validada em `consultar_dados` |
 | `SKILL_GAP`                              | `buscar_contexto` sem skill publicada capaz (payload, não throw) |
 | `RATE_LIMITED`                           | Teto HTTP ou por tool                        |
+| `QUERY_TIMEOUT`                          | Timeout da query no agente                   |
+| `PLUG_SERVER_ERROR`                      | Erro genérico do hub                         |
+| `INTERNAL_ERROR`                         | Falha inesperada no MCP                      |

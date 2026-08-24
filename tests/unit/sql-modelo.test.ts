@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   bindNamedParams,
+  bindParamsForValidation,
+  columnQualifier,
   extractNamedParams,
+  parseJoinEqualities,
   parseSqlModelo,
 } from "../../src/application/use-cases/shared/sql-modelo.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
@@ -38,11 +41,13 @@ describe("parseSqlModelo", () => {
 
   it("extrai placeholders :nome e @nome fora de literais", () => {
     expect(
-      extractNamedParams("SELECT p.codprod FROM produto p WHERE p.codprod = :codigo AND p.nome <> ':x'"),
+      extractNamedParams(
+        "SELECT p.codprod FROM produto p WHERE p.codprod = :codigo AND p.nome <> ':x'",
+      ),
     ).toEqual(["codigo"]);
-    expect(extractNamedParams("SELECT p.codprod FROM produto p WHERE p.codprod = @codigo")).toEqual([
-      "codigo",
-    ]);
+    expect(extractNamedParams("SELECT p.codprod FROM produto p WHERE p.codprod = @codigo")).toEqual(
+      ["codigo"],
+    );
   });
 
   it("bindNamedParams exige params presentes", () => {
@@ -56,5 +61,40 @@ describe("parseSqlModelo", () => {
     expect(
       bindNamedParams("SELECT p.codprod FROM produto p WHERE p.codprod = :codigo", { codigo: 1 }),
     ).toEqual({ codigo: 1 });
+  });
+
+  it("rejeita expressão sem AS", () => {
+    expect(() => parseSqlModelo("SELECT SUM(qtd) FROM item")).toThrow(DomainError);
+    try {
+      parseSqlModelo("SELECT p.preco * p.qtd FROM produto p");
+      expect.fail("deveria lançar");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      expect((error as DomainError).code).toBe(ERROR_CODES.INVALID_SQL);
+    }
+    const modelo = parseSqlModelo("SELECT SUM(qtd) AS total FROM item");
+    expect(modelo.colunas.some((c) => c.alias.toLowerCase() === "total")).toBe(true);
+  });
+
+  it("extrai igualdades do ON e o qualificador da coluna", () => {
+    const modelo = parseSqlModelo(
+      "SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
+    );
+    expect(parseJoinEqualities(modelo.relacionamentos[0]?.on)).toEqual([
+      { leftAlias: "c", leftColumn: "codcli", rightAlias: "p", rightColumn: "codcli" },
+    ]);
+    expect(columnQualifier("p.codprod")).toBe("p");
+    expect(columnQualifier("SUM(p.qtd)")).toBeNull();
+  });
+
+  it("bindParamsForValidation preenche ausentes com null", () => {
+    expect(
+      bindParamsForValidation("SELECT p.codprod FROM produto p WHERE p.codprod = :codigo", {}),
+    ).toEqual({ codigo: null });
+    expect(
+      bindParamsForValidation("SELECT p.codprod FROM produto p WHERE p.codprod = :codigo", {
+        codigo: 10,
+      }),
+    ).toEqual({ codigo: 10 });
   });
 });

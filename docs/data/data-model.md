@@ -11,7 +11,7 @@ Não há tabela de senha de conta MCP, cliente de Authorization Server nem catá
 
 - `grafo_dialeto`: um dialeto por agente (primeiro escritor).
 - `grafo_lock`: lock de merge (`SELECT … FOR UPDATE`).
-- `tabela_grafo` / `coluna_grafo` / `relacionamento_grafo`: `origem` (`inferido` | `confirmado_usuario` | `validado_execucao`), `status` (`vigente` | `conflito`).
+- `relacionamento_grafo`: `tabela_origem_id`, `coluna_origem`, `tabela_destino_id`, `coluna_destino`, `tipo_join`. O treino grava as colunas reais do `ON` quando o parser lê `alias.coluna = alias.coluna`; sem `ON` legível permanece `*`.
 - Precedência: `validado_execucao` > `confirmado_usuario` > `inferido`. Empate de texto → `conflito`.
 
 ## Skills e notas

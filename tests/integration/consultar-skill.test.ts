@@ -26,7 +26,10 @@ const initialize = async (app: Awaited<ReturnType<typeof compose>>["app"], token
     },
   });
   const rawSession = init.headers["mcp-session-id"];
-  return { status: init.status, sessionId: typeof rawSession === "string" ? rawSession : undefined };
+  return {
+    status: init.status,
+    sessionId: typeof rawSession === "string" ? rawSession : undefined,
+  };
 };
 
 describe("consultar_dados só com skill", () => {
@@ -95,7 +98,9 @@ describe("consultar_dados só com skill", () => {
       await useCases.validarSkill.execute(registered.json.usuarioId as string, {
         acessoId: registered.json.acessoId as string,
         skillId: created.skill.id,
+        params: { codigo: 10 },
       });
+      expect(plug.lastSql).toMatch(/_validacao/i);
       await useCases.publicarSkill.execute(registered.json.usuarioId as string, {
         acessoId: registered.json.acessoId as string,
         skillId: created.skill.id,

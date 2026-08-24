@@ -12,7 +12,7 @@ import type {
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import type { AnotacaoGrafo, Skill } from "../../domain/entities/skill.js";
-import { parseSqlModelo, sqlAmostra } from "./shared/sql-modelo.js";
+import { bindParamsForValidation, parseSqlModelo, sqlValidacaoVazia } from "./shared/sql-modelo.js";
 import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 
 const slugify = (value: string): string =>
@@ -139,7 +139,7 @@ export class ValidarSkill {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; skillId?: string },
+    input: { acessoId?: string; skillId?: string; params?: Record<string, unknown> },
   ): Promise<{ success: true; skill: Skill }> {
     const uid = requireUsuario(usuarioId);
     const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
@@ -152,11 +152,13 @@ export class ValidarSkill {
       });
     }
     const modelo = parseSqlModelo(skill.sqlModelo);
+    const params = bindParamsForValidation(modelo.sql, input.params);
     await this.plug.executeSql({
       accessToken: await this.sessions.getAccessToken(uid),
       agentId: acesso.agentId,
       clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-      sql: sqlAmostra(acesso.dialeto, modelo.sql),
+      sql: sqlValidacaoVazia(acesso.dialeto, modelo.sql),
+      params,
       options: { maxRows: 1 },
     });
     const updated = await this.skills.setStatus(skill.id, "validada");

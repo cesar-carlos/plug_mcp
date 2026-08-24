@@ -9,7 +9,7 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
-import { parseSqlModelo, sqlAmostra } from "./shared/sql-modelo.js";
+import { parseSqlModelo, sqlAmostra, bindParamsForValidation, columnQualifier, parseJoinEqualities } from "./shared/sql-modelo.js";
 import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 
 const allowedByPolicy = (
@@ -35,7 +35,7 @@ export class TreinarComSql {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; sql?: string; confirmadoUsuario?: boolean },
+    input: { acessoId?: string; sql?: string; params?: Record<string, unknown> },
   ): Promise<{
     success: true;
     dialeto: Dialeto;
@@ -49,7 +49,8 @@ export class TreinarComSql {
     const uid = requireUsuario(usuarioId);
     const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
     const modelo = parseSqlModelo(input.sql ?? "");
-    const origem = input.confirmadoUsuario ? "confirmado_usuario" : "validado_execucao";
+    const origem = "validado_execucao" as const;
+    const params = bindParamsForValidation(modelo.sql, input.params);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
     const accessToken = await this.sessions.getAccessToken(uid);
 
@@ -73,6 +74,7 @@ export class TreinarComSql {
         agentId: acesso.agentId,
         clientToken,
         sql: sqlAmostra(acesso.dialeto, modelo.sql),
+        params,
         options: { maxRows: 1 },
       });
     } catch (error) {
@@ -102,6 +104,7 @@ export class TreinarComSql {
       }
       let conflitos = 0;
       const tabelaIds = new Map<string, string>();
+      const aliasToId = new Map<string, string>();
       for (const tabela of modelo.tabelas) {
         const result = await this.grafo.mergeTabela({
           agentId: acesso.agentId,
@@ -110,13 +113,23 @@ export class TreinarComSql {
           autorUsuarioId: uid,
         });
         tabelaIds.set(tabela.nome.toLowerCase(), result.tabela.id);
+        aliasToId.set(tabela.nome.toLowerCase(), result.tabela.id);
+        if (tabela.alias) {
+          aliasToId.set(tabela.alias.toLowerCase(), result.tabela.id);
+        }
         if (result.conflito) {
           conflitos += 1;
         }
       }
       for (const coluna of modelo.colunas) {
-        const fromTable = modelo.tabelas[0];
-        const tabelaId = fromTable ? tabelaIds.get(fromTable.nome.toLowerCase()) : undefined;
+        const qualifier = columnQualifier(coluna.expr);
+        let tabelaId: string | undefined;
+        if (qualifier) {
+          tabelaId = aliasToId.get(qualifier.toLowerCase());
+        } else if (modelo.tabelas.length === 1) {
+          const only = modelo.tabelas[0];
+          tabelaId = only ? tabelaIds.get(only.nome.toLowerCase()) : undefined;
+        }
         if (!tabelaId) {
           continue;
         }
@@ -132,26 +145,51 @@ export class TreinarComSql {
       }
       let rels = 0;
       for (const rel of modelo.relacionamentos) {
-        const origemId = modelo.tabelas[0]
-          ? tabelaIds.get(modelo.tabelas[0].nome.toLowerCase())
-          : undefined;
-        const destinoId = tabelaIds.get(rel.tabela.toLowerCase());
-        if (!origemId || !destinoId) {
+        const equalities = parseJoinEqualities(rel.on);
+        if (equalities.length === 0) {
+          const origemId = modelo.tabelas[0]
+            ? tabelaIds.get(modelo.tabelas[0].nome.toLowerCase())
+            : undefined;
+          const destinoId = tabelaIds.get(rel.tabela.toLowerCase());
+          if (!origemId || !destinoId) {
+            continue;
+          }
+          const result = await this.grafo.mergeRelacionamento({
+            agentId: acesso.agentId,
+            tabelaOrigemId: origemId,
+            colunaOrigem: "*",
+            tabelaDestinoId: destinoId,
+            colunaDestino: "*",
+            tipoJoin: rel.tipoJoin,
+            origem,
+            autorUsuarioId: uid,
+          });
+          rels += 1;
+          if (result.conflito) {
+            conflitos += 1;
+          }
           continue;
         }
-        const result = await this.grafo.mergeRelacionamento({
-          agentId: acesso.agentId,
-          tabelaOrigemId: origemId,
-          colunaOrigem: "*",
-          tabelaDestinoId: destinoId,
-          colunaDestino: "*",
-          tipoJoin: rel.tipoJoin,
-          origem,
-          autorUsuarioId: uid,
-        });
-        rels += 1;
-        if (result.conflito) {
-          conflitos += 1;
+        for (const eq of equalities) {
+          const origemId = aliasToId.get(eq.leftAlias.toLowerCase());
+          const destinoId = aliasToId.get(eq.rightAlias.toLowerCase());
+          if (!origemId || !destinoId) {
+            continue;
+          }
+          const result = await this.grafo.mergeRelacionamento({
+            agentId: acesso.agentId,
+            tabelaOrigemId: origemId,
+            colunaOrigem: eq.leftColumn,
+            tabelaDestinoId: destinoId,
+            colunaDestino: eq.rightColumn,
+            tipoJoin: rel.tipoJoin,
+            origem,
+            autorUsuarioId: uid,
+          });
+          rels += 1;
+          if (result.conflito) {
+            conflitos += 1;
+          }
         }
       }
       return { conflitos, rels };

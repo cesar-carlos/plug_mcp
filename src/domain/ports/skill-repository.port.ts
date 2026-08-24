@@ -10,7 +10,12 @@ export interface SkillRepositoryPort {
   findById(id: string): Promise<Skill | null>;
   findBySlug(agentId: string, slug: string): Promise<Skill | null>;
   listByAgent(agentId: string): Promise<readonly Skill[]>;
-  buscar(agentId: string, query: string, limite: number): Promise<readonly Skill[]>;
+  buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+    status?: StatusSkill,
+  ): Promise<readonly Skill[]>;
 }
 
 export interface AnotacaoGrafoRepositoryPort {
