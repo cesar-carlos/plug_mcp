@@ -624,10 +624,12 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
     id: string,
     patch: Partial<Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status">>,
   ): Promise<Skill> {
+    const { params, ...rest } = patch;
     const [row] = await this.db
       .update(schema.skill)
       .set({
-        ...patch,
+        ...rest,
+        ...(params !== undefined ? { params: [...params] } : {}),
         versao: sql`${schema.skill.versao} + 1`,
         updatedAt: new Date(),
       })
