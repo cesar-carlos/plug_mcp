@@ -33,22 +33,22 @@ Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 
 ## Domínio
 
-| `code`                                   | Quando                                           |
-| ---------------------------------------- | ------------------------------------------------ |
-| `UNAUTHENTICATED`                        | Sem Bearer (fora do bootstrap) ou token inválido |
-| `VALIDATION_ERROR`                       | Parâmetro ausente/inválido                       |
-| `ACESSO_NOT_FOUND`                       | `acessoId` de outro usuário                      |
-| `AGENT_ACCESS_PENDING`                   | Pedido ainda pending                             |
-| `DIALECT_CONFLICT`                       | Segundo dialeto no mesmo `agentId`               |
-| `CONFLICT`                               | Acesso/skill duplicado                           |
-| `CREDENTIAL_STALE`                       | Senha do Client recusada                         |
-| `PERMISSION_DENIED`                      | Policy do `client_token`                         |
-| `USER_AUTH_EXPIRED`                      | JWT do Client recusado (401 do hub)          |
-| `INVALID_SQL`                            | `SELECT *`, mutação, segundo comando, expressão sem AS |
-| `SKILL_NOT_FOUND` / `ANOTACAO_NOT_FOUND` | Id inexistente neste `agentId`               |
-| `SKILL_NOT_PUBLISHED`                    | Skill em rascunho/validada em `consultar_dados` |
-| `SKILL_GAP`                              | `buscar_contexto` sem skill publicada capaz (payload, não throw) |
-| `RATE_LIMITED`                           | Teto HTTP ou por tool                        |
-| `QUERY_TIMEOUT`                          | Timeout da query no agente                   |
-| `PLUG_SERVER_ERROR`                      | Erro genérico do hub                         |
-| `INTERNAL_ERROR`                         | Falha inesperada no MCP                      |
+| `code`                                   | Quando                                                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `UNAUTHENTICATED`                        | Sem Bearer (fora do bootstrap) ou token inválido                                                          |
+| `VALIDATION_ERROR`                       | Parâmetro ausente/inválido; `criar_skill`/`atualizar_skill` com tabelas fora do grafo; `validar_skill` com params sem descrição; `publicar_skill` sem checklist ou sem `confirmadoPeloUsuario`; valor incompatível com `tipo` |
+| `ACESSO_NOT_FOUND`                       | `acessoId` de outro usuário                                                                               |
+| `AGENT_ACCESS_PENDING`                   | Pedido ainda pending                                                                                      |
+| `DIALECT_CONFLICT`                       | Segundo dialeto no mesmo `agentId`                                                                        |
+| `CONFLICT`                               | Acesso/skill duplicado                                                                                    |
+| `CREDENTIAL_STALE`                       | Senha do Client recusada                                                                                  |
+| `PERMISSION_DENIED`                      | Policy do `client_token`                                                                                  |
+| `USER_AUTH_EXPIRED`                      | JWT do Client recusado (401 do hub)                                                                       |
+| `INVALID_SQL`                            | `SELECT *`, mutação, segundo comando, expressão sem AS, coluna sem qualificador em JOIN, JOIN sem igualdade no `ON` |
+| `SKILL_NOT_FOUND` / `ANOTACAO_NOT_FOUND` | Id inexistente neste `agentId`                                                                            |
+| `SKILL_NOT_PUBLISHED`                    | Skill em rascunho/validada em `consultar_dados`                                                           |
+| `SKILL_GAP`                              | `buscar_contexto` sem skill publicada capaz (payload, não throw)                                          |
+| `RATE_LIMITED`                           | Teto HTTP ou por tool                                                                                     |
+| `QUERY_TIMEOUT`                          | Timeout da query no agente                                                                                |
+| `PLUG_SERVER_ERROR`                      | Erro genérico do hub                                                                                      |
+| `INTERNAL_ERROR`                         | Falha inesperada no MCP                                                                                   |

@@ -1,4 +1,14 @@
-import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { ParametroSkill } from "../../domain/entities/skill.js";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -128,6 +138,7 @@ export const skill = pgTable(
     nome: text("nome").notNull(),
     descricao: text("descricao").notNull(),
     sqlModelo: text("sql_modelo").notNull(),
+    params: jsonb("params").$type<ParametroSkill[]>().notNull().default([]),
     versao: integer("versao").notNull().default(1),
     status: text("status").notNull().default("rascunho"),
     autorUsuarioId: uuid("autor_usuario_id"),

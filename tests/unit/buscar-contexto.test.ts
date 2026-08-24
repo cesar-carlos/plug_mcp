@@ -63,6 +63,45 @@ describe("BuscarContexto", () => {
     expect(result.grafoParaTreino).toBeDefined();
   });
 
+  it("com rascunho oriente a continuar o fluxo em vez de recomeçar", async () => {
+    const { buscar, created, skills } = await setup();
+    await skills.create({
+      agentId,
+      slug: "rascunho-produtos",
+      nome: "Lista de produtos",
+      descricao: "Ainda em treino",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "produtos",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.gap?.hint).toMatch(/em andamento/i);
+    expect(result.fluxoTreino?.proximoPasso).toBeTruthy();
+  });
+
+  it("casa pergunta pelo sqlModelo e pelos params", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "saldo-aberto",
+      nome: "Contas",
+      descricao: "Títulos",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.saldo_aberto = :flag",
+      params: [{ nome: "flag", descricao: "Saldo em aberto", obrigatorio: true, tipo: "string" }],
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "saldo aberto",
+    });
+    expect(result.consultaPermitida).toBe(true);
+    expect(result.skillsPublicadas.some((s) => s.id === published.id)).toBe(true);
+  });
+
   it("com skill publicada lista só publicadas e permite consulta", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
@@ -119,5 +158,32 @@ describe("BuscarContexto", () => {
     expect(result.consultaPermitida).toBe(true);
     expect(result.skillsPublicadas.some((s) => s.id === published.id)).toBe(true);
     expect(result.skillsParaTreino?.length ?? 0).toBeGreaterThanOrEqual(0);
+  });
+
+  it("escolhe rascunho mais relevante da query, não o primeiro inserido", async () => {
+    const { buscar, created, skills } = await setup();
+    await skills.create({
+      agentId,
+      slug: "lista-xyz",
+      nome: "Lista xyz",
+      descricao: "Rascunho genérico",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    const relevant = await skills.create({
+      agentId,
+      slug: "faturamento-cliente",
+      nome: "Faturamento por cliente",
+      descricao: "Total faturado no mês por cliente",
+      sqlModelo: "SELECT c.nome FROM cliente c",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "faturamento cliente",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.gap?.hint).toMatch(/Faturamento por cliente/);
+    expect(result.skillsParaTreino[0]?.id).toBe(relevant.id);
   });
 });

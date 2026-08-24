@@ -1,6 +1,7 @@
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
+import type { ParametroSkill } from "../../../domain/entities/skill.js";
 
 export const SQL_MAX_BYTES = 1_048_576;
 const IDENT = "[A-Za-z_][A-Za-z0-9_$#]*";
@@ -146,6 +147,19 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
     });
   }
 
+  for (const rel of relacionamentos) {
+    if (rel.tipoJoin.includes("cross")) {
+      continue;
+    }
+    if (parseJoinEqualities(rel.on).length === 0) {
+      throw new DomainError({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "JOIN exige ON com igualdade alias.coluna = alias.coluna.",
+        hint: "Ex.: INNER JOIN cliente c ON c.codcli = p.codcli. CROSS JOIN não grava relacionamento. Funções no ON não são aceitas.",
+      });
+    }
+  }
+
   const selectList = extractSelectList(sql);
   const colunas = selectList.map((item) => parseSelectItem(item));
   if (colunas.length === 0) {
@@ -154,6 +168,18 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
       message: "Não foi possível ler as colunas do SELECT.",
       hint: "Use colunas simples ou alias (ex.: SUM(qtd) AS total).",
     });
+  }
+
+  if (relacionamentos.length > 0) {
+    for (const coluna of colunas) {
+      if (!columnQualifier(coluna.expr) && !looksLikeExpression(coluna.expr)) {
+        throw new DomainError({
+          code: ERROR_CODES.INVALID_SQL,
+          message: "Coluna sem qualificador em JOIN.",
+          hint: "Com JOIN, qualifique cada coluna (ex.: p.codprod em vez de codprod). Expressões com AS continuam válidas.",
+        });
+      }
+    }
   }
 
   return { sql, tabelas: dedupeTabelas(tabelas), colunas, relacionamentos };
@@ -335,6 +361,80 @@ export const bindParamsForValidation = (
     bound[name] = Object.prototype.hasOwnProperty.call(source, name) ? source[name] : null;
   }
   return bound;
+};
+
+const ISO_DATE =
+  /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+
+const coerceParamValue = (nome: string, tipo: ParametroSkill["tipo"], value: unknown): unknown => {
+  if (value == null) {
+    return value;
+  }
+  switch (tipo) {
+    case "number": {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) {
+        return Number(value);
+      }
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Param ${nome} deve ser number.`,
+        hint: 'Passe um número (ex.: 10 ou "10").',
+      });
+    }
+    case "boolean": {
+      if (typeof value === "boolean") {
+        return value;
+      }
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Param ${nome} deve ser boolean.`,
+        hint: "Passe true ou false.",
+      });
+    }
+    case "date": {
+      if (typeof value === "string" && ISO_DATE.test(value.trim())) {
+        return value.trim();
+      }
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Param ${nome} deve ser data ISO (YYYY-MM-DD).`,
+        hint: "Ex.: 2026-08-01 ou 2026-08-01T00:00:00Z.",
+      });
+    }
+    default: {
+      if (typeof value === "string") {
+        return value;
+      }
+      if (typeof value === "number" || typeof value === "boolean") {
+        return String(value);
+      }
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Param ${nome} deve ser string.`,
+        hint: "Passe um texto.",
+      });
+    }
+  }
+};
+
+export const coerceBoundParams = (
+  bound: Record<string, unknown>,
+  contract: readonly ParametroSkill[],
+): Record<string, unknown> => {
+  if (contract.length === 0) {
+    return bound;
+  }
+  const out: Record<string, unknown> = { ...bound };
+  for (const param of contract) {
+    if (!Object.prototype.hasOwnProperty.call(out, param.nome)) {
+      continue;
+    }
+    out[param.nome] = coerceParamValue(param.nome, param.tipo, out[param.nome]);
+  }
+  return out;
 };
 
 export const sqlValidacaoVazia = (dialeto: Dialeto, sql: string): string => {

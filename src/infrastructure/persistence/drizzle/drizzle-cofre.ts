@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { and, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { rankByTerms, tokenizeQuery } from "../busca-termos.js";
 import type { Db } from "./db.js";
 import * as schema from "../schema.js";
@@ -21,6 +21,7 @@ import type {
   TabelaGrafo,
 } from "../../../domain/entities/grafo.js";
 import { decidirMerge } from "../../../domain/entities/merge-fato.js";
+import { parseParametroSkillList } from "../../../domain/entities/skill.js";
 import type { AcessoRepositoryPort } from "../../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../../domain/ports/usuario-repository.port.js";
 import type {
@@ -41,9 +42,9 @@ const toUsuario = (row: typeof schema.usuarioMcp.$inferSelect): UsuarioMcp => ({
   emailEnc: row.emailEnc,
   emailHash: row.emailHash,
   senhaEnc: row.senhaEnc,
-    tokenHash: row.tokenHash,
-    tokenExpiresAt: row.tokenExpiresAt ?? null,
-    createdAt: row.createdAt,
+  tokenHash: row.tokenHash,
+  tokenExpiresAt: row.tokenExpiresAt ?? null,
+  createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
 
@@ -471,6 +472,33 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     }));
   }
 
+  async countConflitos(agentId: string): Promise<number> {
+    const conn = this.conn();
+    const [tabelas] = await conn
+      .select({ n: count() })
+      .from(schema.tabelaGrafo)
+      .where(
+        and(eq(schema.tabelaGrafo.agentId, agentId), eq(schema.tabelaGrafo.status, "conflito")),
+      );
+    const [colunas] = await conn
+      .select({ n: count() })
+      .from(schema.colunaGrafo)
+      .innerJoin(schema.tabelaGrafo, eq(schema.colunaGrafo.tabelaId, schema.tabelaGrafo.id))
+      .where(
+        and(eq(schema.tabelaGrafo.agentId, agentId), eq(schema.colunaGrafo.status, "conflito")),
+      );
+    const [rels] = await conn
+      .select({ n: count() })
+      .from(schema.relacionamentoGrafo)
+      .where(
+        and(
+          eq(schema.relacionamentoGrafo.agentId, agentId),
+          eq(schema.relacionamentoGrafo.status, "conflito"),
+        ),
+      );
+    return (tabelas?.n ?? 0) + (colunas?.n ?? 0) + (rels?.n ?? 0);
+  }
+
   async findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null> {
     const rows = await this.conn()
       .select()
@@ -577,20 +605,30 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
   constructor(private readonly db: Db) {}
 
   async create(input: NovaSkill): Promise<Skill> {
-    const [row] = await this.db.insert(schema.skill).values(input).returning();
+    const [row] = await this.db
+      .insert(schema.skill)
+      .values({
+        agentId: input.agentId,
+        slug: input.slug,
+        nome: input.nome,
+        descricao: input.descricao,
+        sqlModelo: input.sqlModelo,
+        params: input.params ? [...input.params] : [],
+        autorUsuarioId: input.autorUsuarioId,
+      })
+      .returning();
     return this.toSkill(row!);
   }
 
   async update(
     id: string,
-    patch: Partial<Pick<Skill, "nome" | "descricao" | "sqlModelo">>,
+    patch: Partial<Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status">>,
   ): Promise<Skill> {
     const [row] = await this.db
       .update(schema.skill)
       .set({
         ...patch,
         versao: sql`${schema.skill.versao} + 1`,
-        status: "rascunho",
         updatedAt: new Date(),
       })
       .where(eq(schema.skill.id, id))
@@ -634,7 +672,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
     agentId: string,
     query: string,
     limite: number,
-    status?: StatusSkill,
+    status?: StatusSkill | readonly StatusSkill[],
   ): Promise<readonly Skill[]> {
     const terms = tokenizeQuery(query);
     if (terms.length === 0) {
@@ -646,23 +684,27 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
         ilike(schema.skill.nome, like),
         ilike(schema.skill.descricao, like),
         ilike(schema.skill.slug, like),
+        ilike(schema.skill.sqlModelo, like),
       ];
     });
+    const statusFilter =
+      status === undefined
+        ? undefined
+        : typeof status === "string"
+          ? eq(schema.skill.status, status)
+          : inArray(schema.skill.status, [...status]);
     const rows = await this.db
       .select()
       .from(schema.skill)
-      .where(
-        and(
-          eq(schema.skill.agentId, agentId),
-          status ? eq(schema.skill.status, status) : undefined,
-          or(...likes),
-        ),
-      )
+      .where(and(eq(schema.skill.agentId, agentId), statusFilter, or(...likes)))
       .limit(Math.max(limite * 4, 32));
     return rankByTerms(
       rows.map((row) => this.toSkill(row)),
       terms,
-      (row) => `${row.nome} ${row.descricao} ${row.slug}`,
+      (row) =>
+        `${row.nome} ${row.descricao} ${row.slug} ${row.sqlModelo} ${row.params
+          .map((param) => `${param.nome} ${param.descricao} ${param.tipo}`)
+          .join(" ")}`,
       limite,
     );
   }
@@ -675,6 +717,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
       nome: row.nome,
       descricao: row.descricao,
       sqlModelo: row.sqlModelo,
+      params: parseParametroSkillList(row.params),
       versao: row.versao,
       status: row.status as StatusSkill,
       autorUsuarioId: row.autorUsuarioId,

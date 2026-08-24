@@ -5,6 +5,7 @@ import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.a
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
 import {
   InMemoryAcessoRepository,
+  InMemoryGrafoRepository,
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
@@ -22,6 +23,7 @@ describe("ValidarSkill", () => {
     const usuarios = new InMemoryUsuarioRepository();
     const acessos = new InMemoryAcessoRepository();
     const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
     const registrar = new RegistrarAcesso(
       usuarios,
       acessos,
@@ -38,19 +40,26 @@ describe("ValidarSkill", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
+    await grafo.mergeTabela({
+      agentId,
+      nome: "produto",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
     };
-    const criar = new CriarSkill(acessos, skills);
-    const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto);
-    const publicar = new PublicarSkill(acessos, skills);
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
+    const publicar = new PublicarSkill(acessos, skills, grafo);
     const skill = await criar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       slug: "faturamento-periodo",
       nome: "Faturamento no período",
       descricao: "Total faturado a partir de uma data",
       sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.dtcad >= :dataInicio",
+      params: [{ nome: "dataInicio", descricao: "Data inicial do período" }],
     });
     expect(skill.skill.status).toBe("rascunho");
     const validated = await validar.execute(created.usuarioId, {
@@ -64,6 +73,7 @@ describe("ValidarSkill", () => {
     const published = await publicar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       skillId: skill.skill.id,
+      confirmadoPeloUsuario: true,
     });
     expect(published.skill.status).toBe("publicada");
   });
@@ -74,6 +84,7 @@ describe("ValidarSkill", () => {
     const usuarios = new InMemoryUsuarioRepository();
     const acessos = new InMemoryAcessoRepository();
     const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
     const registrar = new RegistrarAcesso(
       usuarios,
       acessos,
@@ -90,17 +101,24 @@ describe("ValidarSkill", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
+    await grafo.mergeTabela({
+      agentId,
+      nome: "produto",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
     };
-    const criar = new CriarSkill(acessos, skills);
-    const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto);
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
     const skill = await criar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       nome: "Por código",
       descricao: "Filtra produto por código",
       sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      params: [{ nome: "codigo", descricao: "Código do produto" }],
     });
     await validar.execute(created.usuarioId, {
       acessoId: created.acessoId,

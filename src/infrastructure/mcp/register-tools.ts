@@ -86,6 +86,13 @@ const destroyLocal = {
   openWorldHint: false,
 } as const;
 
+const paramSkillShape = z.object({
+  nome: z.string(),
+  descricao: z.string().optional(),
+  obrigatorio: z.boolean().optional(),
+  tipo: z.enum(["string", "number", "date", "boolean"]).optional(),
+});
+
 export const registerTools = (
   server: McpServer,
   config: AppConfig,
@@ -274,13 +281,14 @@ export const registerTools = (
 
   server.tool(
     "criar_skill",
-    "Nomeia um SQL de negócio já treinado. Feche o treino com esta tool; a IA consulta o ERP pela skill publicada, não pelo grafo.",
+    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Params com descrição fecham o checklist antes de publicar. A IA consulta o ERP pela skill publicada, não pelo grafo.",
     {
       acessoId: z.string().optional(),
       slug: z.string().optional(),
       nome: z.string().optional(),
       descricao: z.string().optional(),
       sqlModelo: z.string().optional(),
+      params: z.array(paramSkillShape).optional(),
     },
     writeLocal,
     async (args) => run("criar_skill", () => useCases.criarSkill.execute(currentAccountId(), args)),
@@ -288,13 +296,14 @@ export const registerTools = (
 
   server.tool(
     "atualizar_skill",
-    "Atualiza nome/descrição/SQL de uma skill e volta para rascunho.",
+    "Atualiza nome/descrição/SQL/params. Se o SQL mudar, as tabelas precisam estar no grafo e o status volta a rascunho. Patch só de nome/descrição/params mantém o status.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
       nome: z.string().optional(),
       descricao: z.string().optional(),
       sqlModelo: z.string().optional(),
+      params: z.array(paramSkillShape).optional(),
     },
     writeLocal,
     async (args) =>
@@ -310,7 +319,7 @@ export const registerTools = (
 
   server.tool(
     "validar_skill",
-    "Valida o sqlModelo da skill com envelope vazio (sem ler dado). Params nomeados opcionais; placeholders ausentes vão como null. Marca como validada.",
+    "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Marca como validada.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -323,8 +332,12 @@ export const registerTools = (
 
   server.tool(
     "publicar_skill",
-    "Publica uma skill já validada para os demais acessos do mesmo agentId.",
-    { acessoId: z.string().optional(), skillId: z.string().optional() },
+    "Libera a skill só com checklist completo e confirmadoPeloUsuario: true. Mostre o resumo no chat antes de publicar.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
     destroyLocal,
     async (args) =>
       run("publicar_skill", async () => {

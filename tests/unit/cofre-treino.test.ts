@@ -7,10 +7,12 @@ import {
   InMemoryAcessoRepository,
   InMemoryAuditLog,
   InMemoryGrafoRepository,
+  InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -77,7 +79,15 @@ describe("cofre e treino", () => {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
     };
-    const treinar = new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit);
+    const treinar = new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    );
     await expect(
       treinar.execute(created.usuarioId, {
         acessoId: created.acessoId,
@@ -126,6 +136,7 @@ describe("cofre e treino", () => {
       { getAccessToken: async () => "access-test", invalidate: () => undefined },
       crypto,
       audit,
+      new InMemorySkillRepository(),
     );
     await expect(
       treinar.execute(created.usuarioId, {
@@ -166,11 +177,27 @@ describe("cofre e treino", () => {
       clientToken: "tok-b-12345678",
     });
     const sessions = { getAccessToken: async () => "access-test", invalidate: () => undefined };
-    await new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit).execute(a.usuarioId, {
+    await new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    ).execute(a.usuarioId, {
       acessoId: a.acessoId,
       sql: "SELECT p.codprod FROM produto p",
     });
-    await new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit).execute(b.usuarioId, {
+    await new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    ).execute(b.usuarioId, {
       acessoId: b.acessoId,
       sql: "SELECT c.codcli FROM cliente c",
     });
@@ -209,12 +236,28 @@ describe("cofre e treino", () => {
       clientToken: "tok-b-12345678",
     });
     const sessions = { getAccessToken: async () => "access-test", invalidate: () => undefined };
-    await new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit).execute(a.usuarioId, {
+    await new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    ).execute(a.usuarioId, {
       acessoId: a.acessoId,
       sql: "SELECT p.codprod FROM produto p",
     });
     await expect(
-      new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit).execute(b.usuarioId, {
+      new TreinarComSql(
+        acessos,
+        grafo,
+        plug,
+        sessions,
+        crypto,
+        audit,
+        new InMemorySkillRepository(),
+      ).execute(b.usuarioId, {
         acessoId: b.acessoId,
         sql: "SELECT p.codprod FROM produto p",
       }),
@@ -248,7 +291,15 @@ describe("cofre e treino", () => {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
     };
-    const treinar = new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit);
+    const treinar = new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    );
     await treinar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       sql: "SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
@@ -261,13 +312,103 @@ describe("cofre e treino", () => {
     const colsProduto = await grafo.listColunas(produto!.id);
     const colsCliente = await grafo.listColunas(cliente!.id);
     expect(colsProduto.some((c) => c.nome.toLowerCase() === "codprod")).toBe(true);
+    expect(colsProduto.some((c) => c.nome.toLowerCase() === "codcli")).toBe(true);
     expect(colsProduto.some((c) => c.nome.toLowerCase() === "nome")).toBe(false);
     expect(colsCliente.some((c) => c.nome.toLowerCase() === "nome")).toBe(true);
+    expect(colsCliente.some((c) => c.nome.toLowerCase() === "codcli")).toBe(true);
     const rels = await grafo.listRelacionamentos(agentId);
     expect(rels).toHaveLength(1);
     expect(rels[0]?.colunaOrigem.toLowerCase()).toBe("codcli");
     expect(rels[0]?.colunaDestino.toLowerCase()).toBe("codcli");
     expect(rels[0]?.tabelaOrigemId).toBe(cliente!.id);
     expect(rels[0]?.tabelaDestinoId).toBe(produto!.id);
+  });
+
+  it("recusa SELECT sem qualificador quando há JOIN", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+    };
+    const treinar = new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    );
+    await expect(
+      treinar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        sql: "SELECT codprod, nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.INVALID_SQL });
+  });
+
+  it("CROSS JOIN não grava relacionamento *", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+    };
+    const treinar = new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    );
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT p.codprod, c.nome FROM produto p CROSS JOIN cliente c",
+    });
+    const rels = await grafo.listRelacionamentos(agentId);
+    expect(rels).toHaveLength(0);
   });
 });

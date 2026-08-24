@@ -5,11 +5,19 @@ import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AuditLogPort } from "../../domain/ports/audit-log.port.js";
 import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
+import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
-import { parseSqlModelo, sqlAmostra, bindParamsForValidation, columnQualifier, parseJoinEqualities } from "./shared/sql-modelo.js";
+import {
+  parseSqlModelo,
+  sqlAmostra,
+  bindParamsForValidation,
+  columnQualifier,
+  parseJoinEqualities,
+} from "./shared/sql-modelo.js";
+import { fluxoForAgentSkill, pickSkillInProgress } from "./shared/fluxo-treino.js";
 import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 
 const allowedByPolicy = (
@@ -31,6 +39,7 @@ export class TreinarComSql {
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
     private readonly audit: AuditLogPort,
+    private readonly skills: SkillRepositoryPort,
   ) {}
 
   async execute(
@@ -43,6 +52,7 @@ export class TreinarComSql {
     colunas: string[];
     relacionamentos: number;
     conflitos: number;
+    fluxoTreino: Awaited<ReturnType<typeof fluxoForAgentSkill>>;
     hint: string;
   }> {
     const started = Date.now();
@@ -145,29 +155,11 @@ export class TreinarComSql {
       }
       let rels = 0;
       for (const rel of modelo.relacionamentos) {
+        if (rel.tipoJoin.includes("cross")) {
+          continue;
+        }
         const equalities = parseJoinEqualities(rel.on);
         if (equalities.length === 0) {
-          const origemId = modelo.tabelas[0]
-            ? tabelaIds.get(modelo.tabelas[0].nome.toLowerCase())
-            : undefined;
-          const destinoId = tabelaIds.get(rel.tabela.toLowerCase());
-          if (!origemId || !destinoId) {
-            continue;
-          }
-          const result = await this.grafo.mergeRelacionamento({
-            agentId: acesso.agentId,
-            tabelaOrigemId: origemId,
-            colunaOrigem: "*",
-            tabelaDestinoId: destinoId,
-            colunaDestino: "*",
-            tipoJoin: rel.tipoJoin,
-            origem,
-            autorUsuarioId: uid,
-          });
-          rels += 1;
-          if (result.conflito) {
-            conflitos += 1;
-          }
           continue;
         }
         for (const eq of equalities) {
@@ -175,6 +167,24 @@ export class TreinarComSql {
           const destinoId = aliasToId.get(eq.rightAlias.toLowerCase());
           if (!origemId || !destinoId) {
             continue;
+          }
+          const leftCol = await this.grafo.mergeColuna({
+            tabelaId: origemId,
+            nome: eq.leftColumn,
+            origem,
+            autorUsuarioId: uid,
+          });
+          if (leftCol.conflito) {
+            conflitos += 1;
+          }
+          const rightCol = await this.grafo.mergeColuna({
+            tabelaId: destinoId,
+            nome: eq.rightColumn,
+            origem,
+            autorUsuarioId: uid,
+          });
+          if (rightCol.conflito) {
+            conflitos += 1;
           }
           const result = await this.grafo.mergeRelacionamento({
             agentId: acesso.agentId,
@@ -206,6 +216,9 @@ export class TreinarComSql {
       duracaoMs: Date.now() - started,
     });
 
+    const catalog = await this.skills.listByAgent(acesso.agentId);
+    const emAndamento = pickSkillInProgress(catalog, modelo.sql);
+    const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
     return {
       success: true,
       dialeto: acesso.dialeto,
@@ -213,10 +226,13 @@ export class TreinarComSql {
       colunas: modelo.colunas.map((c) => c.alias),
       relacionamentos: merged.rels,
       conflitos: merged.conflitos,
+      fluxoTreino,
       hint:
         merged.conflitos > 0
           ? "Há conflitos no grafo. Chame resolver_conflito antes de publicar skills."
-          : "Grafo atualizado. Cadastre a skill (criar_skill → validar_skill → publicar_skill) para a IA poder responder essa classe de pergunta. Sem skill publicada, a IA não deve inventar SQL na hora da consulta.",
+          : emAndamento
+            ? `Grafo atualizado. Continue a skill "${emAndamento.nome}" (${emAndamento.status}): ${fluxoTreino.proximoPasso ?? "validar_skill"}.`
+            : `Grafo atualizado. Próximo passo: ${fluxoTreino.proximoPasso ?? "criar_skill"}. Cadastre a skill (criar_skill → descrever params → validar_skill) e só publique se o usuário confirmar.`,
     };
   }
 }

@@ -11,9 +11,43 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
-import type { AnotacaoGrafo, Skill } from "../../domain/entities/skill.js";
+import type { AnotacaoGrafo, Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
+import {
+  countConflitosGrafo,
+  fluxoForAgentSkill,
+  mergeParamInput,
+  missingGraphTables,
+  paramsDescribed,
+  paramsFromSql,
+  type FluxoTreino,
+} from "./shared/fluxo-treino.js";
 import { bindParamsForValidation, parseSqlModelo, sqlValidacaoVazia } from "./shared/sql-modelo.js";
 import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+
+interface ParamInput {
+  nome?: string;
+  descricao?: string;
+  obrigatorio?: boolean;
+  tipo?: TipoParametroSkill;
+}
+
+const normalizeParamInput = (
+  input?: readonly ParamInput[],
+):
+  | { nome: string; descricao?: string; obrigatorio?: boolean; tipo?: TipoParametroSkill }[]
+  | undefined => {
+  if (!input) {
+    return undefined;
+  }
+  return input
+    .map((item) => ({
+      nome: item.nome?.trim() ?? "",
+      descricao: item.descricao,
+      obrigatorio: item.obrigatorio,
+      tipo: item.tipo,
+    }))
+    .filter((item) => item.nome.length > 0);
+};
 
 const slugify = (value: string): string =>
   value
@@ -28,6 +62,7 @@ export class CriarSkill {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
   ) {}
 
   async execute(
@@ -38,8 +73,9 @@ export class CriarSkill {
       nome?: string;
       descricao?: string;
       sqlModelo?: string;
+      params?: readonly ParamInput[];
     },
-  ): Promise<{ success: true; skill: Skill }> {
+  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
     const nome = input.nome?.trim() ?? "";
@@ -52,7 +88,20 @@ export class CriarSkill {
         hint: "A skill nomeia um SQL de negócio já treinado. Use treinar_com_sql antes, se o grafo ainda não tiver as tabelas.",
       });
     }
-    parseSqlModelo(sqlModelo);
+    const modelo = parseSqlModelo(sqlModelo);
+    const missing = await missingGraphTables(
+      this.grafo,
+      acesso.agentId,
+      modelo.tabelas.map((tabela) => tabela.nome),
+    );
+    if (missing.length > 0) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "As tabelas deste SQL ainda não estão no grafo.",
+        hint: `Chame treinar_com_sql antes. Tabelas ausentes: ${missing.join(", ")}.`,
+      });
+    }
+    const params = mergeParamInput(paramsFromSql(sqlModelo), normalizeParamInput(input.params));
     const slugInput = input.slug?.trim();
     const slugNome = slugify(nome);
     const slug = (
@@ -72,9 +121,14 @@ export class CriarSkill {
       nome,
       descricao,
       sqlModelo,
+      params,
       autorUsuarioId: uid,
     });
-    return { success: true, skill };
+    return {
+      success: true,
+      skill,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, skill),
+    };
   }
 }
 
@@ -82,6 +136,7 @@ export class AtualizarSkill {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
   ) {}
 
   async execute(
@@ -92,20 +147,45 @@ export class AtualizarSkill {
       nome?: string;
       descricao?: string;
       sqlModelo?: string;
+      params?: readonly ParamInput[];
     },
-  ): Promise<{ success: true; skill: Skill }> {
+  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const skill = await this.requireSkill(acesso.agentId, input.skillId);
-    if (input.sqlModelo) {
-      parseSqlModelo(input.sqlModelo);
+    const sqlModelo = input.sqlModelo?.trim() ? input.sqlModelo.trim() : skill.sqlModelo;
+    const sqlChanged = sqlModelo !== skill.sqlModelo;
+    if (sqlChanged) {
+      const modelo = parseSqlModelo(sqlModelo);
+      const missing = await missingGraphTables(
+        this.grafo,
+        acesso.agentId,
+        modelo.tabelas.map((tabela) => tabela.nome),
+      );
+      if (missing.length > 0) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "As tabelas deste SQL ainda não estão no grafo.",
+          hint: `Chame treinar_com_sql antes. Tabelas ausentes: ${missing.join(", ")}.`,
+        });
+      }
+    } else if (input.sqlModelo) {
+      parseSqlModelo(sqlModelo);
     }
+    const baseParams = paramsFromSql(sqlModelo, skill.params);
+    const params = mergeParamInput(baseParams, normalizeParamInput(input.params));
     const updated = await this.skills.update(skill.id, {
       nome: input.nome?.trim() ? input.nome.trim() : skill.nome,
       descricao: input.descricao?.trim() ? input.descricao.trim() : skill.descricao,
-      sqlModelo: input.sqlModelo?.trim() ? input.sqlModelo.trim() : skill.sqlModelo,
+      sqlModelo,
+      params,
+      status: sqlChanged ? "rascunho" : skill.status,
     });
-    return { success: true, skill: updated };
+    return {
+      success: true,
+      skill: updated,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updated),
+    };
   }
 
   private async requireSkill(agentId: string, skillId?: string): Promise<Skill> {
@@ -135,12 +215,13 @@ export class ValidarSkill {
     private readonly plug: PlugServerGatewayPort,
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
+    private readonly grafo: GrafoRepositoryPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
     input: { acessoId?: string; skillId?: string; params?: Record<string, unknown> },
-  ): Promise<{ success: true; skill: Skill }> {
+  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
     const skill = await this.skills.findById(input.skillId ?? "");
@@ -149,6 +230,13 @@ export class ValidarSkill {
         code: ERROR_CODES.SKILL_NOT_FOUND,
         message: "Skill não encontrada neste agentId.",
         hint: "Use listar_skills.",
+      });
+    }
+    if (!paramsDescribed(skill.params)) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Descreva todos os parâmetros da skill antes de validar.",
+        hint: "Chame atualizar_skill com params[{ nome, descricao }] para cada placeholder :nome/@nome.",
       });
     }
     const modelo = parseSqlModelo(skill.sqlModelo);
@@ -162,7 +250,11 @@ export class ValidarSkill {
       options: { maxRows: 1 },
     });
     const updated = await this.skills.setStatus(skill.id, "validada");
-    return { success: true, skill: updated };
+    return {
+      success: true,
+      skill: updated,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updated),
+    };
   }
 }
 
@@ -170,12 +262,13 @@ export class PublicarSkill {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; skillId?: string },
-  ): Promise<{ success: true; skill: Skill }> {
+    input: { acessoId?: string; skillId?: string; confirmadoPeloUsuario?: boolean },
+  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const skill = await this.skills.findById(input.skillId ?? "");
@@ -186,6 +279,13 @@ export class PublicarSkill {
         hint: "Use listar_skills.",
       });
     }
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Publicar exige confirmação do usuário.",
+        hint: "Mostre o resumo da skill no chat e chame de novo com confirmadoPeloUsuario: true.",
+      });
+    }
     if (skill.status !== "validada") {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -193,8 +293,27 @@ export class PublicarSkill {
         hint: "Chame validar_skill depois de treinar_com_sql com o SQL da skill.",
       });
     }
+    if (!paramsDescribed(skill.params)) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Descreva todos os parâmetros da skill antes de publicar.",
+        hint: "Chame atualizar_skill com params[{ nome, descricao }] para cada placeholder :nome/@nome.",
+      });
+    }
+    const conflitos = await countConflitosGrafo(this.grafo, acesso.agentId);
+    if (conflitos > 0) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Há conflitos pendentes no grafo.",
+        hint: "Chame resolver_conflito antes de publicar_skill.",
+      });
+    }
     const updated = await this.skills.setStatus(skill.id, "publicada", skill.versao);
-    return { success: true, skill: updated };
+    return {
+      success: true,
+      skill: updated,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updated),
+    };
   }
 }
 
@@ -218,12 +337,13 @@ export class ObterSkill {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
     input: { acessoId?: string; skillId?: string; slug?: string },
-  ): Promise<{ success: true; skill: Skill }> {
+  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const skill = input.skillId
@@ -238,7 +358,11 @@ export class ObterSkill {
         hint: "Passe skillId ou slug. Use listar_skills.",
       });
     }
-    return { success: true, skill };
+    return {
+      success: true,
+      skill,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, skill),
+    };
   }
 }
 

@@ -1,0 +1,1 @@
+ALTER TABLE skill ADD COLUMN IF NOT EXISTS params jsonb NOT NULL DEFAULT '[]'::jsonb;

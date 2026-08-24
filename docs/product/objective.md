@@ -6,7 +6,7 @@ O MCP existe para **dar contexto à IA do usuário final**. Com skills cadastrad
 
 A IA se orienta **pelas skills publicadas** daquele `agentId`. Fluxo: `buscar_contexto` / `listar_skills` / `obter_skill` / resource `skill://` → `consultar_dados(skillId, params)`. O servidor **recusa SQL solto**; só executa o `sqlModelo` persistido da skill publicada.
 
-O grafo (tabelas, colunas, relacionamentos) apoia o **treino** e a documentação do schema. **Não** é licença para montar SQL ad-hoc na hora da pergunta. `buscar_contexto` sinaliza `consultaPermitida: false` + `SKILL_GAP` quando não há skill publicada capaz.
+O grafo (tabelas, colunas, relacionamentos) apoia o **treino** (passo a passo até `publicar_skill`) e a documentação do schema. **Não** é licença para montar SQL ad-hoc na hora da pergunta. `buscar_contexto` sinaliza `consultaPermitida: false` + `SKILL_GAP` quando não há skill publicada capaz; se houver rascunho/validada, o hint pede para continuar o `proximoPasso`.
 
 ## Sem skill
 
@@ -14,7 +14,7 @@ Se não houver skill capaz de buscar o dado **ou** de cruzar as informações pe
 
 1. Ser honesta e pragmática: não há habilidade cadastrada para isso.
 2. Não inventar JOIN, tabela, coluna nem dicionário de códigos.
-3. Orientar o usuário a treinar (`treinar_com_sql`) e cadastrar a skill (`criar_skill` → `validar_skill` → `publicar_skill`).
+3. Orientar o usuário no passo a passo até **liberar** a skill: `treinar_com_sql` → `criar_skill` → descrever params (incluindo `tipo`) → `validar_skill` → confirmação no chat → `publicar_skill` com `confirmadoPeloUsuario: true`. Cada tool devolve `fluxoTreino`; o servidor recusa pular (criar sem grafo, validar sem descrição de params, publicar sem checklist ou sem confirmação).
 
 ## Comunicação com o ERP
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Skill } from "../../domain/entities/skill.js";
+import type { Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import { extractNamedParams } from "../../application/use-cases/shared/sql-modelo.js";
@@ -52,6 +52,19 @@ const queryAnnotations = {
   openWorldHint: true,
 } as const;
 
+const zodForParamTipo = (tipo: TipoParametroSkill | undefined): z.ZodTypeAny => {
+  switch (tipo) {
+    case "number":
+      return z.number();
+    case "boolean":
+      return z.boolean();
+    case "date":
+      return z.string().describe("ISO date (YYYY-MM-DD)");
+    default:
+      return z.string();
+  }
+};
+
 export const syncSkillTools = async (input: {
   server: McpServer;
   ports: SkillCatalogPorts;
@@ -70,7 +83,9 @@ export const syncSkillTools = async (input: {
       acessoId: z.string().optional(),
     };
     for (const param of params) {
-      shape[param] = z.union([z.string(), z.number(), z.boolean(), z.null()]).optional();
+      const meta = skill.params.find((item) => item.nome === param);
+      const field = zodForParamTipo(meta?.tipo).nullable();
+      shape[param] = meta?.descricao ? field.optional().describe(meta.descricao) : field.optional();
     }
     const existing = input.registered.get(name);
     existing?.remove();
@@ -112,10 +127,7 @@ export const syncSkillTools = async (input: {
   }
 };
 
-export const registerSkillCatalog = (
-  server: McpServer,
-  ports: SkillCatalogPorts,
-): void => {
+export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts): void => {
   server.registerResource(
     "skill",
     new ResourceTemplate("skill://{agentId}/{slug}", {
@@ -163,6 +175,7 @@ export const registerSkillCatalog = (
               nome: skill.nome,
               descricao: skill.descricao,
               sqlModelo: skill.sqlModelo,
+              params: skill.params,
               versao: skill.versao,
               status: skill.status,
             }),
@@ -217,7 +230,13 @@ export const registerSkillCatalog = (
             type: "text",
             text: [
               `Cadastre uma skill para: ${objetivo}`,
-              "Passos: treinar_com_sql (SELECT nomeado, JOIN se várias tabelas) → criar_skill → validar_skill → publicar_skill.",
+              "Explique o objetivo da skill ao usuário.",
+              "1) Peça o SQL e chame treinar_com_sql (SELECT nomeado; JOIN se várias tabelas; colunas qualificadas).",
+              "2) Mostre o fluxoTreino e peça nome/descrição → criar_skill (tabelas já no grafo).",
+              "3) Se houver placeholders :nome/@nome, peça significado e tipo (string/number/date/boolean) → atualizar_skill com params[{ nome, descricao, tipo }].",
+              "4) Se fluxoTreino indicar conflitos, chame resolver_conflito.",
+              "5) validar_skill (envelope vazio).",
+              "6) Mostre o resumo e só chame publicar_skill com confirmadoPeloUsuario: true se o usuário confirmar. Sem confirmação, não publique.",
               "Não consulte o ERP pelo grafo. A consulta depois usa só a skill publicada.",
             ].join("\n"),
           },

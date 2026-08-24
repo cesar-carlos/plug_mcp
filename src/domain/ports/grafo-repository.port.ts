@@ -48,6 +48,7 @@ export interface GrafoRepositoryPort {
   listTabelas(agentId: string): Promise<readonly TabelaGrafo[]>;
   listColunas(tabelaId: string): Promise<readonly ColunaGrafo[]>;
   listRelacionamentos(agentId: string): Promise<readonly RelacionamentoGrafo[]>;
+  countConflitos(agentId: string): Promise<number>;
   findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null>;
   findColuna(tabelaId: string, nome: string): Promise<ColunaGrafo | null>;
   resolverConflito(input: {

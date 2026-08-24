@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bindNamedParams,
   bindParamsForValidation,
+  coerceBoundParams,
   columnQualifier,
   extractNamedParams,
   parseJoinEqualities,
@@ -76,6 +77,21 @@ describe("parseSqlModelo", () => {
     expect(modelo.colunas.some((c) => c.alias.toLowerCase() === "total")).toBe(true);
   });
 
+  it("rejeita coluna sem qualificador quando há JOIN", () => {
+    expect(() =>
+      parseSqlModelo(
+        "SELECT codprod, nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
+      ),
+    ).toThrow(DomainError);
+  });
+
+  it("aceita expressão com AS mesmo em JOIN", () => {
+    const modelo = parseSqlModelo(
+      "SELECT p.codprod, SUM(i.qtd) AS total FROM pedido p INNER JOIN item i ON i.pedido = p.codigo GROUP BY p.codprod",
+    );
+    expect(modelo.colunas.some((c) => c.alias.toLowerCase() === "total")).toBe(true);
+  });
+
   it("extrai igualdades do ON e o qualificador da coluna", () => {
     const modelo = parseSqlModelo(
       "SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
@@ -96,5 +112,30 @@ describe("parseSqlModelo", () => {
         codigo: 10,
       }),
     ).toEqual({ codigo: 10 });
+  });
+
+  it("rejeita JOIN sem igualdade no ON", () => {
+    expect(() =>
+      parseSqlModelo("SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON 1 = 1"),
+    ).toThrow(DomainError);
+    try {
+      parseSqlModelo("SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON 1 = 1");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      expect((error as DomainError).code).toBe(ERROR_CODES.INVALID_SQL);
+    }
+  });
+
+  it("aceita CROSS JOIN sem exigir ON", () => {
+    const modelo = parseSqlModelo("SELECT p.codprod, c.nome FROM produto p CROSS JOIN cliente c");
+    expect(modelo.relacionamentos.some((rel) => rel.tipoJoin.includes("cross"))).toBe(true);
+  });
+
+  it("bind recusa number com string não numérica", () => {
+    expect(() =>
+      coerceBoundParams({ codigo: "abc" }, [
+        { nome: "codigo", descricao: "Código", obrigatorio: true, tipo: "number" },
+      ]),
+    ).toThrow(DomainError);
   });
 });

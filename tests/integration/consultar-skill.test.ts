@@ -88,12 +88,18 @@ describe("consultar_dados só com skill", () => {
       const missingResult = readToolResult(missing.payload);
       expect(missingResult.ok).toBe(false);
 
+      await useCases.treinarComSql.execute(registered.json.usuarioId as string, {
+        acessoId: registered.json.acessoId as string,
+        sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+        params: { codigo: 10 },
+      });
       const created = await useCases.criarSkill.execute(registered.json.usuarioId as string, {
         acessoId: registered.json.acessoId as string,
         slug: "produtos",
         nome: "Produtos",
         descricao: "Lista produtos",
         sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+        params: [{ nome: "codigo", descricao: "Código do produto", tipo: "number" }],
       });
       await useCases.validarSkill.execute(registered.json.usuarioId as string, {
         acessoId: registered.json.acessoId as string,
@@ -104,6 +110,7 @@ describe("consultar_dados só com skill", () => {
       await useCases.publicarSkill.execute(registered.json.usuarioId as string, {
         acessoId: registered.json.acessoId as string,
         skillId: created.skill.id,
+        confirmadoPeloUsuario: true,
       });
 
       plug.lastSql = null;

@@ -7,6 +7,7 @@ import type {
   Skill,
   StatusSkill,
 } from "../../../domain/entities/skill.js";
+import { parseParametroSkillList } from "../../../domain/entities/skill.js";
 import type {
   ColunaGrafo,
   GrafoDialeto,
@@ -342,6 +343,19 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     return [...this.rels.values()].filter((row) => row.agentId === agentId);
   }
 
+  async countConflitos(agentId: string): Promise<number> {
+    const tabelas = [...this.tabelas.values()].filter((row) => row.agentId === agentId);
+    let n = tabelas.filter((tabela) => tabela.status === "conflito").length;
+    const tabelaIds = new Set(tabelas.map((tabela) => tabela.id));
+    n += [...this.colunas.values()].filter(
+      (coluna) => tabelaIds.has(coluna.tabelaId) && coluna.status === "conflito",
+    ).length;
+    n += [...this.rels.values()].filter(
+      (rel) => rel.agentId === agentId && rel.status === "conflito",
+    ).length;
+    return n;
+  }
+
   async findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null> {
     return (
       [...this.tabelas.values()].find(
@@ -422,7 +436,13 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
   async create(input: NovaSkill): Promise<Skill> {
     const row: Skill = {
       id: id(),
-      ...input,
+      agentId: input.agentId,
+      slug: input.slug,
+      nome: input.nome,
+      descricao: input.descricao,
+      sqlModelo: input.sqlModelo,
+      params: parseParametroSkillList(input.params ?? []),
+      autorUsuarioId: input.autorUsuarioId,
       versao: 1,
       status: "rascunho",
       createdAt: now(),
@@ -434,7 +454,7 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
 
   async update(
     skillId: string,
-    patch: Partial<Pick<Skill, "nome" | "descricao" | "sqlModelo">>,
+    patch: Partial<Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status">>,
   ): Promise<Skill> {
     const row = this.rows.get(skillId);
     if (!row) {
@@ -444,7 +464,6 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
       ...row,
       ...patch,
       versao: row.versao + 1,
-      status: "rascunho",
       updatedAt: now(),
     };
     this.rows.set(skillId, next);
@@ -479,14 +498,19 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
     agentId: string,
     query: string,
     limite: number,
-    status?: StatusSkill,
+    status?: StatusSkill | readonly StatusSkill[],
   ): Promise<readonly Skill[]> {
+    const allowed =
+      status === undefined ? null : new Set(typeof status === "string" ? [status] : status);
     return rankByTerms(
       [...this.rows.values()].filter(
-        (row) => row.agentId === agentId && (status === undefined || row.status === status),
+        (row) => row.agentId === agentId && (allowed === null || allowed.has(row.status)),
       ),
       tokenizeQuery(query),
-      (row) => `${row.nome} ${row.descricao} ${row.slug}`,
+      (row) =>
+        `${row.nome} ${row.descricao} ${row.slug} ${row.sqlModelo} ${row.params
+          .map((param) => `${param.nome} ${param.descricao} ${param.tipo}`)
+          .join(" ")}`,
       limite,
     );
   }

@@ -16,7 +16,12 @@ import type {
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
 import type { Skill } from "../../domain/entities/skill.js";
 import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
-import { bindNamedParams, parseSqlModelo } from "./shared/sql-modelo.js";
+import { bindNamedParams, coerceBoundParams, parseSqlModelo } from "./shared/sql-modelo.js";
+import {
+  fluxoForAgentSkill,
+  pickSkillInProgress,
+  type FluxoTreino,
+} from "./shared/fluxo-treino.js";
 import {
   cell,
   DESCREVER_TABELA_MAX_ROWS,
@@ -37,9 +42,7 @@ const truncateCell = (value: unknown): unknown => {
   return `${value.slice(0, QUERY_CELL_MAX_CHARS)}…`;
 };
 
-const sanitizeQueryRows = (
-  rows: readonly Record<string, unknown>[],
-): Record<string, unknown>[] =>
+const sanitizeQueryRows = (rows: readonly Record<string, unknown>[]): Record<string, unknown>[] =>
   rows.map((row) => {
     const next: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(row)) {
@@ -138,7 +141,7 @@ export class ConsultarDados {
       });
     }
     const modelo = parseSqlModelo(skill.sqlModelo);
-    const params = bindNamedParams(modelo.sql, input.params);
+    const params = coerceBoundParams(bindNamedParams(modelo.sql, input.params), skill.params);
     const requested = input.options?.max_rows ?? this.defaultMaxRows;
     const maxRows = Math.min(Math.max(1, requested), this.absoluteMaxRows);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
@@ -352,6 +355,7 @@ export class BuscarContexto {
     skillsPublicadas: readonly Skill[];
     skillsParaTreino: readonly Skill[];
     grafoParaTreino: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
+    fluxoTreino?: FluxoTreino;
     gap?: { code: "SKILL_GAP"; hint: string };
   }> {
     const uid = requireUsuario(usuarioId);
@@ -369,14 +373,18 @@ export class BuscarContexto {
       agentId: acesso.agentId,
       clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
     });
-    const [tabelas, skillsPublicadas, skillHits, notas] = await Promise.all([
+    const [tabelas, skillsPublicadas, skillsParaTreino, notas] = await Promise.all([
       this.grafo.buscar(acesso.agentId, query, 12),
       this.skills.buscar(acesso.agentId, query, 8, "publicada"),
-      this.skills.buscar(acesso.agentId, query, 8),
+      this.skills.buscar(acesso.agentId, query, 8, ["rascunho", "validada"]),
       this.anotacoes.buscar(acesso.agentId, query, 8),
     ]);
-    const skillsParaTreino = skillHits.filter((skill) => skill.status !== "publicada");
     const consultaPermitida = skillsPublicadas.length > 0;
+    const emAndamento = pickSkillInProgress(skillsParaTreino);
+    const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
+    const gapHint = emAndamento
+      ? `Há skill em andamento "${emAndamento.nome}" (${emAndamento.status}). Continue o fluxo: ${fluxoTreino.proximoPasso ?? "validar_skill"}. Não chame consultar_dados.`
+      : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
     return {
       success: true as const,
       consultaPermitida,
@@ -386,11 +394,12 @@ export class BuscarContexto {
         tabelas: tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy)),
         anotacoes: notas,
       },
+      fluxoTreino,
       gap: consultaPermitida
         ? undefined
         : {
             code: "SKILL_GAP",
-            hint: "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.",
+            hint: gapHint,
           },
     };
   }
@@ -411,9 +420,9 @@ export class ResolverConflito {
       relacionamentoId?: string;
       descricao?: string;
     },
-  ): Promise<{ success: true }> {
+  ): Promise<{ success: true; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
-    await requireAcesso(this.acessos, input.acessoId, uid);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     await this.grafo.resolverConflito({
       tabelaId: input.tabelaId,
       colunaId: input.colunaId,
@@ -422,6 +431,9 @@ export class ResolverConflito {
       descricao: input.descricao,
       autorUsuarioId: uid,
     });
-    return { success: true };
+    return {
+      success: true,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
+    };
   }
 }

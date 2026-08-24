@@ -8,7 +8,7 @@ alwaysApply: true
 O MCP dá contexto à IA do usuário final. Consulta ao ERP **só** via skill publicada daquele `agentId`. Permissão SQL não se define aqui.
 
 - Cofre: e-mail, senha, `agentId`, `client_token` (+ dialeto). Não cadastrar User/Client/Agent. Um token MCP opaco por usuário; nunca na resposta da tool.
-- Treino (`treinar_com_sql`) atualiza o grafo compartilhado e **fecha com skill** (`criar_skill` → `validar_skill` → `publicar_skill`).
+- Treino é passo a passo até liberar: `treinar_com_sql` → `criar_skill` → descrever params → `validar_skill` → `publicar_skill` (`confirmadoPeloUsuario: true`). O servidor recusa pular. Consulta só com skill **publicada**.
 - Pergunta de dados: `buscar_contexto` / `listar_skills` / `obter_skill` → `consultar_dados` com `skillId` (o servidor executa o `sqlModelo` publicado). **Não** derivar SQL ad-hoc do grafo. SQL solto é recusado.
 - Sem skill capaz do dado ou do cruzamento: `consultaPermitida: false` / `SKILL_GAP`. Não inventar. Orientar treino e cadastro da skill.
 - Autorização: só `client_token` / `plug_agente` no plug-server.

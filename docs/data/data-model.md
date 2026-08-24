@@ -11,12 +11,12 @@ Não há tabela de senha de conta MCP, cliente de Authorization Server nem catá
 
 - `grafo_dialeto`: um dialeto por agente (primeiro escritor).
 - `grafo_lock`: lock de merge (`SELECT … FOR UPDATE`).
-- `relacionamento_grafo`: `tabela_origem_id`, `coluna_origem`, `tabela_destino_id`, `coluna_destino`, `tipo_join`. O treino grava as colunas reais do `ON` quando o parser lê `alias.coluna = alias.coluna`; sem `ON` legível permanece `*`.
+- `relacionamento_grafo`: `tabela_origem_id`, `coluna_origem`, `tabela_destino_id`, `coluna_destino`, `tipo_join`. O treino grava as colunas reais do `ON` (igualdade `alias.coluna = alias.coluna`); JOIN sem igualdade é recusado; CROSS JOIN **não** grava relacionamento. JOIN no SELECT exige colunas qualificadas (`p.codprod`, não `codprod`).
 - Precedência: `validado_execucao` > `confirmado_usuario` > `inferido`. Empate de texto → `conflito`.
 
 ## Skills e notas
 
-- `skill`: `slug` unique por `agent_id`, `sql_modelo`, `versao`, `status` (`rascunho` | `validada` | `publicada`). Skill **publicada** é a bússola da consulta; sem ela a IA não inventa SQL.
+- `skill`: `slug` unique por `agent_id`, `sql_modelo`, `params` (JSON: `{ nome, descricao, obrigatorio, tipo }[]`, `tipo` = string/number/date/boolean, default string; JSON legado sem tipo vira string), `versao`, `status` (`rascunho` | `validada` | `publicada`). Placeholders `:nome`/`@nome` viram contrato; validar e publicar exigem `descricao` em cada um. Skill **publicada** é a bússola da consulta; sem ela a IA não inventa SQL.
 - `anotacao_grafo`: nota/glossário; `tabela_id` opcional.
 
 ## Auditoria
