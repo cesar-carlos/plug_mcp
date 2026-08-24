@@ -45,6 +45,7 @@ const setupAcesso = async () => {
   const sessions = {
     getAccessToken: async () => "access-test",
     invalidate: () => undefined,
+    remember: () => undefined,
   };
   const consultar = new ConsultarDados(acessos, skills, plug, sessions, crypto, audit, 500, 5000);
   return { plug, skills, consultar, created };

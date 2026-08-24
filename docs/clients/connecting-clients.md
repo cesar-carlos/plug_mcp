@@ -29,4 +29,6 @@ Conectores que **exigem** Authorization Server de terceiros (alguns custom conne
 
 Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS` > 0): o servidor responde 401 com `WWW-Authenticate` RFC 6750 (`error="invalid_token"`) e aponta `GET /setup/{code}`. `Origin` fora de `MCP_ALLOWED_ORIGINS` (quando a lista não é vazia) responde **403**. Existe `GET /.well-known/oauth-protected-resource` descrevendo o recurso **sem** `authorization_servers`.
 
+O **host MCP** (Cursor, Claude Desktop, etc.) pode registrar argumentos de tool em claro — senha e `client_token` inclusive. O servidor não controla esse transcript. Não ecoe esses valores na resposta; `listar_acessos` devolve o token mascarado.
+
 Exemplo: [cursor-mcp.example.json](cursor-mcp.example.json).

@@ -1,7 +1,12 @@
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
-import type { Acesso } from "../../../domain/entities/acesso.js";
+import type { Acesso, StatusAcesso } from "../../../domain/entities/acesso.js";
 import type { AcessoRepositoryPort } from "../../../domain/ports/acesso-repository.port.js";
+import type {
+  PlugServerGatewayPort,
+  UsuarioPlugSessionPort,
+} from "../../../domain/ports/plug-server-gateway.port.js";
+import { withHubAuth } from "./hub-auth.js";
 
 export const requireUsuario = (usuarioId: string | undefined): string => {
   if (!usuarioId) {
@@ -37,6 +42,16 @@ export const requireAcesso = async (
   return acesso;
 };
 
+export const statusFromHub = (state: string): StatusAcesso => {
+  if (state === "approved") {
+    return "approved";
+  }
+  if (state === "revoked") {
+    return "revoked";
+  }
+  return "pending";
+};
+
 export const requireAcessoAprovado = (acesso: Acesso): Acesso => {
   if (acesso.statusAcesso === "pending") {
     throw new DomainError({
@@ -54,4 +69,22 @@ export const requireAcessoAprovado = (acesso: Acesso): Acesso => {
     });
   }
   return acesso;
+};
+
+export const refreshAndRequireAcessoAprovado = async (
+  acessos: AcessoRepositoryPort,
+  plug: PlugServerGatewayPort,
+  sessions: UsuarioPlugSessionPort,
+  acesso: Acesso,
+  usuarioId: string,
+): Promise<Acesso> => {
+  if (acesso.statusAcesso !== "pending") {
+    return requireAcessoAprovado(acesso);
+  }
+  const hub = await withHubAuth(sessions, usuarioId, (accessToken) =>
+    plug.getAgentAccessStatus(accessToken, acesso.agentId),
+  );
+  const statusAcesso = statusFromHub(hub.state);
+  await acessos.updateStatus(acesso.id, statusAcesso);
+  return requireAcessoAprovado({ ...acesso, statusAcesso });
 };

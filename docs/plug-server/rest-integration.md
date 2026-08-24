@@ -6,16 +6,16 @@ Fonte normativa no hub: `plug_server/docs/api/api_rest_bridge.md` e OpenAPI `GET
 
 ## Endpoints que o adapter chama
 
-| Método | Caminho                                                         | Port                                                   |
-| ------ | --------------------------------------------------------------- | ------------------------------------------------------ |
-| POST   | `/client-auth/login`                                            | `login` via `UsuarioTokenManager`                      |
-| POST   | `/client-auth/refresh`                                          | `refresh` via `UsuarioTokenManager`                    |
-| POST   | `/client/me/agents`                                             | `requestAgentAccess`                                   |
-| GET    | `/client/me/agents/{agentId}`                                   | `getAgentAccessStatus`                                 |
-| GET    | `/client/me/agent-access-requests?search={agentId}&pageSize=20` | resolução de 403 (pending vs rejected/revoked)         |
-| PUT    | `/client/me/agents/{agentId}/client-token`                      | `putClientToken` (opcional; o RPC ainda envia o token) |
-| POST   | `/agents/commands` (`sql.execute`)                              | `executeSql` — `options.execution_mode: preserve`      |
-| POST   | `/agents/commands` (`client_token.getPolicy`)                   | `getClientTokenPolicy` (cache por hash)                |
+| Método | Caminho                                                         | Port                                                                                                                                       |
+| ------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/client-auth/login`                                            | `login` via `UsuarioTokenManager`                                                                                                          |
+| POST   | `/client-auth/refresh`                                          | `refresh` via `UsuarioTokenManager`                                                                                                        |
+| POST   | `/client/me/agents`                                             | `requestAgentAccess`                                                                                                                       |
+| GET    | `/client/me/agents/{agentId}`                                   | `getAgentAccessStatus`                                                                                                                     |
+| GET    | `/client/me/agent-access-requests?search={agentId}&pageSize=20` | resolução de 403 (pending vs rejected/revoked)                                                                                             |
+| PUT    | `/client/me/agents/{agentId}/client-token`                      | `putClientToken` após gravar o acesso e quando o hub passa a `approved`. Best-effort: falha não desfaz o cofre. O RPC ainda envia o token. |
+| POST   | `/agents/commands` (`sql.execute`)                              | `executeSql` — `options.execution_mode: preserve`                                                                                          |
+| POST   | `/agents/commands` (`client_token.getPolicy`)                   | `getClientTokenPolicy` (cache por hash)                                                                                                    |
 
 O MCP não lê o `client_token` de volta do hub — a cópia cifrada no cofre é a autoridade.
 
@@ -23,10 +23,11 @@ Cada `sql.execute` usa `command.id` UUID novo (replay no hub ~2 min). HTTP 200 c
 
 ## `UsuarioTokenManager`
 
-- JWT do hub **por `usuarioId`**, com e-mail/senha cifrados.
+- JWT do hub **por `usuarioId`**, só em memória (não vai ao banco). Restart do processo reloga com e-mail/senha cifrados. Rode **1 instância**.
 - Refresh proativo ~60 s antes do `exp`.
 - Promessa `inflight` por usuário.
 - Refresh falhou → login com senha do cofre. Falha de senha → `CREDENTIAL_STALE`.
+- `withHubAuth`: HTTP 401 → `invalidate` + um retry da operação.
 - Client `pending`/`blocked` → 403 mapeado para ativação, não “senha errada”.
 - Logs: só `accessTokenLen`, nunca o valor.
 

@@ -4,6 +4,7 @@ const REDACTED_KEYS = new Set([
   "password",
   "password_hash",
   "passwordHash",
+  "senha",
   "clientToken",
   "client_token",
   "accessToken",

@@ -57,4 +57,5 @@ export interface PlugServerGatewayPort {
 export interface UsuarioPlugSessionPort {
   getAccessToken(usuarioId: string): Promise<string>;
   invalidate(usuarioId: string): void;
+  remember(usuarioId: string, tokens: PlugHubTokens): void;
 }

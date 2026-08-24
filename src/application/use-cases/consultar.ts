@@ -15,7 +15,8 @@ import type {
 } from "../../domain/ports/plug-server-gateway.port.js";
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
 import type { Skill } from "../../domain/entities/skill.js";
-import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+import { withHubAuth } from "./shared/hub-auth.js";
 import { bindNamedParams, coerceBoundParams, parseSqlModelo } from "./shared/sql-modelo.js";
 import {
   fluxoForAgentSkill,
@@ -106,7 +107,13 @@ export class ConsultarDados {
   }> {
     const started = Date.now();
     const uid = requireUsuario(usuarioId);
-    const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
     if (input.sql?.trim()) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -145,22 +152,23 @@ export class ConsultarDados {
     const requested = input.options?.max_rows ?? this.defaultMaxRows;
     const maxRows = Math.min(Math.max(1, requested), this.absoluteMaxRows);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
-    const accessToken = await this.sessions.getAccessToken(uid);
     const paramKeys = Object.keys(params).sort().join(",");
     try {
-      const result = await this.plug.executeSql({
-        accessToken,
-        agentId: acesso.agentId,
-        clientToken,
-        sql: modelo.sql,
-        params,
-        options: {
-          maxRows,
-          page: input.options?.page,
-          pageSize: input.options?.page_size,
-          timeoutMs: input.options?.timeout_ms,
-        },
-      });
+      const result = await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.executeSql({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken,
+          sql: modelo.sql,
+          params,
+          options: {
+            maxRows,
+            page: input.options?.page,
+            pageSize: input.options?.page_size,
+            timeoutMs: input.options?.timeout_ms,
+          },
+        }),
+      );
       const truncated = result.rows.length >= maxRows;
       const rows = sanitizeQueryRows(result.rows);
       await this.audit.append({
@@ -221,17 +229,25 @@ export class ExplorarTabelas {
     hint?: string;
   }> {
     const uid = requireUsuario(usuarioId);
-    const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
     const sql = sqlExplorarTabelas(acesso.dialeto);
     try {
-      const result = await this.plug.executeSql({
-        accessToken: await this.sessions.getAccessToken(uid),
-        agentId: acesso.agentId,
-        clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-        sql,
-        params: { filtro: likeFiltro(input.filtro) },
-        options: { maxRows: EXPLORAR_TABELAS_MAX_ROWS },
-      });
+      const result = await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.executeSql({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+          sql,
+          params: { filtro: likeFiltro(input.filtro) },
+          options: { maxRows: EXPLORAR_TABELAS_MAX_ROWS },
+        }),
+      );
       const tabelas = result.rows.map((row) => ({
         schema: cell(row, "schema_name") || null,
         table_name: cell(row, "table_name"),
@@ -281,18 +297,26 @@ export class MapearTabela {
     colunas: { nome: string; tipo: string; nullable: string }[];
   }> {
     const uid = requireUsuario(usuarioId);
-    const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
     const ident = parseIdentificadorTabela(input.tabela);
     const sql = sqlDescreverTabela(acesso.dialeto, Boolean(ident.schema));
     try {
-      const result = await this.plug.executeSql({
-        accessToken: await this.sessions.getAccessToken(uid),
-        agentId: acesso.agentId,
-        clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-        sql,
-        params: { tabela: ident.tabela, schema: ident.schema ?? undefined },
-        options: { maxRows: DESCREVER_TABELA_MAX_ROWS },
-      });
+      const result = await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.executeSql({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+          sql,
+          params: { tabela: ident.tabela, schema: ident.schema ?? undefined },
+          options: { maxRows: DESCREVER_TABELA_MAX_ROWS },
+        }),
+      );
       await this.grafo.withAgentLock(acesso.agentId, async () => {
         const locked = await this.grafo.getDialeto(acesso.agentId);
         if (!locked) {
@@ -359,7 +383,13 @@ export class BuscarContexto {
     gap?: { code: "SKILL_GAP"; hint: string };
   }> {
     const uid = requireUsuario(usuarioId);
-    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
     const query = input.query?.trim() ?? "";
     if (query.length < 2) {
       throw new DomainError({
@@ -368,11 +398,13 @@ export class BuscarContexto {
         hint: "Descreva o assunto de negócio (ex.: pedido de venda, saldo em aberto).",
       });
     }
-    const policy = await this.plug.getClientTokenPolicy({
-      accessToken: await this.sessions.getAccessToken(uid),
-      agentId: acesso.agentId,
-      clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-    });
+    const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.getClientTokenPolicy({
+        accessToken,
+        agentId: acesso.agentId,
+        clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+      }),
+    );
     const [tabelas, skillsPublicadas, skillsParaTreino, notas] = await Promise.all([
       this.grafo.buscar(acesso.agentId, query, 12),
       this.skills.buscar(acesso.agentId, query, 8, "publicada"),

@@ -18,7 +18,8 @@ import {
   parseJoinEqualities,
 } from "./shared/sql-modelo.js";
 import { fluxoForAgentSkill, pickSkillInProgress } from "./shared/fluxo-treino.js";
-import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+import { withHubAuth } from "./shared/hub-auth.js";
 
 const allowedByPolicy = (
   table: string,
@@ -57,18 +58,25 @@ export class TreinarComSql {
   }> {
     const started = Date.now();
     const uid = requireUsuario(usuarioId);
-    const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
     const modelo = parseSqlModelo(input.sql ?? "");
     const origem = "validado_execucao" as const;
     const params = bindParamsForValidation(modelo.sql, input.params);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
-    const accessToken = await this.sessions.getAccessToken(uid);
 
-    const policy = await this.plug.getClientTokenPolicy({
-      accessToken,
-      agentId: acesso.agentId,
-      clientToken,
-    });
+    const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.getClientTokenPolicy({
+        accessToken,
+        agentId: acesso.agentId,
+        clientToken,
+      }),
+    );
     const denied = modelo.tabelas.filter((t) => !allowedByPolicy(t.nome, policy));
     if (denied.length > 0) {
       throw new DomainError({
@@ -79,14 +87,16 @@ export class TreinarComSql {
     }
 
     try {
-      await this.plug.executeSql({
-        accessToken,
-        agentId: acesso.agentId,
-        clientToken,
-        sql: sqlAmostra(acesso.dialeto, modelo.sql),
-        params,
-        options: { maxRows: 1 },
-      });
+      await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.executeSql({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken,
+          sql: sqlAmostra(acesso.dialeto, modelo.sql),
+          params,
+          options: { maxRows: 1 },
+        }),
+      );
     } catch (error) {
       await this.audit.append({
         usuarioId: uid,

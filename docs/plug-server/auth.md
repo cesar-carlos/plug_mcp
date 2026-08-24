@@ -44,7 +44,7 @@ Regras:
 - Só conta `Client` com status `active` autentica. `pending` / `rejected` / `blocked` falham no login, no refresh e em rotas Bearer (`403`).
 - Cadastro público (`/client-auth/register`) nasce `pending` e exige aprovação do `User` dono (`ownerEmail`). O MCP **não** registra Clients — o usuário já é Client `active`.
 - Toda chamada autenticada: `Authorization: Bearer <accessToken>`.
-- `UsuarioTokenManager` guarda o par JWT por `usuarioId`, refresca ~60 s antes do `exp`, e em HTTP `401` invalida e tenta login de novo com a senha do cofre.
+- `UsuarioTokenManager` guarda o par JWT por `usuarioId` **só em memória**, refresca ~60 s antes do `exp`. Chamadas ao hub passam por `withHubAuth`: HTTP `401` → `invalidate` + **um** retry da operação (login com a senha do cofre). Se a senha do cofre também for recusada → `CREDENTIAL_STALE`.
 
 Rate limits do hub (produção, ordem de grandeza — confirmar em `plug_server/docs/limits/limites_acesso_e_quotas.md`): login por IP; refresh tem janela própria mais folgada; `POST /agents/commands` conta por JWT `sub`. Headers `Retry-After` / `RateLimit-Reset` devem ser respeitados (`RATE_LIMITED`).
 
@@ -65,12 +65,12 @@ MCP                         plug-server                      User (dono)
  │  403 = ainda sem acesso        │
 ```
 
-| Método | Caminho                                    | Semântica                                                                     |
-| ------ | ------------------------------------------ | ----------------------------------------------------------------------------- |
-| POST   | `/client/me/agents`                        | Pedir acesso. Idempotente se já aprovado (`alreadyApproved`).                 |
-| GET    | `/client/me/agents/{agentId}`              | `200` se aprovado; `403` se não. Inclui `hasClientToken`, `isHubConnected`.   |
-| PUT    | `/client/me/agents/{agentId}/client-token` | Grava o token SQL no hub (opcional para o agente; o MCP também envia no RPC). |
-| GET    | `/client/me/agent-access-requests?search=` | Pedidos `pending` / `approved` / `rejected` / `expired` / `revoked`.          |
+| Método | Caminho                                    | Semântica                                                                                                                                                                                                |
+| ------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/client/me/agents`                        | Pedir acesso. Idempotente se já aprovado (`alreadyApproved`).                                                                                                                                            |
+| GET    | `/client/me/agents/{agentId}`              | `200` se aprovado; `403` se não. Inclui `hasClientToken`, `isHubConnected`.                                                                                                                              |
+| PUT    | `/client/me/agents/{agentId}/client-token` | `putClientToken` após `registrar_acesso` / `adicionar_acesso` e quando `verificar_acesso` vê `approved`. Best-effort (403 com acesso pending é esperado). O RPC `sql.execute` continua enviando o token. |
+| GET    | `/client/me/agent-access-requests?search=` | Pedidos `pending` / `approved` / `rejected` / `expired` / `revoked`.                                                                                                                                     |
 
 `isHubConnected` é um **instantâneo desta réplica** do hub (agente registado em `/agents` neste processo). Com várias instâncias, pode ser `false` mesmo com o agente online noutra réplica.
 

@@ -8,6 +8,7 @@ describe("redact de logs", () => {
       new ConsoleTestLogger().info("login", {
         password_hash: "hash-secreto",
         passwordHash: "hashCamel",
+        senha: "segredo-claro",
         access_token: "at-secret",
         refresh_token: "rt-secret",
         email: "dev@localhost",
@@ -16,6 +17,7 @@ describe("redact de logs", () => {
       const fields = spy.mock.calls[0]?.[2] as Record<string, unknown>;
       expect(fields.password_hash).toBe("[redacted]");
       expect(fields.passwordHash).toBe("[redacted]");
+      expect(fields.senha).toBe("[redacted]");
       expect(fields.access_token).toBe("[redacted]");
       expect(fields.refresh_token).toBe("[redacted]");
       expect(fields.email).toBe("dev@localhost");

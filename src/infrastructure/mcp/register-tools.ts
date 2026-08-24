@@ -117,7 +117,7 @@ export const registerTools = (
 
   server.tool(
     "registrar_acesso",
-    "Primeira tool, sem Bearer. Recebe e-mail/senha do Client no plug-server, agentId, dialeto e client_token. Devolve setupCode/setupUrl — o token MCP NÃO vem na resposta da tool.",
+    "Primeira tool, sem Bearer. Recebe e-mail/senha do Client no plug-server, agentId, dialeto e client_token. Devolve setupCode/setupUrl — o token MCP NÃO vem na resposta da tool. Não ecoe senha nem client_token no chat.",
     {
       email: z.string().optional(),
       senha: z.string().optional(),
@@ -138,7 +138,7 @@ export const registerTools = (
 
   server.tool(
     "adicionar_acesso",
-    "Com token MCP, adiciona outro agentId/client_token sem pedir senha de novo.",
+    "Com token MCP, adiciona outro agentId/client_token sem pedir senha de novo. Não ecoe o client_token no chat.",
     {
       agentId: z.string().optional(),
       dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
@@ -178,7 +178,7 @@ export const registerTools = (
 
   server.tool(
     "atualizar_credencial_plug",
-    "Atualiza e-mail/senha do Client no cofre após o plug-server recusar login.",
+    "Atualiza e-mail/senha do Client no cofre após o plug-server recusar login. Não ecoe a senha no chat.",
     { email: z.string().optional(), senha: z.string().optional() },
     writeLocal,
     async (args) =>

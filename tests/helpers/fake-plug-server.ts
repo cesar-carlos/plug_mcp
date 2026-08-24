@@ -15,6 +15,8 @@ export class FakePlugServer implements PlugServerGatewayPort {
   rejected = new Set<string>();
   revoked = new Set<string>();
   tokens = new Map<string, string>();
+  lastPut: { agentId: string; clientToken: string | null } | null = null;
+  putImpl: (() => Promise<void>) | null = null;
   lastSql: string | null = null;
   lastParams: Record<string, unknown> | undefined;
   policy: ClientTokenPolicy = { allTables: true, tables: [] };
@@ -70,6 +72,11 @@ export class FakePlugServer implements PlugServerGatewayPort {
     agentId: string,
     clientToken: string | null,
   ): Promise<void> {
+    this.lastPut = { agentId, clientToken };
+    if (this.putImpl) {
+      await this.putImpl();
+      return;
+    }
     if (clientToken) {
       this.tokens.set(agentId, clientToken);
     } else {

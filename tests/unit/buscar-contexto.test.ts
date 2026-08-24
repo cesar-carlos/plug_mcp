@@ -45,6 +45,7 @@ describe("BuscarContexto", () => {
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
+      remember: () => undefined,
     };
     const buscar = new BuscarContexto(acessos, grafo, skills, anotacoes, plug, sessions, crypto);
     return { buscar, created, skills };

@@ -22,7 +22,8 @@ import {
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
 import { bindParamsForValidation, parseSqlModelo, sqlValidacaoVazia } from "./shared/sql-modelo.js";
-import { requireAcesso, requireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+import { requireAcesso, requireAcessoAprovado, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+import { withHubAuth } from "./shared/hub-auth.js";
 
 interface ParamInput {
   nome?: string;
@@ -223,7 +224,13 @@ export class ValidarSkill {
     input: { acessoId?: string; skillId?: string; params?: Record<string, unknown> },
   ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
-    const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
     const skill = await this.skills.findById(input.skillId ?? "");
     if (skill?.agentId !== acesso.agentId) {
       throw new DomainError({
@@ -241,14 +248,16 @@ export class ValidarSkill {
     }
     const modelo = parseSqlModelo(skill.sqlModelo);
     const params = bindParamsForValidation(modelo.sql, input.params);
-    await this.plug.executeSql({
-      accessToken: await this.sessions.getAccessToken(uid),
-      agentId: acesso.agentId,
-      clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-      sql: sqlValidacaoVazia(acesso.dialeto, modelo.sql),
-      params,
-      options: { maxRows: 1 },
-    });
+    await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.executeSql({
+        accessToken,
+        agentId: acesso.agentId,
+        clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+        sql: sqlValidacaoVazia(acesso.dialeto, modelo.sql),
+        params,
+        options: { maxRows: 1 },
+      }),
+    );
     const updated = await this.skills.setStatus(skill.id, "validada");
     return {
       success: true,

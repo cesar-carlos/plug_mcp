@@ -58,6 +58,13 @@ export class UsuarioTokenManager implements UsuarioPlugSessionPort {
     this.cache.delete(usuarioId);
   }
 
+  remember(usuarioId: string, tokens: PlugHubTokens): void {
+    this.cache.set(usuarioId, {
+      tokens,
+      accessExpMs: jwtExpMs(tokens.accessToken) ?? Date.now() + 10 * 60_000,
+    });
+  }
+
   private async loginOrRefresh(usuarioId: string): Promise<string> {
     const usuario = await this.usuarios.findById(usuarioId);
     if (!usuario) {
@@ -101,10 +108,4 @@ export class UsuarioTokenManager implements UsuarioPlugSessionPort {
     }
   }
 
-  private remember(usuarioId: string, tokens: PlugHubTokens): void {
-    this.cache.set(usuarioId, {
-      tokens,
-      accessExpMs: jwtExpMs(tokens.accessToken) ?? Date.now() + 10 * 60_000,
-    });
-  }
 }

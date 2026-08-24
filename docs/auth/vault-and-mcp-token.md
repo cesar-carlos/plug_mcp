@@ -24,6 +24,8 @@ Origin: se `MCP_ALLOWED_ORIGINS` não for vazio e o header `Origin` vier com val
 
 Sessões Streamable HTTP são um `Map` in-memory. Rode **1 instância** (PM2 `fork`). Não há Redis de transport.
 
+JWT do hub (`accessToken` / `refreshToken`) **não** vai ao banco — só o `UsuarioTokenManager` em memória. Restart = login de novo com e-mail/senha cifrados. HTTP 401 numa tool: `withHubAuth` invalida o cache e tenta **uma** vez (login/refresh); senha do cofre recusada → `CREDENTIAL_STALE`.
+
 ## Um Client por token MCP
 
 Um par e-mail/senha por usuário MCP. Outro Client = outro `registrar_acesso`. `adicionar_acesso` só pede `agentId` / dialeto / `client_token`.

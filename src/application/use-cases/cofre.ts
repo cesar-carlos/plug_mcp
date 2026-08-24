@@ -4,13 +4,16 @@ import { toAcessoPublico, type AcessoPublico } from "../../domain/entities/acess
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
+import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../domain/ports/usuario-repository.port.js";
 import type {
+  PlugHubTokens,
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
-import { requireAcesso, requireUsuario } from "./shared/guards.js";
+import { requireAcesso, requireUsuario, statusFromHub } from "./shared/guards.js";
+import { tryPutClientToken, withHubAuth } from "./shared/hub-auth.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -32,16 +35,6 @@ const equalText = (left: string, right: string): boolean => {
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
-const statusFromHub = (state: string): "approved" | "pending" | "revoked" => {
-  if (state === "approved") {
-    return "approved";
-  }
-  if (state === "revoked") {
-    return "revoked";
-  }
-  return "pending";
-};
-
 export class RegistrarAcesso {
   constructor(
     private readonly usuarios: UsuarioRepositoryPort,
@@ -51,6 +44,8 @@ export class RegistrarAcesso {
     private readonly setup: SetupCodeStore,
     private readonly publicBaseUrl: string,
     private readonly tokenTtlDays: number,
+    private readonly sessions?: UsuarioPlugSessionPort,
+    private readonly logger?: LoggerPort,
   ) {}
 
   async execute(input: {
@@ -151,6 +146,7 @@ export class RegistrarAcesso {
         tokenExpiresAt: expiryFromTtlDays(this.tokenTtlDays),
       });
       const acesso = await persistAcesso(usuario.id);
+      await this.afterPersist(usuario.id, hub, agentId, clientToken, statusAcesso);
       const setup = this.setup.issue(token);
       return {
         success: true,
@@ -159,7 +155,7 @@ export class RegistrarAcesso {
         statusAcesso,
         setupCode: setup.code,
         setupUrl: `${this.publicBaseUrl}/setup/${setup.code}`,
-        hint: "Abra setupUrl no navegador, copie o token MCP e coloque em Authorization: Bearer. Não peça o token de volta no chat.",
+        hint: "Abra setupUrl no navegador, copie o token MCP e coloque em Authorization: Bearer. Não peça o token de volta no chat. Não ecoe senha nem client_token na resposta.",
       };
     }
 
@@ -172,6 +168,7 @@ export class RegistrarAcesso {
       });
     }
     const acesso = await persistAcesso(existing.id);
+    await this.afterPersist(existing.id, hub, agentId, clientToken, statusAcesso);
     return {
       success: true,
       usuarioId: existing.id,
@@ -179,6 +176,24 @@ export class RegistrarAcesso {
       statusAcesso,
       hint: "Acesso extra gravado. Continue com o token MCP já configurado. Não geramos um segundo token.",
     };
+  }
+
+  private async afterPersist(
+    usuarioId: string,
+    hub: PlugHubTokens,
+    agentId: string,
+    clientToken: string,
+    statusAcesso: string,
+  ): Promise<void> {
+    this.sessions?.remember(usuarioId, hub);
+    await tryPutClientToken(
+      this.plug,
+      this.logger,
+      hub.accessToken,
+      agentId,
+      clientToken,
+      statusAcesso === "pending",
+    );
   }
 }
 
@@ -188,6 +203,7 @@ export class AdicionarAcesso {
     private readonly plug: PlugServerGatewayPort,
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
+    private readonly logger?: LoggerPort,
   ) {}
 
   async execute(
@@ -214,9 +230,11 @@ export class AdicionarAcesso {
         hint: "Este trio usuário+agentId+client_token já existe. Use listar_acessos.",
       });
     }
-    const accessToken = await this.sessions.getAccessToken(uid);
-    await this.plug.requestAgentAccess(accessToken, agentId);
-    const status = await this.plug.getAgentAccessStatus(accessToken, agentId);
+    const status = await withHubAuth(this.sessions, uid, async (accessToken) => {
+      await this.plug.requestAgentAccess(accessToken, agentId);
+      return this.plug.getAgentAccessStatus(accessToken, agentId);
+    });
+    const statusAcesso = statusFromHub(status.state);
     const acesso = await this.acessos.create({
       usuarioId: uid,
       agentId,
@@ -224,7 +242,17 @@ export class AdicionarAcesso {
       nomeAmigavel: input.nomeAmigavel?.trim() ? input.nomeAmigavel.trim() : agentId,
       clientTokenEnc: this.crypto.encrypt(clientToken),
       clientTokenHash: tokenHash,
-      statusAcesso: statusFromHub(status.state),
+      statusAcesso,
+    });
+    await withHubAuth(this.sessions, uid, async (accessToken) => {
+      await tryPutClientToken(
+        this.plug,
+        this.logger,
+        accessToken,
+        agentId,
+        clientToken,
+        statusAcesso === "pending",
+      );
     });
     return { success: true, acesso: toAcessoPublico(acesso, clientToken) };
   }
@@ -247,6 +275,8 @@ export class VerificarAcesso {
     private readonly acessos: AcessoRepositoryPort,
     private readonly plug: PlugServerGatewayPort,
     private readonly sessions: UsuarioPlugSessionPort,
+    private readonly crypto: CryptoPort,
+    private readonly logger?: LoggerPort,
   ) {}
 
   async execute(
@@ -255,10 +285,24 @@ export class VerificarAcesso {
   ): Promise<{ success: true; acesso: AcessoPublico; hub: unknown }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
-    const accessToken = await this.sessions.getAccessToken(uid);
-    const hub = await this.plug.getAgentAccessStatus(accessToken, acesso.agentId);
+    const hub = await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.getAgentAccessStatus(accessToken, acesso.agentId),
+    );
     const statusAcesso = statusFromHub(hub.state);
     await this.acessos.updateStatus(acesso.id, statusAcesso);
+    if (statusAcesso === "approved") {
+      const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
+      await withHubAuth(this.sessions, uid, async (accessToken) => {
+        await tryPutClientToken(
+          this.plug,
+          this.logger,
+          accessToken,
+          acesso.agentId,
+          clientToken,
+          false,
+        );
+      });
+    }
     return { success: true, acesso: toAcessoPublico({ ...acesso, statusAcesso }), hub };
   }
 }
@@ -299,13 +343,13 @@ export class AtualizarCredencialPlug {
         hint: "São as credenciais do plug-server, não um login MCP.",
       });
     }
-    await this.plug.login(email, senha);
+    const tokens = await this.plug.login(email, senha);
     await this.usuarios.updateCredenciais(
       uid,
       this.crypto.encrypt(email),
       this.crypto.encrypt(senha),
     );
-    this.sessions.invalidate(uid);
+    this.sessions.remember(uid, tokens);
     return { success: true };
   }
 }

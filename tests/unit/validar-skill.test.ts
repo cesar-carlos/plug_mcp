@@ -49,6 +49,7 @@ describe("ValidarSkill", () => {
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
+      remember: () => undefined,
     };
     const criar = new CriarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
@@ -110,6 +111,7 @@ describe("ValidarSkill", () => {
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
+      remember: () => undefined,
     };
     const criar = new CriarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);

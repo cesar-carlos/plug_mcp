@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
+import {
+  AdicionarAcesso,
+  RegistrarAcesso,
+  VerificarAcesso,
+} from "../../src/application/use-cases/cofre.js";
 import { TreinarComSql } from "../../src/application/use-cases/treinar-com-sql.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
@@ -11,6 +15,7 @@ import {
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { stubSessions } from "../helpers/stub-sessions.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 
@@ -78,6 +83,7 @@ describe("cofre e treino", () => {
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
+      remember: () => undefined,
     };
     const treinar = new TreinarComSql(
       acessos,
@@ -133,7 +139,11 @@ describe("cofre e treino", () => {
       acessos,
       grafo,
       plug,
-      { getAccessToken: async () => "access-test", invalidate: () => undefined },
+      {
+        getAccessToken: async () => "access-test",
+        invalidate: () => undefined,
+        remember: () => undefined,
+      },
       crypto,
       audit,
       new InMemorySkillRepository(),
@@ -176,7 +186,11 @@ describe("cofre e treino", () => {
       dialeto: "sybase",
       clientToken: "tok-b-12345678",
     });
-    const sessions = { getAccessToken: async () => "access-test", invalidate: () => undefined };
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
     await new TreinarComSql(
       acessos,
       grafo,
@@ -235,7 +249,11 @@ describe("cofre e treino", () => {
       dialeto: "postgres",
       clientToken: "tok-b-12345678",
     });
-    const sessions = { getAccessToken: async () => "access-test", invalidate: () => undefined };
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
     await new TreinarComSql(
       acessos,
       grafo,
@@ -290,6 +308,7 @@ describe("cofre e treino", () => {
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
+      remember: () => undefined,
     };
     const treinar = new TreinarComSql(
       acessos,
@@ -350,6 +369,7 @@ describe("cofre e treino", () => {
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
+      remember: () => undefined,
     };
     const treinar = new TreinarComSql(
       acessos,
@@ -394,6 +414,7 @@ describe("cofre e treino", () => {
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
+      remember: () => undefined,
     };
     const treinar = new TreinarComSql(
       acessos,
@@ -410,5 +431,150 @@ describe("cofre e treino", () => {
     });
     const rels = await grafo.listRelacionamentos(agentId);
     expect(rels).toHaveLength(0);
+  });
+
+  it("registrar_acesso chama putClientToken quando o hub já aprovou", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const registrar = new RegistrarAcesso(
+      new InMemoryUsuarioRepository(),
+      new InMemoryAcessoRepository(),
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    expect(plug.lastPut).toEqual({ agentId, clientToken: "tok-sql-123456" });
+  });
+
+  it("adicionar_acesso chama putClientToken quando o hub já aprovou", async () => {
+    const plug = new FakePlugServer();
+    const agent2 = "22222222-2222-4222-8222-222222222222";
+    plug.approve(agentId);
+    plug.approve(agent2);
+    const acessos = new InMemoryAcessoRepository();
+    const created = await new RegistrarAcesso(
+      new InMemoryUsuarioRepository(),
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    plug.lastPut = null;
+    await new AdicionarAcesso(acessos, plug, stubSessions(), crypto).execute(created.usuarioId, {
+      agentId: agent2,
+      dialeto: "sybase",
+      clientToken: "tok-other-999",
+    });
+    expect(plug.lastPut).toEqual({ agentId: agent2, clientToken: "tok-other-999" });
+  });
+
+  it("PUT 403 com acesso pending não falha o caso de uso", async () => {
+    const plug = new FakePlugServer();
+    plug.putImpl = async () => {
+      throw new DomainError({
+        code: ERROR_CODES.AGENT_ACCESS_DENIED,
+        message: "sem acesso ao agente",
+        hint: "pending",
+      });
+    };
+    const result = await new RegistrarAcesso(
+      new InMemoryUsuarioRepository(),
+      new InMemoryAcessoRepository(),
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    expect(result.statusAcesso).toBe("pending");
+    expect(result.acessoId).toBeTruthy();
+  });
+
+  it("verificar_acesso tenta PUT ao virar approved", async () => {
+    const plug = new FakePlugServer();
+    const acessos = new InMemoryAcessoRepository();
+    const created = await new RegistrarAcesso(
+      new InMemoryUsuarioRepository(),
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    expect(created.statusAcesso).toBe("pending");
+    plug.approve(agentId);
+    plug.lastPut = null;
+    await new VerificarAcesso(acessos, plug, stubSessions(), crypto).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+    });
+    expect(plug.lastPut).toEqual({ agentId, clientToken: "tok-sql-123456" });
+  });
+
+  it("SQL com cofre pending e hub approved passa após o refresh único", async () => {
+    const plug = new FakePlugServer();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const created = await new RegistrarAcesso(
+      new InMemoryUsuarioRepository(),
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    expect(created.statusAcesso).toBe("pending");
+    plug.approve(agentId);
+    const trained = await new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      stubSessions(),
+      crypto,
+      new InMemoryAuditLog(),
+      new InMemorySkillRepository(),
+    ).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT p.codprod FROM produto p",
+    });
+    expect(trained.tabelas.map((t) => t.toLowerCase())).toContain("produto");
+    const acesso = await acessos.findById(created.acessoId);
+    expect(acesso?.statusAcesso).toBe("approved");
   });
 });

@@ -6,15 +6,15 @@ Consulta ao ERP na sessão do usuário: **só** com `sqlModelo` de skill publica
 
 ## Cofre
 
-| Tool                        | Auth    | Função                                               |
-| --------------------------- | ------- | ---------------------------------------------------- |
-| `registrar_acesso`          | nenhuma | Cria usuário+acesso. Devolve `setupCode`/`setupUrl`. |
-| `adicionar_acesso`          | Bearer  | Novo `agentId`/`client_token` sem senha.             |
-| `listar_acessos`            | Bearer  | Lista (token mascarado).                             |
-| `verificar_acesso`          | Bearer  | Status no hub. Sem polling agressivo.                |
-| `remover_acesso`            | Bearer  | Apaga o acesso; o grafo do `agentId` permanece.      |
-| `atualizar_credencial_plug` | Bearer  | Nova senha/e-mail do Client.                         |
-| `rotacionar_token_mcp`      | Bearer  | Novo `setupCode`; invalida o hash antigo.            |
+| Tool                        | Auth    | Função                                                                                        |
+| --------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `registrar_acesso`          | nenhuma | Cria usuário+acesso. Devolve `setupCode`/`setupUrl`. PUT `client_token` no hub (best-effort). |
+| `adicionar_acesso`          | Bearer  | Novo `agentId`/`client_token` sem senha. PUT best-effort.                                     |
+| `listar_acessos`            | Bearer  | Lista (token mascarado).                                                                      |
+| `verificar_acesso`          | Bearer  | Status no hub; se `approved`, PUT do `client_token`. Sem polling agressivo.                   |
+| `remover_acesso`            | Bearer  | Apaga o acesso; o grafo do `agentId` permanece.                                               |
+| `atualizar_credencial_plug` | Bearer  | Nova senha/e-mail do Client.                                                                  |
+| `rotacionar_token_mcp`      | Bearer  | Novo `setupCode`; invalida o hash antigo.                                                     |
 
 ## Treino e schema
 

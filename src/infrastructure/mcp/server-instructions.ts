@@ -12,7 +12,7 @@ Sem linha retornada, não invente KPI. truncated / teto de linhas não é o univ
 
 const MCP_OPERACAO = `Servidor MCP Se7e: cofre do Client no plug-server, um token MCP opaco, e skills publicadas (SQL modelo) por agentId. O grafo de schema apoia o treino — não substitui skill na hora de consultar.
 
-O usuário já é Client no plug-server. Não cadastre User/Client/Agent. Peça e-mail, senha, agentId, dialeto e client_token. Permissão SQL é só a policy do client_token no hub/plug_agente.
+O usuário já é Client no plug-server. Não cadastre User/Client/Agent. Peça e-mail, senha, agentId, dialeto e client_token. Permissão SQL é só a policy do client_token no hub/plug_agente. Nunca ecoe senha, client_token, JWT do hub ou token MCP no chat.
 
 Bootstrap (sem Bearer): só registrar_acesso. A tool NÃO devolve o token MCP. Devolve setupCode/setupUrl. O usuário abre GET /setup/{code} e cola o token em Authorization: Bearer. Não peça o token de volta no chat. Um token MCP por usuário.
 

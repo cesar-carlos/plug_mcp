@@ -50,6 +50,7 @@ const seed = async () => {
   const sessions = {
     getAccessToken: async () => "access-test",
     invalidate: () => undefined,
+    remember: () => undefined,
   };
   return { plug, acessos, skills, grafo, created, sessions };
 };
