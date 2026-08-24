@@ -5,16 +5,21 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
+import type { RateLimitStore } from "../http/rate-limit.js";
 import { wwwAuthenticate, readBearer } from "./mcp-auth.js";
 import { accountContext } from "./account-context.js";
 import { registerTools, type ToolUseCases } from "./register-tools.js";
 import { MCP_SERVER_INSTRUCTIONS } from "./server-instructions.js";
+import { createToolRunner } from "./tool-result.js";
+import { syncSkillTools, type SkillCatalogPorts } from "./skill-tools.js";
 
 interface Session {
   transport: StreamableHTTPServerTransport;
   server: McpServer;
   lastActivityAt: number;
   bootstrap: boolean;
+  usuarioId: string | null;
+  skillTools: Map<string, { remove: () => void }>;
 }
 
 const MAX_SWEEP_INTERVAL_MS = 5 * 60_000;
@@ -35,6 +40,8 @@ export const createMcpHttpHandler = (input: {
   useCases: ToolUseCases;
   logger: LoggerPort;
   resolveUsuarioId: (token: string) => Promise<string | null>;
+  catalog: SkillCatalogPorts;
+  rateLimit?: RateLimitStore;
 }): {
   handle: (req: Request, res: Response) => Promise<void>;
   sessions: Map<string, Session>;
@@ -42,17 +49,60 @@ export const createMcpHttpHandler = (input: {
 } => {
   const sessions = new Map<string, Session>();
   const idleTimeoutMs = input.config.MCP_SESSION_IDLE_TIMEOUT_MS;
+  let requestIp: string | undefined;
 
-  const createSession = (bootstrap: boolean): Session => {
+  const runner = (): ReturnType<typeof createToolRunner> =>
+    createToolRunner(input.config, input.logger, {
+      rateLimit: input.rateLimit,
+      clientIp: () => requestIp,
+    });
+
+  const refreshSkillTools = async (session: Session, usuarioId: string): Promise<void> => {
+    await syncSkillTools({
+      server: session.server,
+      ports: input.catalog,
+      consultarDados: input.useCases.consultarDados,
+      run: runner(),
+      usuarioId,
+      registered: session.skillTools,
+    });
+  };
+
+  const notifyUsuario = async (usuarioId: string): Promise<void> => {
+    for (const session of sessions.values()) {
+      if (session.usuarioId === usuarioId && !session.bootstrap) {
+        await refreshSkillTools(session, usuarioId);
+      }
+    }
+  };
+
+  const createSession = (bootstrap: boolean, usuarioId: string | null): Session => {
     const server = new McpServer(
       { name: "se7e-mcp-server", version: "0.1.0" },
-      { instructions: MCP_SERVER_INSTRUCTIONS },
+      {
+        capabilities: { tools: { listChanged: true } },
+        instructions: MCP_SERVER_INSTRUCTIONS,
+      },
     );
-    registerTools(server, input.config, input.useCases, input.logger, { bootstrapOnly: bootstrap });
+    const session: Session = {
+      transport: undefined as unknown as StreamableHTTPServerTransport,
+      server,
+      lastActivityAt: Date.now(),
+      bootstrap,
+      usuarioId,
+      skillTools: new Map(),
+    };
+    registerTools(server, input.config, input.useCases, input.logger, {
+      bootstrapOnly: bootstrap,
+      catalog: bootstrap ? undefined : input.catalog,
+      rateLimit: input.rateLimit,
+      clientIp: () => requestIp,
+      onSkillsChanged: notifyUsuario,
+    });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sid) => {
-        sessions.set(sid, { transport, server, lastActivityAt: Date.now(), bootstrap });
+        sessions.set(sid, session);
       },
     });
     transport.onclose = () => {
@@ -61,7 +111,8 @@ export const createMcpHttpHandler = (input: {
         sessions.delete(sid);
       }
     };
-    return { transport, server, lastActivityAt: Date.now(), bootstrap };
+    session.transport = transport;
+    return session;
   };
 
   const sweepIdleSessions = (): void => {
@@ -83,6 +134,7 @@ export const createMcpHttpHandler = (input: {
   sweepTimer.unref();
 
   const handle = async (req: Request, res: Response): Promise<void> => {
+    requestIp = req.ip;
     const bearer = readBearer(req);
     let usuarioId: string | null = null;
     if (bearer) {
@@ -112,9 +164,15 @@ export const createMcpHttpHandler = (input: {
 
     const run = async (session: Session): Promise<void> => {
       session.lastActivityAt = Date.now();
+      if (usuarioId) {
+        session.usuarioId = usuarioId;
+      }
       await accountContext.run(usuarioId ?? undefined, async () => {
         await session.transport.handleRequest(req, res, req.body);
       });
+      if (usuarioId && !session.bootstrap && isInitializeRequest(req.body)) {
+        await refreshSkillTools(session, usuarioId);
+      }
     };
 
     if (existing) {
@@ -123,7 +181,7 @@ export const createMcpHttpHandler = (input: {
     }
 
     if (req.method === "POST" && isInitializeRequest(req.body)) {
-      const session = createSession(!usuarioId);
+      const session = createSession(!usuarioId, usuarioId);
       await session.server.connect(session.transport);
       await run(session);
       return;

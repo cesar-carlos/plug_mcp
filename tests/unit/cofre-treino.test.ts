@@ -24,7 +24,15 @@ describe("cofre e treino", () => {
     const usuarios = new InMemoryUsuarioRepository();
     const acessos = new InMemoryAcessoRepository();
     const setup = new SetupCodeStore();
-    const uc = new RegistrarAcesso(usuarios, acessos, plug, crypto, setup, "http://127.0.0.1:3333");
+    const uc = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      setup,
+      "http://127.0.0.1:3333",
+      0,
+    );
     const result = await uc.execute({
       email: "client@example.com",
       senha: "secret-pass",
@@ -56,6 +64,7 @@ describe("cofre e treino", () => {
       crypto,
       setup,
       "http://localhost",
+      0,
     );
     const created = await registrar.execute({
       email: "a@b.com",
@@ -101,6 +110,7 @@ describe("cofre e treino", () => {
       crypto,
       setup,
       "http://localhost",
+      0,
     );
     const created = await registrar.execute({
       email: "a@b.com",
@@ -139,6 +149,7 @@ describe("cofre e treino", () => {
       crypto,
       setup,
       "http://localhost",
+      0,
     );
     const a = await registrar.execute({
       email: "a@b.com",
@@ -181,6 +192,7 @@ describe("cofre e treino", () => {
       crypto,
       setup,
       "http://localhost",
+      0,
     );
     const a = await registrar.execute({
       email: "a@b.com",

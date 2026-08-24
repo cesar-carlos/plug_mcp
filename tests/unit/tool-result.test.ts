@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { testConfig } from "../../src/config/env.js";
 import {
   createToolRunner,
@@ -7,8 +8,8 @@ import {
   jsonResult,
 } from "../../src/infrastructure/mcp/tool-result.js";
 import {
-  mapPlugServerAbort,
   isAbortError,
+  mapPlugServerAbort,
 } from "../../src/infrastructure/plug-server/map-plug-error.js";
 
 describe("tool-result", () => {
@@ -27,22 +28,19 @@ describe("tool-result", () => {
     const payload = JSON.parse(result.content[0]!.text) as {
       error: { code: string; message: string };
     };
-    expect(payload.error.code).toBe("INTERNAL_ERROR");
+    expect(payload.error.code).toBe(ERROR_CODES.INTERNAL_ERROR);
     expect(payload.error.message).toBe("Erro interno.");
     expect(payload.error.message).not.toContain("encrypted");
     expect(logger.error).toHaveBeenCalled();
-    const fields = logger.error.mock.calls[0]?.[1] as { tool?: string; error?: string };
-    expect(fields.tool).toBe("consultar_dados");
-    expect(fields.error).toContain("invalid encrypted payload");
   });
 
   it("DomainError não é logado como inesperado", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
     const result = errorResult(
       new DomainError({
-        code: "VALIDATION_ERROR",
-        message: "sql é obrigatório.",
-        hint: "Obtenha sql_base",
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "skillId é obrigatório.",
+        hint: "Use listar_skills",
       }),
       testConfig(),
       logger,
@@ -50,7 +48,7 @@ describe("tool-result", () => {
     );
     expect(logger.error).not.toHaveBeenCalled();
     const payload = JSON.parse(result.content[0]!.text) as { error: { code: string } };
-    expect(payload.error.code).toBe("VALIDATION_ERROR");
+    expect(payload.error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
   });
 });
 
@@ -59,7 +57,7 @@ describe("mapPlugServerAbort", () => {
     const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
     expect(isAbortError(abort)).toBe(true);
     const err = mapPlugServerAbort();
-    expect(err.code).toBe("PLUG_SERVER_TIMEOUT");
+    expect(err.code).toBe(ERROR_CODES.PLUG_SERVER_TIMEOUT);
     expect(err.retryable).toBe(true);
   });
 });

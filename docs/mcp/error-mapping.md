@@ -41,6 +41,9 @@ Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 | `CONFLICT`                               | Acesso/skill duplicado                           |
 | `CREDENTIAL_STALE`                       | Senha do Client recusada                         |
 | `PERMISSION_DENIED`                      | Policy do `client_token`                         |
-| `USER_AUTH_EXPIRED`                      | JWT do Client recusado (401)                     |
-| `INVALID_SQL`                            | `SELECT *`, mutação no treino, FROM sem JOIN     |
-| `SKILL_NOT_FOUND` / `ANOTACAO_NOT_FOUND` | Id inexistente neste `agentId`                   |
+| `USER_AUTH_EXPIRED`                      | JWT do Client recusado (401 do hub)          |
+| `INVALID_SQL`                            | `SELECT *`, mutação, segundo comando         |
+| `SKILL_NOT_FOUND` / `ANOTACAO_NOT_FOUND` | Id inexistente neste `agentId`               |
+| `SKILL_NOT_PUBLISHED`                    | Skill em rascunho/validada em `consultar_dados` |
+| `SKILL_GAP`                              | `buscar_contexto` sem skill publicada capaz (payload, não throw) |
+| `RATE_LIMITED`                           | Teto HTTP ou por tool                        |

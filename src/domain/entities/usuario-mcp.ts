@@ -4,6 +4,7 @@ export interface UsuarioMcp {
   readonly emailHash: string;
   readonly senhaEnc: string;
   readonly tokenHash: string;
+  readonly tokenExpiresAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -13,4 +14,5 @@ export interface NovoUsuarioMcp {
   readonly emailHash: string;
   readonly senhaEnc: string;
   readonly tokenHash: string;
+  readonly tokenExpiresAt: Date | null;
 }

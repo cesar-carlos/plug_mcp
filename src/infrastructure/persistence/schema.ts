@@ -13,6 +13,7 @@ export const usuarioMcp = pgTable(
     emailHash: text("email_hash").notNull(),
     senhaEnc: text("senha_enc").notNull(),
     tokenHash: text("token_hash").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

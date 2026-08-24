@@ -16,6 +16,7 @@ export class FakePlugServer implements PlugServerGatewayPort {
   revoked = new Set<string>();
   tokens = new Map<string, string>();
   lastSql: string | null = null;
+  lastParams: Record<string, unknown> | undefined;
   policy: ClientTokenPolicy = { allTables: true, tables: [] };
   sqlImpl: () => Promise<SqlExecuteResult> = async () => ({
     columns: ["ok"],
@@ -89,8 +90,11 @@ export class FakePlugServer implements PlugServerGatewayPort {
     agentId: string;
     clientToken: string;
     sql: string;
+    params?: Record<string, unknown>;
+    options?: { maxRows?: number; page?: number; pageSize?: number; timeoutMs?: number };
   }): Promise<SqlExecuteResult> {
     this.lastSql = input.sql;
+    this.lastParams = input.params;
     if (!this.approved.has(input.agentId)) {
       throw new DomainError({
         code: ERROR_CODES.AGENT_ACCESS_DENIED,

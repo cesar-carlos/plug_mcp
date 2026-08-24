@@ -4,7 +4,7 @@ Não há tabela de senha de conta MCP, cliente de Authorization Server nem catá
 
 ## Cofre
 
-- `usuario_mcp`: `email_enc`, `email_hash`, `senha_enc`, `token_hash` (SHA-256 do token MCP). Unique em `email_hash` e `token_hash`.
+- `usuario_mcp`: `email_enc`, `email_hash`, `senha_enc`, `token_hash` (SHA-256 do token MCP), `token_expires_at` (opcional; TTL `MCP_TOKEN_TTL_DAYS`). Unique em `email_hash` e `token_hash`.
 - `acesso`: `usuario_id`, `agent_id`, `dialeto`, `nome_amigavel`, `client_token_enc`, `client_token_hash`, `status_acesso`. Unique `(usuario_id, agent_id, client_token_hash)`.
 
 ## Grafo (`agent_id`, compartilhado)

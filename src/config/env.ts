@@ -27,6 +27,9 @@ const envSchema = z.object({
   MCP_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   MCP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   MCP_BOOTSTRAP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  MCP_TOKEN_TTL_DAYS: z.coerce.number().int().min(0).default(0),
+  MCP_TOOL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
+  MCP_QUERY_TOOL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
 });
 
 export type AppConfig = z.infer<typeof envSchema> & {

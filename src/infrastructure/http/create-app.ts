@@ -7,9 +7,12 @@ import type { Logger as PinoLogger } from "pino";
 import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { UsuarioRepositoryPort } from "../../domain/ports/usuario-repository.port.js";
+import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
+import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import { createMcpHttpHandler } from "../mcp/mcp-http.js";
 import type { ToolUseCases } from "../mcp/register-tools.js";
+import { isMcpTokenExpired } from "../mcp/mcp-auth.js";
 import { createRateLimiter, mcpRateLimitKey, type RateLimitStore } from "./rate-limit.js";
 import type { SetupCodeStore } from "./setup-code-store.js";
 
@@ -18,6 +21,8 @@ export const createExpressApp = (input: {
   logger: LoggerPort;
   useCases: ToolUseCases;
   usuarios: UsuarioRepositoryPort;
+  acessos: AcessoRepositoryPort;
+  skills: SkillRepositoryPort;
   crypto: CryptoPort;
   setup: SetupCodeStore;
   pino?: PinoLogger;
@@ -73,6 +78,31 @@ export const createExpressApp = (input: {
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: false }));
 
+  app.use((req, res, next) => {
+    if (req.path !== "/mcp") {
+      next();
+      return;
+    }
+    const allowed = input.config.allowedOrigins;
+    if (allowed.length === 0) {
+      next();
+      return;
+    }
+    const origin = req.header("origin");
+    if (origin && !allowed.includes(origin)) {
+      res.status(403).json({ error: "origin_not_allowed" });
+      return;
+    }
+    next();
+  });
+
+  app.get("/.well-known/oauth-protected-resource", (_req, res) => {
+    res.json({
+      resource: input.config.mcpResourceUrl,
+      bearer_methods_supported: ["header"],
+    });
+  });
+
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: "se7e-mcp-server" });
   });
@@ -94,9 +124,14 @@ export const createExpressApp = (input: {
     config: input.config,
     useCases: input.useCases,
     logger: input.logger,
+    catalog: { acessos: input.acessos, skills: input.skills },
+    rateLimit: input.mcpRateLimitStore,
     resolveUsuarioId: async (token) => {
       const usuario = await input.usuarios.findByTokenHash(input.crypto.sha256Hex(token));
-      return usuario?.id ?? null;
+      if (!usuario || isMcpTokenExpired(usuario)) {
+        return null;
+      }
+      return usuario.id;
     },
   });
 

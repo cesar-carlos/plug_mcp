@@ -84,6 +84,14 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
       hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
     });
   }
+  const withoutTrailingSemi = sql.replace(/;+\s*$/, "");
+  if (withoutTrailingSemi.includes(";")) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "SQL não pode conter um segundo comando.",
+      hint: "Envie um único SELECT, sem ponto-e-vírgula no meio.",
+    });
+  }
 
   const fromMatch =
     /\bfrom\b\s+((?:[\w.[\]"`']+\s*(?:as\s+)?[\w"`']*\s*,\s*)*[\w.[\]"`']+(?:\s+(?:as\s+)?[\w"`']+)?)/i.exec(
@@ -223,6 +231,49 @@ export const sqlAmostra = (dialeto: Dialeto, sql: string): string => {
     case "firebird":
       return `SELECT FIRST 1 * FROM (${inner}) AS _amostra`;
   }
+};
+
+const stripLiterals = (sql: string): string =>
+  sql.replace(/'(?:''|[^'])*'/g, "''").replace(/"(?:""|[^"])*"/g, '""');
+
+/** Placeholders `:nome` e `@nome` fora de literais. */
+export const extractNamedParams = (sql: string): readonly string[] => {
+  const names = new Set<string>();
+  const re = /(?<![A-Za-z0-9_])[:@]([A-Za-z_][A-Za-z0-9_]*)/g;
+  const stripped = stripLiterals(sql);
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(stripped)) !== null) {
+    const name = match[1];
+    if (name) {
+      names.add(name);
+    }
+  }
+  return [...names];
+};
+
+export const bindNamedParams = (
+  sql: string,
+  provided: Record<string, unknown> | undefined,
+): Record<string, unknown> => {
+  const names = extractNamedParams(sql);
+  const source = provided ?? {};
+  const bound: Record<string, unknown> = {};
+  const missing: string[] = [];
+  for (const name of names) {
+    if (!Object.prototype.hasOwnProperty.call(source, name)) {
+      missing.push(name);
+      continue;
+    }
+    bound[name] = source[name];
+  }
+  if (missing.length > 0) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: `Params ausentes: ${missing.join(", ")}.`,
+      hint: "Passe params nomeados iguais aos placeholders :nome ou @nome do sqlModelo.",
+    });
+  }
+  return bound;
 };
 
 export const sqlValidacaoVazia = (dialeto: Dialeto, sql: string): string => {

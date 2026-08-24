@@ -40,8 +40,9 @@ const toUsuario = (row: typeof schema.usuarioMcp.$inferSelect): UsuarioMcp => ({
   emailEnc: row.emailEnc,
   emailHash: row.emailHash,
   senhaEnc: row.senhaEnc,
-  tokenHash: row.tokenHash,
-  createdAt: row.createdAt,
+    tokenHash: row.tokenHash,
+    tokenExpiresAt: row.tokenExpiresAt ?? null,
+    createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
 
@@ -93,10 +94,18 @@ export class DrizzleUsuarioRepository implements UsuarioRepositoryPort {
     return row ? toUsuario(row) : null;
   }
 
-  async updateTokenHash(id: string, tokenHash: string): Promise<void> {
+  async updateTokenHash(
+    id: string,
+    tokenHash: string,
+    tokenExpiresAt?: Date | null,
+  ): Promise<void> {
     await this.db
       .update(schema.usuarioMcp)
-      .set({ tokenHash, updatedAt: new Date() })
+      .set({
+        tokenHash,
+        ...(tokenExpiresAt !== undefined ? { tokenExpiresAt } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(schema.usuarioMcp.id, id));
   }
 

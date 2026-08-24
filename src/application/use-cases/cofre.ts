@@ -15,6 +15,13 @@ import { requireAcesso, requireUsuario } from "./shared/guards.js";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export const expiryFromTtlDays = (ttlDays: number, now = new Date()): Date | null => {
+  if (ttlDays <= 0) {
+    return null;
+  }
+  return new Date(now.getTime() + ttlDays * 86_400_000);
+};
+
 export interface SetupCodeStore {
   issue(token: string): { code: string; expiresAt: Date };
 }
@@ -43,6 +50,7 @@ export class RegistrarAcesso {
     private readonly crypto: CryptoPort,
     private readonly setup: SetupCodeStore,
     private readonly publicBaseUrl: string,
+    private readonly tokenTtlDays: number,
   ) {}
 
   async execute(input: {
@@ -140,6 +148,7 @@ export class RegistrarAcesso {
         emailHash,
         senhaEnc: this.crypto.encrypt(senha),
         tokenHash: this.crypto.sha256Hex(token),
+        tokenExpiresAt: expiryFromTtlDays(this.tokenTtlDays),
       });
       const acesso = await persistAcesso(usuario.id);
       const setup = this.setup.issue(token);
@@ -307,6 +316,7 @@ export class RotacionarTokenMcp {
     private readonly crypto: CryptoPort,
     private readonly setup: SetupCodeStore,
     private readonly publicBaseUrl: string,
+    private readonly tokenTtlDays: number,
   ) {}
 
   async execute(usuarioId: string | undefined): Promise<{
@@ -316,7 +326,11 @@ export class RotacionarTokenMcp {
   }> {
     const uid = requireUsuario(usuarioId);
     const token = this.crypto.randomToken(32);
-    await this.usuarios.updateTokenHash(uid, this.crypto.sha256Hex(token));
+    await this.usuarios.updateTokenHash(
+      uid,
+      this.crypto.sha256Hex(token),
+      expiryFromTtlDays(this.tokenTtlDays),
+    );
     const setup = this.setup.issue(token);
     return {
       success: true,

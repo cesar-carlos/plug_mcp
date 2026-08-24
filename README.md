@@ -48,6 +48,8 @@ Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fecha
 
 ## Bootstrap
 
+Consulta ao ERP: só `consultar_dados(skillId, params)` (e tools `skill_*`). SQL solto é recusado. Sem skill publicada capaz, `buscar_contexto` devolve `SKILL_GAP`. Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`.
+
 1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
 2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**
 3. A tool devolve `setupCode` + `setupUrl`. O usuário abre a URL, copia o token e cola em `Authorization: Bearer`.
@@ -63,7 +65,7 @@ Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fecha
 | `npm run lint` / `format` | ESLint + Prettier          |
 | `npm run db:migrate`      | Aplica `drizzle/*.sql`     |
 
-Docker: `Dockerfile` multi-stage (`node:24.19.0-alpine`) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
+Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.19.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
 
 ## Testes live contra o plug-server real
 

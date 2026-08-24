@@ -30,10 +30,12 @@ Consulta ao ERP na sessão do usuário: **só** com `sqlModelo` de skill publica
 
 ## Skills
 
-`criar_skill` → `atualizar_skill` → `validar_skill` (executa amostra) → `publicar_skill`. `listar_skills` / `obter_skill`.
+`buscar_contexto` devolve `consultaPermitida`. Se for `false`, vem `gap.code = SKILL_GAP`: **não** chame `consultar_dados`. Oriente `treinar_com_sql` → `criar_skill` → `validar_skill` → `publicar_skill`. O grafo em `grafoParaTreino` é material de treino, não licença de SQL.
 
-A skill publicada é a bússola da IA. Sem ela, a resposta correta é admitir a lacuna e pedir o cadastro.
+Cada skill publicada também vira tool `skill_{slug}` (e `skill_{slug}_{prefixoAgentId}` se houver colisão de slug entre agentIds do mesmo usuário). Resources `skill://{agentId}/{slug}`. Prompts `consultar_com_skill` e `cadastrar_skill`.
 
 ## Consulta
 
-`consultar_dados`: execute o `sqlModelo` de uma skill publicada. Autorização = `client_token`. Respeite `max_rows`. Sem skill capaz (incluindo cruzamento), não invente SQL — oriente `treinar_com_sql` e `criar_skill`.
+`consultar_dados`: **só** `acessoId` + `skillId` + `params` nomeados. **Não** aceita `sql`. Executa o `sqlModelo` persistido da skill **publicada** (re-parse SELECT, bind `:nome`/`@nome`). Autorização = `client_token`. Respeite `max_rows`. Sem skill capaz (incluindo cruzamento), não invente SQL.
+
+Resposta tabular: `columns`, `rows`, `truncated`, `maxRowsApplied` em JSON e em `structuredContent`. Células string são truncadas. SQL não é ecoado no sucesso.

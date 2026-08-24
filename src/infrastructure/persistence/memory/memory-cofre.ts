@@ -55,12 +55,21 @@ export class InMemoryUsuarioRepository implements UsuarioRepositoryPort {
     return [...this.rows.values()].find((row) => row.emailHash === emailHash) ?? null;
   }
 
-  async updateTokenHash(usuarioId: string, tokenHash: string): Promise<void> {
+  async updateTokenHash(
+    usuarioId: string,
+    tokenHash: string,
+    tokenExpiresAt?: Date | null,
+  ): Promise<void> {
     const row = this.rows.get(usuarioId);
     if (!row) {
       return;
     }
-    this.rows.set(usuarioId, { ...row, tokenHash, updatedAt: now() });
+    this.rows.set(usuarioId, {
+      ...row,
+      tokenHash,
+      ...(tokenExpiresAt !== undefined ? { tokenExpiresAt } : {}),
+      updatedAt: now(),
+    });
   }
 
   async updateCredenciais(usuarioId: string, emailEnc: string, senhaEnc: string): Promise<void> {

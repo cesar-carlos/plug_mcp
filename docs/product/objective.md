@@ -4,9 +4,9 @@ O MCP existe para **dar contexto à IA do usuário final**. Com skills cadastrad
 
 ## Consulta
 
-A IA se orienta **pelas skills publicadas** daquele `agentId` (`sqlModelo` treinado). Fluxo: `buscar_contexto` / `listar_skills` / `obter_skill` → `consultar_dados` com o SQL da skill (params nomeados se precisar).
+A IA se orienta **pelas skills publicadas** daquele `agentId`. Fluxo: `buscar_contexto` / `listar_skills` / `obter_skill` / resource `skill://` → `consultar_dados(skillId, params)`. O servidor **recusa SQL solto**; só executa o `sqlModelo` persistido da skill publicada.
 
-O grafo (tabelas, colunas, relacionamentos) apoia o **treino** e a documentação do schema. **Não** é licença para montar SQL ad-hoc na hora da pergunta.
+O grafo (tabelas, colunas, relacionamentos) apoia o **treino** e a documentação do schema. **Não** é licença para montar SQL ad-hoc na hora da pergunta. `buscar_contexto` sinaliza `consultaPermitida: false` + `SKILL_GAP` quando não há skill publicada capaz.
 
 ## Sem skill
 
