@@ -2,6 +2,8 @@
 
 O cliente MCP usa `Authorization: Bearer <token_mcp>`. Este servidor não publica metadados de Authorization Server.
 
+No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (consultor de gestão; SQL só no treino). O protocolo só reenvia isso no `initialize`. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos) se o host não reinsere `instructions`.
+
 ## Fluxo
 
 1. Apontar o cliente para `https://<host>/mcp` **sem** token (ou com token inválido só para descobrir tools de bootstrap, conforme o host).

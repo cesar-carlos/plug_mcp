@@ -61,7 +61,11 @@ export interface ToolUseCases {
 }
 
 import type { RateLimitStore } from "../http/rate-limit.js";
-import { registerSkillCatalog, type SkillCatalogPorts } from "./skill-tools.js";
+import {
+  registerPreTreinoPrompt,
+  registerSkillCatalog,
+  type SkillCatalogPorts,
+} from "./skill-tools.js";
 
 const emptyShape = {};
 
@@ -125,6 +129,8 @@ export const registerTools = (
     writeLocal,
     async (args) => run("registrar_acesso", () => useCases.registrarAcesso.execute(args)),
   );
+
+  registerPreTreinoPrompt(server);
 
   if (options?.bootstrapOnly) {
     return;

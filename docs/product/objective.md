@@ -2,6 +2,8 @@
 
 O MCP existe para **dar contexto à IA do usuário final**. Com skills cadastradas num treino prévio, a IA elabora e executa consulta SQL no ERP **sem inventar schema**. Permissão já foi definida pelo usuário no plug-server.
 
+Todo `initialize` injeta um **pre-treino de sessão** (consultor de gestão + SQL só no treino). A IA cruza **resultados** de skills publicadas para KPI e diagnóstico; não monta SELECT/JOIN ad-hoc. Host que reusa a conexão pode reler o prompt `pre_treino`.
+
 ## Consulta
 
 A IA se orienta **pelas skills publicadas** daquele `agentId`. Fluxo: `buscar_contexto` / `listar_skills` / `obter_skill` / resource `skill://` → `consultar_dados(skillId, params)`. O servidor **recusa SQL solto**; só executa o `sqlModelo` persistido da skill publicada.

@@ -6,6 +6,7 @@ import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.
 import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import { extractNamedParams } from "../../application/use-cases/shared/sql-modelo.js";
 import { currentAccountId } from "./account-context.js";
+import { PRE_TREINO_SESSAO } from "./server-instructions.js";
 import type { ToolRunner } from "./tool-result.js";
 import type { ConsultarDados } from "../../application/use-cases/consultar.js";
 
@@ -127,6 +128,27 @@ export const syncSkillTools = async (input: {
   }
 };
 
+export const registerPreTreinoPrompt = (server: McpServer): void => {
+  server.registerPrompt(
+    "pre_treino",
+    {
+      description:
+        "Persona de sessão: consultor de gestão e SQL só no treino. Reaplique em chat novo na mesma conexão MCP.",
+    },
+    () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: PRE_TREINO_SESSAO,
+          },
+        },
+      ],
+    }),
+  );
+};
+
 export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts): void => {
   server.registerResource(
     "skill",
@@ -202,6 +224,7 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
           content: {
             type: "text",
             text: [
+              "Siga o pre-treino de sessão (prompt pre_treino / initialize.instructions).",
               "Consulte o ERP só com skill publicada.",
               `Pergunta: ${pergunta}`,
               acessoId ? `acessoId: ${acessoId}` : "Use listar_acessos se precisar do acessoId.",
@@ -230,6 +253,7 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
             type: "text",
             text: [
               `Cadastre uma skill para: ${objetivo}`,
+              "Siga o pre-treino de sessão (prompt pre_treino / initialize.instructions).",
               "Explique o objetivo da skill ao usuário.",
               "1) Peça o SQL e chame treinar_com_sql (SELECT nomeado; JOIN se várias tabelas; colunas qualificadas).",
               "2) Mostre o fluxoTreino e peça nome/descrição → criar_skill (tabelas já no grafo).",

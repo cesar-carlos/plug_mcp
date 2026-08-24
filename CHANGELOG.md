@@ -21,6 +21,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Coluna JSON `params` na skill (migration `0010_skill_params.sql`) e checklist `fluxoTreino` nas tools de treino/skill.
 - `params[].tipo` (`string` / `number` / `date` / `boolean`); JSON antigo sem tipo vira `string`. Tools `skill_*` e `consultar_dados` recusam valor incompatível.
 - `publicar_skill` exige `confirmadoPeloUsuario: true` depois do resumo no chat.
+- Pre-treino de sessão (`PRE_TREINO_SESSAO`) em `initialize.instructions` e prompt MCP `pre_treino` (também no bootstrap): consultor de gestão; SQL só no treino; cruzar resultados de skills, não inventar query.
 
 ### Changed
 

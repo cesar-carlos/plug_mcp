@@ -93,7 +93,7 @@ export const createMcpHttpHandler = (input: {
     const server = new McpServer(
       { name: "se7e-mcp-server", version: "0.1.0" },
       {
-        capabilities: { tools: { listChanged: true } },
+        capabilities: { tools: { listChanged: true }, prompts: {} },
         instructions: MCP_SERVER_INSTRUCTIONS,
       },
     );
@@ -163,6 +163,8 @@ export const createMcpHttpHandler = (input: {
         method === "initialize" ||
         method === "notifications/initialized" ||
         method === "tools/list" ||
+        method === "prompts/list" ||
+        method === "prompts/get" ||
         (method === "tools/call" && tool === "registrar_acesso");
       if (!allowed) {
         res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));

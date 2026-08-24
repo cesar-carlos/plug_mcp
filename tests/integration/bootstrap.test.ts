@@ -3,6 +3,7 @@ import request from "supertest";
 import { testConfig } from "../../src/config/env.js";
 import { compose } from "../../src/composition/compose.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { parseMcpPayload } from "../helpers/mcp-rpc.js";
 
 const agentId = "11111111-1111-4111-8111-111111111111";
 
@@ -28,6 +29,24 @@ describe("bootstrap MCP", () => {
         });
       expect(init.status).toBeLessThan(500);
       const sessionId = init.headers["mcp-session-id"];
+      const initPayload = parseMcpPayload(init);
+      const initResult = initPayload.result as {
+        instructions?: string;
+        capabilities?: { prompts?: unknown };
+      };
+      expect(initResult.instructions).toMatch(/consultor/i);
+      expect(initResult.instructions).toContain("SKILL_GAP");
+      expect(initResult.capabilities?.prompts).toEqual(expect.anything());
+
+      const prompts = await request(app)
+        .post("/mcp")
+        .set("Accept", "application/json, text/event-stream")
+        .set("Content-Type", "application/json")
+        .set("mcp-session-id", sessionId ?? "")
+        .send({ jsonrpc: "2.0", id: 10, method: "prompts/list", params: {} });
+      expect(prompts.status).toBeLessThan(500);
+      const promptList = parseMcpPayload(prompts).result as { prompts?: { name: string }[] };
+      expect(promptList.prompts?.some((prompt) => prompt.name === "pre_treino")).toBe(true);
 
       const call = await request(app)
         .post("/mcp")

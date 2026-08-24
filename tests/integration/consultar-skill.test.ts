@@ -71,6 +71,15 @@ describe("consultar_dados só com skill", () => {
       expect(token).toBeTruthy();
 
       const authed = await initialize(app, token);
+      const promptList = await mcpRpc(
+        app,
+        token!,
+        { jsonrpc: "2.0", id: 20, method: "prompts/list", params: {} },
+        authed.sessionId,
+      );
+      const prompts = promptList.payload.result as { prompts?: { name: string }[] };
+      expect(prompts.prompts?.some((prompt) => prompt.name === "pre_treino")).toBe(true);
+
       const missing = await mcpRpc(
         app,
         token!,
