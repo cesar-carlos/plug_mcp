@@ -11,6 +11,7 @@ import {
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
+import { mapPlugServerFailure } from "../../src/infrastructure/plug-server/map-plug-error.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 
 const crypto = new NodeCryptoAdapter(
@@ -220,5 +221,99 @@ describe("ConsultarDados", () => {
         skillId: skill.id,
       }),
     ).rejects.toBeInstanceOf(DomainError);
+  });
+
+  it("mapeia classificação do plug para INVALID_SQL e cita as tabelas", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => {
+      throw mapPlugServerFailure({
+        status: 200,
+        body: {
+          response: {
+            item: {
+              error: {
+                code: -32002,
+                message: "Not authorized",
+                data: {
+                  technical_message: "Authorization denied: unsupported SQL classification",
+                },
+              },
+            },
+          },
+        },
+      });
+    };
+    const skill = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: skill.id,
+      }),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_SQL,
+      hint: expect.stringMatching(/produto/i),
+    });
+  });
+
+  it("recusa paginação do sqlModelo sem ORDER BY antes do plug", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => {
+      throw new Error("não deve chamar o plug");
+    };
+    const skill = await skills.create({
+      agentId,
+      slug: "lista",
+      nome: "Lista",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: skill.id,
+        options: { page: 1, page_size: 20 },
+      }),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "Paginação exige ORDER BY.",
+    });
+    expect(plug.lastSql).toBeNull();
+  });
+
+  it("só encaminha page ao plug quando page_size vem junto", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    const skill = await skills.create({
+      agentId,
+      slug: "lista-ordenada",
+      nome: "Lista",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p ORDER BY p.codprod",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      options: { page: 2 },
+    });
+    expect(plug.lastOptions?.page).toBeUndefined();
+    expect(plug.lastOptions?.pageSize).toBeUndefined();
+    await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      options: { page: 2, page_size: 10 },
+    });
+    expect(plug.lastOptions?.page).toBe(2);
+    expect(plug.lastOptions?.pageSize).toBe(10);
   });
 });

@@ -240,12 +240,16 @@ Limitação declarada, não bug silencioso.
 - Revalidar as duas skills as tirou de `publicada` para `validada`.
 - Tools `skill_*` só com `acessoId` — sem recorte, sem agregação.
 
-## 15. Fase 2 de produto (depois desta entrega)
+## 15. Fase 2 de produto
 
-- Cruzar dois datasets no mesmo SQL com relacionamento validado (já parcialmente coberto por `skillIds[]`).
-- Funções de janela (`ROW_NUMBER`, `SUM() OVER`) no SQL da IA — o AST precisa reconhecê-las e o validador de colunas precisa enxergá-las.
-- Comparação de período como consulta aprendida reutilizável.
-- Cache de resultado agregado por hash do SQL+params.
+Entregue neste ciclo:
+
+- Cruzar skills no mesmo SQL: `skillIds[]` + união de escopos; JOIN só se o relacionamento já estiver no grafo.
+- Funções de janela (`ROW_NUMBER`, `SUM() OVER`, `LAG`): o AST marca `OVER` como agregação e o validador exige que colunas de `PARTITION BY` / `ORDER BY` / argumento estejam no pacote publicado.
+- Comparação de período: SQL da IA (params de data ou janela) gravado em `consulta_aprendida`; `buscar_contexto` pede reuso quando a pergunta fala de período; `salvar_consulta` nomeia o exemplo.
+- Cache de resultado agregado por hash de SQL+params (`QUERY_CACHE_TTL_MS`).
+
+Fora deste ciclo (permanece): parser Firebird para SQL livre; `pergunta` obrigatória na API.
 
 ## 16. Migração e critérios de aceite
 

@@ -239,6 +239,7 @@ const collectRefsFromNode = (node: unknown): { table: string | null; column: str
 const collectFiltroRefs = (
   ast: Record<string, unknown>,
 ): { table: string | null; column: string }[] => [
+  ...collectRefsFromNode(ast.columns),
   ...collectRefsFromNode(ast.where),
   ...collectRefsFromNode(ast.having),
   ...collectRefsFromNode(ast.groupby),
@@ -249,6 +250,17 @@ const hasAggr = (node: unknown): boolean => {
   let found = false;
   walkNodes(node, (item) => {
     if (item.type === "aggr_func") {
+      found = true;
+    }
+  });
+  return found;
+};
+
+/** ROW_NUMBER/LAG (`function`/`window_func`) and SUM() OVER (`aggr_func` + over). */
+const hasWindow = (node: unknown): boolean => {
+  let found = false;
+  walkNodes(node, (item) => {
+    if (item.type === "window" || item.type === "window_func" || item.over != null) {
       found = true;
     }
   });
@@ -370,7 +382,7 @@ const parseColumns = (
     }
     const exprNode = item.expr;
     const star = hasStar(exprNode);
-    const aggregate = hasAggr(exprNode);
+    const aggregate = hasAggr(exprNode) || hasWindow(exprNode);
     const isColumnRef = isRecord(exprNode) && exprNode.type === "column_ref";
     const table = isColumnRef ? readString(exprNode.table) : null;
     const column = isColumnRef ? columnName(exprNode.column) : null;
@@ -487,10 +499,15 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
     ast = tryAstify(sql, database);
   } catch (error) {
     const message = error instanceof Error ? error.message : "SQL inválido.";
+    const janela = /\bOVER\s*\(/i.test(sql);
     throw new DomainError({
       code: ERROR_CODES.INVALID_SQL,
-      message: "Não foi possível interpretar o SQL neste dialeto.",
-      hint: `${message.slice(0, 180)}. Ajuste o SQL ao guia de dialeto do acesso.`,
+      message: janela
+        ? "Não foi possível interpretar a função de janela (OVER) neste dialeto."
+        : "Não foi possível interpretar o SQL neste dialeto.",
+      hint: janela
+        ? `${message.slice(0, 180)}. Reescreva PARTITION BY / ORDER BY da janela no guia de dialeto do acesso.`
+        : `${message.slice(0, 180)}. Ajuste o SQL ao guia de dialeto do acesso.`,
     });
   }
   const statements: unknown[] = Array.isArray(ast) ? ast : [ast];

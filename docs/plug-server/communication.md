@@ -78,7 +78,7 @@ O `plug_agente` **classifica** o SQL para decidir se o `client_token` autoriza a
 - `data.technical_message` contém `classification`
 - Acontece **mesmo** com `all_tables: true` / `all_permissions: true`
 
-`map-plug-error.ts` troca o hint genérico de `ACCESS_REVOKED` (“peça outro token”) por orientação para ajustar o SQL. Fontes do catálogo já referenciam tabelas reais do ERP; o cuidado vale para SQL ad-hoc e testes live (usar catálogo de sistema: `sysobjects`, `sys.objects`, `pg_catalog.pg_class`, `RDB$RELATIONS`).
+`map-plug-error.ts` mapeia esse caso para `INVALID_SQL` (não `ACCESS_REVOKED`). Token válido + SQL com FROM ainda pode falhar se o dialeto do acesso estiver errado (ex.: `sybase` numa base SQL Server). `consultar_dados` completa o hint com as tabelas do SQL enviado. Fontes do catálogo já referenciam tabelas reais do ERP; o cuidado vale para SQL ad-hoc e testes live (usar catálogo de sistema: `sysobjects`, `sys.objects`, `pg_catalog.pg_class`, `RDB$RELATIONS`).
 
 ## Erros que o hub devolve
 
@@ -89,14 +89,15 @@ Dois envelopes possíveis no mesmo POST:
 
 Códigos RPC que o MCP mapeia:
 
-| RPC      | Situação típica                  | `code` MCP             |
-| -------- | -------------------------------- | ---------------------- |
-| `-32001` | `client_token` ausente           | `MISSING_CLIENT_TOKEN` |
-| `-32002` | política / classificação / token | `ACCESS_REVOKED`       |
-| `-32008` | timeout no agente                | `QUERY_TIMEOUT`        |
-| `-32009` | SQL inválido no dialeto          | `INVALID_SQL`          |
-| `-32013` | rate limit no agente             | `RATE_LIMITED`         |
-| `-32000` | agente offline / não pronto      | `AGENT_UNAVAILABLE`    |
+| RPC      | Situação típica             | `code` MCP             |
+| -------- | --------------------------- | ---------------------- |
+| `-32001` | `client_token` ausente      | `MISSING_CLIENT_TOKEN` |
+| `-32002` | classificação SQL           | `INVALID_SQL`          |
+| `-32002` | política / token            | `ACCESS_REVOKED`       |
+| `-32008` | timeout no agente           | `QUERY_TIMEOUT`        |
+| `-32009` | SQL inválido no dialeto     | `INVALID_SQL`          |
+| `-32013` | rate limit no agente        | `RATE_LIMITED`         |
+| `-32000` | agente offline / não pronto | `AGENT_UNAVAILABLE`    |
 
 Tabela completa e hints: [`../mcp/error-mapping.md`](../mcp/error-mapping.md).
 

@@ -377,6 +377,61 @@ export class PublicarSkill {
   }
 }
 
+export class RemoverSkill {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
+    private readonly aprendizado: AprendizadoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      skillId?: string;
+      slug?: string;
+      confirmadoPeloUsuario?: boolean;
+    },
+  ): Promise<{ success: true; skillId: string; slug: string; statusAnterior: Skill["status"] }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const skill = input.skillId?.trim()
+      ? await this.skills.findById(input.skillId.trim())
+      : input.slug?.trim()
+        ? await this.skills.findBySlug(acesso.agentId, input.slug.trim())
+        : null;
+    if (skill?.agentId !== acesso.agentId) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "Skill não encontrada neste agentId.",
+        hint: "Use listar_skills. Passe skillId ou slug.",
+      });
+    }
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Remover a skill exige confirmação do usuário.",
+        hint: `Mostre no chat que vai apagar "${skill.nome}" (slug ${skill.slug}, status ${skill.status}). O grafo do agentId permanece. Chame de novo com confirmadoPeloUsuario: true.`,
+      });
+    }
+    await this.aprendizado.desvincularSkill(acesso.agentId, skill.id);
+    const ok = await this.skills.deleteById(skill.id);
+    if (!ok) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "Skill não encontrada neste agentId.",
+        hint: "Use listar_skills.",
+      });
+    }
+    return {
+      success: true,
+      skillId: skill.id,
+      slug: skill.slug,
+      statusAnterior: skill.status,
+    };
+  }
+}
+
 export class ListarSkills {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -437,6 +492,7 @@ export class ObterSkill {
     escopoPadrao: Acesso["escopoPadrao"];
     timezone: string | null;
     fluxoTreino: FluxoTreino;
+    avisos: { code: string; message: string }[];
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await refreshAndRequireAcessoAprovado(
@@ -524,6 +580,17 @@ export class ObterSkill {
         }
       })
       .slice(0, 8);
+    const avisos: { code: string; message: string }[] = [];
+    const semTipoFormato =
+      colunas.length === 0 || colunas.every((coluna) => !coluna.tipo && !coluna.formato);
+    const semCardinalidade = relacionamentos.every((rel) => !rel.cardinalidade);
+    if (semTipoFormato && semCardinalidade) {
+      avisos.push({
+        code: "PERFIL_AUSENTE",
+        message:
+          "tipo, formato e cardinalidade vazios. Depois do catálogo estável, chame validar_skill enriquecer=completo. Não invente tipo nem JOIN.",
+      });
+    }
     return {
       success: true,
       skill: { ...persisted, escopo },
@@ -539,6 +606,7 @@ export class ObterSkill {
       escopoPadrao: acesso.escopoPadrao,
       timezone: acesso.timezone,
       fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, persisted),
+      avisos,
     };
   }
 }

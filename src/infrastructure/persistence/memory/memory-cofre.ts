@@ -540,6 +540,10 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
     return [...this.rows.values()].filter((row) => row.agentId === agentId);
   }
 
+  async deleteById(id: string): Promise<boolean> {
+    return this.rows.delete(id);
+  }
+
   async buscar(
     agentId: string,
     query: string,
@@ -712,6 +716,27 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
 
   async listarSinonimos(agentId: string): Promise<readonly Sinonimo[]> {
     return this.sinonimos.filter((row) => row.agentId === agentId);
+  }
+
+  async desvincularSkill(
+    agentId: string,
+    skillId: string,
+  ): Promise<{ consultas: number; sinonimos: number }> {
+    let consultas = 0;
+    for (let i = 0; i < this.consultas.length; i += 1) {
+      const row = this.consultas[i];
+      if (row?.agentId === agentId && row.skillId === skillId) {
+        this.consultas[i] = { ...row, skillId: null };
+        consultas += 1;
+      }
+    }
+    const before = this.sinonimos.length;
+    const kept = this.sinonimos.filter(
+      (row) => !(row.agentId === agentId && row.alvoTipo === "skill" && row.alvoId === skillId),
+    );
+    this.sinonimos.length = 0;
+    this.sinonimos.push(...kept);
+    return { consultas, sinonimos: before - kept.length };
   }
 
   async registrarLacuna(agentId: string, pergunta: string): Promise<LacunaConsulta> {

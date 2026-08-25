@@ -1,6 +1,7 @@
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES, type ErrorCode } from "../../domain/errors/error-codes.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
+import { hintSqlNaoClassificavel } from "../../application/use-cases/shared/sql-classification-hint.js";
 
 export interface PlugHttpFailure {
   readonly status: number;
@@ -65,12 +66,10 @@ export const extractRpcError = (
   return { code, message, reason, retryAfterMs, technicalMessage };
 };
 
-// Descoberto via teste live contra plug-server real: um SQL sem FROM referenciando tabela/view
-// real (ex.: "SELECT 1") não é classificável pelo pipeline de autorização do plug_agente e é negado
-// com -32002/"Not authorized" mesmo com um client_token totalmente permissivo (all_tables: true).
-// O hint padrão de ACCESS_REVOKED ("token revogado") é enganoso nesse caso — detectamos o padrão
-// pelo technical_message e damos um hint específico e acionável para a IA corrigir o SQL.
-const isUnclassifiableSqlDenial = (
+// Descoberto via teste live: SQL que o plug_agente não classifica (sem FROM, dialeto errado,
+// wrap de página) volta -32002/"Not authorized" mesmo com client_token permissivo. Isso não é
+// token revogado — mapeamos para INVALID_SQL.
+export const isUnclassifiableSqlDenial = (
   rpcCode: number,
   technicalMessage: string | undefined,
 ): boolean => rpcCode === -32002 && /classification/i.test(technicalMessage ?? "");
@@ -141,12 +140,19 @@ export const mapPlugServerFailure = (
     if (mapped) {
       const unclassifiableSql = isUnclassifiableSqlDenial(rpc.code, rpc.technicalMessage);
       logPlugDetail(logger, failure, rpc);
+      if (unclassifiableSql) {
+        return new DomainError({
+          code: ERROR_CODES.INVALID_SQL,
+          message: "O agente não classificou este SQL para autorização.",
+          hint: hintSqlNaoClassificavel(),
+          retryable: false,
+          retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
+        });
+      }
       return new DomainError({
         code: mapped.code,
         message: mapped.message,
-        hint: unclassifiableSql
-          ? "O agente não conseguiu classificar este SQL para autorização (geralmente falta um FROM referenciando uma tabela/view real, ex.: 'SELECT 1' sem FROM). Ajuste a consulta para referenciar uma tabela/view existente do ERP e tente de novo."
-          : mapped.hint,
+        hint: mapped.hint,
         retryable: mapped.retryable,
         retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
       });

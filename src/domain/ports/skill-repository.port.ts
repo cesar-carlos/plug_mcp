@@ -12,6 +12,7 @@ export interface SkillRepositoryPort {
   findById(id: string): Promise<Skill | null>;
   findBySlug(agentId: string, slug: string): Promise<Skill | null>;
   listByAgent(agentId: string): Promise<readonly Skill[]>;
+  deleteById(id: string): Promise<boolean>;
   buscar(
     agentId: string,
     query: string,

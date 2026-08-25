@@ -171,7 +171,7 @@ export const validarSqlNoEscopo = (
     throw new DomainError({
       code: ERROR_CODES.CONSULTA_SEM_RECORTE,
       message: "Consulta sem recorte nem agregação.",
-      hint: "Adicione WHERE (período, empresa, status) ou agregue no banco (SUM/COUNT/GROUP BY). Não puxe a listagem para somar na IA.",
+      hint: "Adicione WHERE (período, empresa, status) ou agregue no banco (SUM/COUNT/GROUP BY/OVER). Não puxe a listagem para somar na IA.",
     });
   }
   if (options?.page && !ast.temOrderBy) {

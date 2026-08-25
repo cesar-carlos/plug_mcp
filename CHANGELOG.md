@@ -32,7 +32,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - `treinar_com_sql enriquecer=completo`: cardinalidade, tipo/formato, perfil min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso e não desfaz o treino). `validar_skill` aceita o mesmo `enriquecer=completo` para skills já publicadas.
 - Persistência preguiçosa de `skill.escopo` derivado do `sqlModelo` (e script `npm run db:backfill-escopo`) para skills antigas com JSON vazio. `escopo.grao` sai do SELECT (GROUP BY ou colunas físicas).
 - Suíte adversarial do validador de escopo (CTE, subquery, JOIN inventado no pacote, `SELECT *` aninhado, segundo comando). Teto de `GROUP BY` e aviso `LITERAL_TEXTO`.
-- `obter_skill` inclui `consultasExemplo` no pacote. `asOf` usa o timezone do acesso.
+- `obter_skill` inclui `consultasExemplo` no pacote. `asOf` usa o timezone do acesso. Aviso `PERFIL_AUSENTE` quando tipo/formato/cardinalidade estão vazios.
+- Tool `remover_skill`: apaga a skill (rascunho ou publicada) com `confirmadoPeloUsuario: true`, libera o slug e desvincula consultas/sinônimos. O grafo do `agentId` permanece.
+- Funções de janela (`OVER` / `ROW_NUMBER` / `LAG`) no SQL da IA: contam como recorte (não disparam `CONSULTA_SEM_RECORTE`) e as colunas de `PARTITION BY`/`ORDER BY` entram no validador de escopo.
 
 ### Changed
 
@@ -51,6 +53,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - `consultar_dados` pede `max_rows + 1` ao hub e marca `truncated` só quando veio linha a mais.
 - `treinar_com_sql` e `buscar_contexto` apontam a skill em andamento mais relevante (SQL igual ou tabelas do rascunho ⊆ SQL atual / ranking da query).
 - JOIN sem igualdade no `ON` é recusado; CROSS JOIN não grava relacionamento `*`.
+- SQL que o plug não classifica (`-32002` + classification) vira `INVALID_SQL` (não `ACCESS_REVOKED`); o hint de `consultar_dados` cita as tabelas enviadas. Paginação exige `ORDER BY` também no `sqlModelo` e só encaminha `page` com `page_size`.
+- `mapear_tabela` agrupa o catálogo (uma linha por coluna), infere papel/formato e avisa `CATALOGO_TIPOS_AMBIGUOS` quando o JOIN de tipos explode (sybase em SQL Server). JOIN `mssql` usa `user_type_id` e `system_type_id`.
+- `buscar_contexto` em pergunta de período (com `consultasAprendidas`) pede para reusar esses SQLs (params de data ou `OVER`/`LAG`) em vez de reinventar a comparação.
 
 ### Removed
 

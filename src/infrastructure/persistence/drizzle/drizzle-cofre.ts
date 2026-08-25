@@ -671,6 +671,11 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
     return rows.map((row) => this.toSkill(row));
   }
 
+  async deleteById(id: string): Promise<boolean> {
+    const rows = await this.db.delete(schema.skill).where(eq(schema.skill.id, id)).returning();
+    return rows.length > 0;
+  }
+
   async buscar(
     agentId: string,
     query: string,
@@ -1000,6 +1005,33 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       alvoTipo: row.alvoTipo,
       alvoId: row.alvoId,
     }));
+  }
+
+  async desvincularSkill(
+    agentId: string,
+    skillId: string,
+  ): Promise<{ consultas: number; sinonimos: number }> {
+    const consultas = await this.db
+      .update(schema.consultaAprendida)
+      .set({ skillId: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.consultaAprendida.agentId, agentId),
+          eq(schema.consultaAprendida.skillId, skillId),
+        ),
+      )
+      .returning();
+    const sinonimos = await this.db
+      .delete(schema.sinonimo)
+      .where(
+        and(
+          eq(schema.sinonimo.agentId, agentId),
+          eq(schema.sinonimo.alvoTipo, "skill"),
+          eq(schema.sinonimo.alvoId, skillId),
+        ),
+      )
+      .returning();
+    return { consultas: consultas.length, sinonimos: sinonimos.length };
   }
 
   async registrarLacuna(agentId: string, pergunta: string): Promise<LacunaConsulta> {

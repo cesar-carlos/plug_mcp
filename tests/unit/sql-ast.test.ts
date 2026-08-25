@@ -33,4 +33,21 @@ describe("sql-ast", () => {
     const star = tryParseSelect("SELECT * FROM (SELECT p.codprod FROM produto p) x");
     expect(star?.temStar).toBe(true);
   });
+
+  it("trata OVER como agregação e coleta colunas da janela", () => {
+    for (const dialeto of ["mssql", "sybase", "postgres"] as const) {
+      const ast = parseSelect(
+        "SELECT SUM(t.valor) OVER (PARTITION BY t.empresa ORDER BY t.data) AS total FROM titulo t",
+        dialeto,
+      );
+      expect(ast.temAgregacao).toBe(true);
+      const cols = ast.filtroRefs.map((ref) => ref.column.toLowerCase());
+      expect(cols).toEqual(expect.arrayContaining(["valor", "empresa", "data"]));
+      const rowNumber = parseSelect(
+        "SELECT ROW_NUMBER() OVER (PARTITION BY t.empresa ORDER BY t.data) AS rn FROM titulo t",
+        dialeto,
+      );
+      expect(rowNumber.temAgregacao).toBe(true);
+    }
+  });
 });

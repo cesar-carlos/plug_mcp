@@ -42,6 +42,10 @@ import { queryCacheKey } from "./shared/query-cache-key.js";
 import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import { formatAsOf } from "./shared/format-as-of.js";
 import {
+  hintSqlNaoClassificavel,
+  isSqlClassificationDenial,
+} from "./shared/sql-classification-hint.js";
+import {
   persistirConsultaExecutada,
   persistirItensAprendizado,
   type ItemAprendizadoInput,
@@ -52,6 +56,7 @@ import {
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
 import {
+  agruparColunasCatalogo,
   cell,
   DESCREVER_TABELA_MAX_ROWS,
   EXPLORAR_TABELAS_MAX_ROWS,
@@ -61,8 +66,27 @@ import {
   sqlDescreverTabela,
   sqlExplorarTabelas,
 } from "./shared/schema-introspection.js";
+import { inferirFormatoColuna, inferirPapelColuna } from "./shared/inferir-papel.js";
 
 const QUERY_CELL_MAX_CHARS = 2_048;
+
+const PERIODO_NA_PERGUNTA =
+  /\b(per[ií]odo|ano|m[eê]s|yoy|versus|compar(ar|ação|acao)|trimestre|semestre)\b/i;
+
+const hintConsultasAprendidas = (
+  query: string,
+  consultas: readonly ConsultaAprendida[],
+): string | undefined => {
+  if (consultas.length === 0) {
+    return undefined;
+  }
+  const base =
+    "Reutilize estes SQLs em consultasAprendidas (já comprovados neste agentId). Adapte params; não invente tabela, coluna nem JOIN.";
+  if (PERIODO_NA_PERGUNTA.test(query)) {
+    return `${base} Pergunta de período: reutilize esses SQLs (params de data ou OVER/LAG); não reinventar a comparação.`;
+  }
+  return base;
+};
 
 interface AprendizadoGravado {
   readonly consultaId: string;
@@ -378,7 +402,15 @@ export class ConsultarDados {
     const perguntaUsada = input.pergunta?.trim() ? input.pergunta.trim() : skill.nome;
     const itensAprendizado = input.aprendizado ?? [];
     const astLivre = tryParseSelect(sqlExecutar, acesso.dialeto);
-    const cacheable = Boolean(astLivre?.temAgregacao && this.extras.cache && !input.options?.page);
+    if (input.options?.page && !astLivre?.temOrderBy) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Paginação exige ORDER BY.",
+        hint: "Sem ordem estável a página repete e perde linha. Inclua ORDER BY no SQL (sqlModelo ou sql).",
+      });
+    }
+    const paginar = Boolean(input.options?.page && input.options.page_size);
+    const cacheable = Boolean(astLivre?.temAgregacao && this.extras.cache && !paginar);
     const cacheKey = cacheable ? queryCacheKey(acesso.agentId, sqlExecutar, params, maxRows) : "";
     try {
       if (cacheable && this.extras.cache) {
@@ -433,8 +465,8 @@ export class ConsultarDados {
           params,
           options: {
             maxRows: fetchMax,
-            page: input.options?.page,
-            pageSize: input.options?.page_size,
+            page: paginar ? input.options?.page : undefined,
+            pageSize: paginar ? input.options?.page_size : undefined,
             timeoutMs: input.options?.timeout_ms,
           },
         }),
@@ -520,6 +552,15 @@ export class ConsultarDados {
         linhasRetornadas: null,
         duracaoMs: Date.now() - started,
       });
+      if (error instanceof DomainError && isSqlClassificationDenial(error)) {
+        throw new DomainError({
+          code: error.code,
+          message: error.message,
+          hint: hintSqlNaoClassificavel(modelo.tabelas.map((tabela) => tabela.nome)),
+          retryable: error.retryable,
+          retryAfterMs: error.retryAfterMs,
+        });
+      }
       throw error;
     }
   }
@@ -702,7 +743,14 @@ export class MapearTabela {
   ): Promise<{
     success: true;
     tabela: string;
-    colunas: { nome: string; tipo: string; nullable: string }[];
+    colunas: {
+      nome: string;
+      tipo: string;
+      nullable: string;
+      papel: string;
+      formato: "date" | "number" | null;
+    }[];
+    avisos: { code: string; message: string }[];
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await refreshAndRequireAcessoAprovado(
@@ -725,6 +773,15 @@ export class MapearTabela {
           options: { maxRows: DESCREVER_TABELA_MAX_ROWS },
         }),
       );
+      const agrupado = agruparColunasCatalogo(result.rows);
+      const avisos: { code: string; message: string }[] = [];
+      if (agrupado.ambiguas) {
+        avisos.push({
+          code: "CATALOGO_TIPOS_AMBIGUOS",
+          message:
+            "O catálogo devolveu vários tipos por coluna. Se a base for SQL Server, chame atualizar_dialeto para mssql e mapeie de novo. Não grave geometry/xml como tipo da coluna.",
+        });
+      }
       await this.grafo.withAgentLock(acesso.agentId, async () => {
         const locked = await this.grafo.getDialeto(acesso.agentId);
         if (!locked) {
@@ -742,11 +799,17 @@ export class MapearTabela {
           origem: "inferido",
           autorUsuarioId: uid,
         });
-        for (const row of result.rows) {
+        for (const coluna of agrupado.colunas) {
+          if (!coluna.nome) {
+            continue;
+          }
+          const tipo = coluna.tipo || null;
           await this.grafo.mergeColuna({
             tabelaId: tabela.tabela.id,
-            nome: cell(row, "column_name"),
-            tipo: cell(row, "data_type") || null,
+            nome: coluna.nome,
+            tipo,
+            papel: inferirPapelColuna(coluna.nome, tipo),
+            formato: inferirFormatoColuna(tipo),
             origem: "inferido",
             autorUsuarioId: uid,
           });
@@ -755,11 +818,17 @@ export class MapearTabela {
       return {
         success: true,
         tabela: ident.tabela,
-        colunas: result.rows.map((row) => ({
-          nome: cell(row, "column_name"),
-          tipo: cell(row, "data_type"),
-          nullable: cell(row, "is_nullable"),
-        })),
+        colunas: agrupado.colunas.map((coluna) => {
+          const tipo = coluna.tipo || "";
+          return {
+            nome: coluna.nome,
+            tipo,
+            nullable: coluna.nullable,
+            papel: inferirPapelColuna(coluna.nome, tipo || null),
+            formato: inferirFormatoColuna(tipo || null),
+          };
+        }),
+        avisos,
       };
     } catch (error) {
       return rethrowCatalogDenied(error);
@@ -863,10 +932,7 @@ export class BuscarContexto {
             code: "SKILL_GAP",
             hint: gapHint,
           },
-      hint:
-        consultasAprendidas.length > 0
-          ? "Reutilize estes SQLs em consultasAprendidas (já comprovados neste agentId). Adapte params; não invente tabela, coluna nem JOIN."
-          : undefined,
+      hint: hintConsultasAprendidas(query, consultasAprendidas),
     };
   }
 }

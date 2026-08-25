@@ -90,7 +90,7 @@ Não é o JWT do Client. É um token **opaco** (ou JWT próprio do agente) emiti
 - Nunca vai para log, resposta de tool ou `hint` de erro.
 - Introspecção **sem SQL**: RPC `client_token.getPolicy` no mesmo `POST /agents/commands`.
 
-SQL precisa ser **classificável**: o agente identifica tabela/view no `FROM`. `SELECT 1` sem `FROM` é negado com JSON-RPC `-32002` mesmo com política permissiva. Detalhe em [communication.md](communication.md).
+SQL precisa ser **classificável**: o agente identifica tabela/view no `FROM`. `SELECT 1` sem `FROM` é negado com JSON-RPC `-32002` mesmo com política permissiva. O MCP mapeia isso para `INVALID_SQL`, não para token revogado. Detalhe em [communication.md](communication.md).
 
 ## O que o usuário final informa (e o que não informa)
 

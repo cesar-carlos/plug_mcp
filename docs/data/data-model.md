@@ -17,13 +17,13 @@ Não há tabela de senha de conta MCP, cliente de Authorization Server nem catá
 
 ## Skills e notas
 
-- `skill`: `slug` unique por `agent_id`, `sql_modelo` (consulta **exemplo**), `escopo` JSON (tabelas, colunas por tabela, relacionamentos, **grão** = GROUP BY ou colunas físicas do SELECT), `params`, `versao`, `status` (`rascunho` | `validada` | `publicada`). Skill **publicada** é o escopo da consulta; a IA escreve SQL dentro desse pacote. Escopo vazio (skills pré-0011) é persistido na primeira leitura (`obter_skill` / `consultar_dados`) ou com `npm run db:backfill-escopo`.
+- `skill`: `slug` unique por `agent_id`, `sql_modelo` (consulta **exemplo**), `escopo` JSON (tabelas, colunas por tabela, relacionamentos, **grão** = GROUP BY ou colunas físicas do SELECT), `params`, `versao`, `status` (`rascunho` | `validada` | `publicada`). Skill **publicada** é o escopo da consulta; a IA escreve SQL dentro desse pacote. Escopo vazio (skills pré-0011) é persistido na primeira leitura (`obter_skill` / `consultar_dados`) ou com `npm run db:backfill-escopo`. `remover_skill` faz hard delete (libera o slug); o grafo não é apagado.
 - `anotacao_grafo`: nota/glossário/regra/métrica; `tabela_id` opcional; `tipo` inclui `regra` e `metrica`.
 
 ## Aprendizado (migration `0012`)
 
-- `consulta_aprendida`: SQL que funcionou (gravado automaticamente em `consultar_dados`), pergunta, contrato de params, contagem de execuções. `obter_skill.pacote.consultasExemplo` devolve as mais usadas da skill, recortadas pela policy. `buscar_contexto` pede para reutilizar `consultasAprendidas`.
-- `sinonimo`: termo → skill/alvo; `buscar_contexto` expande a query.
+- `consulta_aprendida`: SQL que funcionou (gravado automaticamente em `consultar_dados`), pergunta, contrato de params, contagem de execuções. Sem FK para `skill`; ao remover a skill, `skill_id` fica nulo (o SQL histórico permanece no `agentId`). `obter_skill.pacote.consultasExemplo` devolve as mais usadas da skill, recortadas pela policy. `buscar_contexto` pede para reutilizar `consultasAprendidas`.
+- `sinonimo`: termo → skill/alvo; `buscar_contexto` expande a query. `remover_skill` apaga sinônimos cujo alvo é a skill.
 - `lacuna_consulta`: pergunta que caiu em `SKILL_GAP` (fila de treino).
 
 ## Auditoria

@@ -90,6 +90,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
     });
     expect(result.pacote.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
     expect(result.pacote.consultasExemplo).toHaveLength(1);
+    expect(result.avisos.some((aviso) => aviso.code === "PERFIL_AUSENTE")).toBe(true);
     const reloaded = await skills.findById(skill.id);
     expect(reloaded?.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
   });

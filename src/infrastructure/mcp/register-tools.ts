@@ -35,6 +35,7 @@ import type {
   ObterSkill,
   PublicarSkill,
   RemoverAnotacao,
+  RemoverSkill,
   ValidarSkill,
 } from "../../application/use-cases/skills.js";
 import type {
@@ -65,6 +66,7 @@ export interface ToolUseCases {
   atualizarSkill: AtualizarSkill;
   validarSkill: ValidarSkill;
   publicarSkill: PublicarSkill;
+  removerSkill: RemoverSkill;
   listarSkills: ListarSkills;
   obterSkill: ObterSkill;
   expandirEscopo: ExpandirEscopo;
@@ -254,7 +256,7 @@ export const registerTools = (
 
   server.tool(
     "mapear_tabela",
-    "Lê colunas de uma tabela no ERP e funde no grafo compartilhado (origem inferido).",
+    "Lê colunas de uma tabela no ERP e funde no grafo (origem inferido). Infere papel/formato. Vários tipos por coluna viram aviso CATALOGO_TIPOS_AMBIGUOS (SQL Server → atualizar_dialeto para mssql).",
     { acessoId: z.string().optional(), tabela: z.string().optional() },
     writeWorld,
     async (args) =>
@@ -432,6 +434,27 @@ export const registerTools = (
   );
 
   server.tool(
+    "remover_skill",
+    "Apaga a skill (pacote e sqlModelo) deste agentId. Exige confirmadoPeloUsuario: true. O grafo permanece; consultas aprendidas ficam desvinculadas. Mostre nome/slug/status no chat antes.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      slug: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    destroyLocal,
+    async (args) =>
+      run("remover_skill", async () => {
+        const result = await useCases.removerSkill.execute(currentAccountId(), args);
+        const uid = currentAccountId();
+        if (uid && options?.onSkillsChanged) {
+          await options.onSkillsChanged(uid);
+        }
+        return result;
+      }),
+  );
+
+  server.tool(
     "listar_skills",
     "Lista skills do agentId do acesso.",
     { acessoId: z.string().optional() },
@@ -442,7 +465,7 @@ export const registerTools = (
 
   server.tool(
     "obter_skill",
-    "Obtém o pacote da skill: escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas e guia de dialeto.",
+    "Obtém o pacote da skill: escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas e guia de dialeto. Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),

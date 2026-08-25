@@ -60,8 +60,8 @@ export const sqlDescreverTabela = (dialeto: Dialeto, temSchema: boolean): string
   switch (dialeto) {
     case "mssql":
       return temSchema
-        ? `SELECT TOP ${DESCREVER_TABELA_MAX_ROWS} c.name AS column_name, t.name AS data_type, CASE c.is_nullable WHEN 1 THEN 'YES' ELSE 'NO' END AS is_nullable FROM sys.columns c INNER JOIN sys.objects o ON o.object_id = c.object_id INNER JOIN sys.types t ON t.user_type_id = c.user_type_id INNER JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE o.name = :tabela AND s.name = :schema ORDER BY c.column_id`
-        : `SELECT TOP ${DESCREVER_TABELA_MAX_ROWS} c.name AS column_name, t.name AS data_type, CASE c.is_nullable WHEN 1 THEN 'YES' ELSE 'NO' END AS is_nullable FROM sys.columns c INNER JOIN sys.objects o ON o.object_id = c.object_id INNER JOIN sys.types t ON t.user_type_id = c.user_type_id WHERE o.name = :tabela ORDER BY c.column_id`;
+        ? `SELECT TOP ${DESCREVER_TABELA_MAX_ROWS} c.name AS column_name, t.name AS data_type, CASE c.is_nullable WHEN 1 THEN 'YES' ELSE 'NO' END AS is_nullable FROM sys.columns c INNER JOIN sys.objects o ON o.object_id = c.object_id INNER JOIN sys.types t ON t.user_type_id = c.user_type_id AND t.system_type_id = c.system_type_id INNER JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE o.name = :tabela AND s.name = :schema ORDER BY c.column_id`
+        : `SELECT TOP ${DESCREVER_TABELA_MAX_ROWS} c.name AS column_name, t.name AS data_type, CASE c.is_nullable WHEN 1 THEN 'YES' ELSE 'NO' END AS is_nullable FROM sys.columns c INNER JOIN sys.objects o ON o.object_id = c.object_id INNER JOIN sys.types t ON t.user_type_id = c.user_type_id AND t.system_type_id = c.system_type_id WHERE o.name = :tabela ORDER BY c.column_id`;
     case "sybase":
       return `SELECT TOP ${DESCREVER_TABELA_MAX_ROWS} c.name AS column_name, t.name AS data_type, CASE c.status & 8 WHEN 8 THEN 'YES' ELSE 'NO' END AS is_nullable FROM syscolumns c INNER JOIN sysobjects o ON o.id = c.id INNER JOIN systypes t ON t.usertype = c.usertype WHERE o.name = :tabela ORDER BY c.colid`;
     case "postgres":
@@ -84,6 +84,50 @@ export const cell = (row: Record<string, unknown>, ...keys: string[]): string =>
     }
   }
   return "";
+};
+
+export interface ColunaCatalogo {
+  readonly nome: string;
+  readonly tipo: string;
+  readonly nullable: string;
+}
+
+export const agruparColunasCatalogo = (
+  rows: readonly Record<string, unknown>[],
+): { colunas: ColunaCatalogo[]; ambiguas: boolean } => {
+  const byName = new Map<string, { nome: string; tipos: Set<string>; nullable: string }>();
+  const order: string[] = [];
+  for (const row of rows) {
+    const nome = cell(row, "column_name");
+    if (!nome) {
+      continue;
+    }
+    const tipo = cell(row, "data_type");
+    const nullable = cell(row, "is_nullable");
+    const key = nome.toLowerCase();
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, { nome, tipos: new Set(tipo ? [tipo] : []), nullable });
+      order.push(key);
+      continue;
+    }
+    if (tipo) {
+      existing.tipos.add(tipo);
+    }
+    if (!existing.nullable && nullable) {
+      existing.nullable = nullable;
+    }
+  }
+  const colunas: ColunaCatalogo[] = order.flatMap((key) => {
+    const item = byName.get(key);
+    if (!item) {
+      return [];
+    }
+    const tipoUnico = item.tipos.size === 1 ? [...item.tipos][0] : undefined;
+    return [{ nome: item.nome, tipo: tipoUnico ?? "", nullable: item.nullable }];
+  });
+  const ambiguas = [...byName.values()].some((item) => item.tipos.size > 1);
+  return { colunas, ambiguas };
 };
 
 export const hintCatalogoSistemaNegado = (): string =>

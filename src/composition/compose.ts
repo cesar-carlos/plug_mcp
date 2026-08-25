@@ -36,6 +36,7 @@ import {
   ObterSkill,
   PublicarSkill,
   RemoverAnotacao,
+  RemoverSkill,
   ValidarSkill,
 } from "../application/use-cases/skills.js";
 import { TreinarComSql } from "../application/use-cases/treinar-com-sql.js";
@@ -217,6 +218,7 @@ export const compose = async (
     atualizarSkill: new AtualizarSkill(acessos, skills, grafo),
     validarSkill: new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo),
     publicarSkill: new PublicarSkill(acessos, skills, grafo),
+    removerSkill: new RemoverSkill(acessos, skills, aprendizado),
     listarSkills: new ListarSkills(acessos, skills),
     obterSkill: new ObterSkill(
       acessos,

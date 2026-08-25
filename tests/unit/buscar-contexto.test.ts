@@ -4,6 +4,7 @@ import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
 import {
+  InMemoryAprendizadoRepository,
   InMemoryAcessoRepository,
   InMemoryAnotacaoGrafoRepository,
   InMemoryGrafoRepository,
@@ -26,6 +27,7 @@ describe("BuscarContexto", () => {
     const grafo = new InMemoryGrafoRepository();
     const skills = new InMemorySkillRepository();
     const anotacoes = new InMemoryAnotacaoGrafoRepository();
+    const aprendizado = new InMemoryAprendizadoRepository();
     const registrar = new RegistrarAcesso(
       usuarios,
       acessos,
@@ -47,8 +49,17 @@ describe("BuscarContexto", () => {
       invalidate: () => undefined,
       remember: () => undefined,
     };
-    const buscar = new BuscarContexto(acessos, grafo, skills, anotacoes, plug, sessions, crypto);
-    return { buscar, created, skills };
+    const buscar = new BuscarContexto(
+      acessos,
+      grafo,
+      skills,
+      anotacoes,
+      plug,
+      sessions,
+      crypto,
+      aprendizado,
+    );
+    return { buscar, created, skills, aprendizado };
   };
 
   it("sem skill publicada devolve consultaPermitida false e SKILL_GAP", async () => {
@@ -186,5 +197,34 @@ describe("BuscarContexto", () => {
     expect(result.consultaPermitida).toBe(false);
     expect(result.gap?.hint).toMatch(/Faturamento por cliente/);
     expect(result.skillsParaTreino[0]?.id).toBe(relevant.id);
+  });
+
+  it("em pergunta de período pede para reutilizar consultasAprendidas com params ou OVER", async () => {
+    const { buscar, created, skills, aprendizado } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "faturamento",
+      nome: "Faturamento",
+      descricao: "Total faturado",
+      sqlModelo: "SELECT p.valor FROM produto p WHERE p.data >= :dataInicio",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await aprendizado.salvarConsulta({
+      agentId,
+      skillId: published.id,
+      pergunta: "faturamento no período",
+      sql: "SELECT SUM(p.valor) AS total FROM produto p WHERE p.data >= :dataInicio",
+      paramsContrato: [
+        { nome: "dataInicio", descricao: "Início", obrigatorio: true, tipo: "date" },
+      ],
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "comparar faturamento no período",
+    });
+    expect(result.consultasAprendidas.length).toBeGreaterThan(0);
+    expect(result.hint).toMatch(/OVER\/LAG/);
   });
 });

@@ -57,9 +57,7 @@ describe("mapPlugServerFailure", () => {
     expect(err.hint).toContain("ativar o Client");
   });
 
-  it("dá um hint específico quando -32002 é SQL não classificável (ex.: SELECT sem FROM)", () => {
-    // Payload real observado num teste live contra o plug-server de produção: client_token
-    // totalmente permissivo (all_tables/all_permissions true), mas "SELECT 1" sem FROM é negado.
+  it("mapeia -32002 classification para INVALID_SQL, não ACCESS_REVOKED", () => {
     const err = mapPlugServerFailure({
       status: 200,
       body: {
@@ -79,11 +77,24 @@ describe("mapPlugServerFailure", () => {
         },
       },
     });
-    expect(err.code).toBe("ACCESS_REVOKED");
+    expect(err.code).toBe("INVALID_SQL");
     expect(err.retryable).toBe(false);
-    expect(err.message).toBe("Acesso SQL recusado ou token revogado neste agente.");
-    expect(err.message).not.toMatch(/classification|SELECT|sysobjects/i);
-    expect(err.hint).toContain("FROM referenciando uma tabela/view real");
+    expect(err.message).toBe("O agente não classificou este SQL para autorização.");
+    expect(err.message).not.toMatch(/classification|SELECT 1|sysobjects|revogado/i);
+    expect(err.hint).toContain("Não trate como token revogado");
+    expect(err.hint).not.toContain("SELECT 1");
+  });
+
+  it("mantém ACCESS_REVOKED quando -32002 não é classification", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: { error: { code: -32002, message: "Not authorized", data: { reason: "revoked" } } },
+        },
+      },
+    });
+    expect(err.code).toBe("ACCESS_REVOKED");
   });
 
   it("não devolve a mensagem crua do plug-server no DomainError", () => {

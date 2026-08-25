@@ -23,5 +23,9 @@ export interface AprendizadoRepositoryPort {
     alvoId: string;
   }): Promise<Sinonimo>;
   listarSinonimos(agentId: string): Promise<readonly Sinonimo[]>;
+  desvincularSkill(
+    agentId: string,
+    skillId: string,
+  ): Promise<{ consultas: number; sinonimos: number }>;
   registrarLacuna(agentId: string, pergunta: string): Promise<LacunaConsulta>;
 }
