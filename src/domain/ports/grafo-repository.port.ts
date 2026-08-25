@@ -5,6 +5,7 @@ import type {
   RelacionamentoGrafo,
   TabelaGrafo,
 } from "../entities/grafo.js";
+import type { Cardinalidade, PapelColuna, PerfilColuna } from "../entities/escopo.js";
 
 export interface MergeTabelaInput {
   readonly agentId: string;
@@ -20,6 +21,9 @@ export interface MergeColunaInput {
   readonly tipo?: string | null;
   readonly descricao?: string | null;
   readonly dicionario?: string | null;
+  readonly papel?: PapelColuna | null;
+  readonly formato?: string | null;
+  readonly perfil?: PerfilColuna | null;
   readonly origem: OrigemFato;
   readonly autorUsuarioId: string | null;
 }
@@ -31,6 +35,7 @@ export interface MergeRelacionamentoInput {
   readonly tabelaDestinoId: string;
   readonly colunaDestino: string;
   readonly tipoJoin: string;
+  readonly cardinalidade?: Cardinalidade | null;
   readonly descricao?: string | null;
   readonly origem: OrigemFato;
   readonly autorUsuarioId: string | null;

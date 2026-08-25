@@ -7,6 +7,7 @@ import { createToolRunner } from "./tool-result.js";
 import type {
   AdicionarAcesso,
   AtualizarCredencialPlug,
+  AtualizarDialeto,
   ListarAcessos,
   RegistrarAcesso,
   RemoverAcesso,
@@ -20,12 +21,15 @@ import type {
   ExplorarTabelas,
   MapearTabela,
   ResolverConflito,
+  ValidarConsulta,
 } from "../../application/use-cases/consultar.js";
 import type {
   AnotarGrafo,
   AtualizarSkill,
   ConfirmarColuna,
+  ConfirmarRelacionamento,
   CriarSkill,
+  ExpandirEscopo,
   ListarAnotacoes,
   ListarSkills,
   ObterSkill,
@@ -33,6 +37,13 @@ import type {
   RemoverAnotacao,
   ValidarSkill,
 } from "../../application/use-cases/skills.js";
+import type {
+  AtualizarEscopoPadrao,
+  HerdarCatalogo,
+  ListarAuditoria,
+  RegistrarAprendizado,
+  SalvarConsulta,
+} from "../../application/use-cases/aprendizado.js";
 
 export interface ToolUseCases {
   registrarAcesso: RegistrarAcesso;
@@ -42,22 +53,31 @@ export interface ToolUseCases {
   removerAcesso: RemoverAcesso;
   atualizarCredencialPlug: AtualizarCredencialPlug;
   rotacionarTokenMcp: RotacionarTokenMcp;
+  atualizarDialeto: AtualizarDialeto;
   treinarComSql: TreinarComSql;
   consultarDados: ConsultarDados;
   explorarTabelas: ExplorarTabelas;
   mapearTabela: MapearTabela;
   buscarContexto: BuscarContexto;
   resolverConflito: ResolverConflito;
+  validarConsulta: ValidarConsulta;
   criarSkill: CriarSkill;
   atualizarSkill: AtualizarSkill;
   validarSkill: ValidarSkill;
   publicarSkill: PublicarSkill;
   listarSkills: ListarSkills;
   obterSkill: ObterSkill;
+  expandirEscopo: ExpandirEscopo;
+  confirmarRelacionamento: ConfirmarRelacionamento;
   confirmarColuna: ConfirmarColuna;
   anotarGrafo: AnotarGrafo;
   listarAnotacoes: ListarAnotacoes;
   removerAnotacao: RemoverAnotacao;
+  salvarConsulta: SalvarConsulta;
+  registrarAprendizado: RegistrarAprendizado;
+  atualizarEscopoPadrao: AtualizarEscopoPadrao;
+  herdarCatalogo: HerdarCatalogo;
+  listarAuditoria: ListarAuditoria;
 }
 
 import type { RateLimitStore } from "../http/rate-limit.js";
@@ -197,12 +217,26 @@ export const registerTools = (
   );
 
   server.tool(
+    "atualizar_dialeto",
+    "Muda o dialeto do acesso e do grafo do agentId. Skills deixam de estar publicadas (voltam a rascunho) porque o SQL pode não valer no dialeto novo. Exige confirmadoPeloUsuario: true.",
+    {
+      acessoId: z.string().optional(),
+      dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("atualizar_dialeto", () => useCases.atualizarDialeto.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
     "treinar_com_sql",
-    "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais para placeholders. Executa o SQL (amostra) e respeita a policy do client_token. Origem do fato: validado_execucao.",
+    "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso).",
     {
       acessoId: z.string().optional(),
       sql: z.string().optional(),
       params: z.record(z.unknown()).optional(),
+      enriquecer: z.enum(["basico", "completo"]).optional(),
     },
     writeWorld,
     async (args) =>
@@ -229,7 +263,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Busca skills, grafo e anotações deste agentId. Na pergunta de dados, priorize skills publicadas; sem skill capaz, não invente SQL.",
+    "Busca skills publicadas, consultas aprendidas, grafo e anotações. Expande sinônimos. Reuse consultasAprendidas. Sem skill capaz: SKILL_GAP (não invente tabela/JOIN). Grave o que o usuário ensinar com registrar_aprendizado.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -255,10 +289,24 @@ export const registerTools = (
     "consultar_dados",
     {
       description:
-        "Executa o sqlModelo persistido de uma skill publicada. Sem parâmetro sql. Autorização = client_token. Sem skill capaz, não invente a consulta.",
+        "Consulta o ERP no escopo publicado. Sempre envie pergunta (a pergunta do usuário). Sem sql, executa a consulta exemplo. Com sql, SELECT no dialeto validado contra o pacote. O servidor grava o SQL que funcionou. Regras/dicionário: aprendizado[] ou registrar_aprendizado.",
       inputSchema: {
         acessoId: z.string().optional(),
-        skillId: z.string(),
+        skillId: z.string().optional(),
+        skillIds: z.array(z.string()).optional(),
+        sql: z.string().optional(),
+        pergunta: z.string().optional(),
+        aprendizado: z
+          .array(
+            z.object({
+              tipo: z.string().optional(),
+              titulo: z.string().optional(),
+              texto: z.string().optional(),
+              tabela: z.string().optional(),
+              skillId: z.string().optional(),
+            }),
+          )
+          .optional(),
         params: z.record(z.unknown()).optional(),
         options: z
           .object({
@@ -272,11 +320,37 @@ export const registerTools = (
       outputSchema: {
         success: z.literal(true),
         skillId: z.string(),
+        skillIds: z.array(z.string()),
         columns: z.array(z.string()),
         rows: z.array(z.record(z.string(), z.unknown())),
         rowCount: z.number(),
         maxRowsApplied: z.number(),
         truncated: z.boolean(),
+        sqlExecutado: z.string(),
+        paramsUsados: z.record(z.string(), z.unknown()),
+        asOf: z.string(),
+        recorte: z.array(
+          z.object({
+            tipoJoin: z.string(),
+            tabela: z.string(),
+            on: z.string().nullable(),
+          }),
+        ),
+        escopoAplicado: z.object({
+          empresa: z.string().optional(),
+          filial: z.string().optional(),
+          consolidado: z.boolean(),
+        }),
+        avisos: z.array(z.object({ code: z.string(), message: z.string() })),
+        aprendizadoGravado: z
+          .object({
+            consultaId: z.string(),
+            execucoes: z.number(),
+            nova: z.boolean(),
+            perguntaUsada: z.string(),
+            itens: z.number(),
+          })
+          .optional(),
         hint: z.string().optional(),
       },
       annotations: readWorld,
@@ -325,11 +399,12 @@ export const registerTools = (
 
   server.tool(
     "validar_skill",
-    "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Marca como validada.",
+    "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
       params: z.record(z.unknown()).optional(),
+      enriquecer: z.enum(["basico", "completo"]).optional(),
     },
     writeWorld,
     async (args) =>
@@ -367,7 +442,7 @@ export const registerTools = (
 
   server.tool(
     "obter_skill",
-    "Obtém uma skill por id ou slug.",
+    "Obtém o pacote da skill: escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas e guia de dialeto.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -375,6 +450,53 @@ export const registerTools = (
     },
     readList,
     async (args) => run("obter_skill", () => useCases.obterSkill.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
+    "expandir_escopo",
+    "Acrescenta tabelas já treinadas ao escopo da skill. Exige confirmadoPeloUsuario: true.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      tabelas: z.array(z.string()).optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("expandir_escopo", () => useCases.expandirEscopo.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
+    "confirmar_relacionamento",
+    "Confirma um JOIN no grafo (origem confirmado_usuario) para o validador de escopo aceitar.",
+    {
+      acessoId: z.string().optional(),
+      tabelaOrigem: z.string().optional(),
+      colunaOrigem: z.string().optional(),
+      tabelaDestino: z.string().optional(),
+      colunaDestino: z.string().optional(),
+      tipoJoin: z.string().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("confirmar_relacionamento", () =>
+        useCases.confirmarRelacionamento.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "validar_consulta",
+    "Dry-run: valida o SQL da IA contra o escopo publicado e executa envelope vazio no ERP (sem ler dado). Placeholders ausentes ligam-se a null.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      skillIds: z.array(z.string()).optional(),
+      sql: z.string().optional(),
+      params: z.record(z.unknown()).optional(),
+    },
+    readWorld,
+    async (args) =>
+      run("validar_consulta", () => useCases.validarConsulta.execute(currentAccountId(), args)),
   );
 
   server.tool(
@@ -423,6 +545,77 @@ export const registerTools = (
     destroyLocal,
     async (args) =>
       run("remover_anotacao", () => useCases.removerAnotacao.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
+    "salvar_consulta",
+    "Promove/renomeia um SQL que funcionou a exemplo reutilizável (consulta aprendida). consultar_dados já grava o SQL; use esta tool para amarrar a pergunta do usuário. Exige confirmadoPeloUsuario: true.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      pergunta: z.string().optional(),
+      sql: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("salvar_consulta", () => useCases.salvarConsulta.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
+    "registrar_aprendizado",
+    "Obrigatório quando o usuário ensinar regra, métrica, glossário, dicionário ou sinônimo. Grava na base de conhecimento (anotacao_grafo / sinonimo). Também aceito em consultar_dados.aprendizado[].",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      tipo: z.string().optional(),
+      titulo: z.string().optional(),
+      texto: z.string().optional(),
+      tabela: z.string().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("registrar_aprendizado", () =>
+        useCases.registrarAprendizado.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "atualizar_escopo_padrao",
+    "Define empresa/filial default e timezone do acesso. Exige confirmadoPeloUsuario: true. Consultas passam a recortar esse escopo.",
+    {
+      acessoId: z.string().optional(),
+      empresa: z.string().optional(),
+      filial: z.string().optional(),
+      timezone: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("atualizar_escopo_padrao", () =>
+        useCases.atualizarEscopoPadrao.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "herdar_catalogo",
+    "Copia o catálogo template Se7e (tabelas/colunas/relacionamentos) para o grafo do agentId. Origem inferido. Exige confirmadoPeloUsuario: true.",
+    {
+      acessoId: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("herdar_catalogo", () => useCases.herdarCatalogo.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
+    "listar_auditoria",
+    "Lista as últimas execuções de tools deste acesso (sem SQL completo nem segredos).",
+    { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
+    readList,
+    async (args) =>
+      run("listar_auditoria", () => useCases.listarAuditoria.execute(currentAccountId(), args)),
   );
 
   if (options?.catalog) {

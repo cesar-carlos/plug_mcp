@@ -26,6 +26,12 @@ const envSchema = z.object({
   MCP_TOKEN_TTL_DAYS: z.coerce.number().int().min(0).default(0),
   MCP_TOOL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   MCP_QUERY_TOOL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  MCP_SKILL_TOOLS_ENABLED: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((value) => !["false", "0", "no"].includes(value.toLowerCase())),
+  QUERY_CACHE_TTL_MS: z.coerce.number().int().positive().default(60_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema> & {

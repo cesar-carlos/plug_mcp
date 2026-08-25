@@ -260,6 +260,7 @@ describe("fluxo guiado de treino", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       params: [],
+      escopo: { tabelas: [], colunasPorTabela: {}, relacionamentos: [], grao: [] },
     };
     const draftSql = {
       ...base,

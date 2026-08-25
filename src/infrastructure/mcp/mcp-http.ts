@@ -57,6 +57,13 @@ export const createMcpHttpHandler = (input: {
     });
 
   const refreshSkillTools = async (session: Session, usuarioId: string): Promise<void> => {
+    if (!input.config.MCP_SKILL_TOOLS_ENABLED) {
+      for (const handle of session.skillTools.values()) {
+        handle.remove();
+      }
+      session.skillTools.clear();
+      return;
+    }
     await syncSkillTools({
       server: session.server,
       ports: input.catalog,

@@ -1,3 +1,5 @@
+import type { Cardinalidade, PapelColuna, PerfilColuna } from "./escopo.js";
+
 export type OrigemFato = "inferido" | "confirmado_usuario" | "validado_execucao";
 export type StatusFato = "vigente" | "conflito";
 
@@ -23,6 +25,9 @@ export interface ColunaGrafo {
   readonly tipo: string | null;
   readonly descricao: string | null;
   readonly dicionario: string | null;
+  readonly papel: PapelColuna | null;
+  readonly formato: string | null;
+  readonly perfil: PerfilColuna | null;
   readonly origem: OrigemFato;
   readonly status: StatusFato;
   readonly autorUsuarioId: string | null;
@@ -36,6 +41,7 @@ export interface RelacionamentoGrafo {
   readonly tabelaDestinoId: string;
   readonly colunaDestino: string;
   readonly tipoJoin: string;
+  readonly cardinalidade: Cardinalidade | null;
   readonly descricao: string | null;
   readonly origem: OrigemFato;
   readonly status: StatusFato;

@@ -9,6 +9,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { ParametroSkill } from "../../domain/entities/skill.js";
+import type { EscopoSkill } from "../../domain/entities/escopo.js";
+import type { PerfilColuna } from "../../domain/entities/escopo.js";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -45,6 +47,8 @@ export const acesso = pgTable(
     clientTokenEnc: text("client_token_enc").notNull(),
     clientTokenHash: text("client_token_hash").notNull(),
     statusAcesso: text("status_acesso").notNull().default("pending"),
+    escopoPadrao: jsonb("escopo_padrao"),
+    timezone: text("timezone"),
     ...timestamps,
   },
   (t) => [
@@ -89,6 +93,9 @@ export const colunaGrafo = pgTable(
     tipo: text("tipo"),
     descricao: text("descricao"),
     dicionario: text("dicionario"),
+    papel: text("papel"),
+    formato: text("formato"),
+    perfil: jsonb("perfil").$type<PerfilColuna | null>(),
     origem: text("origem").notNull(),
     status: text("status").notNull().default("vigente"),
     autorUsuarioId: uuid("autor_usuario_id"),
@@ -111,6 +118,7 @@ export const relacionamentoGrafo = pgTable(
       .references(() => tabelaGrafo.id, { onDelete: "cascade" }),
     colunaDestino: text("coluna_destino").notNull(),
     tipoJoin: text("tipo_join").notNull().default("inner"),
+    cardinalidade: text("cardinalidade"),
     descricao: text("descricao"),
     origem: text("origem").notNull(),
     status: text("status").notNull().default("vigente"),
@@ -139,6 +147,10 @@ export const skill = pgTable(
     descricao: text("descricao").notNull(),
     sqlModelo: text("sql_modelo").notNull(),
     params: jsonb("params").$type<ParametroSkill[]>().notNull().default([]),
+    escopo: jsonb("escopo")
+      .$type<EscopoSkill>()
+      .notNull()
+      .default({ tabelas: [], colunasPorTabela: {}, relacionamentos: [], grao: [] }),
     versao: integer("versao").notNull().default(1),
     status: text("status").notNull().default("rascunho"),
     autorUsuarioId: uuid("autor_usuario_id"),
@@ -188,3 +200,45 @@ export const auditLog = pgTable(
 export const grafoLock = pgTable("grafo_lock", {
   agentId: uuid("agent_id").primaryKey(),
 });
+
+export const consultaAprendida = pgTable(
+  "consulta_aprendida",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id").notNull(),
+    skillId: uuid("skill_id"),
+    pergunta: text("pergunta").notNull(),
+    sql: text("sql").notNull(),
+    paramsContrato: jsonb("params_contrato").$type<ParametroSkill[]>().notNull().default([]),
+    execucoes: integer("execucoes").notNull().default(1),
+    ultimaExecucao: timestamp("ultima_execucao", { withTimezone: true }).notNull().defaultNow(),
+    status: text("status").notNull().default("ativa"),
+    autorUsuarioId: uuid("autor_usuario_id"),
+    ...timestamps,
+  },
+  (t) => [index("consulta_aprendida_agent_idx").on(t.agentId)],
+);
+
+export const sinonimo = pgTable(
+  "sinonimo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id").notNull(),
+    termo: text("termo").notNull(),
+    alvoTipo: text("alvo_tipo").notNull(),
+    alvoId: text("alvo_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("sinonimo_agent_idx").on(t.agentId)],
+);
+
+export const lacunaConsulta = pgTable(
+  "lacuna_consulta",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id").notNull(),
+    pergunta: text("pergunta").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("lacuna_consulta_agent_idx").on(t.agentId)],
+);

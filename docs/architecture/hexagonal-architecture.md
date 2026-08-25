@@ -11,8 +11,8 @@ use-cases  →  ports  ←  adapters (Drizzle, REST plug-server, crypto)
 ```
 
 - **domain**: entidades (`UsuarioMcp`, `Acesso`, grafo, skill), ports, `DomainError`.
-- **application**: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `skills`).
-- **infrastructure**: HTTP, MCP SDK, Drizzle, adapter REST, Pino. Catálogo dinâmico: tools `skill_*` por sessão, resource `skill://`, prompts.
+- **application**: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `skills`, `aprendizado`).
+- **infrastructure**: HTTP, MCP SDK, Drizzle, adapter REST, Pino. Tools `skill_*` por sessão atrás de `MCP_SKILL_TOOLS_ENABLED`; resource `skill://`; prompts. Cache de resultado agregado (Redis opcional).
 - **composition**: `compose.ts` escolhe memória ou Postgres (`DATABASE_URL`).
 
 ## Identidade
@@ -27,4 +27,4 @@ Bearer MCP → hash SHA-256 → `usuario_mcp`. ALS só na borda (`currentAccount
 
 Escrita do grafo com `withAgentLock`. Dialeto no primeiro merge. Leitura filtrada por `getClientTokenPolicy`.
 
-O grafo apoia o treino. A consulta na sessão usa skill publicada (`sqlModelo`). Sem skill capaz, a IA admite a lacuna — não deriva SQL do grafo.
+O grafo apoia o treino e acumula fatos confirmados pela execução. A consulta na sessão usa skill publicada como **escopo**: sem `sql`, o servidor executa a consulta exemplo (`sqlModelo`); com `sql`, o validador recusa tabela/coluna/JOIN fora do pacote. Sem skill capaz, a IA admite a lacuna.

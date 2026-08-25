@@ -48,18 +48,28 @@ const setupAcesso = async () => {
     remember: () => undefined,
   };
   const consultar = new ConsultarDados(acessos, skills, plug, sessions, crypto, audit, 500, 5000);
-  return { plug, skills, consultar, created };
+  return { plug, skills, consultar, created, acessos };
 };
 
 describe("ConsultarDados", () => {
-  it("recusa SQL solto", async () => {
-    const { consultar, created } = await setupAcesso();
+  it("recusa SQL com tabela fora do escopo", async () => {
+    const { consultar, created, skills } = await setupAcesso();
+    const skill = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista produtos",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
-        sql: "SELECT p.codprod FROM produto p",
+        skillId: skill.id,
+        sql: "SELECT f.valor FROM faturamento f WHERE f.ano = 2026",
       }),
-    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+    ).rejects.toMatchObject({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO });
   });
 
   it("exige skillId", async () => {
@@ -109,10 +119,88 @@ describe("ConsultarDados", () => {
     });
     expect(result.success).toBe(true);
     expect(result.skillId).toBe(skill.id);
+    expect(result.sqlExecutado).toContain("produto");
+    expect(result.paramsUsados).toEqual({ codigo: 99 });
+    expect(result.asOf).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(result.truncated).toBe(false);
     expect(plug.lastSql).toContain("produto");
     expect(plug.lastSql).not.toMatch(/select \*/i);
     expect(plug.lastParams).toEqual({ codigo: 99 });
-    expect(JSON.stringify(result)).not.toContain("SELECT p.codprod");
+  });
+
+  it("asOf usa o timezone do acesso", async () => {
+    const { consultar, created, skills, acessos } = await setupAcesso();
+    await acessos.updateEscopoPadrao(created.acessoId, null, "America/Cuiaba");
+    const skill = await skills.create({
+      agentId,
+      slug: "tz",
+      nome: "Tz",
+      descricao: "Tz",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+    });
+    expect(result.asOf).toMatch(/\[America\/Cuiaba\]$/);
+  });
+
+  it("marca truncated só quando veio linha além do teto", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => ({
+      columns: ["codigo"],
+      rows: [{ codigo: 1 }, { codigo: 2 }],
+    });
+    const skill = await skills.create({
+      agentId,
+      slug: "lista",
+      nome: "Lista",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const exato = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      options: { max_rows: 2 },
+    });
+    expect(exato.truncated).toBe(false);
+    expect(exato.rowCount).toBe(2);
+    plug.sqlImpl = async () => ({
+      columns: ["codigo"],
+      rows: [{ codigo: 1 }, { codigo: 2 }, { codigo: 3 }],
+    });
+    const cortado = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      options: { max_rows: 2 },
+    });
+    expect(cortado.truncated).toBe(true);
+    expect(cortado.rowCount).toBe(2);
+  });
+
+  it("sugere slug próximo quando skillId não existe", async () => {
+    const { consultar, created, skills } = await setupAcesso();
+    await skills.create({
+      agentId,
+      slug: "titulos-a-receber",
+      nome: "Títulos",
+      descricao: "Lista",
+      sqlModelo: "SELECT t.cod AS codigo FROM titulo t",
+      autorUsuarioId: created.usuarioId,
+    });
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: "titulos-a-recebr",
+      }),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.SKILL_NOT_FOUND,
+      hint: expect.stringContaining("titulos-a-receber"),
+    });
   });
 
   it("recusa segundo comando no modelo persistido", async () => {

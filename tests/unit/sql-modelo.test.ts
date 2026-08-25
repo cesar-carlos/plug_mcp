@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { escopoFromSqlModelo } from "../../src/application/use-cases/shared/escopo-from-modelo.js";
 import {
   bindNamedParams,
   bindParamsForValidation,
@@ -137,5 +138,25 @@ describe("parseSqlModelo", () => {
         { nome: "codigo", descricao: "Código", obrigatorio: true, tipo: "number" },
       ]),
     ).toThrow(DomainError);
+  });
+});
+
+describe("escopoFromSqlModelo grao", () => {
+  it("usa GROUP BY quando houver agregação", () => {
+    const escopo = escopoFromSqlModelo(
+      parseSqlModelo(
+        "SELECT p.codprod, SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0 GROUP BY p.codprod",
+      ),
+    );
+    expect(escopo.grao.map((item) => item.toLowerCase())).toContain("codprod");
+  });
+
+  it("usa colunas físicas do SELECT sem agregação", () => {
+    const escopo = escopoFromSqlModelo(
+      parseSqlModelo("SELECT p.codprod AS codigo, p.descricao FROM produto p"),
+    );
+    expect(escopo.grao.map((item) => item.toLowerCase())).toEqual(
+      expect.arrayContaining(["codprod", "descricao"]),
+    );
   });
 });

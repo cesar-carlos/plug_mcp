@@ -83,7 +83,11 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/main.ts", "src/infrastructure/persistence/migrate.ts"],
+    files: [
+      "src/main.ts",
+      "src/infrastructure/persistence/migrate.ts",
+      "src/infrastructure/persistence/backfill-escopo.ts",
+    ],
     rules: {
       "no-console": "off",
     },

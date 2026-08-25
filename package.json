@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts",
+    "db:backfill-escopo": "tsx --env-file-if-exists=.env src/infrastructure/persistence/backfill-escopo.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
@@ -27,6 +28,7 @@
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
     "helmet": "^8.3.0",
+    "node-sql-parser": "^5.4.0",
     "pg": "^8.16.3",
     "pino": "^9.9.0",
     "pino-http": "^10.5.0",

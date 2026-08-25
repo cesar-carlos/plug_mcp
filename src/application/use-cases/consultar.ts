@@ -1,9 +1,12 @@
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
+import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
+import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { AuditLogPort } from "../../domain/ports/audit-log.port.js";
 import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
+import type { QueryResultCachePort } from "../../domain/ports/query-result-cache.port.js";
 import type {
   AnotacaoGrafoRepositoryPort,
   SkillRepositoryPort,
@@ -15,9 +18,34 @@ import type {
 } from "../../domain/ports/plug-server-gateway.port.js";
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
 import type { Skill } from "../../domain/entities/skill.js";
+import { uniaoEscopos } from "../../domain/entities/escopo.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
-import { bindNamedParams, coerceBoundParams, parseSqlModelo } from "./shared/sql-modelo.js";
+import {
+  bindNamedParams,
+  coerceBoundParams,
+  parseSqlModelo,
+  sqlValidacaoVazia,
+  bindParamsForValidation,
+} from "./shared/sql-modelo.js";
+import { tryParseSelect } from "./shared/sql-ast.js";
+import { hintComProximos } from "./shared/sugestoes.js";
+import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
+import { validarSqlNoEscopo, coletarAvisosValidacao } from "./shared/validar-escopo.js";
+import { promoverFatosDaExecucao } from "./shared/promover-fatos.js";
+import {
+  exigirFiltroEscopoPadrao,
+  mesclarParamsEscopo,
+  avisosPlaceholderEscopo,
+} from "./shared/escopo-filtro.js";
+import { queryCacheKey } from "./shared/query-cache-key.js";
+import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
+import { formatAsOf } from "./shared/format-as-of.js";
+import {
+  persistirConsultaExecutada,
+  persistirItensAprendizado,
+  type ItemAprendizadoInput,
+} from "./shared/persistir-aprendizado.js";
 import {
   fluxoForAgentSkill,
   pickSkillInProgress,
@@ -36,6 +64,44 @@ import {
 
 const QUERY_CELL_MAX_CHARS = 2_048;
 
+interface AprendizadoGravado {
+  readonly consultaId: string;
+  readonly execucoes: number;
+  readonly nova: boolean;
+  readonly perguntaUsada: string;
+  readonly itens: number;
+}
+
+interface CachedQueryPayload {
+  readonly columns: readonly string[];
+  readonly rows: readonly Record<string, unknown>[];
+  readonly asOf: string;
+  readonly truncated: boolean;
+}
+
+const parseCachedQuery = (raw: string): CachedQueryPayload | null => {
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const rec = value as Record<string, unknown>;
+    if (!Array.isArray(rec.columns) || !Array.isArray(rec.rows) || typeof rec.asOf !== "string") {
+      return null;
+    }
+    return {
+      columns: rec.columns.filter((item): item is string => typeof item === "string"),
+      rows: rec.rows.filter(
+        (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object",
+      ),
+      asOf: rec.asOf,
+      truncated: rec.truncated === true,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const truncateCell = (value: unknown): unknown => {
   if (typeof value !== "string" || value.length <= QUERY_CELL_MAX_CHARS) {
     return value;
@@ -51,6 +117,63 @@ const sanitizeQueryRows = (rows: readonly Record<string, unknown>[]): Record<str
     }
     return next;
   });
+
+const gravarAprendizadoDaConsulta = async (input: {
+  extras: {
+    grafo?: GrafoRepositoryPort;
+    aprendizado?: AprendizadoRepositoryPort;
+    anotacoes?: AnotacaoGrafoRepositoryPort;
+  };
+  agentId: string;
+  skillId: string;
+  pergunta: string;
+  sql: string;
+  paramsContrato: Skill["params"];
+  autorUsuarioId: string;
+  itens: readonly ItemAprendizadoInput[];
+}): Promise<{ gravado?: AprendizadoGravado; avisos: { code: string; message: string }[] }> => {
+  const avisos: { code: string; message: string }[] = [];
+  if (!input.extras.aprendizado) {
+    return { avisos };
+  }
+  const consulta = await persistirConsultaExecutada({
+    aprendizado: input.extras.aprendizado,
+    agentId: input.agentId,
+    skillId: input.skillId,
+    pergunta: input.pergunta,
+    sql: input.sql,
+    paramsContrato: input.paramsContrato,
+    autorUsuarioId: input.autorUsuarioId,
+  });
+  let itens = 0;
+  if (input.itens.length > 0 && input.extras.anotacoes && input.extras.grafo) {
+    const extra = await persistirItensAprendizado({
+      agentId: input.agentId,
+      autorUsuarioId: input.autorUsuarioId,
+      itens: input.itens,
+      grafo: input.extras.grafo,
+      anotacoes: input.extras.anotacoes,
+      aprendizado: input.extras.aprendizado,
+    });
+    avisos.push(...extra.avisos);
+    itens = extra.anotacoes.length + extra.sinonimos;
+  } else if (input.itens.length > 0) {
+    avisos.push({
+      code: "APRENDIZADO_IGNORADO",
+      message: "Itens de aprendizado não gravados: grafo/anotações indisponíveis.",
+    });
+  }
+  return {
+    gravado: {
+      consultaId: consulta.id,
+      execucoes: consulta.execucoes,
+      nova: consulta.execucoes === 1,
+      perguntaUsada: consulta.pergunta,
+      itens,
+    },
+    avisos,
+  };
+};
 
 const allowedByPolicy = (table: string, policy: ClientTokenPolicy): boolean => {
   if (policy.allTables) {
@@ -84,6 +207,13 @@ export class ConsultarDados {
     private readonly audit: AuditLogPort,
     private readonly defaultMaxRows: number,
     private readonly absoluteMaxRows: number,
+    private readonly extras: {
+      grafo?: GrafoRepositoryPort;
+      aprendizado?: AprendizadoRepositoryPort;
+      anotacoes?: AnotacaoGrafoRepositoryPort;
+      cache?: QueryResultCachePort;
+      cacheTtlMs?: number;
+    } = {},
   ) {}
 
   async execute(
@@ -91,18 +221,29 @@ export class ConsultarDados {
     input: {
       acessoId?: string;
       skillId?: string;
+      skillIds?: string[];
       sql?: string;
+      pergunta?: string;
+      aprendizado?: readonly ItemAprendizadoInput[];
       params?: Record<string, unknown>;
       options?: { max_rows?: number; page?: number; page_size?: number; timeout_ms?: number };
     },
   ): Promise<{
     success: true;
     skillId: string;
+    skillIds: string[];
     columns: readonly string[];
     rows: readonly Record<string, unknown>[];
     rowCount: number;
     maxRowsApplied: number;
     truncated: boolean;
+    sqlExecutado: string;
+    paramsUsados: Record<string, unknown>;
+    asOf: string;
+    recorte: { tipoJoin: string; tabela: string; on: string | null }[];
+    escopoAplicado: { empresa?: string; filial?: string; consolidado: boolean };
+    avisos: { code: string; message: string }[];
+    aprendizadoGravado?: AprendizadoGravado;
     hint?: string;
   }> {
     const started = Date.now();
@@ -114,63 +255,192 @@ export class ConsultarDados {
       await requireAcesso(this.acessos, input.acessoId, uid),
       uid,
     );
-    if (input.sql?.trim()) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "consultar_dados não aceita SQL solto.",
-        hint: "Passe skillId de uma skill publicada. Sem skill capaz, treine e publique (treinar_com_sql → criar_skill → validar_skill → publicar_skill).",
-      });
-    }
-    const skillId = input.skillId?.trim() ?? "";
-    if (!skillId) {
+    const ids = [
+      ...new Set(
+        [...(input.skillIds ?? []), input.skillId ?? ""]
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0),
+      ),
+    ];
+    if (ids.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "skillId é obrigatório.",
-        hint: "Use buscar_contexto / listar_skills / obter_skill e execute só skill publicada. Não invente SQL.",
+        hint: "Use buscar_contexto / listar_skills / obter_skill. SQL só no escopo de skill publicada.",
       });
     }
-    const skill = await this.skills.findById(skillId);
-    if (skill?.agentId !== acesso.agentId) {
-      throw new DomainError({
-        code: ERROR_CODES.SKILL_NOT_FOUND,
-        message: "Skill não encontrada neste agentId.",
-        hint: "Confira skillId com listar_skills no mesmo acesso.",
+    const skillsPublicadas: Skill[] = [];
+    for (const id of ids) {
+      const found = await this.skills.findById(id);
+      if (found?.agentId !== acesso.agentId) {
+        const conhecidas = await this.skills.listByAgent(acesso.agentId);
+        throw new DomainError({
+          code: ERROR_CODES.SKILL_NOT_FOUND,
+          message: "Skill não encontrada neste agentId.",
+          hint: hintComProximos(
+            "Confira skillId com listar_skills no mesmo acesso.",
+            id,
+            conhecidas.flatMap((item) => [item.slug, item.id]),
+          ),
+        });
+      }
+      if (found.status !== "publicada") {
+        throw new DomainError({
+          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+          message: "Só skill publicada pode consultar o ERP.",
+          hint:
+            found.status === "validada"
+              ? "Chame publicar_skill antes de consultar_dados."
+              : "Valide e publique a skill (validar_skill → publicar_skill).",
+        });
+      }
+      skillsPublicadas.push(found);
+    }
+    const skillsComEscopo: Skill[] = [];
+    for (const published of skillsPublicadas) {
+      skillsComEscopo.push(await persistirEscopoSeVazio(this.skills, published));
+    }
+    const skill = skillsComEscopo[0]!;
+    const sqlLivre = input.sql?.trim() ?? "";
+    const avisos: { code: string; message: string }[] = [];
+    if (!acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial) {
+      avisos.push({
+        code: "ESCOPO_CONSOLIDADO",
+        message:
+          "Sem empresa/filial default no acesso; o número é consolidado de todas as empresas visíveis.",
       });
     }
-    if (skill.status !== "publicada") {
-      throw new DomainError({
-        code: ERROR_CODES.SKILL_NOT_PUBLISHED,
-        message: "Só skill publicada pode consultar o ERP.",
-        hint:
-          skill.status === "validada"
-            ? "Chame publicar_skill antes de consultar_dados."
-            : "Valide e publique a skill (validar_skill → publicar_skill).",
+    let sqlExecutar = skill.sqlModelo;
+    let modelo = parseSqlModelo(sqlExecutar);
+    if (sqlLivre) {
+      const escopo = uniaoEscopos(
+        skillsComEscopo.map((item) =>
+          item.escopo.tabelas.length > 0
+            ? item.escopo
+            : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
+        ),
+      );
+      const ast = validarSqlNoEscopo(sqlLivre, acesso.dialeto, escopo, {
+        page: input.options?.page,
       });
+      avisos.push(...coletarAvisosValidacao(ast));
+      sqlExecutar = ast.sql;
+      modelo = parseSqlModelo(sqlLivre);
     }
-    const modelo = parseSqlModelo(skill.sqlModelo);
-    const params = coerceBoundParams(bindNamedParams(modelo.sql, input.params), skill.params);
+    const colunasDasTabelas: Record<string, string[]> = {};
+    if (this.extras.grafo) {
+      for (const tabela of modelo.tabelas) {
+        const found = await this.extras.grafo.findTabelaByNome(acesso.agentId, tabela.nome);
+        if (!found) {
+          continue;
+        }
+        const cols = await this.extras.grafo.listColunas(found.id);
+        colunasDasTabelas[tabela.nome] = cols.map((coluna) => coluna.nome);
+      }
+    }
+    exigirFiltroEscopoPadrao({
+      sql: sqlExecutar,
+      colunasDasTabelas,
+      escopoPadrao: acesso.escopoPadrao,
+    });
+    avisos.push(
+      ...avisosPlaceholderEscopo({
+        sql: sqlExecutar,
+        colunasDasTabelas,
+        escopoPadrao: acesso.escopoPadrao,
+      }),
+    );
+    if (this.extras.anotacoes) {
+      const notas = await this.extras.anotacoes.list(acesso.agentId);
+      for (const nota of notas) {
+        if (nota.tipo === "regra" || nota.tipo === "metrica") {
+          avisos.push({ code: nota.tipo.toUpperCase(), message: `${nota.titulo}: ${nota.texto}` });
+        }
+      }
+    }
+    const params = coerceBoundParams(
+      bindNamedParams(modelo.sql, mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao)),
+      skill.params,
+    );
     const requested = input.options?.max_rows ?? this.defaultMaxRows;
     const maxRows = Math.min(Math.max(1, requested), this.absoluteMaxRows);
+    const fetchMax = Math.min(maxRows + 1, this.absoluteMaxRows + 1);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
     const paramKeys = Object.keys(params).sort().join(",");
+    const recorte = modelo.relacionamentos
+      .filter((rel) => !rel.tipoJoin.includes("left") && !rel.tipoJoin.includes("cross"))
+      .map((rel) => ({ tipoJoin: rel.tipoJoin, tabela: rel.tabela, on: rel.on }));
+    const asOfInfo = formatAsOf(new Date(), acesso.timezone);
+    if (asOfInfo.aviso) {
+      avisos.push({ code: "TIMEZONE_INVALIDO", message: asOfInfo.aviso });
+    }
+    const asOf = asOfInfo.asOf;
+    const perguntaUsada = input.pergunta?.trim() ? input.pergunta.trim() : skill.nome;
+    const itensAprendizado = input.aprendizado ?? [];
+    const astLivre = tryParseSelect(sqlExecutar, acesso.dialeto);
+    const cacheable = Boolean(astLivre?.temAgregacao && this.extras.cache && !input.options?.page);
+    const cacheKey = cacheable ? queryCacheKey(acesso.agentId, sqlExecutar, params, maxRows) : "";
     try {
+      if (cacheable && this.extras.cache) {
+        const cached = await this.extras.cache.get(cacheKey);
+        if (cached) {
+          const parsed = parseCachedQuery(cached);
+          if (parsed) {
+            const loop = await gravarAprendizadoDaConsulta({
+              extras: this.extras,
+              agentId: acesso.agentId,
+              skillId: skill.id,
+              pergunta: perguntaUsada,
+              sql: sqlExecutar,
+              paramsContrato: skill.params,
+              autorUsuarioId: uid,
+              itens: itensAprendizado,
+            });
+            return {
+              success: true,
+              skillId: skill.id,
+              skillIds: skillsComEscopo.map((item) => item.id),
+              columns: parsed.columns,
+              rows: parsed.rows,
+              rowCount: parsed.rows.length,
+              maxRowsApplied: maxRows,
+              truncated: parsed.truncated,
+              sqlExecutado: sqlExecutar,
+              paramsUsados: params,
+              asOf: parsed.asOf,
+              recorte,
+              escopoAplicado: {
+                empresa: acesso.escopoPadrao?.empresa,
+                filial: acesso.escopoPadrao?.filial,
+                consolidado: !acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial,
+              },
+              avisos: [
+                ...avisos,
+                ...loop.avisos,
+                { code: "CACHE", message: "Resultado agregado servido do cache." },
+              ],
+              aprendizadoGravado: loop.gravado,
+            };
+          }
+        }
+      }
       const result = await withHubAuth(this.sessions, uid, (accessToken) =>
         this.plug.executeSql({
           accessToken,
           agentId: acesso.agentId,
           clientToken,
-          sql: modelo.sql,
+          sql: sqlExecutar,
           params,
           options: {
-            maxRows,
+            maxRows: fetchMax,
             page: input.options?.page,
             pageSize: input.options?.page_size,
             timeoutMs: input.options?.timeout_ms,
           },
         }),
       );
-      const truncated = result.rows.length >= maxRows;
-      const rows = sanitizeQueryRows(result.rows);
+      const truncated = result.rows.length > maxRows;
+      const rows = sanitizeQueryRows(result.rows.slice(0, maxRows));
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
@@ -181,17 +451,63 @@ export class ConsultarDados {
         linhasRetornadas: rows.length,
         duracaoMs: Date.now() - started,
       });
+      if (this.extras.grafo) {
+        await promoverFatosDaExecucao({
+          grafo: this.extras.grafo,
+          agentId: acesso.agentId,
+          autorUsuarioId: uid,
+          modelo,
+        });
+      }
+      if (cacheable && this.extras.cache) {
+        await this.extras.cache.set(
+          cacheKey,
+          JSON.stringify({ columns: result.columns, rows, asOf, truncated }),
+          this.extras.cacheTtlMs ?? 60_000,
+        );
+      }
+      const loop = await gravarAprendizadoDaConsulta({
+        extras: this.extras,
+        agentId: acesso.agentId,
+        skillId: skill.id,
+        pergunta: perguntaUsada,
+        sql: sqlExecutar,
+        paramsContrato: skill.params,
+        autorUsuarioId: uid,
+        itens: itensAprendizado,
+      });
+      if (!input.pergunta?.trim()) {
+        avisos.push({
+          code: "PERGUNTA_AUSENTE",
+          message:
+            "Passe pergunta em consultar_dados (a pergunta do usuário). O SQL já foi gravado como consulta aprendida.",
+        });
+      }
       return {
         success: true,
         skillId: skill.id,
+        skillIds: skillsComEscopo.map((item) => item.id),
         columns: result.columns,
         rows,
         rowCount: rows.length,
         maxRowsApplied: maxRows,
         truncated,
+        sqlExecutado: sqlExecutar,
+        paramsUsados: params,
+        asOf,
+        recorte,
+        escopoAplicado: {
+          empresa: acesso.escopoPadrao?.empresa,
+          filial: acesso.escopoPadrao?.filial,
+          consolidado: !acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial,
+        },
+        avisos: [...avisos, ...loop.avisos],
+        aprendizadoGravado: loop.gravado,
         hint: truncated
           ? "Resultado possivelmente incompleto (atingiu max_rows). Agregue no SQL ou pagine com ORDER BY."
-          : undefined,
+          : loop.gravado
+            ? "SQL gravado. Se o usuário ensinou regra, dicionário ou sinônimo, envie em aprendizado[] ou chame registrar_aprendizado."
+            : undefined,
       };
     } catch (error) {
       await this.audit.append({
@@ -206,6 +522,98 @@ export class ConsultarDados {
       });
       throw error;
     }
+  }
+}
+
+export class ValidarConsulta {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
+    private readonly plug: PlugServerGatewayPort,
+    private readonly sessions: UsuarioPlugSessionPort,
+    private readonly crypto: CryptoPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      skillId?: string;
+      skillIds?: string[];
+      sql?: string;
+      params?: Record<string, unknown>;
+    },
+  ): Promise<{
+    success: true;
+    valido: true;
+    dialeto: string;
+    tabelas: string[];
+    avisos: { code: string; message: string }[];
+  }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
+    const ids = [
+      ...new Set(
+        [...(input.skillIds ?? []), input.skillId ?? ""]
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0),
+      ),
+    ];
+    const sql = input.sql?.trim() ?? "";
+    if (ids.length === 0 || !sql) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "skillId e sql são obrigatórios.",
+        hint: "Passe as skills publicadas e o SELECT a validar.",
+      });
+    }
+    const skillsPublicadas: Skill[] = [];
+    for (const id of ids) {
+      const found = await this.skills.findById(id);
+      if (found?.agentId !== acesso.agentId || found.status !== "publicada") {
+        throw new DomainError({
+          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+          message: "Só skill publicada entra no escopo da validação.",
+          hint: "Confira listar_skills.",
+        });
+      }
+      skillsPublicadas.push(found);
+    }
+    const skillsComEscopo: Skill[] = [];
+    for (const published of skillsPublicadas) {
+      skillsComEscopo.push(await persistirEscopoSeVazio(this.skills, published));
+    }
+    const escopo = uniaoEscopos(
+      skillsComEscopo.map((item) =>
+        item.escopo.tabelas.length > 0
+          ? item.escopo
+          : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
+      ),
+    );
+    const ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo);
+    await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.executeSql({
+        accessToken,
+        agentId: acesso.agentId,
+        clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+        sql: sqlValidacaoVazia(acesso.dialeto, ast.sql),
+        params: bindParamsForValidation(ast.sql, input.params),
+        options: { maxRows: 1 },
+      }),
+    );
+    return {
+      success: true,
+      valido: true,
+      dialeto: acesso.dialeto,
+      tabelas: [...ast.tabelas.map((tabela) => tabela.nome)],
+      avisos: coletarAvisosValidacao(ast),
+    };
   }
 }
 
@@ -325,7 +733,7 @@ export class MapearTabela {
           throw new DomainError({
             code: ERROR_CODES.DIALECT_CONFLICT,
             message: "Este agentId já foi treinado em outro dialeto.",
-            hint: `Grafo travado em ${locked.dialeto}.`,
+            hint: `Grafo travado em ${locked.dialeto}. Chame atualizar_dialeto com confirmadoPeloUsuario: true para mudar o dialeto (skills voltam a rascunho).`,
           });
         }
         const tabela = await this.grafo.mergeTabela({
@@ -368,6 +776,7 @@ export class BuscarContexto {
     private readonly plug: PlugServerGatewayPort,
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
+    private readonly aprendizado?: AprendizadoRepositoryPort,
   ) {}
 
   async execute(
@@ -378,9 +787,11 @@ export class BuscarContexto {
     consultaPermitida: boolean;
     skillsPublicadas: readonly Skill[];
     skillsParaTreino: readonly Skill[];
+    consultasAprendidas: readonly ConsultaAprendida[];
     grafoParaTreino: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     fluxoTreino?: FluxoTreino;
     gap?: { code: "SKILL_GAP"; hint: string };
+    hint?: string;
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await refreshAndRequireAcessoAprovado(
@@ -398,6 +809,17 @@ export class BuscarContexto {
         hint: "Descreva o assunto de negócio (ex.: pedido de venda, saldo em aberto).",
       });
     }
+    const sinonimos = this.aprendizado
+      ? await this.aprendizado.listarSinonimos(acesso.agentId)
+      : [];
+    const extras: string[] = [];
+    const lower = query.toLowerCase();
+    for (const item of sinonimos) {
+      if (lower.includes(item.termo.toLowerCase())) {
+        extras.push(item.alvoId);
+      }
+    }
+    const expanded = extras.length > 0 ? `${query} ${extras.join(" ")}` : query;
     const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.getClientTokenPolicy({
         accessToken,
@@ -405,23 +827,31 @@ export class BuscarContexto {
         clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
       }),
     );
-    const [tabelas, skillsPublicadas, skillsParaTreino, notas] = await Promise.all([
-      this.grafo.buscar(acesso.agentId, query, 12),
-      this.skills.buscar(acesso.agentId, query, 8, "publicada"),
-      this.skills.buscar(acesso.agentId, query, 8, ["rascunho", "validada"]),
-      this.anotacoes.buscar(acesso.agentId, query, 8),
-    ]);
+    const [tabelas, skillsPublicadas, skillsParaTreino, notas, consultasAprendidas] =
+      await Promise.all([
+        this.grafo.buscar(acesso.agentId, expanded, 12),
+        this.skills.buscar(acesso.agentId, expanded, 8, "publicada"),
+        this.skills.buscar(acesso.agentId, expanded, 8, ["rascunho", "validada"]),
+        this.anotacoes.buscar(acesso.agentId, expanded, 8),
+        this.aprendizado
+          ? this.aprendizado.buscarConsultas(acesso.agentId, expanded, 5)
+          : Promise.resolve([] as ConsultaAprendida[]),
+      ]);
     const consultaPermitida = skillsPublicadas.length > 0;
     const emAndamento = pickSkillInProgress(skillsParaTreino);
     const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
     const gapHint = emAndamento
       ? `Há skill em andamento "${emAndamento.nome}" (${emAndamento.status}). Continue o fluxo: ${fluxoTreino.proximoPasso ?? "validar_skill"}. Não chame consultar_dados.`
       : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
+    if (!consultaPermitida && this.aprendizado) {
+      await this.aprendizado.registrarLacuna(acesso.agentId, query);
+    }
     return {
       success: true as const,
       consultaPermitida,
       skillsPublicadas,
       skillsParaTreino,
+      consultasAprendidas,
       grafoParaTreino: {
         tabelas: tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy)),
         anotacoes: notas,
@@ -433,6 +863,10 @@ export class BuscarContexto {
             code: "SKILL_GAP",
             hint: gapHint,
           },
+      hint:
+        consultasAprendidas.length > 0
+          ? "Reutilize estes SQLs em consultasAprendidas (já comprovados neste agentId). Adapte params; não invente tabela, coluna nem JOIN."
+          : undefined,
     };
   }
 }

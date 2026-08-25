@@ -107,5 +107,4 @@ export class UsuarioTokenManager implements UsuarioPlugSessionPort {
       throw error;
     }
   }
-
 }

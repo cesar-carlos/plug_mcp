@@ -2,6 +2,7 @@ import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { ParametroSkill } from "../../../domain/entities/skill.js";
+import { tryParseSelect } from "./sql-ast.js";
 
 export const SQL_MAX_BYTES = 1_048_576;
 const IDENT = "[A-Za-z_][A-Za-z0-9_$#]*";
@@ -45,7 +46,7 @@ const stripComments = (sql: string): string =>
 
 const unquote = (ident: string): string => ident.replace(/[[\]"`']/g, "");
 
-const lastIdent = (qualified: string): string => {
+export const lastIdent = (qualified: string): string => {
   const parts = unquote(qualified).split(".");
   return parts[parts.length - 1] ?? qualified;
 };
@@ -85,19 +86,114 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
       hint: "Use apenas SELECT. Mutações ficam a cargo do client_token em consultar_dados, não no treino.",
     });
   }
-  if (/select\s+(?:distinct\s+)?\*/i.test(sql) || /select\s+[\s\S]*\b\w+\.\*/i.test(sql)) {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "SELECT * não treina o grafo.",
-      hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
-    });
-  }
   const withoutTrailingSemi = sql.replace(/;+\s*$/, "");
   if (withoutTrailingSemi.includes(";")) {
     throw new DomainError({
       code: ERROR_CODES.INVALID_SQL,
       message: "SQL não pode conter um segundo comando.",
       hint: "Envie um único SELECT, sem ponto-e-vírgula no meio.",
+    });
+  }
+  const ast = tryParseSelect(sql);
+  if (ast) {
+    return sqlModeloFromAst(sql, ast);
+  }
+  return parseSqlModeloRegex(sql);
+};
+
+const sqlModeloFromAst = (
+  sql: string,
+  ast: NonNullable<ReturnType<typeof tryParseSelect>>,
+): SqlModelo => {
+  if (ast.temStar) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "SELECT * não treina o grafo.",
+      hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
+    });
+  }
+  const tabelas: TabelaSql[] = ast.tabelas
+    .filter((tabela) => !tabela.isSubquery)
+    .map((tabela) => ({ nome: tabela.nome, alias: tabela.alias }));
+  if (tabelas.length === 0) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "SQL de treino precisa de FROM com tabela real.",
+      hint: "O agente classifica autorização por tabela. Referencie tabelas/views existentes.",
+    });
+  }
+  const relacionamentos: RelacionamentoSql[] = ast.joins.map((join) => ({
+    tipoJoin: join.tipoJoin,
+    tabela: join.tabela,
+    on:
+      join.equalities.length > 0
+        ? join.equalities
+            .map((eq) => `${eq.leftAlias}.${eq.leftColumn} = ${eq.rightAlias}.${eq.rightColumn}`)
+            .join(" AND ")
+        : join.on,
+  }));
+  if (tabelas.length > 1 && relacionamentos.length === 0) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "Várias tabelas exigem JOIN explícito.",
+      hint: "Não use FROM a, b. Declare JOIN ... ON para o grafo registrar o relacionamento.",
+    });
+  }
+  for (const join of ast.joins) {
+    if (join.tipoJoin.includes("cross")) {
+      continue;
+    }
+    if (join.equalities.length === 0) {
+      throw new DomainError({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "JOIN exige ON com igualdade alias.coluna = alias.coluna.",
+        hint: "Ex.: INNER JOIN cliente c ON c.codcli = p.codcli. CROSS JOIN não grava relacionamento. Funções no ON não são aceitas.",
+      });
+    }
+  }
+  const colunas: ColunaSql[] = ast.colunas.map((coluna) => {
+    if (coluna.isExpression && !coluna.alias) {
+      throw new DomainError({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "Expressão no SELECT precisa de alias explícito.",
+        hint: "Use AS (ex.: SUM(qtd) AS total). Sem alias o grafo gravaria um nome inválido.",
+      });
+    }
+    return {
+      expr:
+        coluna.table && coluna.column
+          ? `${coluna.table}.${coluna.column}`
+          : (coluna.expr ?? coluna.column ?? coluna.alias),
+      alias: coluna.alias ?? coluna.column ?? lastIdent(coluna.expr),
+    };
+  });
+  if (colunas.length === 0) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "Não foi possível ler as colunas do SELECT.",
+      hint: "Use colunas simples ou alias (ex.: SUM(qtd) AS total).",
+    });
+  }
+  if (relacionamentos.length > 0) {
+    for (const coluna of ast.colunas) {
+      if (!coluna.isExpression && !coluna.table) {
+        throw new DomainError({
+          code: ERROR_CODES.INVALID_SQL,
+          message: "Coluna sem qualificador em JOIN.",
+          hint: "Com JOIN, qualifique cada coluna (ex.: p.codprod em vez de codprod). Expressões com AS continuam válidas.",
+        });
+      }
+    }
+  }
+  return { sql, tabelas: dedupeTabelas(tabelas), colunas, relacionamentos };
+};
+
+const parseSqlModeloRegex = (sql: string): SqlModelo => {
+  if (/select\s+(?:distinct\s+)?\*/i.test(sql) || /select\s+[\s\S]*\b\w+\.\*/i.test(sql)) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "SELECT * não treina o grafo.",
+      hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
     });
   }
 

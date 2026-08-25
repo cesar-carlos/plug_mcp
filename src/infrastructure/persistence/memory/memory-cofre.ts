@@ -6,8 +6,16 @@ import type {
   NovaSkill,
   Skill,
   StatusSkill,
+  ParametroSkill,
 } from "../../../domain/entities/skill.js";
 import { parseParametroSkillList } from "../../../domain/entities/skill.js";
+import type {
+  ConsultaAprendida,
+  LacunaConsulta,
+  Sinonimo,
+} from "../../../domain/entities/aprendizado.js";
+import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
+import { escopoVazio } from "../../../domain/entities/escopo.js";
 import type {
   ColunaGrafo,
   GrafoDialeto,
@@ -91,7 +99,14 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
   private readonly rows = new Map<string, Acesso>();
 
   async create(input: NovoAcesso): Promise<Acesso> {
-    const row: Acesso = { id: id(), ...input, createdAt: now(), updatedAt: now() };
+    const row: Acesso = {
+      id: id(),
+      ...input,
+      escopoPadrao: input.escopoPadrao ?? null,
+      timezone: input.timezone ?? null,
+      createdAt: now(),
+      updatedAt: now(),
+    };
     this.rows.set(row.id, row);
     return row;
   }
@@ -142,6 +157,26 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
       return;
     }
     this.rows.set(acessoId, { ...row, clientTokenEnc, clientTokenHash, updatedAt: now() });
+  }
+
+  async updateDialeto(acessoId: string, dialeto: Acesso["dialeto"]): Promise<void> {
+    const row = this.rows.get(acessoId);
+    if (!row) {
+      return;
+    }
+    this.rows.set(acessoId, { ...row, dialeto, updatedAt: now() });
+  }
+
+  async updateEscopoPadrao(
+    acessoId: string,
+    escopoPadrao: Acesso["escopoPadrao"],
+    timezone: string | null,
+  ): Promise<void> {
+    const row = this.rows.get(acessoId);
+    if (!row) {
+      return;
+    }
+    this.rows.set(acessoId, { ...row, escopoPadrao, timezone, updatedAt: now() });
   }
 
   async deleteById(acessoId: string): Promise<void> {
@@ -237,6 +272,9 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         tipo: input.tipo ?? null,
         descricao: input.descricao ?? null,
         dicionario: input.dicionario ?? null,
+        papel: input.papel ?? null,
+        formato: input.formato ?? null,
+        perfil: input.perfil ?? null,
         origem: input.origem,
         status: "vigente",
         autorUsuarioId: input.autorUsuarioId,
@@ -268,6 +306,9 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
       tipo: merge.tipo ?? existing.tipo,
       descricao: merge.descricao,
       dicionario: merge.dicionario ?? existing.dicionario,
+      papel: input.papel ?? existing.papel,
+      formato: input.formato ?? existing.formato,
+      perfil: input.perfil ?? existing.perfil,
       origem: merge.origem,
       status: merge.status,
       autorUsuarioId: input.autorUsuarioId,
@@ -296,6 +337,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         tabelaDestinoId: input.tabelaDestinoId,
         colunaDestino: input.colunaDestino,
         tipoJoin: input.tipoJoin,
+        cardinalidade: input.cardinalidade ?? null,
         descricao: input.descricao ?? null,
         origem: input.origem,
         status: "vigente",
@@ -322,6 +364,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     const relacionamento: RelacionamentoGrafo = {
       ...existing,
       tipoJoin: input.tipoJoin,
+      cardinalidade: input.cardinalidade ?? existing.cardinalidade,
       descricao: merge.descricao,
       origem: merge.origem,
       status: merge.status,
@@ -442,6 +485,7 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
       descricao: input.descricao,
       sqlModelo: input.sqlModelo,
       params: parseParametroSkillList(input.params ?? []),
+      escopo: input.escopo ?? escopoVazio(),
       autorUsuarioId: input.autorUsuarioId,
       versao: 1,
       status: "rascunho",
@@ -454,7 +498,9 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
 
   async update(
     skillId: string,
-    patch: Partial<Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status">>,
+    patch: Partial<
+      Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status" | "escopo">
+    >,
   ): Promise<Skill> {
     const row = this.rows.get(skillId);
     if (!row) {
@@ -576,5 +622,101 @@ export class InMemoryAuditLog implements AuditLogPort {
     this.entries.length = 0;
     this.entries.push(...keep);
     return before - keep.length;
+  }
+
+  async listByUsuario(usuarioId: string, limite: number): Promise<readonly AuditLogEntry[]> {
+    return this.entries
+      .filter((row) => row.usuarioId === usuarioId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limite);
+  }
+}
+
+export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort {
+  private readonly consultas: ConsultaAprendida[] = [];
+  private readonly sinonimos: Sinonimo[] = [];
+  private readonly lacunas: LacunaConsulta[] = [];
+
+  async salvarConsulta(input: {
+    agentId: string;
+    skillId: string | null;
+    pergunta: string;
+    sql: string;
+    paramsContrato: readonly ParametroSkill[];
+    autorUsuarioId: string | null;
+  }): Promise<ConsultaAprendida> {
+    const existing = this.consultas.find(
+      (row) => row.agentId === input.agentId && row.sql === input.sql,
+    );
+    if (existing) {
+      const next: ConsultaAprendida = {
+        ...existing,
+        execucoes: existing.execucoes + 1,
+        ultimaExecucao: now(),
+        pergunta:
+          input.pergunta.trim().length > existing.pergunta.trim().length
+            ? input.pergunta
+            : existing.pergunta,
+      };
+      const idx = this.consultas.findIndex((row) => row.id === existing.id);
+      this.consultas[idx] = next;
+      return next;
+    }
+    const row: ConsultaAprendida = {
+      id: id(),
+      agentId: input.agentId,
+      skillId: input.skillId,
+      pergunta: input.pergunta,
+      sql: input.sql,
+      paramsContrato: input.paramsContrato,
+      execucoes: 1,
+      ultimaExecucao: now(),
+      status: "ativa",
+      autorUsuarioId: input.autorUsuarioId,
+    };
+    this.consultas.push(row);
+    return row;
+  }
+
+  async listarConsultas(agentId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
+    return this.consultas
+      .filter((row) => row.agentId === agentId)
+      .sort((a, b) => b.execucoes - a.execucoes)
+      .slice(0, limite);
+  }
+
+  async buscarConsultas(
+    agentId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly ConsultaAprendida[]> {
+    const terms = tokenizeQuery(query);
+    return rankByTerms(
+      this.consultas.filter((row) => row.agentId === agentId),
+      terms,
+      (row) => `${row.pergunta} ${row.sql}`,
+      limite,
+    );
+  }
+
+  async registrarSinonimo(input: {
+    agentId: string;
+    termo: string;
+    alvoTipo: string;
+    alvoId: string;
+  }): Promise<Sinonimo> {
+    const row: Sinonimo = { id: id(), ...input };
+    this.sinonimos.push(row);
+    return row;
+  }
+
+  async listarSinonimos(agentId: string): Promise<readonly Sinonimo[]> {
+    return this.sinonimos.filter((row) => row.agentId === agentId);
+  }
+
+  async registrarLacuna(agentId: string, pergunta: string): Promise<LacunaConsulta> {
+    const row: LacunaConsulta = { id: id(), agentId, pergunta, createdAt: now() };
+    this.lacunas.push(row);
+    return row;
   }
 }

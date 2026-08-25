@@ -24,7 +24,9 @@ const stripAccents = (value: string): string =>
 
 export const tokenizeQuery = (query: string): readonly string[] => {
   const normalized = stripAccents(query);
-  const raw = normalized.split(/[^a-z0-9]+/).filter((term) => term.length >= 3 && !STOPWORDS.has(term));
+  const raw = normalized
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length >= 3 && !STOPWORDS.has(term));
   const unique = [...new Set(raw)];
   if (unique.length === 0) {
     const compact = normalized.replace(/[^a-z0-9]+/g, "");

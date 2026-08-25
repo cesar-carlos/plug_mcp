@@ -133,7 +133,7 @@ export const registerPreTreinoPrompt = (server: McpServer): void => {
     "pre_treino",
     {
       description:
-        "Persona de sessão: consultor de gestão e SQL só no treino. Reaplique em chat novo na mesma conexão MCP.",
+        "Persona de sessão: consultor de gestão; escreve SQL no escopo da skill publicada. Reaplique em chat novo na mesma conexão MCP.",
     },
     () => ({
       messages: [
@@ -211,7 +211,7 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
     "consultar_com_skill",
     {
       description:
-        "Fluxo de consulta ao ERP: descobrir skill publicada e chamar consultar_dados. Não invente SQL.",
+        "Fluxo de consulta ao ERP: ler o pacote da skill publicada e escrever SQL no escopo. Não invente tabela, coluna nem JOIN.",
       argsSchema: {
         pergunta: z.string(),
         acessoId: z.string().optional(),
@@ -228,7 +228,7 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
               "Consulte o ERP só com skill publicada.",
               `Pergunta: ${pergunta}`,
               acessoId ? `acessoId: ${acessoId}` : "Use listar_acessos se precisar do acessoId.",
-              "Passos: buscar_contexto → listar_skills / resources skill:// → obter_skill → consultar_dados(skillId, params).",
+              "Passos: buscar_contexto (reuse consultasAprendidas) → listar_skills / obter_skill → validar_consulta se o SQL for novo → consultar_dados(skillIds, sql, params, pergunta). Se o usuário ensinou regra/dicionário, envie aprendizado[] ou chame registrar_aprendizado.",
               "Se consultaPermitida for false ou gap.code SKILL_GAP, não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.",
             ].join("\n"),
           },

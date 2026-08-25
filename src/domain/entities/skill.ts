@@ -1,3 +1,5 @@
+import type { EscopoSkill } from "./escopo.js";
+
 export type StatusSkill = "rascunho" | "validada" | "publicada";
 
 export type TipoParametroSkill = "string" | "number" | "date" | "boolean";
@@ -49,6 +51,7 @@ export interface Skill {
   readonly descricao: string;
   readonly sqlModelo: string;
   readonly params: readonly ParametroSkill[];
+  readonly escopo: EscopoSkill;
   readonly versao: number;
   readonly status: StatusSkill;
   readonly autorUsuarioId: string | null;
@@ -63,6 +66,7 @@ export interface NovaSkill {
   readonly descricao: string;
   readonly sqlModelo: string;
   readonly params?: readonly ParametroSkill[];
+  readonly escopo?: EscopoSkill;
   readonly autorUsuarioId: string | null;
 }
 

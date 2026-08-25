@@ -5,13 +5,16 @@ import {
 } from "../../src/infrastructure/mcp/server-instructions.js";
 
 describe("PRE_TREINO_SESSAO", () => {
-  it("define consultor, recusa SQL inventado, cruzamento de resultados e listar_skills", () => {
+  it("define consultor, SQL no escopo, cruzamento e listar_skills", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/consultor/i);
-    expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o invente SELECT/i);
-    expect(PRE_TREINO_SESSAO).toMatch(/cruz/i);
-    expect(PRE_TREINO_SESSAO).toMatch(/resultados/i);
+    expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o invente tabela/i);
+    expect(PRE_TREINO_SESSAO).toMatch(/escopo/i);
+    expect(PRE_TREINO_SESSAO).toMatch(/validar_consulta/);
     expect(PRE_TREINO_SESSAO).toContain("SKILL_GAP");
     expect(PRE_TREINO_SESSAO).toContain("listar_skills");
+    expect(PRE_TREINO_SESSAO).toMatch(/Aprendizado constante/i);
+    expect(PRE_TREINO_SESSAO).toContain("registrar_aprendizado");
+    expect(PRE_TREINO_SESSAO).toContain("consultar_dados");
   });
 
   it("entra em MCP_SERVER_INSTRUCTIONS junto com a operação", () => {

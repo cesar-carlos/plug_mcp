@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { isDialeto } from "../../domain/entities/dialeto.js";
+import { isDialeto, type Dialeto } from "../../domain/entities/dialeto.js";
 import { toAcessoPublico, type AcessoPublico } from "../../domain/entities/acesso.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
@@ -7,6 +7,8 @@ import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../domain/ports/usuario-repository.port.js";
+import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
+import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import type {
   PlugHubTokens,
   PlugServerGatewayPort,
@@ -351,6 +353,65 @@ export class AtualizarCredencialPlug {
     );
     this.sessions.remember(uid, tokens);
     return { success: true };
+  }
+}
+
+export class AtualizarDialeto {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: { acessoId?: string; dialeto?: string; confirmadoPeloUsuario?: boolean },
+  ): Promise<{
+    success: true;
+    dialetoAnterior: string;
+    dialeto: Dialeto;
+    skillsRebaixadas: number;
+  }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const dialetoRaw = input.dialeto?.trim() ?? "";
+    if (!isDialeto(dialetoRaw)) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "dialeto inválido.",
+        hint: "Use mssql, sybase, postgres ou firebird.",
+      });
+    }
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Atualizar o dialeto exige confirmação do usuário.",
+        hint: "Mostre que as skills do agentId voltam a rascunho e chame de novo com confirmadoPeloUsuario: true.",
+      });
+    }
+    const dialetoAnterior = acesso.dialeto;
+    if (dialetoAnterior === dialetoRaw) {
+      return { success: true, dialetoAnterior, dialeto: dialetoRaw, skillsRebaixadas: 0 };
+    }
+    const doMesmoAgente = (await this.acessos.listByUsuario(uid)).filter(
+      (item) => item.agentId === acesso.agentId,
+    );
+    for (const item of doMesmoAgente) {
+      await this.acessos.updateDialeto(item.id, dialetoRaw);
+    }
+    await this.grafo.withAgentLock(acesso.agentId, async () => {
+      await this.grafo.setDialeto(acesso.agentId, dialetoRaw);
+    });
+    const skills = await this.skills.listByAgent(acesso.agentId);
+    let skillsRebaixadas = 0;
+    for (const skill of skills) {
+      if (skill.status === "rascunho") {
+        continue;
+      }
+      await this.skills.setStatus(skill.id, "rascunho");
+      skillsRebaixadas += 1;
+    }
+    return { success: true, dialetoAnterior, dialeto: dialetoRaw, skillsRebaixadas };
   }
 }
 

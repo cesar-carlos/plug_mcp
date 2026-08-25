@@ -1,4 +1,5 @@
 import type { Dialeto } from "./dialeto.js";
+import type { EscopoPadraoAcesso } from "./escopo.js";
 
 export type StatusAcesso = "pending" | "approved" | "revoked";
 
@@ -11,6 +12,8 @@ export interface Acesso {
   readonly clientTokenEnc: string;
   readonly clientTokenHash: string;
   readonly statusAcesso: StatusAcesso;
+  readonly escopoPadrao: EscopoPadraoAcesso | null;
+  readonly timezone: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -23,6 +26,8 @@ export interface NovoAcesso {
   readonly clientTokenEnc: string;
   readonly clientTokenHash: string;
   readonly statusAcesso: StatusAcesso;
+  readonly escopoPadrao?: EscopoPadraoAcesso | null;
+  readonly timezone?: string | null;
 }
 
 export interface AcessoPublico {

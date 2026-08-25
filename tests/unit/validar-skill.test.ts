@@ -79,6 +79,67 @@ describe("ValidarSkill", () => {
     expect(published.skill.status).toBe("publicada");
   });
 
+  it("revalidar skill publicada não despublica", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    await grafo.mergeTabela({
+      agentId,
+      nome: "produto",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
+    const publicar = new PublicarSkill(acessos, skills, grafo);
+    const skill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+    });
+    await validar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.skill.id,
+    });
+    await publicar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.skill.id,
+      confirmadoPeloUsuario: true,
+    });
+    const revalidada = await validar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.skill.id,
+    });
+    expect(revalidada.skill.status).toBe("publicada");
+    expect(revalidada.statusPreservado).toBe(true);
+  });
+
   it("liga params fornecidos na validação", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
@@ -128,5 +189,77 @@ describe("ValidarSkill", () => {
       params: { codigo: 42 },
     });
     expect(plug.lastParams).toEqual({ codigo: 42 });
+  });
+
+  it("enriquecer=completo perfila o sqlModelo sem desfazer a validação", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    await grafo.mergeTabela({
+      agentId,
+      nome: "produto",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
+    const skill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      params: [],
+    });
+    plug.sqlImpl = async () => {
+      const sql = plug.lastSql ?? "";
+      if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
+        return {
+          columns: ["column_name", "data_type"],
+          rows: [{ column_name: "codprod", data_type: "int" }],
+        };
+      }
+      if (/MIN\(/i.test(sql)) {
+        return {
+          columns: ["min_v", "max_v", "nulos", "total", "distintos"],
+          rows: [{ min_v: 1, max_v: 9, nulos: 0, total: 10, distintos: 10 }],
+        };
+      }
+      return { columns: ["ok"], rows: [{ ok: 1 }] };
+    };
+    const result = await validar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.skill.id,
+      enriquecer: "completo",
+    });
+    expect(result.skill.status).toBe("validada");
+    const tabela = await grafo.findTabelaByNome(agentId, "produto");
+    const cols = tabela ? await grafo.listColunas(tabela.id) : [];
+    expect(
+      cols.some((coluna) => coluna.nome.toLowerCase() === "codprod" && coluna.tipo === "int"),
+    ).toBe(true);
   });
 });

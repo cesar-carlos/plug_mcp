@@ -4,7 +4,9 @@ export interface SkillRepositoryPort {
   create(input: NovaSkill): Promise<Skill>;
   update(
     id: string,
-    patch: Partial<Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status">>,
+    patch: Partial<
+      Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status" | "escopo">
+    >,
   ): Promise<Skill>;
   setStatus(id: string, status: StatusSkill, versao?: number): Promise<Skill>;
   findById(id: string): Promise<Skill | null>;

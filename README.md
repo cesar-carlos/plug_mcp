@@ -1,6 +1,6 @@
 # Se7e MCP Server
 
-Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + skills**: guarda as quatro credenciais do Client, emite **um** token MCP opaco, e dá contexto à IA via skills publicadas (o grafo de schema existe para o treino, não para inventar SQL).
+Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + base de conhecimento**: guarda as quatro credenciais do Client, emite **um** token MCP opaco, e dá à IA o pacote da skill publicada. A IA escreve SQL no dialeto do acesso, sempre dentro desse escopo.
 
 Não há login próprio, Authorization Server, catálogo pronto com seed, nem Client de serviço no `.env`.
 
@@ -48,7 +48,7 @@ Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fecha
 
 ## Bootstrap
 
-Consulta ao ERP: só `consultar_dados(skillId, params)` (e tools `skill_*`). SQL solto é recusado. Sem skill publicada capaz, `buscar_contexto` devolve `SKILL_GAP`. Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`.
+Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql`, o SELECT precisa ficar no escopo. Sem skill capaz, `buscar_contexto` devolve `SKILL_GAP`. Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
 
 1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
 2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**
@@ -57,13 +57,14 @@ Consulta ao ERP: só `consultar_dados(skillId, params)` (e tools `skill_*`). SQL
 
 ## Scripts
 
-| Script                    | Função                     |
-| ------------------------- | -------------------------- |
-| `npm run dev`             | `tsx watch`                |
-| `npm test`                | Vitest in-memory           |
-| `npm run test:live`       | plug-server real (`E2E_*`) |
-| `npm run lint` / `format` | ESLint + Prettier          |
-| `npm run db:migrate`      | Aplica `drizzle/*.sql`     |
+| Script                       | Função                                                 |
+| ---------------------------- | ------------------------------------------------------ |
+| `npm run dev`                | `tsx watch`                                            |
+| `npm test`                   | Vitest in-memory                                       |
+| `npm run test:live`          | plug-server real (`E2E_*`)                             |
+| `npm run lint` / `format`    | ESLint + Prettier                                      |
+| `npm run db:migrate`         | Aplica `drizzle/*.sql`                                 |
+| `npm run db:backfill-escopo` | Preenche `skill.escopo` vazio a partir do `sql_modelo` |
 
 Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.19.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
 

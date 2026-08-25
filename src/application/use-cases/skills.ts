@@ -1,7 +1,12 @@
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
+import type { Acesso } from "../../domain/entities/acesso.js";
+import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
+import type { AnotacaoGrafo, Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
+import { uniaoEscopos, type EscopoSkill } from "../../domain/entities/escopo.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
+import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
 import type {
   AnotacaoGrafoRepositoryPort,
@@ -11,7 +16,6 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
-import type { AnotacaoGrafo, Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
 import {
   countConflitosGrafo,
   fluxoForAgentSkill,
@@ -21,9 +25,18 @@ import {
   paramsFromSql,
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
+import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
+import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
+import { enriquecerPerfilCompleto } from "./shared/enriquecer-perfil.js";
 import { bindParamsForValidation, parseSqlModelo, sqlValidacaoVazia } from "./shared/sql-modelo.js";
-import { requireAcesso, requireAcessoAprovado, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
+import {
+  requireAcesso,
+  requireAcessoAprovado,
+  refreshAndRequireAcessoAprovado,
+  requireUsuario,
+} from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
+import { guiaDialeto } from "./shared/guia-dialeto.js";
 
 interface ParamInput {
   nome?: string;
@@ -123,6 +136,7 @@ export class CriarSkill {
       descricao,
       sqlModelo,
       params,
+      escopo: escopoFromSqlModelo(modelo),
       autorUsuarioId: uid,
     });
     return {
@@ -180,6 +194,7 @@ export class AtualizarSkill {
       descricao: input.descricao?.trim() ? input.descricao.trim() : skill.descricao,
       sqlModelo,
       params,
+      escopo: sqlChanged ? escopoFromSqlModelo(parseSqlModelo(sqlModelo)) : skill.escopo,
       status: sqlChanged ? "rascunho" : skill.status,
     });
     return {
@@ -221,8 +236,19 @@ export class ValidarSkill {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; skillId?: string; params?: Record<string, unknown> },
-  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
+    input: {
+      acessoId?: string;
+      skillId?: string;
+      params?: Record<string, unknown>;
+      enriquecer?: "basico" | "completo";
+    },
+  ): Promise<{
+    success: true;
+    skill: Skill;
+    statusPreservado: boolean;
+    fluxoTreino: FluxoTreino;
+    avisos: { code: string; message: string }[];
+  }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await refreshAndRequireAcessoAprovado(
       this.acessos,
@@ -258,11 +284,36 @@ export class ValidarSkill {
         options: { maxRows: 1 },
       }),
     );
-    const updated = await this.skills.setStatus(skill.id, "validada");
+    const preservarPublicada = skill.status === "publicada";
+    const updated = preservarPublicada ? skill : await this.skills.setStatus(skill.id, "validada");
+    const avisos: { code: string; message: string }[] = [];
+    if (input.enriquecer === "completo") {
+      const perfil = await enriquecerPerfilCompleto({
+        grafo: this.grafo,
+        executeSql: async (sql, perfilParams) =>
+          withHubAuth(this.sessions, uid, (accessToken) =>
+            this.plug.executeSql({
+              accessToken,
+              agentId: acesso.agentId,
+              clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+              sql,
+              params: perfilParams ?? {},
+              options: { maxRows: 300 },
+            }),
+          ),
+        agentId: acesso.agentId,
+        dialeto: acesso.dialeto,
+        autorUsuarioId: uid,
+        modelo,
+      });
+      avisos.push(...perfil.avisos);
+    }
     return {
       success: true,
       skill: updated,
+      statusPreservado: preservarPublicada,
       fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updated),
+      avisos,
     };
   }
 }
@@ -347,14 +398,54 @@ export class ObterSkill {
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
     private readonly grafo: GrafoRepositoryPort,
+    private readonly anotacoes: AnotacaoGrafoRepositoryPort,
+    private readonly plug: PlugServerGatewayPort,
+    private readonly sessions: UsuarioPlugSessionPort,
+    private readonly crypto: CryptoPort,
+    private readonly aprendizado?: AprendizadoRepositoryPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
     input: { acessoId?: string; skillId?: string; slug?: string },
-  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
+  ): Promise<{
+    success: true;
+    skill: Skill;
+    pacote: {
+      escopo: EscopoSkill;
+      colunas: {
+        tabela: string;
+        nome: string;
+        tipo: string | null;
+        papel: string | null;
+        dicionario: string | null;
+        formato: string | null;
+      }[];
+      relacionamentos: {
+        origem: string;
+        destino: string;
+        colunaOrigem: string;
+        colunaDestino: string;
+        tipoJoin: string;
+        cardinalidade: string | null;
+      }[];
+      regras: AnotacaoGrafo[];
+      metricas: AnotacaoGrafo[];
+      consultasExemplo: ConsultaAprendida[];
+    };
+    guiaDialeto: ReturnType<typeof guiaDialeto>;
+    escopoPadrao: Acesso["escopoPadrao"];
+    timezone: string | null;
+    fluxoTreino: FluxoTreino;
+  }> {
     const uid = requireUsuario(usuarioId);
-    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const acesso = await refreshAndRequireAcessoAprovado(
+      this.acessos,
+      this.plug,
+      this.sessions,
+      await requireAcesso(this.acessos, input.acessoId, uid),
+      uid,
+    );
     const skill = input.skillId
       ? await this.skills.findById(input.skillId)
       : input.slug
@@ -367,10 +458,87 @@ export class ObterSkill {
         hint: "Passe skillId ou slug. Use listar_skills.",
       });
     }
+    const persisted = await persistirEscopoSeVazio(this.skills, skill);
+    const escopo =
+      persisted.escopo.tabelas.length > 0
+        ? persisted.escopo
+        : escopoFromSqlModelo(parseSqlModelo(persisted.sqlModelo));
+    const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.getClientTokenPolicy({
+        accessToken,
+        agentId: acesso.agentId,
+        clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+      }),
+    );
+    const allowed = (tabela: string): boolean =>
+      policy.allTables || policy.tables.some((item) => item.toLowerCase() === tabela.toLowerCase());
+    const tabelas = (await this.grafo.listTabelas(acesso.agentId)).filter(
+      (tabela) =>
+        allowed(tabela.nome) &&
+        escopo.tabelas.some((nome) => nome.toLowerCase() === tabela.nome.toLowerCase()),
+    );
+    const idToNome = new Map(tabelas.map((tabela) => [tabela.id, tabela.nome]));
+    const colunas: {
+      tabela: string;
+      nome: string;
+      tipo: string | null;
+      papel: string | null;
+      dicionario: string | null;
+      formato: string | null;
+    }[] = [];
+    for (const tabela of tabelas) {
+      const cols = await this.grafo.listColunas(tabela.id);
+      for (const coluna of cols) {
+        colunas.push({
+          tabela: tabela.nome,
+          nome: coluna.nome,
+          tipo: coluna.tipo,
+          papel: coluna.papel,
+          dicionario: coluna.dicionario,
+          formato: coluna.formato,
+        });
+      }
+    }
+    const relacionamentos = (await this.grafo.listRelacionamentos(acesso.agentId))
+      .map((rel) => ({
+        origem: idToNome.get(rel.tabelaOrigemId) ?? "",
+        destino: idToNome.get(rel.tabelaDestinoId) ?? "",
+        colunaOrigem: rel.colunaOrigem,
+        colunaDestino: rel.colunaDestino,
+        tipoJoin: rel.tipoJoin,
+        cardinalidade: rel.cardinalidade,
+      }))
+      .filter((rel) => rel.origem && rel.destino);
+    const notas = await this.anotacoes.list(acesso.agentId);
+    const consultas = this.aprendizado
+      ? await this.aprendizado.listarConsultas(acesso.agentId, 16)
+      : [];
+    const consultasExemplo = consultas
+      .filter((item) => item.skillId === null || item.skillId === persisted.id)
+      .filter((item) => {
+        try {
+          const modelo = parseSqlModelo(item.sql);
+          return modelo.tabelas.every((tabela) => allowed(tabela.nome));
+        } catch {
+          return true;
+        }
+      })
+      .slice(0, 8);
     return {
       success: true,
-      skill,
-      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, skill),
+      skill: { ...persisted, escopo },
+      pacote: {
+        escopo,
+        colunas,
+        relacionamentos,
+        regras: notas.filter((nota) => nota.tipo === "regra"),
+        metricas: notas.filter((nota) => nota.tipo === "metrica"),
+        consultasExemplo: [...consultasExemplo],
+      },
+      guiaDialeto: guiaDialeto(acesso.dialeto),
+      escopoPadrao: acesso.escopoPadrao,
+      timezone: acesso.timezone,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, persisted),
     };
   }
 }
@@ -506,6 +674,131 @@ export class RemoverAnotacao {
         hint: "Confira o id em listar_anotacoes.",
       });
     }
+    return { success: true };
+  }
+}
+
+export class ExpandirEscopo {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      skillId?: string;
+      tabelas?: string[];
+      confirmadoPeloUsuario?: boolean;
+    },
+  ): Promise<{ success: true; skill: Skill }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = requireAcessoAprovado(await requireAcesso(this.acessos, input.acessoId, uid));
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Expandir o escopo exige confirmação do usuário.",
+        hint: "Mostre as tabelas novas e chame de novo com confirmadoPeloUsuario: true.",
+      });
+    }
+    const skill = await this.skills.findById(input.skillId ?? "");
+    if (skill?.agentId !== acesso.agentId) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "Skill não encontrada neste agentId.",
+        hint: "Use listar_skills.",
+      });
+    }
+    const extras = (input.tabelas ?? [])
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    const missing = await missingGraphTables(this.grafo, acesso.agentId, extras);
+    if (missing.length > 0) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "As tabelas ainda não estão no grafo.",
+        hint: `Chame treinar_com_sql / mapear_tabela antes. Ausentes: ${missing.join(", ")}.`,
+      });
+    }
+    const base =
+      skill.escopo.tabelas.length > 0
+        ? skill.escopo
+        : escopoFromSqlModelo(parseSqlModelo(skill.sqlModelo));
+    const extraEscopo: EscopoSkill = {
+      tabelas: extras,
+      colunasPorTabela: Object.fromEntries(
+        await Promise.all(
+          extras.map(async (nome) => {
+            const tabela = await this.grafo.findTabelaByNome(acesso.agentId, nome);
+            const cols = tabela ? await this.grafo.listColunas(tabela.id) : [];
+            return [nome, cols.map((coluna) => coluna.nome)] as const;
+          }),
+        ),
+      ),
+      relacionamentos: [],
+      grao: [],
+    };
+    const updated = await this.skills.update(skill.id, {
+      escopo: uniaoEscopos([base, extraEscopo]),
+      status: skill.status,
+    });
+    return { success: true, skill: updated };
+  }
+}
+
+export class ConfirmarRelacionamento {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      tabelaOrigem?: string;
+      colunaOrigem?: string;
+      tabelaDestino?: string;
+      colunaDestino?: string;
+      tipoJoin?: string;
+    },
+  ): Promise<{ success: true }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const origemNome = input.tabelaOrigem?.trim() ?? "";
+    const destinoNome = input.tabelaDestino?.trim() ?? "";
+    const colunaOrigem = input.colunaOrigem?.trim() ?? "";
+    const colunaDestino = input.colunaDestino?.trim() ?? "";
+    if (!origemNome || !destinoNome || !colunaOrigem || !colunaDestino) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "tabelaOrigem, colunaOrigem, tabelaDestino e colunaDestino são obrigatórios.",
+        hint: "Use obter_skill para ver o grafo conhecido.",
+      });
+    }
+    await this.grafo.withAgentLock(acesso.agentId, async () => {
+      const origem = await this.grafo.findTabelaByNome(acesso.agentId, origemNome);
+      const destino = await this.grafo.findTabelaByNome(acesso.agentId, destinoNome);
+      if (!origem || !destino) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Tabela ainda não está no grafo.",
+          hint: "Chame treinar_com_sql ou mapear_tabela.",
+        });
+      }
+      await this.grafo.mergeRelacionamento({
+        agentId: acesso.agentId,
+        tabelaOrigemId: origem.id,
+        colunaOrigem,
+        tabelaDestinoId: destino.id,
+        colunaDestino,
+        tipoJoin: input.tipoJoin?.trim() ? input.tipoJoin.trim() : "inner",
+        origem: "confirmado_usuario",
+        autorUsuarioId: uid,
+      });
+    });
     return { success: true };
   }
 }

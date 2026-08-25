@@ -17,6 +17,8 @@ import {
   columnQualifier,
   parseJoinEqualities,
 } from "./shared/sql-modelo.js";
+import { inferirPapelColuna } from "./shared/inferir-papel.js";
+import { enriquecerPerfilCompleto } from "./shared/enriquecer-perfil.js";
 import { fluxoForAgentSkill, pickSkillInProgress } from "./shared/fluxo-treino.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
@@ -45,7 +47,12 @@ export class TreinarComSql {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; sql?: string; params?: Record<string, unknown> },
+    input: {
+      acessoId?: string;
+      sql?: string;
+      params?: Record<string, unknown>;
+      enriquecer?: "basico" | "completo";
+    },
   ): Promise<{
     success: true;
     dialeto: Dialeto;
@@ -54,6 +61,7 @@ export class TreinarComSql {
     relacionamentos: number;
     conflitos: number;
     fluxoTreino: Awaited<ReturnType<typeof fluxoForAgentSkill>>;
+    avisos: { code: string; message: string }[];
     hint: string;
   }> {
     const started = Date.now();
@@ -119,7 +127,7 @@ export class TreinarComSql {
         throw new DomainError({
           code: ERROR_CODES.DIALECT_CONFLICT,
           message: "Este agentId já foi treinado em outro dialeto.",
-          hint: `Grafo travado em ${locked.dialeto}. Não misture dialetos no mesmo agentId.`,
+          hint: `Grafo travado em ${locked.dialeto}. Chame atualizar_dialeto com confirmadoPeloUsuario: true para mudar o dialeto (skills voltam a rascunho).`,
         });
       }
       let conflitos = 0;
@@ -156,6 +164,7 @@ export class TreinarComSql {
         const result = await this.grafo.mergeColuna({
           tabelaId,
           nome: coluna.alias,
+          papel: inferirPapelColuna(coluna.alias, null),
           origem,
           autorUsuarioId: uid,
         });
@@ -215,6 +224,29 @@ export class TreinarComSql {
       return { conflitos, rels };
     });
 
+    const avisos: { code: string; message: string }[] = [];
+    if (input.enriquecer === "completo") {
+      const perfil = await enriquecerPerfilCompleto({
+        grafo: this.grafo,
+        executeSql: async (sql, params) =>
+          withHubAuth(this.sessions, uid, (accessToken) =>
+            this.plug.executeSql({
+              accessToken,
+              agentId: acesso.agentId,
+              clientToken,
+              sql,
+              params: params ?? {},
+              options: { maxRows: 300 },
+            }),
+          ),
+        agentId: acesso.agentId,
+        dialeto: acesso.dialeto,
+        autorUsuarioId: uid,
+        modelo,
+      });
+      avisos.push(...perfil.avisos);
+    }
+
     await this.audit.append({
       usuarioId: uid,
       acessoId: acesso.id,
@@ -229,6 +261,12 @@ export class TreinarComSql {
     const catalog = await this.skills.listByAgent(acesso.agentId);
     const emAndamento = pickSkillInProgress(catalog, modelo.sql);
     const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
+    const hintBase =
+      merged.conflitos > 0
+        ? "Há conflitos no grafo. Chame resolver_conflito antes de publicar skills."
+        : emAndamento
+          ? `Grafo atualizado. Continue a skill "${emAndamento.nome}" (${emAndamento.status}): ${fluxoTreino.proximoPasso ?? "validar_skill"}.`
+          : `Grafo atualizado. Próximo passo: ${fluxoTreino.proximoPasso ?? "criar_skill"}. Cadastre a skill (criar_skill → descrever params → validar_skill) e só publique se o usuário confirmar.`;
     return {
       success: true,
       dialeto: acesso.dialeto,
@@ -237,12 +275,11 @@ export class TreinarComSql {
       relacionamentos: merged.rels,
       conflitos: merged.conflitos,
       fluxoTreino,
+      avisos,
       hint:
-        merged.conflitos > 0
-          ? "Há conflitos no grafo. Chame resolver_conflito antes de publicar skills."
-          : emAndamento
-            ? `Grafo atualizado. Continue a skill "${emAndamento.nome}" (${emAndamento.status}): ${fluxoTreino.proximoPasso ?? "validar_skill"}.`
-            : `Grafo atualizado. Próximo passo: ${fluxoTreino.proximoPasso ?? "criar_skill"}. Cadastre a skill (criar_skill → descrever params → validar_skill) e só publique se o usuário confirmar.`,
+        avisos.length > 0
+          ? `${hintBase} Perfilamento: ${avisos.map((item) => item.message).join(" ")}`
+          : hintBase,
     };
   }
 }

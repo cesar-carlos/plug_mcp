@@ -12,5 +12,11 @@ export interface AcessoRepositoryPort {
   ): Promise<Acesso | null>;
   updateStatus(id: string, status: StatusAcesso): Promise<void>;
   updateClientToken(id: string, clientTokenEnc: string, clientTokenHash: string): Promise<void>;
+  updateDialeto(id: string, dialeto: string): Promise<void>;
+  updateEscopoPadrao(
+    id: string,
+    escopoPadrao: Acesso["escopoPadrao"],
+    timezone: string | null,
+  ): Promise<void>;
   deleteById(id: string): Promise<void>;
 }

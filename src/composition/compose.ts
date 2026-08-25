@@ -2,6 +2,7 @@ import type { AppConfig } from "../config/env.js";
 import {
   AdicionarAcesso,
   AtualizarCredencialPlug,
+  AtualizarDialeto,
   ListarAcessos,
   RegistrarAcesso,
   RemoverAcesso,
@@ -14,12 +15,22 @@ import {
   ExplorarTabelas,
   MapearTabela,
   ResolverConflito,
+  ValidarConsulta,
 } from "../application/use-cases/consultar.js";
+import {
+  AtualizarEscopoPadrao,
+  HerdarCatalogo,
+  ListarAuditoria,
+  RegistrarAprendizado,
+  SalvarConsulta,
+} from "../application/use-cases/aprendizado.js";
 import {
   AnotarGrafo,
   AtualizarSkill,
   ConfirmarColuna,
+  ConfirmarRelacionamento,
   CriarSkill,
+  ExpandirEscopo,
   ListarAnotacoes,
   ListarSkills,
   ObterSkill,
@@ -30,6 +41,7 @@ import {
 import { TreinarComSql } from "../application/use-cases/treinar-com-sql.js";
 import type { LoggerPort } from "../domain/ports/logger.port.js";
 import type { PlugServerGatewayPort } from "../domain/ports/plug-server-gateway.port.js";
+import type { QueryResultCachePort } from "../domain/ports/query-result-cache.port.js";
 import { NodeCryptoAdapter } from "../infrastructure/crypto/node-crypto.adapter.js";
 import { createExpressApp } from "../infrastructure/http/create-app.js";
 import { MemoryRateLimitStore, type RateLimitStore } from "../infrastructure/http/rate-limit.js";
@@ -39,6 +51,7 @@ import { createPino, PinoLoggerAdapter } from "../infrastructure/logging/pino-lo
 import type { ToolUseCases } from "../infrastructure/mcp/register-tools.js";
 import { createDb } from "../infrastructure/persistence/drizzle/db.js";
 import {
+  DrizzleAprendizadoRepository,
   DrizzleAcessoRepository,
   DrizzleAnotacaoGrafoRepository,
   DrizzleAuditLog,
@@ -47,6 +60,7 @@ import {
   DrizzleUsuarioRepository,
 } from "../infrastructure/persistence/drizzle/drizzle-cofre.js";
 import {
+  InMemoryAprendizadoRepository,
   InMemoryAcessoRepository,
   InMemoryAnotacaoGrafoRepository,
   InMemoryAuditLog,
@@ -54,6 +68,10 @@ import {
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../infrastructure/persistence/memory/memory-cofre.js";
+import {
+  MemoryQueryResultCache,
+  RedisQueryResultCache,
+} from "../infrastructure/cache/query-result-cache.js";
 import { CachedPlugGateway } from "../infrastructure/plug-server/policy-cache.js";
 import { PlugServerRestAdapter } from "../infrastructure/plug-server/plug-server-rest.adapter.js";
 import { UsuarioTokenManager } from "../infrastructure/plug-server/usuario-token-manager.js";
@@ -89,6 +107,7 @@ export const compose = async (
   let skills: InMemorySkillRepository | DrizzleSkillRepository;
   let anotacoes: InMemoryAnotacaoGrafoRepository | DrizzleAnotacaoGrafoRepository;
   let audit: InMemoryAuditLog | DrizzleAuditLog;
+  let aprendizado: InMemoryAprendizadoRepository | DrizzleAprendizadoRepository;
 
   if (config.DATABASE_URL) {
     const { db, pool } = createDb(config.DATABASE_URL);
@@ -98,6 +117,7 @@ export const compose = async (
     skills = new DrizzleSkillRepository(db);
     anotacoes = new DrizzleAnotacaoGrafoRepository(db);
     audit = new DrizzleAuditLog(db);
+    aprendizado = new DrizzleAprendizadoRepository(db);
     disposers.push(async () => {
       await pool.end();
     });
@@ -108,6 +128,7 @@ export const compose = async (
     skills = new InMemorySkillRepository();
     anotacoes = new InMemoryAnotacaoGrafoRepository();
     audit = new InMemoryAuditLog();
+    aprendizado = new InMemoryAprendizadoRepository();
   }
 
   let mcpRateLimitStore: RateLimitStore = new MemoryRateLimitStore();
@@ -117,12 +138,14 @@ export const compose = async (
         set(key: string, value: string, options: { PX: number }): Promise<unknown>;
       }
     | undefined;
+  let queryCache: QueryResultCachePort = new MemoryQueryResultCache();
   if (config.REDIS_URL.length > 0) {
     const { createClient } = await import("redis");
     const redis = createClient({ url: config.REDIS_URL });
     await redis.connect();
     mcpRateLimitStore = new RedisRateLimitStore(redis);
     policyKv = redis;
+    queryCache = new RedisQueryResultCache(redis);
     disposers.push(async () => {
       await redis.quit();
     });
@@ -157,6 +180,7 @@ export const compose = async (
       config.PUBLIC_BASE_URL,
       config.MCP_TOKEN_TTL_DAYS,
     ),
+    atualizarDialeto: new AtualizarDialeto(acessos, grafo, skills),
     treinarComSql: new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit, skills),
     consultarDados: new ConsultarDados(
       acessos,
@@ -167,21 +191,54 @@ export const compose = async (
       audit,
       config.QUERY_DEFAULT_MAX_ROWS,
       config.QUERY_ABSOLUTE_MAX_ROWS,
+      {
+        grafo,
+        aprendizado,
+        anotacoes,
+        cache: queryCache,
+        cacheTtlMs: config.QUERY_CACHE_TTL_MS,
+      },
     ),
     explorarTabelas: new ExplorarTabelas(acessos, plug, sessions, crypto, audit),
     mapearTabela: new MapearTabela(acessos, grafo, plug, sessions, crypto),
-    buscarContexto: new BuscarContexto(acessos, grafo, skills, anotacoes, plug, sessions, crypto),
+    buscarContexto: new BuscarContexto(
+      acessos,
+      grafo,
+      skills,
+      anotacoes,
+      plug,
+      sessions,
+      crypto,
+      aprendizado,
+    ),
     resolverConflito: new ResolverConflito(acessos, grafo),
+    validarConsulta: new ValidarConsulta(acessos, skills, plug, sessions, crypto),
     criarSkill: new CriarSkill(acessos, skills, grafo),
     atualizarSkill: new AtualizarSkill(acessos, skills, grafo),
     validarSkill: new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo),
     publicarSkill: new PublicarSkill(acessos, skills, grafo),
     listarSkills: new ListarSkills(acessos, skills),
-    obterSkill: new ObterSkill(acessos, skills, grafo),
+    obterSkill: new ObterSkill(
+      acessos,
+      skills,
+      grafo,
+      anotacoes,
+      plug,
+      sessions,
+      crypto,
+      aprendizado,
+    ),
+    expandirEscopo: new ExpandirEscopo(acessos, skills, grafo),
+    confirmarRelacionamento: new ConfirmarRelacionamento(acessos, grafo),
     confirmarColuna: new ConfirmarColuna(acessos, grafo),
     anotarGrafo: new AnotarGrafo(acessos, grafo, anotacoes),
     listarAnotacoes: new ListarAnotacoes(acessos, anotacoes),
     removerAnotacao: new RemoverAnotacao(acessos, anotacoes),
+    salvarConsulta: new SalvarConsulta(acessos, skills, aprendizado),
+    registrarAprendizado: new RegistrarAprendizado(acessos, grafo, anotacoes, aprendizado),
+    atualizarEscopoPadrao: new AtualizarEscopoPadrao(acessos),
+    herdarCatalogo: new HerdarCatalogo(acessos, grafo),
+    listarAuditoria: new ListarAuditoria(acessos, audit),
   };
 
   const { app, dispose } = createExpressApp({
