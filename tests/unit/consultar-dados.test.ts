@@ -67,6 +67,7 @@ describe("ConsultarDados", () => {
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
+        pergunta: "consulta de teste",
         skillId: skill.id,
         sql: "SELECT f.valor FROM faturamento f WHERE f.ano = 2026",
       }),
@@ -76,7 +77,10 @@ describe("ConsultarDados", () => {
   it("exige skillId", async () => {
     const { consultar, created } = await setupAcesso();
     await expect(
-      consultar.execute(created.usuarioId, { acessoId: created.acessoId }),
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "consulta de teste",
+      }),
     ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
   });
 
@@ -93,6 +97,7 @@ describe("ConsultarDados", () => {
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
+        pergunta: "consulta de teste",
         skillId: skill.id,
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.SKILL_NOT_PUBLISHED });
@@ -115,6 +120,7 @@ describe("ConsultarDados", () => {
     await skills.setStatus(skill.id, "publicada");
     const result = await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta de teste",
       skillId: skill.id,
       params: { codigo: 99 },
     });
@@ -143,6 +149,7 @@ describe("ConsultarDados", () => {
     await skills.setStatus(skill.id, "publicada");
     const result = await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta de teste",
       skillId: skill.id,
     });
     expect(result.asOf).toMatch(/\[America\/Cuiaba\]$/);
@@ -165,6 +172,7 @@ describe("ConsultarDados", () => {
     await skills.setStatus(skill.id, "publicada");
     const exato = await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta de teste",
       skillId: skill.id,
       options: { max_rows: 2 },
     });
@@ -176,6 +184,7 @@ describe("ConsultarDados", () => {
     });
     const cortado = await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta de teste",
       skillId: skill.id,
       options: { max_rows: 2 },
     });
@@ -196,6 +205,7 @@ describe("ConsultarDados", () => {
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
+        pergunta: "consulta de teste",
         skillId: "titulos-a-recebr",
       }),
     ).rejects.toMatchObject({
@@ -218,6 +228,7 @@ describe("ConsultarDados", () => {
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
+        pergunta: "consulta de teste",
         skillId: skill.id,
       }),
     ).rejects.toBeInstanceOf(DomainError);
@@ -255,6 +266,7 @@ describe("ConsultarDados", () => {
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
+        pergunta: "consulta de teste",
         skillId: skill.id,
       }),
     ).rejects.toMatchObject({
@@ -280,6 +292,7 @@ describe("ConsultarDados", () => {
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
+        pergunta: "consulta de teste",
         skillId: skill.id,
         options: { page: 1, page_size: 20 },
       }),
@@ -290,7 +303,7 @@ describe("ConsultarDados", () => {
     expect(plug.lastSql).toBeNull();
   });
 
-  it("só encaminha page ao plug quando page_size vem junto", async () => {
+  it("recusa page sem page_size", async () => {
     const { consultar, created, skills, plug } = await setupAcesso();
     const skill = await skills.create({
       agentId,
@@ -301,19 +314,157 @@ describe("ConsultarDados", () => {
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
-    await consultar.execute(created.usuarioId, {
-      acessoId: created.acessoId,
-      skillId: skill.id,
-      options: { page: 2 },
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "consulta de teste",
+        skillId: skill.id,
+        options: { page: 2 },
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+    expect(plug.lastSql).toBeNull();
+    plug.sqlImpl = async () => ({
+      columns: ["codigo"],
+      rows: [{ codigo: 1 }],
+      pagination: { page: 2, pageSize: 10, hasNextPage: false, hasPreviousPage: true },
     });
-    expect(plug.lastOptions?.page).toBeUndefined();
-    expect(plug.lastOptions?.pageSize).toBeUndefined();
-    await consultar.execute(created.usuarioId, {
+    const ok = await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta de teste",
       skillId: skill.id,
       options: { page: 2, page_size: 10 },
     });
+    expect(ok.success).toBe(true);
     expect(plug.lastOptions?.page).toBe(2);
     expect(plug.lastOptions?.pageSize).toBe(10);
+  });
+
+  it("expõe paginacao.hasNextPage e não marca truncated", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => ({
+      columns: ["codigo"],
+      rows: [{ codigo: 1 }, { codigo: 2 }],
+      pagination: { page: 1, pageSize: 2, hasNextPage: true, hasPreviousPage: false },
+    });
+    const skill = await skills.create({
+      agentId,
+      slug: "lista-paginada",
+      nome: "Lista",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p ORDER BY p.codprod",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "consulta de teste",
+      skillId: skill.id,
+      options: { page: 1, page_size: 2, max_rows: 500 },
+    });
+    expect(result.truncated).toBe(false);
+    expect(result.paginacao).toEqual({
+      page: 1,
+      pageSize: 2,
+      hasNextPage: true,
+      hasPreviousPage: false,
+    });
+  });
+
+  it("reescreve @nome para :nome no SQL enviado ao hub", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    const skill = await skills.create({
+      agentId,
+      slug: "por-codigo",
+      nome: "Lista",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = @codigo",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "consulta de teste",
+      skillId: skill.id,
+      params: { codigo: 9 },
+    });
+    expect(plug.lastSql).toContain(":codigo");
+    expect(plug.lastSql).not.toContain("@codigo");
+    expect(result.sqlExecutado).toContain(":codigo");
+  });
+
+  it("recusa paginação do sqlModelo com TOP antes do plug", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => {
+      throw new Error("não deve chamar o plug");
+    };
+    const skill = await skills.create({
+      agentId,
+      slug: "lista-top",
+      nome: "Lista",
+      descricao: "Lista",
+      sqlModelo: "SELECT TOP 10 p.codprod AS codigo FROM produto p ORDER BY p.codprod",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "consulta de teste",
+        skillId: skill.id,
+        options: { page: 1, page_size: 20 },
+      }),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+    });
+    expect(plug.lastSql).toBeNull();
+  });
+
+  it("exige pergunta", async () => {
+    const { consultar, created, skills } = await setupAcesso();
+    const skill = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: skill.id,
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+  });
+
+  it("cruza skills só com SQL customizado", async () => {
+    const { consultar, created, skills } = await setupAcesso();
+    const a = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    const b = await skills.create({
+      agentId,
+      slug: "estoque",
+      nome: "Estoque",
+      descricao: "Lista",
+      sqlModelo: "SELECT e.codprod AS codigo FROM estoque e WHERE e.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(a.id, "publicada");
+    await skills.setStatus(b.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "cruzar",
+        skillIds: [a.id, b.id],
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
   });
 });

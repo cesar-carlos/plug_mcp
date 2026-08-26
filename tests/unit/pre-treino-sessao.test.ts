@@ -15,6 +15,14 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/Aprendizado constante/i);
     expect(PRE_TREINO_SESSAO).toContain("registrar_aprendizado");
     expect(PRE_TREINO_SESSAO).toContain("consultar_dados");
+    expect(PRE_TREINO_SESSAO).toContain(":nome");
+    expect(PRE_TREINO_SESSAO).toContain(":empresa");
+    expect(PRE_TREINO_SESSAO).toContain("options.page");
+    expect(PRE_TREINO_SESSAO).toContain("page_size");
+    expect(PRE_TREINO_SESSAO).toContain("CONSULTA_SEM_RECORTE");
+    expect(PRE_TREINO_SESSAO).toContain("truncated");
+    expect(PRE_TREINO_SESSAO).toContain("hasNextPage");
+    expect(PRE_TREINO_SESSAO).toContain("LITERAL_TEXTO");
   });
 
   it("entra em MCP_SERVER_INSTRUCTIONS junto com a operação", () => {

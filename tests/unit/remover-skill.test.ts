@@ -12,6 +12,7 @@ import {
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -43,11 +44,11 @@ const setup = async () => {
     dialeto: "sybase",
     clientToken: "tok-sql-123456",
   });
-  await grafo.mergeTabela({
+  await seedTabelaComColunas(grafo, {
     agentId,
+    usuarioId: created.usuarioId,
     nome: "produto",
-    origem: "validado_execucao",
-    autorUsuarioId: created.usuarioId,
+    colunas: ["codprod", "dtcad"],
   });
   const criar = new CriarSkill(acessos, skills, grafo);
   const remover = new RemoverSkill(acessos, skills, aprendizado);
@@ -95,7 +96,7 @@ describe("RemoverSkill", () => {
     const { remover, criar, created, skill, skills, grafo, aprendizado } = await setup();
     await aprendizado.salvarConsulta({
       agentId,
-      skillId: skill.id,
+      skillIds: [skill.id],
       pergunta: "faturamento no período",
       sql: skill.sqlModelo,
       paramsContrato: skill.params,
@@ -122,7 +123,7 @@ describe("RemoverSkill", () => {
     expect(await skills.listByAgent(agentId)).toEqual([]);
     const consultas = await aprendizado.listarConsultas(agentId, 10);
     expect(consultas).toHaveLength(1);
-    expect(consultas[0]?.skillId).toBeNull();
+    expect(consultas[0]?.skillIds).toEqual([]);
     expect(await aprendizado.listarSinonimos(agentId)).toEqual([]);
     expect((await grafo.listTabelas(agentId)).map((tabela) => tabela.nome)).toEqual(["produto"]);
     const again = await criar.execute(created.usuarioId, {

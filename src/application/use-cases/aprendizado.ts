@@ -73,7 +73,7 @@ export class SalvarConsulta {
     }
     const consulta = await this.aprendizado.salvarConsulta({
       agentId: acesso.agentId,
-      skillId,
+      skillIds: skillId ? [skillId] : [],
       pergunta,
       sql,
       paramsContrato,

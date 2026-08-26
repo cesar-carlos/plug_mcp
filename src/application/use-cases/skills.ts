@@ -3,7 +3,11 @@ import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { Acesso } from "../../domain/entities/acesso.js";
 import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
 import type { AnotacaoGrafo, Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
-import { uniaoEscopos, type EscopoSkill } from "../../domain/entities/escopo.js";
+import {
+  PACOTE_VERSAO_ATUAL,
+  uniaoEscopos,
+  type EscopoSkill,
+} from "../../domain/entities/escopo.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
@@ -17,7 +21,6 @@ import type {
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import {
-  countConflitosGrafo,
   fluxoForAgentSkill,
   mergeParamInput,
   missingGraphTables,
@@ -25,10 +28,22 @@ import {
   paramsFromSql,
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
+import {
+  countConflitosNoEscopo,
+  exigirEscopoNoGrafo,
+  exigirPacotePublicavel,
+  listarFatosIncompletos,
+} from "./shared/gates-skill.js";
+import { validarSqlNoEscopo } from "./shared/validar-escopo.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import { enriquecerPerfilCompleto } from "./shared/enriquecer-perfil.js";
-import { bindParamsForValidation, parseSqlModelo, sqlValidacaoVazia } from "./shared/sql-modelo.js";
+import {
+  bindParamsForValidation,
+  parseSqlModelo,
+  sqlParaOdbc,
+  sqlValidacaoVazia,
+} from "./shared/sql-modelo.js";
 import {
   requireAcesso,
   requireAcessoAprovado,
@@ -103,6 +118,7 @@ export class CriarSkill {
       });
     }
     const modelo = parseSqlModelo(sqlModelo);
+    const escopo = escopoFromSqlModelo(modelo);
     const missing = await missingGraphTables(
       this.grafo,
       acesso.agentId,
@@ -115,6 +131,7 @@ export class CriarSkill {
         hint: `Chame treinar_com_sql antes. Tabelas ausentes: ${missing.join(", ")}.`,
       });
     }
+    await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopo);
     const params = mergeParamInput(paramsFromSql(sqlModelo), normalizeParamInput(input.params));
     const slugInput = input.slug?.trim();
     const slugNome = slugify(nome);
@@ -136,8 +153,9 @@ export class CriarSkill {
       descricao,
       sqlModelo,
       params,
-      escopo: escopoFromSqlModelo(modelo),
+      escopo,
       autorUsuarioId: uid,
+      pacoteVersao: PACOTE_VERSAO_ATUAL,
     });
     return {
       success: true,
@@ -184,6 +202,7 @@ export class AtualizarSkill {
           hint: `Chame treinar_com_sql antes. Tabelas ausentes: ${missing.join(", ")}.`,
         });
       }
+      await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopoFromSqlModelo(modelo));
     } else if (input.sqlModelo) {
       parseSqlModelo(sqlModelo);
     }
@@ -273,19 +292,32 @@ export class ValidarSkill {
       });
     }
     const modelo = parseSqlModelo(skill.sqlModelo);
+    const escopo = escopoFromSqlModelo(modelo);
+    await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopo);
+    if (acesso.dialeto !== "firebird") {
+      validarSqlNoEscopo(skill.sqlModelo, acesso.dialeto, escopo);
+    }
+    const persisted = await this.skills.update(skill.id, {
+      escopo,
+      pacoteVersao: PACOTE_VERSAO_ATUAL,
+      motivoRevalidacao: null,
+      status: skill.status,
+    });
     const params = bindParamsForValidation(modelo.sql, input.params);
     await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.executeSql({
         accessToken,
         agentId: acesso.agentId,
         clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-        sql: sqlValidacaoVazia(acesso.dialeto, modelo.sql),
+        sql: sqlValidacaoVazia(acesso.dialeto, sqlParaOdbc(modelo.sql)),
         params,
         options: { maxRows: 1 },
       }),
     );
-    const preservarPublicada = skill.status === "publicada";
-    const updated = preservarPublicada ? skill : await this.skills.setStatus(skill.id, "validada");
+    const preservarPublicada = persisted.status === "publicada";
+    const updated = preservarPublicada
+      ? persisted
+      : await this.skills.setStatus(persisted.id, "validada");
     const avisos: { code: string; message: string }[] = [];
     if (input.enriquecer === "completo") {
       const perfil = await enriquecerPerfilCompleto({
@@ -296,7 +328,7 @@ export class ValidarSkill {
               accessToken,
               agentId: acesso.agentId,
               clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-              sql,
+              sql: sqlParaOdbc(sql),
               params: perfilParams ?? {},
               options: { maxRows: 300 },
             }),
@@ -360,14 +392,15 @@ export class PublicarSkill {
         hint: "Chame atualizar_skill com params[{ nome, descricao }] para cada placeholder :nome/@nome.",
       });
     }
-    const conflitos = await countConflitosGrafo(this.grafo, acesso.agentId);
+    const conflitos = await countConflitosNoEscopo(this.grafo, acesso.agentId, skill.escopo);
     if (conflitos > 0) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Há conflitos pendentes no grafo.",
-        hint: "Chame resolver_conflito antes de publicar_skill.",
+        message: "Há conflitos pendentes no escopo desta skill.",
+        hint: "Chame resolver_conflito só para tabelas/colunas/JOINs deste pacote.",
       });
     }
+    await exigirPacotePublicavel(this.grafo, acesso.agentId, skill.escopo, skill.sqlModelo);
     const updated = await this.skills.setStatus(skill.id, "publicada", skill.versao);
     return {
       success: true,
@@ -472,9 +505,14 @@ export class ObterSkill {
         tabela: string;
         nome: string;
         tipo: string | null;
+        nullable: boolean | null;
         papel: string | null;
         dicionario: string | null;
         formato: string | null;
+        descricao: string | null;
+        perfil: unknown;
+        origem: string;
+        status: string;
       }[];
       relacionamentos: {
         origem: string;
@@ -483,6 +521,8 @@ export class ObterSkill {
         colunaDestino: string;
         tipoJoin: string;
         cardinalidade: string | null;
+        descricao: string | null;
+        origemFato: string;
       }[];
       regras: AnotacaoGrafo[];
       metricas: AnotacaoGrafo[];
@@ -528,30 +568,49 @@ export class ObterSkill {
     );
     const allowed = (tabela: string): boolean =>
       policy.allTables || policy.tables.some((item) => item.toLowerCase() === tabela.toLowerCase());
-    const tabelas = (await this.grafo.listTabelas(acesso.agentId)).filter(
+    const grafoTabelas = (await this.grafo.listTabelas(acesso.agentId)).filter(
       (tabela) =>
         allowed(tabela.nome) &&
         escopo.tabelas.some((nome) => nome.toLowerCase() === tabela.nome.toLowerCase()),
     );
-    const idToNome = new Map(tabelas.map((tabela) => [tabela.id, tabela.nome]));
+    const idToNome = new Map(grafoTabelas.map((tabela) => [tabela.id, tabela.nome]));
+    const authorized = (tabela: string, coluna: string): boolean => {
+      const entry = Object.entries(escopo.colunasPorTabela).find(
+        ([nome]) => nome.toLowerCase() === tabela.toLowerCase(),
+      );
+      return (entry?.[1] ?? []).some((item) => item.toLowerCase() === coluna.toLowerCase());
+    };
     const colunas: {
       tabela: string;
       nome: string;
       tipo: string | null;
+      nullable: boolean | null;
       papel: string | null;
       dicionario: string | null;
       formato: string | null;
+      descricao: string | null;
+      perfil: unknown;
+      origem: string;
+      status: string;
     }[] = [];
-    for (const tabela of tabelas) {
+    for (const tabela of grafoTabelas) {
       const cols = await this.grafo.listColunas(tabela.id);
       for (const coluna of cols) {
+        if (!authorized(tabela.nome, coluna.nome)) {
+          continue;
+        }
         colunas.push({
           tabela: tabela.nome,
           nome: coluna.nome,
           tipo: coluna.tipo,
+          nullable: coluna.nullable,
           papel: coluna.papel,
           dicionario: coluna.dicionario,
           formato: coluna.formato,
+          descricao: coluna.descricao,
+          perfil: coluna.perfil,
+          origem: coluna.origem,
+          status: coluna.status,
         });
       }
     }
@@ -563,32 +622,55 @@ export class ObterSkill {
         colunaDestino: rel.colunaDestino,
         tipoJoin: rel.tipoJoin,
         cardinalidade: rel.cardinalidade,
+        descricao: rel.descricao,
+        origemFato: rel.origem,
       }))
-      .filter((rel) => rel.origem && rel.destino);
-    const notas = await this.anotacoes.list(acesso.agentId);
-    const consultas = this.aprendizado
-      ? await this.aprendizado.listarConsultas(acesso.agentId, 16)
-      : [];
-    const consultasExemplo = consultas
-      .filter((item) => item.skillId === null || item.skillId === persisted.id)
-      .filter((item) => {
-        try {
-          const modelo = parseSqlModelo(item.sql);
-          return modelo.tabelas.every((tabela) => allowed(tabela.nome));
-        } catch {
-          return true;
+      .filter((rel) => {
+        if (!rel.origem || !rel.destino) {
+          return false;
         }
-      })
-      .slice(0, 8);
+        return escopo.relacionamentos.some((item) => {
+          const direto =
+            item.tabelaOrigem.toLowerCase() === rel.origem.toLowerCase() &&
+            item.tabelaDestino.toLowerCase() === rel.destino.toLowerCase() &&
+            item.colunaOrigem.toLowerCase() === rel.colunaOrigem.toLowerCase() &&
+            item.colunaDestino.toLowerCase() === rel.colunaDestino.toLowerCase();
+          const inverso =
+            item.tabelaOrigem.toLowerCase() === rel.destino.toLowerCase() &&
+            item.tabelaDestino.toLowerCase() === rel.origem.toLowerCase() &&
+            item.colunaOrigem.toLowerCase() === rel.colunaDestino.toLowerCase() &&
+            item.colunaDestino.toLowerCase() === rel.colunaOrigem.toLowerCase();
+          return direto || inverso;
+        });
+      });
+    const notas = await this.anotacoes.list(acesso.agentId);
+    const tabelasEscopo = new Set(escopo.tabelas.map((nome) => nome.toLowerCase()));
+    const notasSkill = notas.filter((nota) => {
+      if (nota.skillId === persisted.id) {
+        return true;
+      }
+      if (nota.skillId) {
+        return false;
+      }
+      if (!nota.tabelaId) {
+        return false;
+      }
+      const tabelaNome = grafoTabelas.find((item) => item.id === nota.tabelaId)?.nome;
+      return tabelaNome ? tabelasEscopo.has(tabelaNome.toLowerCase()) : false;
+    });
+    const consultasExemplo = this.aprendizado
+      ? await this.aprendizado.listarConsultasDaSkill(acesso.agentId, persisted.id, 8)
+      : [];
     const avisos: { code: string; message: string }[] = [];
-    const semTipoFormato =
-      colunas.length === 0 || colunas.every((coluna) => !coluna.tipo && !coluna.formato);
-    const semCardinalidade = relacionamentos.every((rel) => !rel.cardinalidade);
-    if (semTipoFormato && semCardinalidade) {
+    const faltas = await listarFatosIncompletos(this.grafo, acesso.agentId, escopo, {
+      exigirCardinalidade: true,
+      exigirTipoColuna: true,
+    });
+    const perfilFaltas = faltas.filter((item) => item.kind === "perfil");
+    if (perfilFaltas.length > 0) {
       avisos.push({
         code: "PERFIL_AUSENTE",
-        message:
-          "tipo, formato e cardinalidade vazios. Depois do catálogo estável, chame validar_skill enriquecer=completo. Não invente tipo nem JOIN.",
+        message: perfilFaltas.map((item) => item.message).join(" "),
       });
     }
     return {
@@ -598,8 +680,8 @@ export class ObterSkill {
         escopo,
         colunas,
         relacionamentos,
-        regras: notas.filter((nota) => nota.tipo === "regra"),
-        metricas: notas.filter((nota) => nota.tipo === "metrica"),
+        regras: notasSkill.filter((nota) => nota.tipo === "regra"),
+        metricas: notasSkill.filter((nota) => nota.tipo === "metrica"),
         consultasExemplo: [...consultasExemplo],
       },
       guiaDialeto: guiaDialeto(acesso.dialeto),
@@ -669,7 +751,14 @@ export class AnotarGrafo {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; tabela?: string; tipo?: string; titulo?: string; texto?: string },
+    input: {
+      acessoId?: string;
+      tabela?: string;
+      skillId?: string;
+      tipo?: string;
+      titulo?: string;
+      texto?: string;
+    },
   ): Promise<{ success: true; anotacao: AnotacaoGrafo }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
@@ -685,11 +774,19 @@ export class AnotarGrafo {
     let tabelaId: string | null = null;
     if (input.tabela?.trim()) {
       const tabela = await this.grafo.findTabelaByNome(acesso.agentId, input.tabela.trim());
-      tabelaId = tabela?.id ?? null;
+      if (!tabela) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Tabela ainda não está no grafo.",
+          hint: "Não grave anotação global por tabela inexistente. Treine a tabela antes.",
+        });
+      }
+      tabelaId = tabela.id;
     }
     const anotacao = await this.anotacoes.create({
       agentId: acesso.agentId,
       tabelaId,
+      skillId: input.skillId?.trim() ? input.skillId.trim() : null,
       tipo: input.tipo?.trim() ? input.tipo.trim() : "uso",
       titulo,
       texto,
@@ -782,6 +879,13 @@ export class ExpandirEscopo {
     const extras = (input.tabelas ?? [])
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
+    if (extras.length === 0) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Informe as tabelas a incorporar.",
+        hint: "expandir_escopo exige tabelas confirmadas e o relacionamento com o pacote atual.",
+      });
+    }
     const missing = await missingGraphTables(this.grafo, acesso.agentId, extras);
     if (missing.length > 0) {
       throw new DomainError({
@@ -794,6 +898,43 @@ export class ExpandirEscopo {
       skill.escopo.tabelas.length > 0
         ? skill.escopo
         : escopoFromSqlModelo(parseSqlModelo(skill.sqlModelo));
+    const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
+    const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
+    const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
+    const conhecidas = new Set([...base.tabelas, ...extras].map((nome) => nome.toLowerCase()));
+    const relacionamentos = grafoRels
+      .map((rel) => ({
+        tabelaOrigem: nomeById.get(rel.tabelaOrigemId) ?? "",
+        colunaOrigem: rel.colunaOrigem,
+        tabelaDestino: nomeById.get(rel.tabelaDestinoId) ?? "",
+        colunaDestino: rel.colunaDestino,
+        tipoJoin: rel.tipoJoin,
+      }))
+      .filter(
+        (rel) =>
+          rel.tabelaOrigem &&
+          rel.tabelaDestino &&
+          conhecidas.has(rel.tabelaOrigem.toLowerCase()) &&
+          conhecidas.has(rel.tabelaDestino.toLowerCase()) &&
+          (extras.some((nome) => nome.toLowerCase() === rel.tabelaOrigem.toLowerCase()) ||
+            extras.some((nome) => nome.toLowerCase() === rel.tabelaDestino.toLowerCase())),
+      );
+    if (base.tabelas.length > 0) {
+      for (const extra of extras) {
+        const ligada = relacionamentos.some(
+          (rel) =>
+            rel.tabelaOrigem.toLowerCase() === extra.toLowerCase() ||
+            rel.tabelaDestino.toLowerCase() === extra.toLowerCase(),
+        );
+        if (!ligada) {
+          throw new DomainError({
+            code: ERROR_CODES.JOIN_DESCONHECIDO,
+            message: `Tabela ${extra} não tem relacionamento com o pacote atual.`,
+            hint: "Confirme o JOIN com confirmar_relacionamento (skillId) antes de expandir_escopo.",
+          });
+        }
+      }
+    }
     const extraEscopo: EscopoSkill = {
       tabelas: extras,
       colunasPorTabela: Object.fromEntries(
@@ -805,8 +946,11 @@ export class ExpandirEscopo {
           }),
         ),
       ),
-      relacionamentos: [],
-      grao: [],
+      relacionamentos,
+      graoPorTabela: {},
+      graoResultado: [],
+      metricasSaida: [],
+      pacoteVersao: PACOTE_VERSAO_ATUAL,
     };
     const updated = await this.skills.update(skill.id, {
       escopo: uniaoEscopos([base, extraEscopo]),
@@ -820,19 +964,21 @@ export class ConfirmarRelacionamento {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly grafo: GrafoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
     input: {
       acessoId?: string;
+      skillId?: string;
       tabelaOrigem?: string;
       colunaOrigem?: string;
       tabelaDestino?: string;
       colunaDestino?: string;
       tipoJoin?: string;
     },
-  ): Promise<{ success: true }> {
+  ): Promise<{ success: true; skill?: Skill }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const origemNome = input.tabelaOrigem?.trim() ?? "";
@@ -846,6 +992,16 @@ export class ConfirmarRelacionamento {
         hint: "Use obter_skill para ver o grafo conhecido.",
       });
     }
+    const skillId = input.skillId?.trim() ?? "";
+    const skill = skillId ? await this.skills.findById(skillId) : null;
+    if (skillId && skill?.agentId !== acesso.agentId) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "Skill não encontrada neste agentId.",
+        hint: "Confirmar JOIN para consulta exige skillId do mesmo acesso.",
+      });
+    }
+    const tipoJoin = input.tipoJoin?.trim() ? input.tipoJoin.trim() : "inner";
     await this.grafo.withAgentLock(acesso.agentId, async () => {
       const origem = await this.grafo.findTabelaByNome(acesso.agentId, origemNome);
       const destino = await this.grafo.findTabelaByNome(acesso.agentId, destinoNome);
@@ -862,11 +1018,37 @@ export class ConfirmarRelacionamento {
         colunaOrigem,
         tabelaDestinoId: destino.id,
         colunaDestino,
-        tipoJoin: input.tipoJoin?.trim() ? input.tipoJoin.trim() : "inner",
+        tipoJoin,
         origem: "confirmado_usuario",
         autorUsuarioId: uid,
       });
     });
-    return { success: true };
+    if (!skill) {
+      return { success: true };
+    }
+    const extraEscopo: EscopoSkill = {
+      tabelas: [origemNome, destinoNome],
+      colunasPorTabela: {
+        [origemNome]: [colunaOrigem],
+        [destinoNome]: [colunaDestino],
+      },
+      relacionamentos: [
+        {
+          tabelaOrigem: origemNome,
+          colunaOrigem,
+          tabelaDestino: destinoNome,
+          colunaDestino,
+          tipoJoin,
+        },
+      ],
+      graoPorTabela: {},
+      graoResultado: [],
+      metricasSaida: [],
+      pacoteVersao: PACOTE_VERSAO_ATUAL,
+    };
+    const updated = await this.skills.update(skill.id, {
+      escopo: uniaoEscopos([skill.escopo, extraEscopo]),
+    });
+    return { success: true, skill: updated };
   }
 }

@@ -61,6 +61,11 @@ export interface SqlAstJoin {
   readonly equalities: readonly JoinEqualityAst[];
 }
 
+export interface SqlAstColumnRef {
+  readonly table: string | null;
+  readonly column: string;
+}
+
 export interface SqlAstSelect {
   readonly sql: string;
   readonly database: ParserDatabase;
@@ -68,16 +73,21 @@ export interface SqlAstSelect {
   readonly colunas: readonly SqlAstColuna[];
   readonly joins: readonly SqlAstJoin[];
   readonly temWhere: boolean;
+  readonly temHaving: boolean;
   readonly temAgregacao: boolean;
+  readonly temAgregacaoLocal: boolean;
   readonly temGroupBy: boolean;
   readonly temOrderBy: boolean;
   readonly temLimite: boolean;
   readonly temStar: boolean;
   readonly temLiteralTextoFiltro: boolean;
   readonly groupByCount: number;
-  readonly groupByRefs: readonly { table: string | null; column: string }[];
-  readonly filtroRefs: readonly { table: string | null; column: string }[];
+  readonly groupByRefs: readonly SqlAstColumnRef[];
+  readonly filtroRefs: readonly SqlAstColumnRef[];
+  readonly orderByRefs: readonly SqlAstColumnRef[];
   readonly subqueries: readonly SqlAstSelect[];
+  readonly setBranches: readonly SqlAstSelect[];
+  readonly setOp: string | null;
   readonly cteNomes: readonly string[];
 }
 
@@ -124,7 +134,7 @@ const collectEqualities = (node: unknown): JoinEqualityAst[] => {
   if (!isRecord(node)) {
     return [];
   }
-  if (node.type === "binary_expr" && node.operator === "AND") {
+  if (node.type === "binary_expr" && (node.operator === "AND" || node.operator === "OR")) {
     return [...collectEqualities(node.left), ...collectEqualities(node.right)];
   }
   if (node.type === "binary_expr" && node.operator === "=") {
@@ -236,15 +246,18 @@ const collectRefsFromNode = (node: unknown): { table: string | null; column: str
   return out;
 };
 
-const collectFiltroRefs = (
-  ast: Record<string, unknown>,
-): { table: string | null; column: string }[] => [
+const collectFiltroRefs = (ast: Record<string, unknown>): SqlAstColumnRef[] => [
   ...collectRefsFromNode(ast.columns),
   ...collectRefsFromNode(ast.where),
   ...collectRefsFromNode(ast.having),
   ...collectRefsFromNode(ast.groupby),
   ...collectRefsFromNode(ast.orderby),
 ];
+
+const collectFromOnNodes = (from: unknown): unknown[] =>
+  asArray(from)
+    .map((item) => (isRecord(item) ? item.on : null))
+    .filter((item) => item != null);
 
 const hasAggr = (node: unknown): boolean => {
   let found = false;
@@ -407,6 +420,22 @@ const parseColumns = (
   return { colunas, temStar, temAgregacao };
 };
 
+const pushSelectNode = (out: unknown[], node: Record<string, unknown>): void => {
+  if (node.type === "select") {
+    out.push(node);
+    return;
+  }
+  if (isRecord(node.ast) && node.ast.type === "select") {
+    out.push(node.ast);
+  }
+};
+
+const collectSelectsIn = (node: unknown, out: unknown[]): void => {
+  walkNodes(node, (item) => {
+    pushSelectNode(out, item);
+  });
+};
+
 const collectSubqueryAsts = (select: Record<string, unknown>): unknown[] => {
   const out: unknown[] = [];
   for (const item of asArray(select.with)) {
@@ -420,19 +449,14 @@ const collectSubqueryAsts = (select: Record<string, unknown>): unknown[] => {
       out.push(item.expr.ast);
     }
   }
-  walkNodes(select.where, (node) => {
-    if (node.type === "select" || (node.ast && isRecord(node.ast) && node.ast.type === "select")) {
-      out.push(node.type === "select" ? node : node.ast);
-    }
-  });
-  walkNodes(select.columns, (node) => {
-    if (node.type === "select") {
-      out.push(node);
-    }
-    if (isRecord(node.ast) && node.ast.type === "select") {
-      out.push(node.ast);
-    }
-  });
+  collectSelectsIn(select.where, out);
+  collectSelectsIn(select.having, out);
+  collectSelectsIn(select.columns, out);
+  collectSelectsIn(select.groupby, out);
+  collectSelectsIn(select.orderby, out);
+  for (const on of collectFromOnNodes(select.from)) {
+    collectSelectsIn(on, out);
+  }
   return out;
 };
 
@@ -461,8 +485,15 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
   }
   const { colunas, temStar, temAgregacao } = parseColumns(ast.columns, database);
   const subqueries = collectSubqueryAsts(ast).map((sub) => fromSelectAst(sub, sql, database));
-  const nestedStar = subqueries.some((sub) => sub.temStar);
-  const nestedAggr = subqueries.some((sub) => sub.temAgregacao);
+  const setOp = typeof ast.set_op === "string" ? ast.set_op.toLowerCase() : null;
+  const setBranches =
+    isRecord(ast._next) && ast._next.type === "select"
+      ? [fromSelectAst(ast._next, sql, database)]
+      : [];
+  const nestedStar =
+    subqueries.some((sub) => sub.temStar) || setBranches.some((sub) => sub.temStar);
+  const nestedAggr =
+    subqueries.some((sub) => sub.temAgregacao) || setBranches.some((sub) => sub.temAgregacao);
   const groupCols = groupByColumns(ast);
   const filtroRefs = collectFiltroRefs(ast);
   return {
@@ -472,6 +503,8 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     colunas,
     joins,
     temWhere: ast.where != null,
+    temHaving: ast.having != null,
+    temAgregacaoLocal: temAgregacao,
     temAgregacao: temAgregacao || nestedAggr,
     temGroupBy: groupCols.length > 0,
     temOrderBy: ast.orderby != null && asArray(ast.orderby).length > 0,
@@ -480,11 +513,15 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     temLiteralTextoFiltro:
       hasStringLiteral(ast.where) ||
       hasStringLiteral(ast.having) ||
-      subqueries.some((sub) => sub.temLiteralTextoFiltro),
+      subqueries.some((sub) => sub.temLiteralTextoFiltro) ||
+      setBranches.some((sub) => sub.temLiteralTextoFiltro),
     groupByCount: groupCols.length,
     groupByRefs: collectRefsFromNode(ast.groupby),
     filtroRefs,
+    orderByRefs: collectRefsFromNode(ast.orderby),
     subqueries,
+    setBranches,
+    setOp,
     cteNomes,
   };
 };
@@ -544,10 +581,8 @@ export const tryParseSelect = (sql: string, dialeto?: Dialeto): SqlAstSelect | n
   return null;
 };
 
-export const collectColumnRefs = (
-  select: SqlAstSelect,
-): readonly { table: string | null; column: string }[] => {
-  const out: { table: string | null; column: string }[] = [];
+export const collectColumnRefs = (select: SqlAstSelect): readonly SqlAstColumnRef[] => {
+  const out: SqlAstColumnRef[] = [];
   const visit = (item: SqlAstSelect): void => {
     for (const coluna of item.colunas) {
       if (coluna.column && coluna.column !== "*") {
@@ -563,10 +598,77 @@ export const collectColumnRefs = (
     for (const ref of item.filtroRefs) {
       out.push(ref);
     }
+    for (const ref of item.orderByRefs) {
+      out.push(ref);
+    }
     for (const sub of item.subqueries) {
       visit(sub);
+    }
+    for (const branch of item.setBranches) {
+      visit(branch);
     }
   };
   visit(select);
   return out;
+};
+
+/** Refs desta cláusula apenas — sem subqueries nem ramos de UNION. */
+export const collectColumnRefsLocal = (select: SqlAstSelect): readonly SqlAstColumnRef[] => {
+  const out: SqlAstColumnRef[] = [];
+  for (const coluna of select.colunas) {
+    if (coluna.column && coluna.column !== "*") {
+      out.push({ table: coluna.table, column: coluna.column });
+    }
+  }
+  for (const join of select.joins) {
+    for (const eq of join.equalities) {
+      out.push({ table: eq.leftAlias, column: eq.leftColumn });
+      out.push({ table: eq.rightAlias, column: eq.rightColumn });
+    }
+  }
+  for (const ref of select.filtroRefs) {
+    out.push(ref);
+  }
+  for (const ref of select.orderByRefs) {
+    out.push(ref);
+  }
+  return out;
+};
+
+export const temOrderByNoSelectExterno = (select: SqlAstSelect): boolean => {
+  if (select.temOrderBy) {
+    return true;
+  }
+  let current = select;
+  while (current.setBranches[0]) {
+    current = current.setBranches[0];
+    if (current.temOrderBy) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const temLimiteNoSelectExterno = (select: SqlAstSelect): boolean => {
+  if (select.temLimite) {
+    return true;
+  }
+  let current = select;
+  while (current.setBranches[0]) {
+    current = current.setBranches[0];
+    if (current.temLimite) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const walkSelectTree = (select: SqlAstSelect, visit: (item: SqlAstSelect) => void): void => {
+  visit(select);
+  for (const sub of select.subqueries) {
+    walkSelectTree(sub, visit);
+  }
+  for (const branch of select.setBranches) {
+    walkSelectTree(branch, visit);
+  }
 };

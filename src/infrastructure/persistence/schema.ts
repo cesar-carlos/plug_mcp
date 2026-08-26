@@ -1,8 +1,10 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -91,6 +93,7 @@ export const colunaGrafo = pgTable(
       .references(() => tabelaGrafo.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
     tipo: text("tipo"),
+    nullable: boolean("nullable"),
     descricao: text("descricao"),
     dicionario: text("dicionario"),
     papel: text("papel"),
@@ -147,12 +150,19 @@ export const skill = pgTable(
     descricao: text("descricao").notNull(),
     sqlModelo: text("sql_modelo").notNull(),
     params: jsonb("params").$type<ParametroSkill[]>().notNull().default([]),
-    escopo: jsonb("escopo")
-      .$type<EscopoSkill>()
-      .notNull()
-      .default({ tabelas: [], colunasPorTabela: {}, relacionamentos: [], grao: [] }),
+    escopo: jsonb("escopo").$type<EscopoSkill>().notNull().default({
+      tabelas: [],
+      colunasPorTabela: {},
+      relacionamentos: [],
+      graoPorTabela: {},
+      graoResultado: [],
+      metricasSaida: [],
+      pacoteVersao: 1,
+    }),
     versao: integer("versao").notNull().default(1),
+    pacoteVersao: integer("pacote_versao").notNull().default(1),
     status: text("status").notNull().default("rascunho"),
+    motivoRevalidacao: text("motivo_revalidacao"),
     autorUsuarioId: uuid("autor_usuario_id"),
     ...timestamps,
   },
@@ -168,13 +178,17 @@ export const anotacaoGrafo = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     agentId: uuid("agent_id").notNull(),
     tabelaId: uuid("tabela_id").references(() => tabelaGrafo.id, { onDelete: "set null" }),
+    skillId: uuid("skill_id").references(() => skill.id, { onDelete: "set null" }),
     tipo: text("tipo").notNull(),
     titulo: text("titulo").notNull(),
     texto: text("texto").notNull(),
     autorUsuarioId: uuid("autor_usuario_id"),
     ...timestamps,
   },
-  (t) => [index("anotacao_grafo_agent_idx").on(t.agentId)],
+  (t) => [
+    index("anotacao_grafo_agent_idx").on(t.agentId),
+    index("anotacao_grafo_skill_idx").on(t.skillId),
+  ],
 );
 
 export const auditLog = pgTable(
@@ -206,7 +220,6 @@ export const consultaAprendida = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     agentId: uuid("agent_id").notNull(),
-    skillId: uuid("skill_id"),
     pergunta: text("pergunta").notNull(),
     sql: text("sql").notNull(),
     paramsContrato: jsonb("params_contrato").$type<ParametroSkill[]>().notNull().default([]),
@@ -217,6 +230,22 @@ export const consultaAprendida = pgTable(
     ...timestamps,
   },
   (t) => [index("consulta_aprendida_agent_idx").on(t.agentId)],
+);
+
+export const consultaAprendidaSkill = pgTable(
+  "consulta_aprendida_skill",
+  {
+    consultaId: uuid("consulta_id")
+      .notNull()
+      .references(() => consultaAprendida.id, { onDelete: "cascade" }),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => skill.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.consultaId, t.skillId] }),
+    index("consulta_aprendida_skill_skill_idx").on(t.skillId),
+  ],
 );
 
 export const sinonimo = pgTable(

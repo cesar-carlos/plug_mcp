@@ -50,4 +50,27 @@ describe("sql-ast", () => {
       expect(rowNumber.temAgregacao).toBe(true);
     }
   });
+
+  it("percorre ramos de UNION ALL", () => {
+    const ast = parseSelect(
+      "SELECT p.codprod FROM produto p WHERE p.codprod = 1 UNION ALL SELECT f.valor FROM fatura f WHERE f.valor = 1",
+      "mssql",
+    );
+    expect(ast.setOp).toMatch(/union/);
+    expect(ast.setBranches.length).toBe(1);
+    expect(ast.tabelas.some((tabela) => tabela.nome.toLowerCase() === "produto")).toBe(true);
+    expect(
+      ast.setBranches[0]?.tabelas.some((tabela) => tabela.nome.toLowerCase() === "fatura"),
+    ).toBe(true);
+  });
+
+  it("coleta subquery em HAVING e JOIN ON", () => {
+    const having = parseSelect(
+      "SELECT p.codprod, SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0 GROUP BY p.codprod HAVING SUM(p.codprod) > (SELECT MAX(f.valor) FROM fatura f WHERE f.valor > 0)",
+      "mssql",
+    );
+    expect(
+      having.subqueries.some((sub) => sub.tabelas.some((t) => t.nome.toLowerCase() === "fatura")),
+    ).toBe(true);
+  });
 });

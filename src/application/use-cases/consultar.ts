@@ -27,18 +27,23 @@ import {
   parseSqlModelo,
   sqlValidacaoVazia,
   bindParamsForValidation,
+  sqlParaOdbc,
 } from "./shared/sql-modelo.js";
 import { tryParseSelect } from "./shared/sql-ast.js";
 import { hintComProximos } from "./shared/sugestoes.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
-import { validarSqlNoEscopo, coletarAvisosValidacao } from "./shared/validar-escopo.js";
+import {
+  validarSqlNoEscopo,
+  coletarAvisosValidacao,
+  exigirPaginacaoEstavel,
+} from "./shared/validar-escopo.js";
 import { promoverFatosDaExecucao } from "./shared/promover-fatos.js";
 import {
   exigirFiltroEscopoPadrao,
   mesclarParamsEscopo,
   avisosPlaceholderEscopo,
 } from "./shared/escopo-filtro.js";
-import { queryCacheKey } from "./shared/query-cache-key.js";
+import { queryCacheKey, policyFingerprint } from "./shared/query-cache-key.js";
 import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import { formatAsOf } from "./shared/format-as-of.js";
 import {
@@ -100,7 +105,9 @@ interface CachedQueryPayload {
   readonly columns: readonly string[];
   readonly rows: readonly Record<string, unknown>[];
   readonly asOf: string;
+  readonly servidoEm: string;
   readonly truncated: boolean;
+  readonly columnsMetadata?: readonly { name: string; type?: string; nullable?: boolean }[];
 }
 
 const parseCachedQuery = (raw: string): CachedQueryPayload | null => {
@@ -119,11 +126,40 @@ const parseCachedQuery = (raw: string): CachedQueryPayload | null => {
         (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object",
       ),
       asOf: rec.asOf,
+      servidoEm: typeof rec.servidoEm === "string" ? rec.servidoEm : rec.asOf,
       truncated: rec.truncated === true,
+      ...(Array.isArray(rec.columnsMetadata)
+        ? {
+            columnsMetadata: rec.columnsMetadata.filter(
+              (item): item is { name: string; type?: string; nullable?: boolean } =>
+                Boolean(item) &&
+                typeof item === "object" &&
+                typeof (item as { name?: unknown }).name === "string",
+            ),
+          }
+        : {}),
     };
   } catch {
     return null;
   }
+};
+
+const unirContratosParams = (skills: readonly Skill[]): Skill["params"] => {
+  const map = new Map<string, Skill["params"][number]>();
+  for (const item of skills) {
+    for (const param of item.params) {
+      const prev = map.get(param.nome);
+      if (prev && (prev.tipo !== param.tipo || prev.obrigatorio !== param.obrigatorio)) {
+        throw new DomainError({
+          code: ERROR_CODES.MULTI_SKILL_PARAMS,
+          message: `Param ${param.nome} conflita entre skills (tipo/obrigatoriedade).`,
+          hint: "Alinhe o contrato nas skills ou use nomes distintos no SQL.",
+        });
+      }
+      map.set(param.nome, prev ?? param);
+    }
+  }
+  return [...map.values()];
 };
 
 const truncateCell = (value: unknown): unknown => {
@@ -149,7 +185,7 @@ const gravarAprendizadoDaConsulta = async (input: {
     anotacoes?: AnotacaoGrafoRepositoryPort;
   };
   agentId: string;
-  skillId: string;
+  skillIds: readonly string[];
   pergunta: string;
   sql: string;
   paramsContrato: Skill["params"];
@@ -163,7 +199,7 @@ const gravarAprendizadoDaConsulta = async (input: {
   const consulta = await persistirConsultaExecutada({
     aprendizado: input.extras.aprendizado,
     agentId: input.agentId,
-    skillId: input.skillId,
+    skillIds: input.skillIds,
     pergunta: input.pergunta,
     sql: input.sql,
     paramsContrato: input.paramsContrato,
@@ -264,10 +300,17 @@ export class ConsultarDados {
     sqlExecutado: string;
     paramsUsados: Record<string, unknown>;
     asOf: string;
-    recorte: { tipoJoin: string; tabela: string; on: string | null }[];
+    recorte: { tipoJoin: string; tabela: string; on: string | null; opcional?: boolean }[];
+    columnsMetadata?: readonly { name: string; type?: string; nullable?: boolean }[];
     escopoAplicado: { empresa?: string; filial?: string; consolidado: boolean };
     avisos: { code: string; message: string }[];
     aprendizadoGravado?: AprendizadoGravado;
+    paginacao?: {
+      page: number;
+      pageSize: number;
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+    };
     hint?: string;
   }> {
     const started = Date.now();
@@ -326,6 +369,22 @@ export class ConsultarDados {
     }
     const skill = skillsComEscopo[0]!;
     const sqlLivre = input.sql?.trim() ?? "";
+    const perguntaUsada = input.pergunta?.trim() ?? "";
+    if (!perguntaUsada) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "pergunta é obrigatória.",
+        hint: "Envie a pergunta do usuário em consultar_dados. O servidor grava o SQL que funcionou.",
+      });
+    }
+    if (skillsComEscopo.length > 1 && !sqlLivre) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Cruzar skills exige SQL customizado.",
+        hint: "Passe skillIds de todos os domínios e o SELECT no escopo unido. Sem sql só a consulta exemplo da primeira skill rodaria.",
+      });
+    }
+    const contratoParams = unirContratosParams(skillsComEscopo);
     const avisos: { code: string; message: string }[] = [];
     if (!acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial) {
       avisos.push({
@@ -346,6 +405,7 @@ export class ConsultarDados {
       );
       const ast = validarSqlNoEscopo(sqlLivre, acesso.dialeto, escopo, {
         page: input.options?.page,
+        pageSize: input.options?.page_size,
       });
       avisos.push(...coletarAvisosValidacao(ast));
       sqlExecutar = ast.sql;
@@ -366,6 +426,7 @@ export class ConsultarDados {
       sql: sqlExecutar,
       colunasDasTabelas,
       escopoPadrao: acesso.escopoPadrao,
+      dialeto: acesso.dialeto,
     });
     avisos.push(
       ...avisosPlaceholderEscopo({
@@ -377,41 +438,95 @@ export class ConsultarDados {
     if (this.extras.anotacoes) {
       const notas = await this.extras.anotacoes.list(acesso.agentId);
       for (const nota of notas) {
-        if (nota.tipo === "regra" || nota.tipo === "metrica") {
+        if (
+          (nota.tipo === "regra" || nota.tipo === "metrica") &&
+          (!nota.skillId || skillsComEscopo.some((item) => item.id === nota.skillId))
+        ) {
           avisos.push({ code: nota.tipo.toUpperCase(), message: `${nota.titulo}: ${nota.texto}` });
         }
       }
     }
     const params = coerceBoundParams(
-      bindNamedParams(modelo.sql, mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao)),
-      skill.params,
+      bindNamedParams(
+        modelo.sql,
+        mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao),
+        contratoParams,
+      ),
+      contratoParams,
     );
     const requested = input.options?.max_rows ?? this.defaultMaxRows;
     const maxRows = Math.min(Math.max(1, requested), this.absoluteMaxRows);
-    const fetchMax = Math.min(maxRows + 1, this.absoluteMaxRows + 1);
+    const page = input.options?.page;
+    const pageSize = input.options?.page_size;
+    if (
+      (page !== undefined && pageSize === undefined) ||
+      (page === undefined && pageSize !== undefined)
+    ) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Paginação exige options.page e options.page_size juntos.",
+        hint: "Envie os dois, com ORDER BY no SELECT externo e sem TOP/LIMIT.",
+      });
+    }
+    if (pageSize !== undefined && pageSize > maxRows) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "page_size não pode exceder max_rows.",
+        hint: `Use page_size <= ${String(maxRows)}.`,
+      });
+    }
+    const paginar = Boolean(page && pageSize);
+    if (paginar && acesso.dialeto === "firebird") {
+      throw new DomainError({
+        code: ERROR_CODES.DIALECT_UNSUPPORTED,
+        message: "Firebird não pagina via options.page.",
+        hint: "Use só a consulta exemplo da skill, sem SQL livre nem paginação gerenciada.",
+      });
+    }
+    const fetchMax = paginar ? maxRows : Math.min(maxRows + 1, this.absoluteMaxRows + 1);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
+    const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.getClientTokenPolicy({
+        accessToken,
+        agentId: acesso.agentId,
+        clientToken,
+      }),
+    );
     const paramKeys = Object.keys(params).sort().join(",");
-    const recorte = modelo.relacionamentos
-      .filter((rel) => !rel.tipoJoin.includes("left") && !rel.tipoJoin.includes("cross"))
-      .map((rel) => ({ tipoJoin: rel.tipoJoin, tabela: rel.tabela, on: rel.on }));
+    const recorte = modelo.relacionamentos.map((rel) => ({
+      tipoJoin: rel.tipoJoin,
+      tabela: rel.tabela,
+      on: rel.on,
+      opcional: rel.tipoJoin.includes("left") || rel.tipoJoin.includes("outer"),
+    }));
     const asOfInfo = formatAsOf(new Date(), acesso.timezone);
     if (asOfInfo.aviso) {
       avisos.push({ code: "TIMEZONE_INVALIDO", message: asOfInfo.aviso });
     }
     const asOf = asOfInfo.asOf;
-    const perguntaUsada = input.pergunta?.trim() ? input.pergunta.trim() : skill.nome;
     const itensAprendizado = input.aprendizado ?? [];
     const astLivre = tryParseSelect(sqlExecutar, acesso.dialeto);
-    if (input.options?.page && !astLivre?.temOrderBy) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Paginação exige ORDER BY.",
-        hint: "Sem ordem estável a página repete e perde linha. Inclua ORDER BY no SQL (sqlModelo ou sql).",
-      });
-    }
-    const paginar = Boolean(input.options?.page && input.options.page_size);
+    exigirPaginacaoEstavel(sqlExecutar, astLivre, {
+      page,
+      pageSize,
+    });
+    const sqlNoFio = sqlParaOdbc(sqlExecutar);
     const cacheable = Boolean(astLivre?.temAgregacao && this.extras.cache && !paginar);
-    const cacheKey = cacheable ? queryCacheKey(acesso.agentId, sqlExecutar, params, maxRows) : "";
+    const cacheKey = queryCacheKey({
+      usuarioId: uid,
+      acessoId: acesso.id,
+      clientTokenHash: acesso.clientTokenHash,
+      agentId: acesso.agentId,
+      skillIds: skillsComEscopo.map((item) => item.id),
+      skillVersoes: skillsComEscopo.map((item) => item.versao),
+      sql: sqlNoFio,
+      params,
+      maxRows,
+      timezone: acesso.timezone,
+      escopoEmpresa: acesso.escopoPadrao?.empresa,
+      escopoFilial: acesso.escopoPadrao?.filial,
+      policyFingerprint: policyFingerprint(policy),
+    });
     try {
       if (cacheable && this.extras.cache) {
         const cached = await this.extras.cache.get(cacheKey);
@@ -421,10 +536,10 @@ export class ConsultarDados {
             const loop = await gravarAprendizadoDaConsulta({
               extras: this.extras,
               agentId: acesso.agentId,
-              skillId: skill.id,
+              skillIds: skillsComEscopo.map((item) => item.id),
               pergunta: perguntaUsada,
-              sql: sqlExecutar,
-              paramsContrato: skill.params,
+              sql: sqlNoFio,
+              paramsContrato: contratoParams,
               autorUsuarioId: uid,
               itens: itensAprendizado,
             });
@@ -437,10 +552,11 @@ export class ConsultarDados {
               rowCount: parsed.rows.length,
               maxRowsApplied: maxRows,
               truncated: parsed.truncated,
-              sqlExecutado: sqlExecutar,
+              sqlExecutado: sqlNoFio,
               paramsUsados: params,
               asOf: parsed.asOf,
               recorte,
+              columnsMetadata: parsed.columnsMetadata,
               escopoAplicado: {
                 empresa: acesso.escopoPadrao?.empresa,
                 filial: acesso.escopoPadrao?.filial,
@@ -449,7 +565,10 @@ export class ConsultarDados {
               avisos: [
                 ...avisos,
                 ...loop.avisos,
-                { code: "CACHE", message: "Resultado agregado servido do cache." },
+                {
+                  code: "CACHE",
+                  message: `Resultado agregado do cache (dataDoResultado=${parsed.asOf}; servidoEm=${parsed.servidoEm}). Não trate como leitura ao vivo.`,
+                },
               ],
               aprendizadoGravado: loop.gravado,
             };
@@ -461,7 +580,7 @@ export class ConsultarDados {
           accessToken,
           agentId: acesso.agentId,
           clientToken,
-          sql: sqlExecutar,
+          sql: sqlNoFio,
           params,
           options: {
             maxRows: fetchMax,
@@ -471,8 +590,28 @@ export class ConsultarDados {
           },
         }),
       );
-      const truncated = result.rows.length > maxRows;
-      const rows = sanitizeQueryRows(result.rows.slice(0, maxRows));
+      if (paginar && !result.pagination) {
+        throw new DomainError({
+          code: ERROR_CODES.METADATA_CONTRATO,
+          message: "Paginação sem metadata do agente.",
+          hint: "O hub precisa devolver pagination.page, page_size e has_next_page. Não assuma fim dos dados.",
+        });
+      }
+      const pageRows =
+        paginar && pageSize !== undefined
+          ? result.rows.slice(0, pageSize)
+          : result.rows.slice(0, maxRows);
+      const truncated = paginar ? false : result.rows.length > maxRows || result.truncated === true;
+      const rows = sanitizeQueryRows(pageRows);
+      const paginacao =
+        paginar && page !== undefined && pageSize !== undefined && result.pagination
+          ? {
+              page: result.pagination.page,
+              pageSize: result.pagination.pageSize,
+              hasNextPage: result.pagination.hasNextPage,
+              hasPreviousPage: result.pagination.hasPreviousPage,
+            }
+          : undefined;
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
@@ -494,40 +633,47 @@ export class ConsultarDados {
       if (cacheable && this.extras.cache) {
         await this.extras.cache.set(
           cacheKey,
-          JSON.stringify({ columns: result.columns, rows, asOf, truncated }),
+          JSON.stringify({
+            columns:
+              result.columns.length > 0
+                ? result.columns
+                : (result.columnsMetadata?.map((item) => item.name) ?? []),
+            rows,
+            asOf,
+            servidoEm: asOf,
+            truncated,
+            columnsMetadata: result.columnsMetadata,
+          }),
           this.extras.cacheTtlMs ?? 60_000,
         );
       }
       const loop = await gravarAprendizadoDaConsulta({
         extras: this.extras,
         agentId: acesso.agentId,
-        skillId: skill.id,
+        skillIds: skillsComEscopo.map((item) => item.id),
         pergunta: perguntaUsada,
-        sql: sqlExecutar,
-        paramsContrato: skill.params,
+        sql: sqlNoFio,
+        paramsContrato: contratoParams,
         autorUsuarioId: uid,
         itens: itensAprendizado,
       });
-      if (!input.pergunta?.trim()) {
-        avisos.push({
-          code: "PERGUNTA_AUSENTE",
-          message:
-            "Passe pergunta em consultar_dados (a pergunta do usuário). O SQL já foi gravado como consulta aprendida.",
-        });
-      }
       return {
         success: true,
         skillId: skill.id,
         skillIds: skillsComEscopo.map((item) => item.id),
-        columns: result.columns,
+        columns:
+          result.columns.length > 0
+            ? result.columns
+            : (result.columnsMetadata?.map((item) => item.name) ?? []),
         rows,
         rowCount: rows.length,
         maxRowsApplied: maxRows,
         truncated,
-        sqlExecutado: sqlExecutar,
+        sqlExecutado: sqlNoFio,
         paramsUsados: params,
         asOf,
         recorte,
+        columnsMetadata: result.columnsMetadata,
         escopoAplicado: {
           empresa: acesso.escopoPadrao?.empresa,
           filial: acesso.escopoPadrao?.filial,
@@ -535,11 +681,14 @@ export class ConsultarDados {
         },
         avisos: [...avisos, ...loop.avisos],
         aprendizadoGravado: loop.gravado,
-        hint: truncated
-          ? "Resultado possivelmente incompleto (atingiu max_rows). Agregue no SQL ou pagine com ORDER BY."
-          : loop.gravado
-            ? "SQL gravado. Se o usuário ensinou regra, dicionário ou sinônimo, envie em aprendizado[] ou chame registrar_aprendizado."
-            : undefined,
+        paginacao,
+        hint: paginacao?.hasNextPage
+          ? "Há próxima página. Incremente options.page com o mesmo ORDER BY e page_size."
+          : truncated
+            ? "Resultado possivelmente incompleto (atingiu max_rows). Agregue no SQL ou pagine com ORDER BY."
+            : loop.gravado
+              ? "SQL gravado. Se o usuário ensinou regra, dicionário ou sinônimo, envie em aprendizado[] ou chame registrar_aprendizado."
+              : undefined,
       };
     } catch (error) {
       await this.audit.append({
@@ -643,7 +792,7 @@ export class ValidarConsulta {
         accessToken,
         agentId: acesso.agentId,
         clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-        sql: sqlValidacaoVazia(acesso.dialeto, ast.sql),
+        sql: sqlValidacaoVazia(acesso.dialeto, sqlParaOdbc(ast.sql)),
         params: bindParamsForValidation(ast.sql, input.params),
         options: { maxRows: 1 },
       }),
@@ -854,10 +1003,18 @@ export class BuscarContexto {
   ): Promise<{
     success: true;
     consultaPermitida: boolean;
+    cobertura: "completa" | "parcial" | "desconhecida";
+    candidatos: {
+      skillId: string;
+      slug: string;
+      nome: string;
+      cobertura: "completa" | "parcial" | "desconhecida";
+      termosEncontrados: string[];
+    }[];
     skillsPublicadas: readonly Skill[];
     skillsParaTreino: readonly Skill[];
     consultasAprendidas: readonly ConsultaAprendida[];
-    grafoParaTreino: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
+    grafoParaTreino?: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     fluxoTreino?: FluxoTreino;
     gap?: { code: "SKILL_GAP"; hint: string };
     hint?: string;
@@ -900,31 +1057,86 @@ export class BuscarContexto {
       await Promise.all([
         this.grafo.buscar(acesso.agentId, expanded, 12),
         this.skills.buscar(acesso.agentId, expanded, 8, "publicada"),
-        this.skills.buscar(acesso.agentId, expanded, 8, ["rascunho", "validada"]),
+        this.skills.buscar(acesso.agentId, expanded, 8, [
+          "rascunho",
+          "validada",
+          "rascunho_revalidacao",
+        ]),
         this.anotacoes.buscar(acesso.agentId, expanded, 8),
         this.aprendizado
           ? this.aprendizado.buscarConsultas(acesso.agentId, expanded, 5)
           : Promise.resolve([] as ConsultaAprendida[]),
       ]);
-    const consultaPermitida = skillsPublicadas.length > 0;
+    const tokens = query
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((item) => item.length >= 2);
+    const haystack = (skill: Skill): string => {
+      const synTermos = sinonimos
+        .filter((item) => {
+          const alvo = item.alvoId.toLowerCase();
+          return (
+            item.alvoId === skill.id ||
+            alvo === skill.slug.toLowerCase() ||
+            skill.nome.toLowerCase().includes(alvo)
+          );
+        })
+        .map((item) => item.termo);
+      return `${skill.nome} ${skill.descricao} ${skill.slug} ${skill.sqlModelo} ${synTermos.join(" ")}`.toLowerCase();
+    };
+    const candidatos = skillsPublicadas.map((skill) => {
+      const text = haystack(skill);
+      const termosEncontrados = tokens.filter((token) => text.includes(token));
+      const cobertura: "completa" | "parcial" | "desconhecida" =
+        tokens.length === 0
+          ? "desconhecida"
+          : termosEncontrados.length === tokens.length
+            ? "completa"
+            : termosEncontrados.length > 0
+              ? "parcial"
+              : "desconhecida";
+      return {
+        skillId: skill.id,
+        slug: skill.slug,
+        nome: skill.nome,
+        cobertura,
+        termosEncontrados,
+      };
+    });
+    const coberturaGeral = candidatos.some((item) => item.cobertura === "completa")
+      ? "completa"
+      : candidatos.some((item) => item.cobertura === "parcial")
+        ? "parcial"
+        : "desconhecida";
+    const consultaPermitida = coberturaGeral === "completa";
+    const todas = await this.skills.listByAgent(acesso.agentId);
+    const publicadasNoAgent = todas.filter((item) => item.status === "publicada");
     const emAndamento = pickSkillInProgress(skillsParaTreino);
     const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
+    const precisaListar = !consultaPermitida && publicadasNoAgent.length > 0;
     const gapHint = emAndamento
       ? `Há skill em andamento "${emAndamento.nome}" (${emAndamento.status}). Continue o fluxo: ${fluxoTreino.proximoPasso ?? "validar_skill"}. Não chame consultar_dados.`
-      : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
-    if (!consultaPermitida && this.aprendizado) {
+      : precisaListar
+        ? "A busca por termos não prova ausência. Chame listar_skills antes de desistir. Não invente tabela, coluna nem JOIN."
+        : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
+    const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 2;
+    if (!consultaPermitida && !precisaListar && lacunaElegivel && this.aprendizado) {
       await this.aprendizado.registrarLacuna(acesso.agentId, query);
     }
     return {
       success: true as const,
       consultaPermitida,
+      cobertura: coberturaGeral,
+      candidatos,
       skillsPublicadas,
       skillsParaTreino,
       consultasAprendidas,
-      grafoParaTreino: {
-        tabelas: tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy)),
-        anotacoes: notas,
-      },
+      grafoParaTreino: consultaPermitida
+        ? undefined
+        : {
+            tabelas: tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy)),
+            anotacoes: notas,
+          },
       fluxoTreino,
       gap: consultaPermitida
         ? undefined

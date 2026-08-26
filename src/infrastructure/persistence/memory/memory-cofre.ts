@@ -270,6 +270,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         tabelaId: input.tabelaId,
         nome: input.nome,
         tipo: input.tipo ?? null,
+        nullable: input.nullable ?? null,
         descricao: input.descricao ?? null,
         dicionario: input.dicionario ?? null,
         papel: input.papel ?? null,
@@ -304,6 +305,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     const coluna: ColunaGrafo = {
       ...existing,
       tipo: merge.tipo ?? existing.tipo,
+      nullable: input.nullable ?? existing.nullable,
       descricao: merge.descricao,
       dicionario: merge.dicionario ?? existing.dicionario,
       papel: input.papel ?? existing.papel,
@@ -488,7 +490,9 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
       escopo: input.escopo ?? escopoVazio(),
       autorUsuarioId: input.autorUsuarioId,
       versao: 1,
+      pacoteVersao: input.pacoteVersao ?? input.escopo?.pacoteVersao ?? 1,
       status: "rascunho",
+      motivoRevalidacao: input.motivoRevalidacao ?? null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -499,7 +503,17 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
   async update(
     skillId: string,
     patch: Partial<
-      Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status" | "escopo">
+      Pick<
+        Skill,
+        | "nome"
+        | "descricao"
+        | "sqlModelo"
+        | "params"
+        | "status"
+        | "escopo"
+        | "pacoteVersao"
+        | "motivoRevalidacao"
+      >
     >,
   ): Promise<Skill> {
     const row = this.rows.get(skillId);
@@ -572,6 +586,7 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
   async create(input: {
     agentId: string;
     tabelaId: string | null;
+    skillId?: string | null;
     tipo: string;
     titulo: string;
     texto: string;
@@ -579,7 +594,13 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
   }): Promise<AnotacaoGrafo> {
     const row: AnotacaoGrafo = {
       id: id(),
-      ...input,
+      agentId: input.agentId,
+      tabelaId: input.tabelaId,
+      skillId: input.skillId ?? null,
+      tipo: input.tipo,
+      titulo: input.titulo,
+      texto: input.texto,
+      autorUsuarioId: input.autorUsuarioId,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -587,9 +608,16 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
     return row;
   }
 
-  async list(agentId: string, tabelaId?: string | null): Promise<readonly AnotacaoGrafo[]> {
+  async list(
+    agentId: string,
+    tabelaId?: string | null,
+    skillId?: string | null,
+  ): Promise<readonly AnotacaoGrafo[]> {
     return [...this.rows.values()].filter(
-      (row) => row.agentId === agentId && (tabelaId === undefined || row.tabelaId === tabelaId),
+      (row) =>
+        row.agentId === agentId &&
+        (tabelaId === undefined || row.tabelaId === tabelaId) &&
+        (skillId === undefined || row.skillId === skillId),
     );
   }
 
@@ -643,7 +671,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
 
   async salvarConsulta(input: {
     agentId: string;
-    skillId: string | null;
+    skillIds: readonly string[];
     pergunta: string;
     sql: string;
     paramsContrato: readonly ParametroSkill[];
@@ -652,9 +680,11 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     const existing = this.consultas.find(
       (row) => row.agentId === input.agentId && row.sql === input.sql,
     );
+    const mergedIds = [...new Set([...(existing?.skillIds ?? []), ...input.skillIds])];
     if (existing) {
       const next: ConsultaAprendida = {
         ...existing,
+        skillIds: mergedIds,
         execucoes: existing.execucoes + 1,
         ultimaExecucao: now(),
         pergunta:
@@ -669,7 +699,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     const row: ConsultaAprendida = {
       id: id(),
       agentId: input.agentId,
-      skillId: input.skillId,
+      skillIds: [...input.skillIds],
       pergunta: input.pergunta,
       sql: input.sql,
       paramsContrato: input.paramsContrato,
@@ -685,6 +715,17 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   async listarConsultas(agentId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
     return this.consultas
       .filter((row) => row.agentId === agentId)
+      .sort((a, b) => b.execucoes - a.execucoes)
+      .slice(0, limite);
+  }
+
+  async listarConsultasDaSkill(
+    agentId: string,
+    skillId: string,
+    limite: number,
+  ): Promise<readonly ConsultaAprendida[]> {
+    return this.consultas
+      .filter((row) => row.agentId === agentId && row.skillIds.includes(skillId))
       .sort((a, b) => b.execucoes - a.execucoes)
       .slice(0, limite);
   }
@@ -725,8 +766,11 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     let consultas = 0;
     for (let i = 0; i < this.consultas.length; i += 1) {
       const row = this.consultas[i];
-      if (row?.agentId === agentId && row.skillId === skillId) {
-        this.consultas[i] = { ...row, skillId: null };
+      if (row?.agentId === agentId && row.skillIds.includes(skillId)) {
+        this.consultas[i] = {
+          ...row,
+          skillIds: row.skillIds.filter((id) => id !== skillId),
+        };
         consultas += 1;
       }
     }

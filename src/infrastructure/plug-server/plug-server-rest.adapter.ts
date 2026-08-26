@@ -9,6 +9,7 @@ import type {
   PlugServerGatewayPort,
   RequestAgentAccessResult,
   SqlExecuteResult,
+  SqlColumnMetadata,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import {
   mapPlugServerFailure,
@@ -120,16 +121,19 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     params?: Record<string, unknown>;
     options?: { maxRows?: number; timeoutMs?: number; page?: number; pageSize?: number };
   }): Promise<SqlExecuteResult> {
+    const paginar = Boolean(input.options?.page && input.options.pageSize);
     const options: Record<string, unknown> = {
       max_rows: input.options?.maxRows,
-      execution_mode: "preserve",
     };
+    if (!paginar) {
+      options.execution_mode = "preserve";
+    }
     if (input.options?.timeoutMs) {
       options.timeout_ms = input.options.timeoutMs;
     }
-    if (input.options?.page && input.options.pageSize) {
-      options.page = input.options.page;
-      options.page_size = input.options.pageSize;
+    if (paginar) {
+      options.page = input.options?.page;
+      options.page_size = input.options?.pageSize;
     }
     const json = await this.request(input.accessToken, "POST", "/api/v1/agents/commands", {
       agentId: input.agentId,
@@ -254,6 +258,67 @@ const unwrapRpcResult = (body: unknown): Record<string, unknown> => {
   return asRecord(item?.result) ?? asRecord(item?.data) ?? item ?? {};
 };
 
+const asPositiveInt = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+
+const readPagination = (result: Record<string, unknown>): SqlExecuteResult["pagination"] => {
+  const pag = asRecord(result.pagination);
+  if (!pag) {
+    return undefined;
+  }
+  const page = asPositiveInt(pag.page);
+  const pageSize = asPositiveInt(pag.page_size);
+  if (page === undefined || pageSize === undefined || typeof pag.has_next_page !== "boolean") {
+    return undefined;
+  }
+  return {
+    page,
+    pageSize,
+    hasNextPage: pag.has_next_page,
+    hasPreviousPage: pag.has_previous_page === true,
+  };
+};
+
+const readColumnsMetadata = (result: Record<string, unknown>): SqlColumnMetadata[] => {
+  const raw = Array.isArray(result.column_metadata)
+    ? result.column_metadata
+    : Array.isArray(result.columns_metadata)
+      ? result.columns_metadata
+      : [];
+  const out: SqlColumnMetadata[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const rec = item as Record<string, unknown>;
+    const name =
+      typeof rec.name === "string"
+        ? rec.name
+        : typeof rec.column_name === "string"
+          ? rec.column_name
+          : "";
+    if (!name) {
+      continue;
+    }
+    const type =
+      typeof rec.type === "string"
+        ? rec.type
+        : typeof rec.data_type === "string"
+          ? rec.data_type
+          : undefined;
+    const nullable =
+      typeof rec.nullable === "boolean"
+        ? rec.nullable
+        : rec.is_nullable === true
+          ? true
+          : rec.is_nullable === false
+            ? false
+            : undefined;
+    out.push({ name, ...(type ? { type } : {}), ...(nullable !== undefined ? { nullable } : {}) });
+  }
+  return out;
+};
+
 export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
   const result = unwrapRpcResult(body);
   let columns = Array.isArray(result.columns)
@@ -277,6 +342,21 @@ export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
     }
     return asRecord(row) ?? {};
   });
-  const inferred = columns.length > 0 ? columns : rows[0] ? Object.keys(rows[0]) : [];
-  return { columns: inferred, rows };
+  const metadata = readColumnsMetadata(result);
+  const inferred =
+    columns.length > 0
+      ? columns
+      : metadata.length > 0
+        ? metadata.map((item) => item.name)
+        : rows[0]
+          ? Object.keys(rows[0])
+          : [];
+  const pagination = readPagination(result);
+  return {
+    columns: inferred,
+    rows,
+    ...(result.truncated === true ? { truncated: true } : {}),
+    ...(pagination ? { pagination } : {}),
+    ...(metadata.length > 0 ? { columnsMetadata: metadata } : {}),
+  };
 };

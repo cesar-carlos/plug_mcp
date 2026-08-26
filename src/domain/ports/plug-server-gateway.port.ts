@@ -23,9 +23,25 @@ export interface SqlExecuteOptions {
   readonly pageSize?: number;
 }
 
+export interface SqlExecutePagination {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly hasNextPage: boolean;
+  readonly hasPreviousPage: boolean;
+}
+
+export interface SqlColumnMetadata {
+  readonly name: string;
+  readonly type?: string;
+  readonly nullable?: boolean;
+}
+
 export interface SqlExecuteResult {
   readonly columns: readonly string[];
   readonly rows: readonly Record<string, unknown>[];
+  readonly truncated?: boolean;
+  readonly pagination?: SqlExecutePagination;
+  readonly columnsMetadata?: readonly SqlColumnMetadata[];
 }
 
 export interface ClientTokenPolicy {

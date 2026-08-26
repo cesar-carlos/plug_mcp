@@ -58,15 +58,15 @@ Métodos usados pelo MCP hoje: `sql.execute`. Útil em diagnóstico: `client_tok
 
 ### `sql.execute` — params relevantes
 
-| Campo                        | Obrigatório | Notas                                                                                                                                                                      |
-| ---------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sql`                        | sim         | Até 1 MiB UTF-8 no hub. Precisa de `FROM` com tabela/view real.                                                                                                            |
-| `params`                     | não         | Nomeados. Até 2 MiB JSON.                                                                                                                                                  |
-| `client_token`               | condicional | Obrigatório se o agente exige autorização por token.                                                                                                                       |
-| `options.max_rows`           | não         | Hub aceita até 1_000_000; o MCP aplica teto próprio (`QUERY_*`).                                                                                                           |
-| `options.timeout_ms`         | não         | Timeout **no agente** (1..300_000).                                                                                                                                        |
-| `options.page` + `page_size` | não         | Juntos; exigem `ORDER BY` explícito (contrato agente v2.4+).                                                                                                               |
-| `options.execution_mode`     | não         | `managed` (default no hub, pode reescrever para paginar) ou `preserve`. O MCP envia **`preserve`**: já aplica `max_rows` e não pode deixar o hub reescrever `SUM`/`COUNT`. |
+| Campo                        | Obrigatório | Notas                                                                                                                                                                                                                           |
+| ---------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sql`                        | sim         | Até 1 MiB UTF-8 no hub. Precisa de `FROM` com tabela/view real.                                                                                                                                                                 |
+| `params`                     | não         | Nomeados. Até 2 MiB JSON.                                                                                                                                                                                                       |
+| `client_token`               | condicional | Obrigatório se o agente exige autorização por token.                                                                                                                                                                            |
+| `options.max_rows`           | não         | Hub aceita até 1_000_000; o MCP aplica teto próprio (`QUERY_*`).                                                                                                                                                                |
+| `options.timeout_ms`         | não         | Timeout **no agente** (1..300_000).                                                                                                                                                                                             |
+| `options.page` + `page_size` | não         | Juntos; exigem `ORDER BY` no SELECT externo (contrato agente v2.4+). O MCP omite `execution_mode` e o hub usa `managed`. Sem o par, envia `execution_mode: preserve`.                                                           |
+| `options.execution_mode`     | não         | `managed` (default no hub, pode reescrever para paginar) ou `preserve`. Sem paginação o MCP envia **`preserve`**: já aplica `max_rows` e não pode deixar o hub reescrever `SUM`/`COUNT`. Com `page`+`page_size`, omite o campo. |
 
 O adapter normaliza o envelope (`response.item.result`) para `{ columns, rows }`. HTTP `200` com `response.item.error` **ainda é falha** — mapear via `mapPlugServerFailure`, não tratar como sucesso.
 

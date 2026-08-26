@@ -19,6 +19,7 @@ import {
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -59,13 +60,9 @@ const seedTabela = async (
   grafo: InMemoryGrafoRepository,
   usuarioId: string,
   nome = "produto",
+  colunas: readonly string[] = ["codprod"],
 ): Promise<void> => {
-  await grafo.mergeTabela({
-    agentId,
-    nome,
-    origem: "validado_execucao",
-    autorUsuarioId: usuarioId,
-  });
+  await seedTabelaComColunas(grafo, { agentId, usuarioId, nome, colunas });
 };
 
 describe("fluxo guiado de treino", () => {
@@ -260,7 +257,17 @@ describe("fluxo guiado de treino", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       params: [],
-      escopo: { tabelas: [], colunasPorTabela: {}, relacionamentos: [], grao: [] },
+      pacoteVersao: 1,
+      motivoRevalidacao: null,
+      escopo: {
+        tabelas: [],
+        colunasPorTabela: {},
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [],
+        pacoteVersao: 1,
+      },
     };
     const draftSql = {
       ...base,

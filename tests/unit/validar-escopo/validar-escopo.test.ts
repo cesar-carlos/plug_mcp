@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   coletarAvisosValidacao,
+  exigirPaginacaoEstavel,
   GROUP_BY_MAX_EXPRESSIONS,
   validarSqlNoEscopo,
 } from "../../../src/application/use-cases/shared/validar-escopo.js";
@@ -50,8 +51,93 @@ describe("validarSqlNoEscopo", () => {
     expect(() =>
       validarSqlNoEscopo("SELECT p.codprod FROM produto p WHERE p.codprod > 0", "mssql", escopo, {
         page: 2,
+        pageSize: 10,
       }),
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.VALIDATION_ERROR }));
+  });
+
+  it("não recusa TOP quando só page vem (não pagina de verdade)", () => {
+    const ast = validarSqlNoEscopo(
+      "SELECT TOP 10 p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
+      "mssql",
+      escopo,
+      { page: 2 },
+    );
+    expect(ast.temLimite).toBe(true);
+  });
+
+  it("recusa paginação com TOP no SQL", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT TOP 10 p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
+        "mssql",
+        escopo,
+        { page: 2, pageSize: 10 },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+      }),
+    );
+  });
+
+  it("recusa paginação com LIMIT no SQL", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod LIMIT 10",
+        "postgres",
+        escopo,
+        { page: 2, pageSize: 10 },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+      }),
+    );
+  });
+
+  it("recusa paginação com OFFSET FETCH no SQL", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY",
+        "mssql",
+        escopo,
+        { page: 2, pageSize: 10 },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+      }),
+    );
+  });
+
+  it("recusa paginação com START AT no SQL", () => {
+    expect(() =>
+      exigirPaginacaoEstavel(
+        "SELECT p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod START AT 11",
+        null,
+        { page: 2, pageSize: 10 },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+      }),
+    );
+  });
+
+  it("aceita paginação com ORDER BY sem TOP/LIMIT", () => {
+    const ast = validarSqlNoEscopo(
+      "SELECT p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
+      "mssql",
+      escopo,
+      { page: 2, pageSize: 10 },
+    );
+    expect(ast.temOrderBy).toBe(true);
+    expect(ast.temLimite).toBe(false);
   });
 
   it("recusa firebird no SQL livre", () => {

@@ -8,6 +8,9 @@ import {
   extractNamedParams,
   parseJoinEqualities,
   parseSqlModelo,
+  rewriteAtParamsToColon,
+  sqlDeclaraLimiteDeLinhas,
+  sqlParaOdbc,
 } from "../../src/application/use-cases/shared/sql-modelo.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
@@ -148,15 +151,77 @@ describe("escopoFromSqlModelo grao", () => {
         "SELECT p.codprod, SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0 GROUP BY p.codprod",
       ),
     );
-    expect(escopo.grao.map((item) => item.toLowerCase())).toContain("codprod");
+    expect(escopo.graoResultado.map((item) => item.toLowerCase())).toContain("codprod");
+    expect(escopo.graoPorTabela.produto?.map((item) => item.toLowerCase())).toContain("codprod");
+    expect(escopo.metricasSaida.some((item) => item.alias.toLowerCase() === "total")).toBe(true);
   });
 
   it("usa colunas físicas do SELECT sem agregação", () => {
     const escopo = escopoFromSqlModelo(
       parseSqlModelo("SELECT p.codprod AS codigo, p.descricao FROM produto p"),
     );
-    expect(escopo.grao.map((item) => item.toLowerCase())).toEqual(
+    expect(escopo.graoResultado.map((item) => item.toLowerCase())).toEqual(
       expect.arrayContaining(["codprod", "descricao"]),
     );
+    expect(escopo.colunasPorTabela.produto?.map((item) => item.toLowerCase())).toEqual(
+      expect.arrayContaining(["codprod", "descricao"]),
+    );
+    expect(escopo.colunasPorTabela.produto?.some((item) => item.toLowerCase() === "codigo")).toBe(
+      false,
+    );
+  });
+
+  it("inclui colunas de WHERE e todas as igualdades de JOIN composto", () => {
+    const escopo = escopoFromSqlModelo(
+      parseSqlModelo(
+        "SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli AND c.empresa = p.empresa WHERE p.ativo = 1",
+      ),
+    );
+    const produto = escopo.colunasPorTabela.produto?.map((item) => item.toLowerCase()) ?? [];
+    const cliente = escopo.colunasPorTabela.cliente?.map((item) => item.toLowerCase()) ?? [];
+    expect(produto).toEqual(expect.arrayContaining(["codprod", "codcli", "empresa", "ativo"]));
+    expect(cliente).toEqual(expect.arrayContaining(["nome", "codcli", "empresa"]));
+    expect(escopo.relacionamentos.length).toBe(2);
+  });
+});
+
+describe("sqlParaOdbc / limites", () => {
+  it("reescreve @dataInicio e preserva @@identity", () => {
+    const sql =
+      "SELECT p.codprod, @@identity AS ident FROM produto p WHERE p.data >= @dataInicio AND p.nome <> '@x'";
+    expect(rewriteAtParamsToColon(sql, ["dataInicio"])).toBe(
+      "SELECT p.codprod, @@identity AS ident FROM produto p WHERE p.data >= :dataInicio AND p.nome <> '@x'",
+    );
+    expect(sqlParaOdbc(sql)).toContain(":dataInicio");
+    expect(sqlParaOdbc(sql)).toContain("@@identity");
+  });
+
+  it("detecta TOP LIMIT OFFSET FETCH START AT FIRST e ignora ORDER BY puro", () => {
+    expect(sqlDeclaraLimiteDeLinhas("SELECT TOP 10 p.id FROM p ORDER BY p.id")).toBe(true);
+    expect(sqlDeclaraLimiteDeLinhas("SELECT p.id FROM p LIMIT 10")).toBe(true);
+    expect(
+      sqlDeclaraLimiteDeLinhas(
+        "SELECT p.id FROM p ORDER BY p.id OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY",
+      ),
+    ).toBe(true);
+    expect(sqlDeclaraLimiteDeLinhas("SELECT TOP 10 START AT 11 p.id FROM p")).toBe(true);
+    expect(sqlDeclaraLimiteDeLinhas("SELECT FIRST 10 p.id FROM p")).toBe(true);
+    expect(sqlDeclaraLimiteDeLinhas("SELECT p.id FROM p ORDER BY p.id")).toBe(false);
+    expect(sqlDeclaraLimiteDeLinhas("SELECT p.id FROM p WHERE p.nome = 'LIMIT 1'")).toBe(false);
+    expect(
+      sqlDeclaraLimiteDeLinhas("SELECT p.id FROM p WHERE p.id IN (SELECT TOP 1 x.id FROM x)"),
+    ).toBe(false);
+  });
+
+  it("não trata ::cast, @@var nem comentário como param", () => {
+    expect(
+      extractNamedParams("SELECT now()::date AS d FROM produto p WHERE p.codprod = :codigo"),
+    ).toEqual(["codigo"]);
+    expect(
+      extractNamedParams("SELECT @@identity AS ident FROM produto p WHERE p.codprod = @codigo"),
+    ).toEqual(["codigo"]);
+    expect(
+      extractNamedParams("SELECT p.codprod FROM produto p WHERE p.codprod = :id -- @comentario"),
+    ).toEqual(["id"]);
   });
 });

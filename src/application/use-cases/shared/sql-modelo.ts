@@ -2,10 +2,22 @@ import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { ParametroSkill } from "../../../domain/entities/skill.js";
-import { tryParseSelect } from "./sql-ast.js";
+import { tryParseSelect, walkSelectTree, type SqlAstSelect } from "./sql-ast.js";
+import {
+  extractNamedParams,
+  rewriteAtParamsToColon,
+  sqlDeclaraLimiteExterno,
+  sqlTemOrderByExterno,
+} from "./sql-scan.js";
+
+export {
+  extractNamedParams,
+  rewriteAtParamsToColon,
+  sqlDeclaraLimiteExterno as sqlDeclaraLimiteDeLinhas,
+  sqlTemOrderByExterno as sqlTemOrderBy,
+};
 
 export const SQL_MAX_BYTES = 1_048_576;
-const IDENT = "[A-Za-z_][A-Za-z0-9_$#]*";
 
 export interface TabelaSql {
   readonly nome: string;
@@ -95,16 +107,17 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
     });
   }
   const ast = tryParseSelect(sql);
-  if (ast) {
-    return sqlModeloFromAst(sql, ast);
+  if (!ast) {
+    throw new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "Não foi possível interpretar o SQL neste dialeto.",
+      hint: "SQL que o parser não entende não vira skill. Ajuste ao guia de dialeto (mssql/sybase/postgres). Firebird só consulta exemplo.",
+    });
   }
-  return parseSqlModeloRegex(sql);
+  return sqlModeloFromAst(sql, ast);
 };
 
-const sqlModeloFromAst = (
-  sql: string,
-  ast: NonNullable<ReturnType<typeof tryParseSelect>>,
-): SqlModelo => {
+const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
   if (ast.temStar) {
     throw new DomainError({
       code: ERROR_CODES.INVALID_SQL,
@@ -112,9 +125,34 @@ const sqlModeloFromAst = (
       hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
     });
   }
-  const tabelas: TabelaSql[] = ast.tabelas
-    .filter((tabela) => !tabela.isSubquery)
-    .map((tabela) => ({ nome: tabela.nome, alias: tabela.alias }));
+  const tabelas: TabelaSql[] = [];
+  walkSelectTree(ast, (item) => {
+    for (const tabela of item.tabelas) {
+      if (!tabela.isSubquery && !tabela.isCte) {
+        tabelas.push({ nome: tabela.nome, alias: tabela.alias });
+      }
+    }
+    const fisicas = item.tabelas.filter((tabela) => !tabela.isCte && !tabela.isSubquery);
+    if (fisicas.length > 1 && item.joins.length === 0) {
+      throw new DomainError({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "Várias tabelas exigem JOIN explícito.",
+        hint: "Não use FROM a, b. Declare JOIN ... ON para o grafo registrar o relacionamento.",
+      });
+    }
+    for (const join of item.joins) {
+      if (join.tipoJoin.includes("cross")) {
+        continue;
+      }
+      if (join.equalities.length === 0) {
+        throw new DomainError({
+          code: ERROR_CODES.INVALID_SQL,
+          message: "JOIN exige ON com igualdade alias.coluna = alias.coluna.",
+          hint: "Ex.: INNER JOIN cliente c ON c.codcli = p.codcli. CROSS JOIN não grava relacionamento. Funções no ON não são aceitas.",
+        });
+      }
+    }
+  });
   if (tabelas.length === 0) {
     throw new DomainError({
       code: ERROR_CODES.INVALID_SQL,
@@ -122,35 +160,30 @@ const sqlModeloFromAst = (
       hint: "O agente classifica autorização por tabela. Referencie tabelas/views existentes.",
     });
   }
-  const relacionamentos: RelacionamentoSql[] = ast.joins.map((join) => ({
-    tipoJoin: join.tipoJoin,
-    tabela: join.tabela,
-    on:
-      join.equalities.length > 0
-        ? join.equalities
-            .map((eq) => `${eq.leftAlias}.${eq.leftColumn} = ${eq.rightAlias}.${eq.rightColumn}`)
-            .join(" AND ")
-        : join.on,
-  }));
-  if (tabelas.length > 1 && relacionamentos.length === 0) {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "Várias tabelas exigem JOIN explícito.",
-      hint: "Não use FROM a, b. Declare JOIN ... ON para o grafo registrar o relacionamento.",
-    });
-  }
-  for (const join of ast.joins) {
-    if (join.tipoJoin.includes("cross")) {
-      continue;
-    }
-    if (join.equalities.length === 0) {
-      throw new DomainError({
-        code: ERROR_CODES.INVALID_SQL,
-        message: "JOIN exige ON com igualdade alias.coluna = alias.coluna.",
-        hint: "Ex.: INNER JOIN cliente c ON c.codcli = p.codcli. CROSS JOIN não grava relacionamento. Funções no ON não são aceitas.",
+  const relacionamentos: RelacionamentoSql[] = [];
+  walkSelectTree(ast, (item) => {
+    for (const join of item.joins) {
+      const destino = item.tabelas.find(
+        (tabela) =>
+          (tabela.alias !== null && tabela.alias === join.alias) || tabela.nome === join.tabela,
+      );
+      if (destino?.isSubquery || destino?.isCte) {
+        continue;
+      }
+      relacionamentos.push({
+        tipoJoin: join.tipoJoin,
+        tabela: join.tabela,
+        on:
+          join.equalities.length > 0
+            ? join.equalities
+                .map(
+                  (eq) => `${eq.leftAlias}.${eq.leftColumn} = ${eq.rightAlias}.${eq.rightColumn}`,
+                )
+                .join(" AND ")
+            : join.on,
       });
     }
-  }
+  });
   const colunas: ColunaSql[] = ast.colunas.map((coluna) => {
     if (coluna.isExpression && !coluna.alias) {
       throw new DomainError({
@@ -174,7 +207,7 @@ const sqlModeloFromAst = (
       hint: "Use colunas simples ou alias (ex.: SUM(qtd) AS total).",
     });
   }
-  if (relacionamentos.length > 0) {
+  if (ast.joins.length > 0) {
     for (const coluna of ast.colunas) {
       if (!coluna.isExpression && !coluna.table) {
         throw new DomainError({
@@ -186,166 +219,6 @@ const sqlModeloFromAst = (
     }
   }
   return { sql, tabelas: dedupeTabelas(tabelas), colunas, relacionamentos };
-};
-
-const parseSqlModeloRegex = (sql: string): SqlModelo => {
-  if (/select\s+(?:distinct\s+)?\*/i.test(sql) || /select\s+[\s\S]*\b\w+\.\*/i.test(sql)) {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "SELECT * não treina o grafo.",
-      hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
-    });
-  }
-
-  const fromMatch =
-    /\bfrom\b\s+((?:[\w.[\]"`']+\s*(?:as\s+)?[\w"`']*\s*,\s*)*[\w.[\]"`']+(?:\s+(?:as\s+)?[\w"`']+)?)/i.exec(
-      sql,
-    );
-  if (!fromMatch?.[1]) {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "SQL de treino precisa de FROM com tabela real.",
-      hint: "O agente classifica autorização por tabela. Referencie tabelas/views existentes.",
-    });
-  }
-
-  const tabelas: TabelaSql[] = [];
-  const fromChunk = fromMatch[1].replace(
-    /\b(inner|left|right|full|cross|join|where|group|order|having|union|except|intersect|limit|offset|fetch|rows)\b[\s\S]*$/i,
-    "",
-  );
-  for (const part of fromChunk.split(",")) {
-    const parsed = parseTabelaRef(part.trim());
-    if (parsed) {
-      tabelas.push(parsed);
-    }
-  }
-
-  const relacionamentos: RelacionamentoSql[] = [];
-  const joinRe =
-    /\b((?:inner|left(?:\s+outer)?|right(?:\s+outer)?|full(?:\s+outer)?|cross)\s+)?join\s+([\w.[\]"`']+)(?:\s+(?:as\s+)?(\w+))?(?:\s+on\s+([^]+?))?(?=\s+(?:inner|left|right|full|cross)?\s*join\b|\s+where\b|\s+group\b|\s+order\b|\s+having\b|\s+union\b|$)/gi;
-  let joinMatch: RegExpExecArray | null;
-  while ((joinMatch = joinRe.exec(sql)) !== null) {
-    const tabela = lastIdent(joinMatch[2] ?? "");
-    tabelas.push({ nome: tabela, alias: joinMatch[3] ?? null });
-    relacionamentos.push({
-      tipoJoin: (joinMatch[1]?.trim() ? joinMatch[1].trim() : "inner").toLowerCase(),
-      tabela,
-      on: joinMatch[4]?.trim() ?? null,
-    });
-  }
-
-  if (tabelas.length > 1 && relacionamentos.length === 0) {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "Várias tabelas exigem JOIN explícito.",
-      hint: "Não use FROM a, b. Declare JOIN ... ON para o grafo registrar o relacionamento.",
-    });
-  }
-
-  for (const rel of relacionamentos) {
-    if (rel.tipoJoin.includes("cross")) {
-      continue;
-    }
-    if (parseJoinEqualities(rel.on).length === 0) {
-      throw new DomainError({
-        code: ERROR_CODES.INVALID_SQL,
-        message: "JOIN exige ON com igualdade alias.coluna = alias.coluna.",
-        hint: "Ex.: INNER JOIN cliente c ON c.codcli = p.codcli. CROSS JOIN não grava relacionamento. Funções no ON não são aceitas.",
-      });
-    }
-  }
-
-  const selectList = extractSelectList(sql);
-  const colunas = selectList.map((item) => parseSelectItem(item));
-  if (colunas.length === 0) {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "Não foi possível ler as colunas do SELECT.",
-      hint: "Use colunas simples ou alias (ex.: SUM(qtd) AS total).",
-    });
-  }
-
-  if (relacionamentos.length > 0) {
-    for (const coluna of colunas) {
-      if (!columnQualifier(coluna.expr) && !looksLikeExpression(coluna.expr)) {
-        throw new DomainError({
-          code: ERROR_CODES.INVALID_SQL,
-          message: "Coluna sem qualificador em JOIN.",
-          hint: "Com JOIN, qualifique cada coluna (ex.: p.codprod em vez de codprod). Expressões com AS continuam válidas.",
-        });
-      }
-    }
-  }
-
-  return { sql, tabelas: dedupeTabelas(tabelas), colunas, relacionamentos };
-};
-
-const parseTabelaRef = (raw: string): TabelaSql | null => {
-  const match = new RegExp(`^(${IDENT}(?:\\.${IDENT})?)(?:\\s+(?:as\\s+)?(${IDENT}))?$`, "i").exec(
-    unquote(raw).trim(),
-  );
-  if (!match?.[1]) {
-    return null;
-  }
-  return { nome: lastIdent(match[1]), alias: match[2] ?? null };
-};
-
-const extractSelectList = (sql: string): string[] => {
-  const match = /\bselect\b\s+(?:distinct\s+)?([\s\S]+?)\s+\bfrom\b/i.exec(sql);
-  const list = match?.[1] ?? "";
-  const items: string[] = [];
-  let depth = 0;
-  let current = "";
-  for (const ch of list) {
-    if (ch === "(") {
-      depth += 1;
-    }
-    if (ch === ")") {
-      depth -= 1;
-    }
-    if (ch === "," && depth === 0) {
-      items.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += ch;
-  }
-  if (current.trim()) {
-    items.push(current.trim());
-  }
-  return items;
-};
-
-const looksLikeExpression = (item: string): boolean => /[()+\-*/%]/.test(item.replace(/\./g, ""));
-
-const parseSelectItem = (item: string): ColunaSql => {
-  if (!item || item === "*") {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "SELECT * não treina o grafo.",
-      hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
-    });
-  }
-  const asMatch = /^([\s\S]+?)\s+as\s+("?[\w$#]+"?)$/i.exec(item);
-  if (asMatch?.[1] && asMatch[2]) {
-    return { expr: asMatch[1].trim(), alias: unquote(asMatch[2]) };
-  }
-  const trailing = /^([\s\S]+?)\s+("?[\w$#]+"?)$/.exec(item);
-  if (trailing?.[1] && trailing[2] && !/[\s(]/.test(unquote(trailing[2]))) {
-    const maybeAlias = unquote(trailing[2]);
-    if (!/^(from|where|group|order)$/i.test(maybeAlias)) {
-      return { expr: trailing[1].trim(), alias: maybeAlias };
-    }
-  }
-  if (looksLikeExpression(item)) {
-    throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "Expressão no SELECT precisa de alias explícito.",
-      hint: "Use AS (ex.: SUM(qtd) AS total). Sem alias o grafo gravaria um nome inválido.",
-    });
-  }
-  return { expr: item, alias: lastIdent(item) };
 };
 
 /** Igualdades `alias.coluna = alias.coluna` extraídas de um ON (AND/OR no meio são ignorados). */
@@ -402,44 +275,36 @@ export const sqlAmostra = (dialeto: Dialeto, sql: string): string => {
   }
 };
 
-const stripLiterals = (sql: string): string =>
-  sql.replace(/'(?:''|[^'])*'/g, "''").replace(/"(?:""|[^"])*"/g, '""');
-
-/** Placeholders `:nome` e `@nome` fora de literais. */
-export const extractNamedParams = (sql: string): readonly string[] => {
-  const names = new Set<string>();
-  const re = /(?<![A-Za-z0-9_])[:@]([A-Za-z_][A-Za-z0-9_]*)/g;
-  const stripped = stripLiterals(sql);
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(stripped)) !== null) {
-    const name = match[1];
-    if (name) {
-      names.add(name);
-    }
-  }
-  return [...names];
-};
+export const sqlParaOdbc = (sql: string): string =>
+  rewriteAtParamsToColon(sql, extractNamedParams(sql));
 
 export const bindNamedParams = (
   sql: string,
   provided: Record<string, unknown> | undefined,
+  contract: readonly ParametroSkill[] = [],
 ): Record<string, unknown> => {
   const names = extractNamedParams(sql);
   const source = provided ?? {};
+  const byName = new Map(contract.map((param) => [param.nome, param]));
   const bound: Record<string, unknown> = {};
   const missing: string[] = [];
   for (const name of names) {
-    if (!Object.prototype.hasOwnProperty.call(source, name)) {
-      missing.push(name);
+    if (Object.prototype.hasOwnProperty.call(source, name)) {
+      bound[name] = source[name];
       continue;
     }
-    bound[name] = source[name];
+    const param = byName.get(name);
+    if (param?.obrigatorio === false) {
+      bound[name] = null;
+      continue;
+    }
+    missing.push(name);
   }
   if (missing.length > 0) {
     throw new DomainError({
       code: ERROR_CODES.VALIDATION_ERROR,
       message: `Params ausentes: ${missing.join(", ")}.`,
-      hint: "Passe params nomeados iguais aos placeholders :nome ou @nome do sqlModelo.",
+      hint: "Passe params nomeados iguais aos placeholders :nome do SQL. Opcionais (obrigatorio=false) viram null. Listas/IN exigem um placeholder por valor.",
     });
   }
   return bound;
@@ -490,6 +355,33 @@ const coerceParamValue = (nome: string, tipo: ParametroSkill["tipo"], value: unk
         hint: "Passe true ou false.",
       });
     }
+    case "integer": {
+      if (typeof value === "number" && Number.isInteger(value)) {
+        return value;
+      }
+      if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {
+        return Number(value.trim());
+      }
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Param ${nome} deve ser integer.`,
+        hint: "Passe um inteiro (ex.: 10).",
+      });
+    }
+    case "decimal": {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return String(value);
+      }
+      if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) {
+        return value.trim();
+      }
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Param ${nome} deve ser decimal (string segura).`,
+        hint: 'Passe "10.50" como texto para não perder precisão.',
+      });
+    }
+    case "datetime":
     case "date": {
       if (typeof value === "string" && ISO_DATE.test(value.trim())) {
         return value.trim();

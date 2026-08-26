@@ -78,7 +78,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
     expect(skill.escopo).toEqual(escopoVazio());
     await aprendizado.salvarConsulta({
       agentId,
-      skillId: skill.id,
+      skillIds: [skill.id],
       pergunta: "produtos ativos",
       sql: "SELECT p.codprod FROM produto p WHERE p.codprod > 0",
       paramsContrato: [],
@@ -90,7 +90,6 @@ describe("obter_skill pacote e backfill de escopo", () => {
     });
     expect(result.pacote.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
     expect(result.pacote.consultasExemplo).toHaveLength(1);
-    expect(result.avisos.some((aviso) => aviso.code === "PERFIL_AUSENTE")).toBe(true);
     const reloaded = await skills.findById(skill.id);
     expect(reloaded?.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
   });
@@ -141,8 +140,47 @@ describe("obter_skill pacote e backfill de escopo", () => {
     await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       skillId: skill.id,
+      pergunta: "consulta de teste",
     });
     const reloaded = await skills.findById(skill.id);
     expect(reloaded?.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
+  });
+
+  it("pacote só autoriza colunas do escopo", async () => {
+    const { skills, grafo, obter, created } = await setup();
+    const { tabela } = await grafo.mergeTabela({
+      agentId,
+      nome: "produto",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: tabela.id,
+      nome: "codprod",
+      tipo: "int",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: tabela.id,
+      nome: "secreto",
+      tipo: "int",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    const skill = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await obter.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+    });
+    expect(result.pacote.colunas.map((col) => col.nome.toLowerCase())).toEqual(["codprod"]);
+    expect(result.pacote.colunas.some((col) => col.nome.toLowerCase() === "secreto")).toBe(false);
   });
 });

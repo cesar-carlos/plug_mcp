@@ -17,12 +17,15 @@ Não há tabela de senha de conta MCP, cliente de Authorization Server nem catá
 
 ## Skills e notas
 
-- `skill`: `slug` unique por `agent_id`, `sql_modelo` (consulta **exemplo**), `escopo` JSON (tabelas, colunas por tabela, relacionamentos, **grão** = GROUP BY ou colunas físicas do SELECT), `params`, `versao`, `status` (`rascunho` | `validada` | `publicada`). Skill **publicada** é o escopo da consulta; a IA escreve SQL dentro desse pacote. Escopo vazio (skills pré-0011) é persistido na primeira leitura (`obter_skill` / `consultar_dados`) ou com `npm run db:backfill-escopo`. `remover_skill` faz hard delete (libera o slug); o grafo não é apagado.
+- `skill`: `slug` unique por `agent_id`, `sql_modelo` (consulta **exemplo**), `escopo` JSON (tabelas, `colunasPorTabela` físicas, relacionamentos compostos, `graoPorTabela`/`graoResultado`, `metricasSaida`, `pacoteVersao`), `params`, `versao`, `pacote_versao`, `status` (`rascunho` | `validada` | `publicada` | `rascunho_revalidacao`), `motivo_revalidacao`. Skill **publicada** é a autoridade de consulta. Cutover: `npm run db:backfill-escopo` reconstrói o pacote e rebaixa publicadas para revalidação.
+- `coluna_grafo`: inclui `nullable` e `perfil` (min/max/nulos/distintos/candidatos a dicionário).
+- `anotacao_grafo`: `skill_id` nullable; `skill_id=null` não é global silencioso — tabela inexistente é recusada.
+- `consulta_aprendida` + `consulta_aprendida_skill`: SQL que funcionou, associado a uma ou mais skills. Consultas sem associação não entram em todas as skills.
 - `anotacao_grafo`: nota/glossário/regra/métrica; `tabela_id` opcional; `tipo` inclui `regra` e `metrica`.
 
 ## Aprendizado (migration `0012`)
 
-- `consulta_aprendida`: SQL que funcionou (gravado automaticamente em `consultar_dados`), pergunta, contrato de params, contagem de execuções. Sem FK para `skill`; ao remover a skill, `skill_id` fica nulo (o SQL histórico permanece no `agentId`). `obter_skill.pacote.consultasExemplo` devolve as mais usadas da skill, recortadas pela policy. `buscar_contexto` pede para reutilizar `consultasAprendidas`.
+- `consulta_aprendida`: SQL que funcionou (gravado automaticamente em `consultar_dados`), pergunta, contrato de params, contagem de execuções. Associação N:N em `consulta_aprendida_skill`. Ao remover a skill, os vínculos somem; o SQL histórico permanece no `agentId`. `obter_skill.pacote.consultasExemplo` devolve as da skill. `buscar_contexto` pede para reutilizar `consultasAprendidas`.
 - `sinonimo`: termo → skill/alvo; `buscar_contexto` expande a query. `remover_skill` apaga sinônimos cujo alvo é a skill.
 - `lacuna_consulta`: pergunta que caiu em `SKILL_GAP` (fila de treino).
 

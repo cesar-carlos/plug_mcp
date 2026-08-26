@@ -12,21 +12,23 @@ export interface GuiaDialeto {
 const GUIAS: Record<Exclude<Dialeto, "firebird">, Omit<GuiaDialeto, "dialeto">> = {
   mssql: {
     paginacao:
-      "SELECT TOP n ... ; paginação estável: ORDER BY ... OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY",
+      "Consulta única limitada: SELECT TOP n ... ORDER BY ... (sem options.page). Paginação de páginas: só ORDER BY no SQL + options.page e options.page_size juntos — não escreva TOP/OFFSET/FETCH",
     data: "YEAR(col), MONTH(col), DATEADD, DATEDIFF, CONVERT(date, col), GETDATE()",
     concatenacao: "col1 + col2 ou CONCAT(col1, col2)",
     cast: "CAST(x AS DECIMAL(18,2)), CONVERT(varchar, x)",
     limite: "TOP n no SELECT; evite SELECT sem WHERE nem agregação",
   },
   sybase: {
-    paginacao: "SELECT TOP n ... ; SQL Anywhere também aceita START AT. Prefira TOP + ORDER BY",
+    paginacao:
+      "Consulta única limitada: SELECT TOP n ... ORDER BY ... (START AT só sem options.page). Paginação de páginas: só ORDER BY no SQL + options.page e options.page_size juntos — não escreva TOP/START AT",
     data: "YEAR(col), MONTH(col), DATEADD, DATEDIFF, CAST(col AS DATE), CURRENT DATE, GETDATE()",
     concatenacao: "col1 || col2 ou STRING(col1, col2)",
     cast: "CAST(x AS DECIMAL(18,2)), CONVERT(varchar, x)",
     limite: "TOP n; evite SELECT sem WHERE nem agregação",
   },
   postgres: {
-    paginacao: "LIMIT n OFFSET m. Sempre ORDER BY na listagem paginada",
+    paginacao:
+      "Consulta única limitada: LIMIT n (sem options.page). Paginação de páginas: só ORDER BY no SQL + options.page e options.page_size juntos — não escreva LIMIT/OFFSET",
     data: "date_trunc('month', col), EXTRACT(YEAR FROM col), col::date, NOW(), CURRENT_DATE",
     concatenacao: "col1 || col2 ou CONCAT(col1, col2)",
     cast: "x::numeric(18,2), CAST(x AS text)",
@@ -38,7 +40,8 @@ export const guiaDialeto = (dialeto: Dialeto): GuiaDialeto => {
   if (dialeto === "firebird") {
     return {
       dialeto,
-      paginacao: "SELECT FIRST n ... ; SQL livre não está habilitado neste dialeto",
+      paginacao:
+        "Consulta única limitada: SELECT FIRST n ... (só na consulta exemplo). SQL livre e paginação via options.page não estão habilitados neste dialeto",
       data: "EXTRACT, CAST(col AS DATE), CURRENT_TIMESTAMP",
       concatenacao: "col1 || col2",
       cast: "CAST(x AS NUMERIC(18,2))",

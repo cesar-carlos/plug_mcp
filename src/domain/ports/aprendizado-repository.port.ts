@@ -4,13 +4,18 @@ import type { ParametroSkill } from "../entities/skill.js";
 export interface AprendizadoRepositoryPort {
   salvarConsulta(input: {
     agentId: string;
-    skillId: string | null;
+    skillIds: readonly string[];
     pergunta: string;
     sql: string;
     paramsContrato: readonly ParametroSkill[];
     autorUsuarioId: string | null;
   }): Promise<ConsultaAprendida>;
   listarConsultas(agentId: string, limite: number): Promise<readonly ConsultaAprendida[]>;
+  listarConsultasDaSkill(
+    agentId: string,
+    skillId: string,
+    limite: number,
+  ): Promise<readonly ConsultaAprendida[]>;
   buscarConsultas(
     agentId: string,
     query: string,

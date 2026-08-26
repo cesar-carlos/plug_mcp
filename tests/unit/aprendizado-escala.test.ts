@@ -64,6 +64,7 @@ const setup = async () => {
   };
   return {
     plug,
+    usuarios,
     acessos,
     grafo,
     skills,
@@ -120,7 +121,7 @@ describe("aprendizado e escala", () => {
     await skills.setStatus(skill.id, "publicada");
     await aprendizado.salvarConsulta({
       agentId,
-      skillId: skill.id,
+      skillIds: [skill.id],
       pergunta: "inadimplencia da carteira",
       sql: "SELECT SUM(r.valor) AS total FROM receber r WHERE r.vencimento < :hoje",
       paramsContrato: [],
@@ -245,6 +246,7 @@ describe("aprendizado e escala", () => {
     );
     await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta agregada",
       skillId: skill.id,
     });
     const tabela = await grafo.findTabelaByNome(agentId, "produto");
@@ -252,17 +254,100 @@ describe("aprendizado e escala", () => {
 
     await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta agregada",
       skillId: skill.id,
       sql: "SELECT SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0",
     });
     const firstCalls = calls;
     const cached = await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
+      pergunta: "consulta agregada",
       skillId: skill.id,
       sql: "SELECT SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0",
     });
     expect(calls).toBe(firstCalls);
     expect(cached.avisos.some((aviso) => aviso.code === "CACHE")).toBe(true);
+  });
+
+  it("cache de consulta isola tokens do mesmo agentId", async () => {
+    const {
+      plug,
+      usuarios,
+      acessos,
+      grafo,
+      skills,
+      anotacoes,
+      aprendizado,
+      audit,
+      created,
+      sessions,
+    } = await setup();
+    let calls = 0;
+    plug.sqlImpl = async () => {
+      calls += 1;
+      return { columns: ["total"], rows: [{ total: 10 }] };
+    };
+    const skill = await skills.create({
+      agentId,
+      slug: "agg",
+      nome: "Agg",
+      descricao: "Soma",
+      sqlModelo: "SELECT SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const cache = new MemoryQueryResultCache();
+    const consultar = new ConsultarDados(
+      acessos,
+      skills,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      500,
+      5000,
+      { grafo, aprendizado, anotacoes, cache, cacheTtlMs: 60_000 },
+    );
+    const sql = "SELECT SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0";
+    await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "total",
+      skillId: skill.id,
+      sql,
+    });
+    const other = await new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "other@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-other-99",
+    });
+    const otherConsultar = new ConsultarDados(
+      acessos,
+      skills,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      500,
+      5000,
+      { grafo, aprendizado, anotacoes, cache, cacheTtlMs: 60_000 },
+    );
+    await otherConsultar.execute(other.usuarioId, {
+      acessoId: other.acessoId,
+      pergunta: "total",
+      skillId: skill.id,
+      sql,
+    });
+    expect(calls).toBe(2);
   });
 
   it("consultar_dados grava o SQL e regra na mesma chamada", async () => {

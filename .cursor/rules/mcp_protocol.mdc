@@ -16,6 +16,6 @@ Com Bearer: token opaco → hash SHA-256 → `usuarioId` no ALS. Tools autentica
 
 Resposta de tool: `jsonResult` / `errorResult` via `createToolRunner`. Erro: `{ success: false, error: { code, message, hint, retryable } }`. Não vaze stack, SQL interno, senha, `client_token` ou token MCP.
 
-`consultar_dados` **exige** `skillId` de skill publicada; recusa `sql` solto. `buscar_contexto` devolve `consultaPermitida` / `SKILL_GAP`. Skills publicadas viram tools `skill_{slug}` (`tools/list_changed`). Resources `skill://`. Prompts `consultar_com_skill` / `cadastrar_skill`.
+`consultar_dados` **exige** `skillId`/`skillIds` de skill publicada **e** `pergunta`. SQL livre é aceito **dentro do escopo** do pacote publicado (UNION/subqueries/aliases fail-closed). Cruzar skills exige SQL customizado. `buscar_contexto` devolve `cobertura` (`completa|parcial|desconhecida`) e `SKILL_GAP` só depois de comparar candidatas (match textual isolado não autoriza). Skills publicadas podem virar tools `skill_{slug}` (`tools/list_changed`) que executam **somente** `sqlModelo`. Resources `skill://` devolvem o mesmo `escopo` canônico. Prompts `consultar_com_skill` / `cadastrar_skill`.
 
 Origin inválido → 403. Token MCP pode ter TTL (`token_expires_at`). Rate limit por tool além do HTTP em `/mcp`. 1 instância PM2 (sessão in-memory). Sem Authorization Server / OAuth. Sem Socket/relay.

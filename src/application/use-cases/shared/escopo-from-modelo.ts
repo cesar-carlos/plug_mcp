@@ -1,7 +1,11 @@
-import type { EscopoSkill } from "../../../domain/entities/escopo.js";
+import type {
+  EscopoSkill,
+  MetricaSaida,
+  RelacionamentoEscopo,
+} from "../../../domain/entities/escopo.js";
+import { PACOTE_VERSAO_ATUAL } from "../../../domain/entities/escopo.js";
 import { lastIdent, type SqlModelo } from "./sql-modelo.js";
-import { columnQualifier } from "./sql-modelo.js";
-import { tryParseSelect } from "./sql-ast.js";
+import { tryParseSelect, walkSelectTree, type SqlAstSelect, type SqlAstTabela } from "./sql-ast.js";
 
 const pushUnique = (map: Record<string, string[]>, tabela: string, coluna: string): void => {
   const list = map[tabela] ?? [];
@@ -11,7 +15,24 @@ const pushUnique = (map: Record<string, string[]>, tabela: string, coluna: strin
   map[tabela] = list;
 };
 
-const uniqueGrao = (nomes: readonly string[]): string[] => {
+const resolveNomeTabela = (ast: SqlAstSelect, aliasOrName: string | null): string | null => {
+  if (!aliasOrName) {
+    const fisicas = ast.tabelas.filter((tabela) => !tabela.isCte && !tabela.isSubquery);
+    return fisicas.length === 1 ? (fisicas[0]?.nome ?? null) : null;
+  }
+  const wanted = aliasOrName.toLowerCase();
+  const found = ast.tabelas.find(
+    (tabela) =>
+      tabela.nome.toLowerCase() === wanted ||
+      (tabela.alias !== null && tabela.alias.toLowerCase() === wanted),
+  );
+  if (!found || found.isCte || found.isSubquery) {
+    return null;
+  }
+  return found.nome;
+};
+
+const unique = (nomes: readonly string[]): string[] => {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const nome of nomes) {
@@ -29,74 +50,134 @@ const uniqueGrao = (nomes: readonly string[]): string[] => {
   return out;
 };
 
-const inferirGrao = (modelo: SqlModelo): string[] => {
-  const ast = tryParseSelect(modelo.sql);
-  if (ast?.temGroupBy && ast.groupByRefs.length > 0) {
-    return uniqueGrao(ast.groupByRefs.map((ref) => ref.column));
+const addRef = (
+  ast: SqlAstSelect,
+  colunasPorTabela: Record<string, string[]>,
+  table: string | null,
+  column: string,
+): string | null => {
+  const tabela = resolveNomeTabela(ast, table);
+  if (tabela && column && column !== "*") {
+    pushUnique(colunasPorTabela, tabela, column);
+    return tabela;
   }
-  if (ast) {
-    return uniqueGrao(
-      ast.colunas
-        .filter((coluna) => !coluna.isAggregate && coluna.column && coluna.column !== "*")
-        .map((coluna) => coluna.column ?? ""),
-    );
+  return null;
+};
+
+export const escopoFromAst = (ast: SqlAstSelect): EscopoSkill => {
+  const tabelas: string[] = [];
+  const seenTabela = new Set<string>();
+  const colunasPorTabela: Record<string, string[]> = {};
+  const relacionamentos: RelacionamentoEscopo[] = [];
+  const relSeen = new Set<string>();
+  const graoPorTabela: Record<string, string[]> = {};
+  const graoResultado: string[] = [];
+  const metricasSaida: MetricaSaida[] = [];
+
+  const rememberTabela = (tabela: SqlAstTabela): void => {
+    if (tabela.isCte || tabela.isSubquery) {
+      return;
+    }
+    const key = tabela.nome.toLowerCase();
+    if (seenTabela.has(key)) {
+      return;
+    }
+    seenTabela.add(key);
+    tabelas.push(tabela.nome);
+    colunasPorTabela[tabela.nome] = colunasPorTabela[tabela.nome] ?? [];
+  };
+
+  walkSelectTree(ast, (item) => {
+    for (const tabela of item.tabelas) {
+      rememberTabela(tabela);
+    }
+    for (const coluna of item.colunas) {
+      if (coluna.isExpression) {
+        continue;
+      }
+      if (coluna.column) {
+        addRef(item, colunasPorTabela, coluna.table, coluna.column);
+      }
+    }
+    for (const ref of item.filtroRefs) {
+      addRef(item, colunasPorTabela, ref.table, ref.column);
+    }
+    for (const ref of item.orderByRefs) {
+      addRef(item, colunasPorTabela, ref.table, ref.column);
+    }
+    for (const join of item.joins) {
+      for (const eq of join.equalities) {
+        const origem = addRef(item, colunasPorTabela, eq.leftAlias, eq.leftColumn);
+        const destino = addRef(item, colunasPorTabela, eq.rightAlias, eq.rightColumn);
+        if (!origem || !destino) {
+          continue;
+        }
+        const key = [origem, eq.leftColumn, destino, eq.rightColumn].join("|").toLowerCase();
+        if (relSeen.has(key)) {
+          continue;
+        }
+        relSeen.add(key);
+        relacionamentos.push({
+          tabelaOrigem: origem,
+          colunaOrigem: eq.leftColumn,
+          tabelaDestino: destino,
+          colunaDestino: eq.rightColumn,
+          tipoJoin: join.tipoJoin,
+        });
+      }
+    }
+  });
+
+  if (ast.temGroupBy && ast.groupByRefs.length > 0) {
+    for (const ref of ast.groupByRefs) {
+      const tabela = addRef(ast, colunasPorTabela, ref.table, ref.column);
+      if (tabela) {
+        pushUnique(graoPorTabela, tabela, ref.column);
+      }
+      graoResultado.push(ref.column);
+    }
+  } else {
+    for (const coluna of ast.colunas) {
+      if (coluna.isAggregate || coluna.isExpression || !coluna.column || coluna.column === "*") {
+        continue;
+      }
+      const tabela = addRef(ast, colunasPorTabela, coluna.table, coluna.column);
+      if (tabela) {
+        pushUnique(graoPorTabela, tabela, coluna.column);
+      }
+      graoResultado.push(coluna.column);
+    }
   }
-  return uniqueGrao(
-    modelo.colunas
-      .filter((coluna) => !coluna.expr.includes("("))
-      .map((coluna) => lastIdent(coluna.expr)),
-  );
+
+  for (const coluna of ast.colunas) {
+    if (coluna.isExpression && coluna.alias) {
+      metricasSaida.push({ alias: coluna.alias, expr: coluna.expr });
+    }
+  }
+
+  return {
+    tabelas,
+    colunasPorTabela,
+    relacionamentos,
+    graoPorTabela,
+    graoResultado: unique(graoResultado),
+    metricasSaida,
+    pacoteVersao: PACOTE_VERSAO_ATUAL,
+  };
 };
 
 export const escopoFromSqlModelo = (modelo: SqlModelo): EscopoSkill => {
-  const aliasToTable = new Map<string, string>();
-  for (const tabela of modelo.tabelas) {
-    aliasToTable.set(tabela.nome.toLowerCase(), tabela.nome);
-    if (tabela.alias) {
-      aliasToTable.set(tabela.alias.toLowerCase(), tabela.nome);
-    }
+  const ast = tryParseSelect(modelo.sql);
+  if (!ast) {
+    return {
+      tabelas: modelo.tabelas.map((tabela) => tabela.nome),
+      colunasPorTabela: {},
+      relacionamentos: [],
+      graoPorTabela: {},
+      graoResultado: [],
+      metricasSaida: [],
+      pacoteVersao: PACOTE_VERSAO_ATUAL,
+    };
   }
-  const colunasPorTabela: Record<string, string[]> = {};
-  for (const tabela of modelo.tabelas) {
-    colunasPorTabela[tabela.nome] = colunasPorTabela[tabela.nome] ?? [];
-  }
-  for (const coluna of modelo.colunas) {
-    const qualifier = columnQualifier(coluna.expr);
-    const tabelaNome = qualifier
-      ? aliasToTable.get(qualifier.toLowerCase())
-      : modelo.tabelas[0]?.nome;
-    const nomeColuna = lastIdent(coluna.expr);
-    if (tabelaNome && nomeColuna) {
-      pushUnique(colunasPorTabela, tabelaNome, nomeColuna);
-    }
-  }
-  const relacionamentos = modelo.relacionamentos.flatMap((rel) => {
-    const on = rel.on ?? "";
-    const match =
-      /([A-Za-z_][A-Za-z0-9_$#]*)\.([A-Za-z_][A-Za-z0-9_$#]*)\s*=\s*([A-Za-z_][A-Za-z0-9_$#]*)\.([A-Za-z_][A-Za-z0-9_$#]*)/.exec(
-        on,
-      );
-    if (!match?.[1] || !match[2] || !match[3] || !match[4]) {
-      return [];
-    }
-    const tabelaOrigem = aliasToTable.get(match[1].toLowerCase()) ?? match[1];
-    const tabelaDestino = aliasToTable.get(match[3].toLowerCase()) ?? match[3];
-    pushUnique(colunasPorTabela, tabelaOrigem, match[2]);
-    pushUnique(colunasPorTabela, tabelaDestino, match[4]);
-    return [
-      {
-        tabelaOrigem,
-        colunaOrigem: match[2],
-        tabelaDestino,
-        colunaDestino: match[4],
-        tipoJoin: rel.tipoJoin,
-      },
-    ];
-  });
-  return {
-    tabelas: modelo.tabelas.map((tabela) => tabela.nome),
-    colunasPorTabela,
-    relacionamentos,
-    grao: inferirGrao(modelo),
-  };
+  return escopoFromAst(ast);
 };

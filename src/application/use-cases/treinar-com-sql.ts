@@ -10,12 +10,12 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
+import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import {
   parseSqlModelo,
   sqlAmostra,
   bindParamsForValidation,
-  columnQualifier,
-  parseJoinEqualities,
+  sqlParaOdbc,
 } from "./shared/sql-modelo.js";
 import { inferirPapelColuna } from "./shared/inferir-papel.js";
 import { enriquecerPerfilCompleto } from "./shared/enriquecer-perfil.js";
@@ -100,7 +100,7 @@ export class TreinarComSql {
           accessToken,
           agentId: acesso.agentId,
           clientToken,
-          sql: sqlAmostra(acesso.dialeto, modelo.sql),
+          sql: sqlParaOdbc(sqlAmostra(acesso.dialeto, modelo.sql)),
           params,
           options: { maxRows: 1 },
         }),
@@ -132,7 +132,7 @@ export class TreinarComSql {
       }
       let conflitos = 0;
       const tabelaIds = new Map<string, string>();
-      const aliasToId = new Map<string, string>();
+      const escopo = escopoFromSqlModelo(modelo);
       for (const tabela of modelo.tabelas) {
         const result = await this.grafo.mergeTabela({
           agentId: acesso.agentId,
@@ -141,84 +141,66 @@ export class TreinarComSql {
           autorUsuarioId: uid,
         });
         tabelaIds.set(tabela.nome.toLowerCase(), result.tabela.id);
-        aliasToId.set(tabela.nome.toLowerCase(), result.tabela.id);
-        if (tabela.alias) {
-          aliasToId.set(tabela.alias.toLowerCase(), result.tabela.id);
-        }
         if (result.conflito) {
           conflitos += 1;
         }
       }
-      for (const coluna of modelo.colunas) {
-        const qualifier = columnQualifier(coluna.expr);
-        let tabelaId: string | undefined;
-        if (qualifier) {
-          tabelaId = aliasToId.get(qualifier.toLowerCase());
-        } else if (modelo.tabelas.length === 1) {
-          const only = modelo.tabelas[0];
-          tabelaId = only ? tabelaIds.get(only.nome.toLowerCase()) : undefined;
-        }
+      for (const [tabelaNome, colunas] of Object.entries(escopo.colunasPorTabela)) {
+        const tabelaId = tabelaIds.get(tabelaNome.toLowerCase());
         if (!tabelaId) {
           continue;
         }
-        const result = await this.grafo.mergeColuna({
-          tabelaId,
-          nome: coluna.alias,
-          papel: inferirPapelColuna(coluna.alias, null),
-          origem,
-          autorUsuarioId: uid,
-        });
-        if (result.conflito) {
-          conflitos += 1;
-        }
-      }
-      let rels = 0;
-      for (const rel of modelo.relacionamentos) {
-        if (rel.tipoJoin.includes("cross")) {
-          continue;
-        }
-        const equalities = parseJoinEqualities(rel.on);
-        if (equalities.length === 0) {
-          continue;
-        }
-        for (const eq of equalities) {
-          const origemId = aliasToId.get(eq.leftAlias.toLowerCase());
-          const destinoId = aliasToId.get(eq.rightAlias.toLowerCase());
-          if (!origemId || !destinoId) {
-            continue;
-          }
-          const leftCol = await this.grafo.mergeColuna({
-            tabelaId: origemId,
-            nome: eq.leftColumn,
+        for (const colunaNome of colunas) {
+          const result = await this.grafo.mergeColuna({
+            tabelaId,
+            nome: colunaNome,
+            papel: inferirPapelColuna(colunaNome, null),
             origem,
             autorUsuarioId: uid,
           });
-          if (leftCol.conflito) {
-            conflitos += 1;
-          }
-          const rightCol = await this.grafo.mergeColuna({
-            tabelaId: destinoId,
-            nome: eq.rightColumn,
-            origem,
-            autorUsuarioId: uid,
-          });
-          if (rightCol.conflito) {
-            conflitos += 1;
-          }
-          const result = await this.grafo.mergeRelacionamento({
-            agentId: acesso.agentId,
-            tabelaOrigemId: origemId,
-            colunaOrigem: eq.leftColumn,
-            tabelaDestinoId: destinoId,
-            colunaDestino: eq.rightColumn,
-            tipoJoin: rel.tipoJoin,
-            origem,
-            autorUsuarioId: uid,
-          });
-          rels += 1;
           if (result.conflito) {
             conflitos += 1;
           }
+        }
+      }
+      let rels = 0;
+      for (const rel of escopo.relacionamentos) {
+        const origemId = tabelaIds.get(rel.tabelaOrigem.toLowerCase());
+        const destinoId = tabelaIds.get(rel.tabelaDestino.toLowerCase());
+        if (!origemId || !destinoId) {
+          continue;
+        }
+        const leftCol = await this.grafo.mergeColuna({
+          tabelaId: origemId,
+          nome: rel.colunaOrigem,
+          origem,
+          autorUsuarioId: uid,
+        });
+        if (leftCol.conflito) {
+          conflitos += 1;
+        }
+        const rightCol = await this.grafo.mergeColuna({
+          tabelaId: destinoId,
+          nome: rel.colunaDestino,
+          origem,
+          autorUsuarioId: uid,
+        });
+        if (rightCol.conflito) {
+          conflitos += 1;
+        }
+        const result = await this.grafo.mergeRelacionamento({
+          agentId: acesso.agentId,
+          tabelaOrigemId: origemId,
+          colunaOrigem: rel.colunaOrigem,
+          tabelaDestinoId: destinoId,
+          colunaDestino: rel.colunaDestino,
+          tipoJoin: rel.tipoJoin,
+          origem,
+          autorUsuarioId: uid,
+        });
+        rels += 1;
+        if (result.conflito) {
+          conflitos += 1;
         }
       }
       return { conflitos, rels };
@@ -234,7 +216,7 @@ export class TreinarComSql {
               accessToken,
               agentId: acesso.agentId,
               clientToken,
-              sql,
+              sql: sqlParaOdbc(sql),
               params: params ?? {},
               options: { maxRows: 300 },
             }),

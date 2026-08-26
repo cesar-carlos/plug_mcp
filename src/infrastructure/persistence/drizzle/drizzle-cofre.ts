@@ -243,6 +243,7 @@ const toColuna = (row: typeof schema.colunaGrafo.$inferSelect): ColunaGrafo => (
   tabelaId: row.tabelaId,
   nome: row.nome,
   tipo: row.tipo,
+  nullable: row.nullable ?? null,
   descricao: row.descricao,
   dicionario: row.dicionario,
   papel: (row.papel as PapelColuna | null) ?? null,
@@ -351,6 +352,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
           tabelaId: input.tabelaId,
           nome: input.nome,
           tipo: input.tipo ?? null,
+          nullable: input.nullable ?? null,
           descricao: input.descricao ?? null,
           dicionario: input.dicionario ?? null,
           papel: input.papel ?? null,
@@ -389,6 +391,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       .update(schema.colunaGrafo)
       .set({
         tipo: merge.tipo ?? existing.tipo,
+        nullable: input.nullable ?? existing.nullable,
         descricao: merge.descricao,
         dicionario: merge.dicionario ?? existing.dicionario,
         papel: input.papel ?? existing.papel,
@@ -610,8 +613,13 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
           tabelas: [],
           colunasPorTabela: {},
           relacionamentos: [],
-          grao: [],
+          graoPorTabela: {},
+          graoResultado: [],
+          metricasSaida: [],
+          pacoteVersao: 1,
         },
+        pacoteVersao: input.pacoteVersao ?? input.escopo?.pacoteVersao ?? 1,
+        motivoRevalidacao: input.motivoRevalidacao ?? null,
         autorUsuarioId: input.autorUsuarioId,
       })
       .returning();
@@ -621,7 +629,17 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
   async update(
     id: string,
     patch: Partial<
-      Pick<Skill, "nome" | "descricao" | "sqlModelo" | "params" | "status" | "escopo">
+      Pick<
+        Skill,
+        | "nome"
+        | "descricao"
+        | "sqlModelo"
+        | "params"
+        | "status"
+        | "escopo"
+        | "pacoteVersao"
+        | "motivoRevalidacao"
+      >
     >,
   ): Promise<Skill> {
     const { params, escopo, ...rest } = patch;
@@ -728,7 +746,9 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
       params: parseParametroSkillList(row.params),
       escopo: parseEscopoSkill(row.escopo),
       versao: row.versao,
+      pacoteVersao: row.pacoteVersao,
       status: row.status as StatusSkill,
+      motivoRevalidacao: row.motivoRevalidacao,
       autorUsuarioId: row.autorUsuarioId,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -742,29 +762,47 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
   async create(input: {
     agentId: string;
     tabelaId: string | null;
+    skillId?: string | null;
     tipo: string;
     titulo: string;
     texto: string;
     autorUsuarioId: string | null;
   }): Promise<AnotacaoGrafo> {
-    const [row] = await this.db.insert(schema.anotacaoGrafo).values(input).returning();
+    const [row] = await this.db
+      .insert(schema.anotacaoGrafo)
+      .values({
+        agentId: input.agentId,
+        tabelaId: input.tabelaId,
+        skillId: input.skillId ?? null,
+        tipo: input.tipo,
+        titulo: input.titulo,
+        texto: input.texto,
+        autorUsuarioId: input.autorUsuarioId,
+      })
+      .returning();
     return this.toAnotacao(row!);
   }
 
-  async list(agentId: string, tabelaId?: string | null): Promise<readonly AnotacaoGrafo[]> {
+  async list(
+    agentId: string,
+    tabelaId?: string | null,
+    skillId?: string | null,
+  ): Promise<readonly AnotacaoGrafo[]> {
+    const filters = [eq(schema.anotacaoGrafo.agentId, agentId)];
+    if (tabelaId === null) {
+      filters.push(isNull(schema.anotacaoGrafo.tabelaId));
+    } else if (tabelaId !== undefined) {
+      filters.push(eq(schema.anotacaoGrafo.tabelaId, tabelaId));
+    }
+    if (skillId === null) {
+      filters.push(isNull(schema.anotacaoGrafo.skillId));
+    } else if (skillId !== undefined) {
+      filters.push(eq(schema.anotacaoGrafo.skillId, skillId));
+    }
     const rows = await this.db
       .select()
       .from(schema.anotacaoGrafo)
-      .where(
-        tabelaId === undefined
-          ? eq(schema.anotacaoGrafo.agentId, agentId)
-          : tabelaId === null
-            ? and(eq(schema.anotacaoGrafo.agentId, agentId), isNull(schema.anotacaoGrafo.tabelaId))
-            : and(
-                eq(schema.anotacaoGrafo.agentId, agentId),
-                eq(schema.anotacaoGrafo.tabelaId, tabelaId),
-              ),
-      );
+      .where(and(...filters));
     return rows.map((row) => this.toAnotacao(row));
   }
 
@@ -812,6 +850,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
       id: row.id,
       agentId: row.agentId,
       tabelaId: row.tabelaId,
+      skillId: row.skillId,
       tipo: row.tipo,
       titulo: row.titulo,
       texto: row.texto,
@@ -885,10 +924,11 @@ export class DrizzleAuditLog implements AuditLogPort {
 
 const toConsultaAprendida = (
   row: typeof schema.consultaAprendida.$inferSelect,
+  skillIds: readonly string[] = [],
 ): ConsultaAprendida => ({
   id: row.id,
   agentId: row.agentId,
-  skillId: row.skillId,
+  skillIds,
   pergunta: row.pergunta,
   sql: row.sql,
   paramsContrato: parseParametroSkillList(row.paramsContrato),
@@ -901,9 +941,33 @@ const toConsultaAprendida = (
 export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   constructor(private readonly db: Db) {}
 
+  private async skillIdsOf(consultaIds: readonly string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (consultaIds.length === 0) {
+      return out;
+    }
+    const rows = await this.db
+      .select()
+      .from(schema.consultaAprendidaSkill)
+      .where(inArray(schema.consultaAprendidaSkill.consultaId, [...consultaIds]));
+    for (const row of rows) {
+      const list = out.get(row.consultaId) ?? [];
+      list.push(row.skillId);
+      out.set(row.consultaId, list);
+    }
+    return out;
+  }
+
+  private async hydrate(
+    rows: readonly (typeof schema.consultaAprendida.$inferSelect)[],
+  ): Promise<ConsultaAprendida[]> {
+    const ids = await this.skillIdsOf(rows.map((row) => row.id));
+    return rows.map((row) => toConsultaAprendida(row, ids.get(row.id) ?? []));
+  }
+
   async salvarConsulta(input: {
     agentId: string;
-    skillId: string | null;
+    skillIds: readonly string[];
     pergunta: string;
     sql: string;
     paramsContrato: readonly ParametroSkill[];
@@ -933,20 +997,33 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
         })
         .where(eq(schema.consultaAprendida.id, existing.id))
         .returning();
-      return toConsultaAprendida(row!);
+      if (input.skillIds.length > 0) {
+        await this.db
+          .insert(schema.consultaAprendidaSkill)
+          .values(input.skillIds.map((skillId) => ({ consultaId: existing.id, skillId })))
+          .onConflictDoNothing();
+      }
+      const [hydrated] = await this.hydrate([row!]);
+      return hydrated!;
     }
     const [row] = await this.db
       .insert(schema.consultaAprendida)
       .values({
         agentId: input.agentId,
-        skillId: input.skillId,
         pergunta: input.pergunta,
         sql: input.sql,
         paramsContrato: [...input.paramsContrato],
         autorUsuarioId: input.autorUsuarioId,
       })
       .returning();
-    return toConsultaAprendida(row!);
+    if (input.skillIds.length > 0) {
+      await this.db
+        .insert(schema.consultaAprendidaSkill)
+        .values(input.skillIds.map((skillId) => ({ consultaId: row!.id, skillId })))
+        .onConflictDoNothing();
+    }
+    const [hydrated] = await this.hydrate([row!]);
+    return hydrated!;
   }
 
   async listarConsultas(agentId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
@@ -956,7 +1033,34 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .where(eq(schema.consultaAprendida.agentId, agentId))
       .orderBy(desc(schema.consultaAprendida.execucoes))
       .limit(limite);
-    return rows.map(toConsultaAprendida);
+    return this.hydrate(rows);
+  }
+
+  async listarConsultasDaSkill(
+    agentId: string,
+    skillId: string,
+    limite: number,
+  ): Promise<readonly ConsultaAprendida[]> {
+    const links = await this.db
+      .select({ consultaId: schema.consultaAprendidaSkill.consultaId })
+      .from(schema.consultaAprendidaSkill)
+      .where(eq(schema.consultaAprendidaSkill.skillId, skillId));
+    const ids = links.map((link) => link.consultaId);
+    if (ids.length === 0) {
+      return [];
+    }
+    const rows = await this.db
+      .select()
+      .from(schema.consultaAprendida)
+      .where(
+        and(
+          eq(schema.consultaAprendida.agentId, agentId),
+          inArray(schema.consultaAprendida.id, ids),
+        ),
+      )
+      .orderBy(desc(schema.consultaAprendida.execucoes))
+      .limit(limite);
+    return this.hydrate(rows);
   }
 
   async buscarConsultas(
@@ -970,7 +1074,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .from(schema.consultaAprendida)
       .where(eq(schema.consultaAprendida.agentId, agentId));
     return rankByTerms(
-      rows.map(toConsultaAprendida),
+      await this.hydrate(rows),
       terms,
       (row) => `${row.pergunta} ${row.sql}`,
       limite,
@@ -1012,14 +1116,8 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     skillId: string,
   ): Promise<{ consultas: number; sinonimos: number }> {
     const consultas = await this.db
-      .update(schema.consultaAprendida)
-      .set({ skillId: null, updatedAt: new Date() })
-      .where(
-        and(
-          eq(schema.consultaAprendida.agentId, agentId),
-          eq(schema.consultaAprendida.skillId, skillId),
-        ),
-      )
+      .delete(schema.consultaAprendidaSkill)
+      .where(eq(schema.consultaAprendidaSkill.skillId, skillId))
       .returning();
     const sinonimos = await this.db
       .delete(schema.sinonimo)

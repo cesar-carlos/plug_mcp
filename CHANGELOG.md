@@ -13,6 +13,24 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- Pacote versionado (`pacoteVersao`), `graoPorTabela`/`graoResultado`, `metricasSaida` no escopo da skill. Conhecimento skill-scoped (`anotacao_grafo.skill_id`) e `consulta_aprendida_skill` (multi-skill). Migration `0013_pacote_conhecimento.sql`.
+- Validador fail-closed em UNION/INTERSECT/EXCEPT, subqueries em HAVING/JOIN/ORDER, alias desconhecido e coluna ambígua. Tokenizer ignora `::cast`, `@@var` e comentários.
+- Erros `ALIAS_DESCONHECIDO`, `COLUNA_AMBIGUA`, `PACOTE_INCOMPLETO`, `MULTI_SKILL_PARAMS`, `METADATA_CONTRATO`.
+- `columnsMetadata` (nome/tipo/nullable) no resultado, inclusive com zero linhas. Cache de consulta inclui `usuarioId`, token e versões da skill.
+
+### Changed
+
+- Cutover quebrável: `obter_skill` e `skill://` usam só o pacote da skill (não o grafo inteiro). Publicadas entram em `rascunho_revalidacao` no backfill (`npm run db:backfill-escopo`), que reconstrói o AST, associa consultas/anotações e limpa o cache `mcp:query:*`.
+- Treino grava só nomes físicos (aliases/expressões viram métricas). `criar_skill`/`publicar_skill` exigem fatos confirmados no grafo do escopo. `confirmar_relacionamento` com `skillId` persiste o JOIN no pacote (só o grafo não libera consulta).
+- `consultar_dados.pergunta` obrigatória. Cruzar skills exige SQL. Params opcionais viram `null`. Defaults de empresa/filial são imutáveis. Paginação exige metadata do agente.
+- `buscar_contexto` ranqueia cobertura; SKILL_GAP da busca por termos pede `listar_skills` antes de desistir.
+
+### Security
+
+- Cache de consulta deixa de ser compartilhado só por `agentId`; isola usuário/token/policy/skill.
+
+### Added
+
 - Tools dinâmicas `skill_{slug}` por skill publicada, com `tools/list_changed` ao publicar.
 - Resources `skill://{agentId}/{slug}` e prompts `consultar_com_skill` / `cadastrar_skill`.
 - Anotações MCP nas tools, `structuredContent` tabular, truncagem de células e teto `max_rows`.
@@ -34,10 +52,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Suíte adversarial do validador de escopo (CTE, subquery, JOIN inventado no pacote, `SELECT *` aninhado, segundo comando). Teto de `GROUP BY` e aviso `LITERAL_TEXTO`.
 - `obter_skill` inclui `consultasExemplo` no pacote. `asOf` usa o timezone do acesso. Aviso `PERFIL_AUSENTE` quando tipo/formato/cardinalidade estão vazios.
 - Tool `remover_skill`: apaga a skill (rascunho ou publicada) com `confirmadoPeloUsuario: true`, libera o slug e desvincula consultas/sinônimos. O grafo do `agentId` permanece.
-- Funções de janela (`OVER` / `ROW_NUMBER` / `LAG`) no SQL da IA: contam como recorte (não disparam `CONSULTA_SEM_RECORTE`) e as colunas de `PARTITION BY`/`ORDER BY` entram no validador de escopo.
+- `consultar_dados` devolve `paginacao` (`hasNextPage` / `hasPreviousPage`) quando `page`+`page_size` vão ao hub. `truncated` continua sendo só o teto de `max_rows` (caminho sem página).
 
 ### Changed
 
+- Pré-treino de sessão e description de `consultar_dados` distinguem `truncated` (teto `max_rows`) de `paginacao.hasNextPage`, mandam `:nome` no fio e os dois padrões de corte (TOP/LIMIT vs `page`+`page_size` com só `ORDER BY`).
+- Pré-treino de sessão (`initialize.instructions` / prompt `pre_treino`) passa a cobrir params nomeados (`:nome`/`@nome`, `:empresa`/`:filial`), os dois padrões de corte (TOP/LIMIT vs `options.page`+`page_size` com só `ORDER BY`), recorte/WHERE e leitura do retorno (`truncated`, `avisos`, tipos).
 - `consultar_dados` exige skill **publicada**. Sem `sql`, executa a consulta exemplo; com `sql`, valida o SELECT da IA contra o escopo. Toda execução bem-sucedida persiste `consulta_aprendida` (envie `pergunta`). `asOf` no fuso do acesso.
 - `buscar_contexto` devolve `consultaPermitida`, `consultasAprendidas` e `gap.code = SKILL_GAP` quando não há skill publicada capaz (o grafo fica só em `grafoParaTreino`). Se houver consultas aprendidas, o hint pede para reutilizar esses SQLs. Rascunhos vêm em `skillsParaTreino`; se houver skill em andamento, o gap pede para continuar o `fluxoTreino.proximoPasso`.
 - `validar_consulta` liga placeholders ausentes a `null` no dry-run.
@@ -68,6 +88,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- Placeholders `@nome` no SQL enviado ao hub viram `:nome` (só params conhecidos; `@@variavel` intacta). Sem isso o agente não fazia bind de `@nome`.
+- Paginação com `page`+`page_size` recusa também `OFFSET`/`FETCH`/`START AT`/`FIRST` no SQL, não só `TOP`/`LIMIT` do AST.
+- `consultar_dados` com `options.page`+`page_size` deixava de falhar no hub: o adapter só envia `execution_mode: preserve` quando não há paginação (com paginação o hub usa `managed`). SQL com `TOP`/`LIMIT`/`FETCH`/`FIRST` e `page` é recusado no validador, sem round-trip.
 - HTTP 401 do hub: `withHubAuth` invalida o JWT, reloga com a senha do cofre e **repete a operação uma vez** — a tool não falha no primeiro token vencido. Senha do cofre recusada vira `CREDENTIAL_STALE`.
 - `putClientToken` deixa de ser API morta: roda após `registrar_acesso` / `adicionar_acesso` e quando `verificar_acesso` vê `approved`. Falha do PUT não desfaz o cofre; 403 com acesso `pending` é esperado.
 - Tools de SQL/policy fazem **um** refresh do status no hub se o cofre ainda está `pending`, para não bloquear depois da aprovação do dono.

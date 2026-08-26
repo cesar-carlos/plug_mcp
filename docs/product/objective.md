@@ -6,9 +6,9 @@ Todo `initialize` injeta um **pre-treino de sessão** (consultor + especialista 
 
 ## Consulta
 
-A skill publicada é o **pacote de conhecimento** e o **escopo** da consulta: tabelas, colunas, relacionamentos, dicionários, grão, cardinalidade, regras e consulta exemplo (`sqlModelo`). Fluxo: `buscar_contexto` / `listar_skills` / `obter_skill` / resource `skill://` → a IA escreve SELECT (agregação, `GROUP BY`, `WHERE` no banco) → `consultar_dados(acessoId, skillIds, sql, params, pergunta)`. Sem `sql`, o servidor executa a consulta exemplo.
+A skill publicada é o **pacote de conhecimento** e o **escopo** da consulta: tabelas, colunas físicas, relacionamentos compostos, dicionários, `graoPorTabela`/`graoResultado`, métricas de saída, cardinalidade, regras e consulta exemplo (`sqlModelo`). Fluxo: `buscar_contexto` (candidatos + `cobertura`) / `listar_skills` / `obter_skill` / resource `skill://` (mesmo pacote) → a IA escreve SELECT (agregação, `GROUP BY`, `WHERE` no banco) → `consultar_dados(acessoId, skillIds, sql, params, pergunta)`. Sem `sql`, o servidor executa a consulta exemplo (uma skill). Cruzamento exige `skillIds` de todos os domínios e SQL customizado.
 
-O validador recusa tabela, coluna ou JOIN fora do escopo das skills publicadas informadas. Mais de uma skill permite cruzar domínios **somente** se o relacionamento já estiver no grafo. `buscar_contexto` sinaliza `consultaPermitida: false` + `SKILL_GAP` quando não há skill publicada capaz; se houver rascunho/validada, o hint pede para continuar o `proximoPasso`.
+O validador recusa tabela, coluna, alias, UNION/subquery ou JOIN fora do escopo das skills publicadas informadas. `buscar_contexto` devolve `cobertura` (`completa` | `parcial` | `desconhecida`) e `consultaPermitida` só quando a cobertura é completa. `SKILL_GAP` da busca por termos não prova ausência — `listar_skills` antes de desistir. Se houver rascunho/validada/`rascunho_revalidacao`, o hint pede para continuar o `proximoPasso`.
 
 O grafo apoia o **treino** e acumula o que a execução confirma (`validado_execucao`). Não é licença para inventar tabela ou JOIN.
 
@@ -24,11 +24,11 @@ Se não houver skill capaz de buscar o dado **ou** de cruzar as informações pe
 
 A base evolui a cada consulta, sem depender da IA lembrar de um passo extra:
 
-1. **`consultar_dados` grava o SQL que funcionou** (`consulta_aprendida`). Sempre envie `pergunta` (a pergunta do usuário) para indexar. Sem `pergunta`, o servidor ainda grava e devolve aviso `PERGUNTA_AUSENTE`.
-2. **Regra, dicionário, glossário, métrica ou sinônimo** que o usuário ensinou no chat: `consultar_dados.aprendizado[]` na mesma chamada, ou a tool `registrar_aprendizado`. Não deixe só no texto da resposta.
+1. **`consultar_dados` grava o SQL que funcionou** (`consulta_aprendida` associada a todas as `skillIds`). `pergunta` é obrigatória.
+2. **Regra, dicionário, glossário, métrica ou sinônimo** que o usuário ensinou no chat: `consultar_dados.aprendizado[]` na mesma chamada, ou a tool `registrar_aprendizado`. Dicionário exige tabela+coluna. Não deixe só no texto da resposta.
 3. **`salvar_consulta`** (com `confirmadoPeloUsuario`) amarra uma pergunta clara a um SQL já comprovado — exemplo curado para reuso.
 4. Execução bem-sucedida promove colunas e JOINs a `validado_execucao`.
-5. `SKILL_GAP` vira `lacuna_consulta` (fila de treino). `buscar_contexto` devolve `consultasAprendidas` para a IA reusar em vez de reinventar.
+5. `SKILL_GAP` vira `lacuna_consulta` só quando a busca é específica o bastante. `buscar_contexto` devolve `consultasAprendidas` para a IA reusar em vez de reinventar.
 
 ## Comunicação com o ERP
 

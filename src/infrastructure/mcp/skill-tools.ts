@@ -56,9 +56,13 @@ const queryAnnotations = {
 const zodForParamTipo = (tipo: TipoParametroSkill | undefined): z.ZodTypeAny => {
   switch (tipo) {
     case "number":
+    case "integer":
       return z.number();
+    case "decimal":
+      return z.string().describe("decimal como string segura");
     case "boolean":
       return z.boolean();
+    case "datetime":
     case "date":
       return z.string().describe("ISO date (YYYY-MM-DD)");
     default:
@@ -82,11 +86,13 @@ export const syncSkillTools = async (input: {
     const params = extractNamedParams(skill.sqlModelo);
     const shape: Record<string, z.ZodTypeAny> = {
       acessoId: z.string().optional(),
+      pergunta: z.string().describe("Pergunta do usuário (obrigatória)."),
     };
     for (const param of params) {
       const meta = skill.params.find((item) => item.nome === param);
-      const field = zodForParamTipo(meta?.tipo).nullable();
-      shape[param] = meta?.descricao ? field.optional().describe(meta.descricao) : field.optional();
+      const field = zodForParamTipo(meta?.tipo);
+      const described = meta?.descricao ? field.describe(meta.descricao) : field;
+      shape[param] = meta?.obrigatorio === false ? described.optional() : described;
     }
     const existing = input.registered.get(name);
     existing?.remove();
@@ -94,11 +100,13 @@ export const syncSkillTools = async (input: {
       name,
       {
         title: skill.nome,
-        description: `${skill.nome}. ${skill.descricao}`.trim(),
+        description:
+          `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados.`.trim(),
         inputSchema: shape,
         annotations: queryAnnotations,
       },
       async (args: Record<string, unknown>) => {
+        const pergunta = typeof args.pergunta === "string" ? args.pergunta : "";
         const acessoId = typeof args.acessoId === "string" ? args.acessoId : undefined;
         const bound: Record<string, unknown> = {};
         for (const param of params) {
@@ -110,6 +118,7 @@ export const syncSkillTools = async (input: {
           input.consultarDados.execute(currentAccountId(), {
             acessoId,
             skillId: skill.id,
+            pergunta,
             params: bound,
           }),
         );
@@ -198,7 +207,9 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
               descricao: skill.descricao,
               sqlModelo: skill.sqlModelo,
               params: skill.params,
+              escopo: skill.escopo,
               versao: skill.versao,
+              pacoteVersao: skill.pacoteVersao,
               status: skill.status,
             }),
           },

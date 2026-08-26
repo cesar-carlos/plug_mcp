@@ -1,8 +1,9 @@
 import type { EscopoSkill } from "./escopo.js";
 
-export type StatusSkill = "rascunho" | "validada" | "publicada";
+export type StatusSkill = "rascunho" | "validada" | "publicada" | "rascunho_revalidacao";
 
-export type TipoParametroSkill = "string" | "number" | "date" | "boolean";
+export type TipoParametroSkill =
+  "string" | "number" | "integer" | "decimal" | "date" | "datetime" | "boolean";
 
 export interface ParametroSkill {
   readonly nome: string;
@@ -11,7 +12,15 @@ export interface ParametroSkill {
   readonly tipo: TipoParametroSkill;
 }
 
-const TIPOS_PARAMETRO: readonly TipoParametroSkill[] = ["string", "number", "date", "boolean"];
+const TIPOS_PARAMETRO: readonly TipoParametroSkill[] = [
+  "string",
+  "number",
+  "integer",
+  "decimal",
+  "date",
+  "datetime",
+  "boolean",
+];
 
 const parseTipoParametro = (value: unknown): TipoParametroSkill =>
   typeof value === "string" && (TIPOS_PARAMETRO as readonly string[]).includes(value)
@@ -53,7 +62,9 @@ export interface Skill {
   readonly params: readonly ParametroSkill[];
   readonly escopo: EscopoSkill;
   readonly versao: number;
+  readonly pacoteVersao: number;
   readonly status: StatusSkill;
+  readonly motivoRevalidacao: string | null;
   readonly autorUsuarioId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -68,12 +79,15 @@ export interface NovaSkill {
   readonly params?: readonly ParametroSkill[];
   readonly escopo?: EscopoSkill;
   readonly autorUsuarioId: string | null;
+  readonly pacoteVersao?: number;
+  readonly motivoRevalidacao?: string | null;
 }
 
 export interface AnotacaoGrafo {
   readonly id: string;
   readonly agentId: string;
   readonly tabelaId: string | null;
+  readonly skillId: string | null;
   readonly tipo: string;
   readonly titulo: string;
   readonly texto: string;

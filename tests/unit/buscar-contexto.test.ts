@@ -212,7 +212,7 @@ describe("BuscarContexto", () => {
     await skills.setStatus(published.id, "publicada");
     await aprendizado.salvarConsulta({
       agentId,
-      skillId: published.id,
+      skillIds: [published.id],
       pergunta: "faturamento no período",
       sql: "SELECT SUM(p.valor) AS total FROM produto p WHERE p.data >= :dataInicio",
       paramsContrato: [

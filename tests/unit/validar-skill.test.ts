@@ -10,6 +10,7 @@ import {
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -40,11 +41,11 @@ describe("ValidarSkill", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
-    await grafo.mergeTabela({
+    await seedTabelaComColunas(grafo, {
       agentId,
+      usuarioId: created.usuarioId,
       nome: "produto",
-      origem: "validado_execucao",
-      autorUsuarioId: created.usuarioId,
+      colunas: ["codprod", "dtcad"],
     });
     const sessions = {
       getAccessToken: async () => "access-test",
@@ -102,11 +103,11 @@ describe("ValidarSkill", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
-    await grafo.mergeTabela({
+    await seedTabelaComColunas(grafo, {
       agentId,
+      usuarioId: created.usuarioId,
       nome: "produto",
-      origem: "validado_execucao",
-      autorUsuarioId: created.usuarioId,
+      colunas: ["codprod", "dtcad"],
     });
     const sessions = {
       getAccessToken: async () => "access-test",
@@ -121,7 +122,7 @@ describe("ValidarSkill", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
     });
     await validar.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -163,11 +164,11 @@ describe("ValidarSkill", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
-    await grafo.mergeTabela({
+    await seedTabelaComColunas(grafo, {
       agentId,
+      usuarioId: created.usuarioId,
       nome: "produto",
-      origem: "validado_execucao",
-      autorUsuarioId: created.usuarioId,
+      colunas: ["codprod", "dtcad"],
     });
     const sessions = {
       getAccessToken: async () => "access-test",
@@ -214,11 +215,11 @@ describe("ValidarSkill", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
-    await grafo.mergeTabela({
+    await seedTabelaComColunas(grafo, {
       agentId,
+      usuarioId: created.usuarioId,
       nome: "produto",
-      origem: "validado_execucao",
-      autorUsuarioId: created.usuarioId,
+      colunas: ["codprod", "dtcad"],
     });
     const sessions = {
       getAccessToken: async () => "access-test",
@@ -231,7 +232,7 @@ describe("ValidarSkill", () => {
       acessoId: created.acessoId,
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       params: [],
     });
     plug.sqlImpl = async () => {

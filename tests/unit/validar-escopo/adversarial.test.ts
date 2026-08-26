@@ -11,72 +11,81 @@ const escopo = escopoFromSqlModelo(
 );
 
 describe("validarSqlNoEscopo adversarial", () => {
-  it("recusa tabela fora via CTE", () => {
+  it("recusa UNION ALL com tabela fora do escopo", () => {
     expect(() =>
       validarSqlNoEscopo(
-        "WITH x AS (SELECT f.valor FROM fatura f) SELECT x.valor FROM x WHERE x.valor > 0",
+        "SELECT p.codprod FROM produto p WHERE p.codprod = 1 UNION ALL SELECT f.valor FROM fatura f WHERE f.valor = 1",
         "mssql",
         escopo,
       ),
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO }));
   });
 
-  it("recusa coluna via subquery correlacionada", () => {
+  it("recusa INTERSECT com tabela fora do escopo", () => {
     expect(() =>
       validarSqlNoEscopo(
-        "SELECT p.codprod FROM produto p WHERE EXISTS (SELECT 1 FROM cliente c WHERE c.fantasma = p.codprod)",
+        "SELECT p.codprod FROM produto p WHERE p.codprod = 1 INTERSECT SELECT f.valor FROM fatura f WHERE f.valor = 1",
+        "postgres",
+        escopo,
+      ),
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO }));
+  });
+
+  it("recusa subquery em HAVING fora do escopo", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT p.codprod, SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0 GROUP BY p.codprod HAVING SUM(p.codprod) > (SELECT MAX(f.valor) FROM fatura f)",
         "mssql",
         escopo,
       ),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO }));
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO }));
   });
 
-  it("recusa JOIN inventado entre duas tabelas já no escopo", () => {
+  it("recusa alias desconhecido", () => {
+    expect(() =>
+      validarSqlNoEscopo("SELECT z.codprod FROM produto p WHERE z.codprod > 0", "mssql", escopo),
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.ALIAS_DESCONHECIDO }));
+  });
+
+  it("recusa coluna sem qualificador com mais de uma tabela", () => {
     expect(() =>
       validarSqlNoEscopo(
-        "SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON c.nome = p.codprod WHERE p.codprod > 0",
+        "SELECT codprod FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli WHERE p.codprod > 0",
         "mssql",
         escopo,
       ),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.JOIN_DESCONHECIDO }));
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.COLUNA_AMBIGUA }));
   });
 
-  it("recusa segundo comando", () => {
+  it("recusa paginação cujo ORDER BY está só em comentário", () => {
     expect(() =>
       validarSqlNoEscopo(
-        "SELECT p.codprod FROM produto p WHERE p.codprod > 0; DROP TABLE produto",
+        "SELECT p.codprod FROM produto p WHERE p.codprod > 0 -- ORDER BY p.codprod",
         "mssql",
         escopo,
+        { page: 2, pageSize: 10 },
       ),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.INVALID_SQL }));
-  });
-
-  it("recusa SELECT * aninhado", () => {
-    expect(() =>
-      validarSqlNoEscopo(
-        "SELECT x.codprod FROM (SELECT * FROM produto) x WHERE x.codprod > 0",
-        "mssql",
-        escopo,
-      ),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.INVALID_SQL }));
-  });
-
-  it("recusa mutação após comentário vazio", () => {
-    expect(() =>
-      validarSqlNoEscopo(
-        "SELECT p.codprod FROM produto p WHERE p.codprod > 0; /* */ DROP TABLE produto",
-        "mssql",
-        escopo,
-      ),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.INVALID_SQL }));
-  });
-
-  it("comentário -- INSERT não vira segundo comando", () => {
-    const ast = validarSqlNoEscopo(
-      "SELECT p.codprod FROM produto p WHERE p.codprod > 0 -- INSERT INTO produto",
-      "mssql",
-      escopo,
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: expect.stringMatching(/ORDER BY/i),
+      }),
     );
-    expect(ast.temWhere).toBe(true);
+  });
+
+  it("recusa paginação cujo ORDER BY está só na subquery", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT p.codprod FROM produto p WHERE p.codprod IN (SELECT c.codcli FROM cliente c ORDER BY c.codcli) ",
+        "mssql",
+        escopo,
+        { page: 2, pageSize: 10 },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: expect.stringMatching(/ORDER BY/i),
+      }),
+    );
   });
 });

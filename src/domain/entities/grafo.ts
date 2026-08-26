@@ -23,6 +23,7 @@ export interface ColunaGrafo {
   readonly tabelaId: string;
   readonly nome: string;
   readonly tipo: string | null;
+  readonly nullable: boolean | null;
   readonly descricao: string | null;
   readonly dicionario: string | null;
   readonly papel: PapelColuna | null;

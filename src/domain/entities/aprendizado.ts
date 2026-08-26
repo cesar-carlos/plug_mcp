@@ -3,7 +3,7 @@ import type { ParametroSkill } from "./skill.js";
 export interface ConsultaAprendida {
   readonly id: string;
   readonly agentId: string;
-  readonly skillId: string | null;
+  readonly skillIds: readonly string[];
   readonly pergunta: string;
   readonly sql: string;
   readonly paramsContrato: readonly ParametroSkill[];

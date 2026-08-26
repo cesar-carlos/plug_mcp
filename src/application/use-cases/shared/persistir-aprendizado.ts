@@ -24,7 +24,7 @@ export interface ItemAprendizadoInput {
 export const persistirConsultaExecutada = async (input: {
   aprendizado: AprendizadoRepositoryPort;
   agentId: string;
-  skillId: string;
+  skillIds: readonly string[];
   pergunta: string;
   sql: string;
   paramsContrato: readonly ParametroSkill[];
@@ -32,7 +32,7 @@ export const persistirConsultaExecutada = async (input: {
 }): Promise<ConsultaAprendida> =>
   input.aprendizado.salvarConsulta({
     agentId: input.agentId,
-    skillId: input.skillId,
+    skillIds: input.skillIds,
     pergunta: input.pergunta,
     sql: input.sql,
     paramsContrato: input.paramsContrato,
@@ -83,13 +83,39 @@ export const persistirItensAprendizado = async (input: {
       continue;
     }
     let tabelaId: string | null = null;
+    const skillId: string | null = item.skillId?.trim() ? item.skillId.trim() : null;
     if (item.tabela?.trim()) {
       const tabela = await input.grafo.findTabelaByNome(input.agentId, item.tabela.trim());
-      tabelaId = tabela?.id ?? null;
+      if (!tabela) {
+        avisos.push({
+          code: "APRENDIZADO_IGNORADO",
+          message: `Tabela ${item.tabela.trim()} não está no grafo; anotação não foi gravada como global.`,
+        });
+        continue;
+      }
+      tabelaId = tabela.id;
+    }
+    if (tipo === "dicionario") {
+      const colunaNome = titulo;
+      if (!tabelaId) {
+        avisos.push({
+          code: "APRENDIZADO_IGNORADO",
+          message: "Dicionário exige tabela e coluna explícitas.",
+        });
+        continue;
+      }
+      await input.grafo.mergeColuna({
+        tabelaId,
+        nome: colunaNome,
+        dicionario: texto,
+        origem: "confirmado_usuario",
+        autorUsuarioId: input.autorUsuarioId,
+      });
     }
     const anotacao = await input.anotacoes.create({
       agentId: input.agentId,
       tabelaId,
+      skillId,
       tipo,
       titulo,
       texto,

@@ -71,6 +71,19 @@ describe("consultar_dados só com skill", () => {
       expect(token).toBeTruthy();
 
       const authed = await initialize(app, token);
+      const toolsList = await mcpRpc(
+        app,
+        token!,
+        { jsonrpc: "2.0", id: 21, method: "tools/list", params: {} },
+        authed.sessionId,
+      );
+      const tools = toolsList.payload.result as {
+        tools?: { name: string; outputSchema?: unknown }[];
+      };
+      const consultarTool = tools.tools?.find((tool) => tool.name === "consultar_dados");
+      expect(consultarTool).toBeDefined();
+      expect(consultarTool?.outputSchema).toBeDefined();
+
       const promptList = await mcpRpc(
         app,
         token!,
@@ -135,6 +148,7 @@ describe("consultar_dados só com skill", () => {
             arguments: {
               acessoId: registered.json.acessoId,
               skillId: created.skill.id,
+              pergunta: "produtos por codigo",
               params: { codigo: 10 },
             },
           },

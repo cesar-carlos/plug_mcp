@@ -265,7 +265,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Busca skills publicadas, consultas aprendidas, grafo e anotações. Expande sinônimos. Reuse consultasAprendidas. Sem skill capaz: SKILL_GAP (não invente tabela/JOIN). Grave o que o usuário ensinar com registrar_aprendizado.",
+    "Candidatos ranqueados com cobertura (completa|parcial|desconhecida). consultaPermitida só se cobertura completa. Reuse consultasAprendidas. SKILL_GAP da busca por termos: listar_skills antes de desistir. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -291,13 +291,13 @@ export const registerTools = (
     "consultar_dados",
     {
       description:
-        "Consulta o ERP no escopo publicado. Sempre envie pergunta (a pergunta do usuário). Sem sql, executa a consulta exemplo. Com sql, SELECT no dialeto validado contra o pacote. O servidor grava o SQL que funcionou. Regras/dicionário: aprendizado[] ou registrar_aprendizado.",
+        "Consulta o ERP no escopo publicado. Sempre envie pergunta. Params :nome no SQL + objeto params. Sem sql, executa a consulta exemplo. Com sql, SELECT no escopo. Página: ORDER BY + options.page e page_size juntos, sem TOP/LIMIT. truncated = teto max_rows; paginacao.hasNextPage = há próxima página. Regras: aprendizado[] ou registrar_aprendizado.",
       inputSchema: {
         acessoId: z.string().optional(),
         skillId: z.string().optional(),
         skillIds: z.array(z.string()).optional(),
         sql: z.string().optional(),
-        pergunta: z.string().optional(),
+        pergunta: z.string(),
         aprendizado: z
           .array(
             z.object({
@@ -324,6 +324,15 @@ export const registerTools = (
         skillId: z.string(),
         skillIds: z.array(z.string()),
         columns: z.array(z.string()),
+        columnsMetadata: z
+          .array(
+            z.object({
+              name: z.string(),
+              type: z.string().nullable(),
+              nullable: z.boolean().nullable(),
+            }),
+          )
+          .optional(),
         rows: z.array(z.record(z.string(), z.unknown())),
         rowCount: z.number(),
         maxRowsApplied: z.number(),
@@ -354,6 +363,14 @@ export const registerTools = (
           })
           .optional(),
         hint: z.string().optional(),
+        paginacao: z
+          .object({
+            page: z.number(),
+            pageSize: z.number(),
+            hasNextPage: z.boolean(),
+            hasPreviousPage: z.boolean(),
+          })
+          .optional(),
       },
       annotations: readWorld,
     },
@@ -491,9 +508,10 @@ export const registerTools = (
 
   server.tool(
     "confirmar_relacionamento",
-    "Confirma um JOIN no grafo (origem confirmado_usuario) para o validador de escopo aceitar.",
+    "Confirma um JOIN no grafo (origem confirmado_usuario). Com skillId, persiste no pacote da skill — só o grafo não libera consulta.",
     {
       acessoId: z.string().optional(),
+      skillId: z.string().optional(),
       tabelaOrigem: z.string().optional(),
       colunaOrigem: z.string().optional(),
       tabelaDestino: z.string().optional(),

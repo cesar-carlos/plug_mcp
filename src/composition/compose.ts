@@ -231,7 +231,7 @@ export const compose = async (
       aprendizado,
     ),
     expandirEscopo: new ExpandirEscopo(acessos, skills, grafo),
-    confirmarRelacionamento: new ConfirmarRelacionamento(acessos, grafo),
+    confirmarRelacionamento: new ConfirmarRelacionamento(acessos, grafo, skills),
     confirmarColuna: new ConfirmarColuna(acessos, grafo),
     anotarGrafo: new AnotarGrafo(acessos, grafo, anotacoes),
     listarAnotacoes: new ListarAnotacoes(acessos, anotacoes),

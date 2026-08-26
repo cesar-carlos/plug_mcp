@@ -6,16 +6,16 @@ Fonte normativa no hub: `plug_server/docs/api/api_rest_bridge.md` e OpenAPI `GET
 
 ## Endpoints que o adapter chama
 
-| Método | Caminho                                                         | Port                                                                                                                                       |
-| ------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| POST   | `/client-auth/login`                                            | `login` via `UsuarioTokenManager`                                                                                                          |
-| POST   | `/client-auth/refresh`                                          | `refresh` via `UsuarioTokenManager`                                                                                                        |
-| POST   | `/client/me/agents`                                             | `requestAgentAccess`                                                                                                                       |
-| GET    | `/client/me/agents/{agentId}`                                   | `getAgentAccessStatus`                                                                                                                     |
-| GET    | `/client/me/agent-access-requests?search={agentId}&pageSize=20` | resolução de 403 (pending vs rejected/revoked)                                                                                             |
-| PUT    | `/client/me/agents/{agentId}/client-token`                      | `putClientToken` após gravar o acesso e quando o hub passa a `approved`. Best-effort: falha não desfaz o cofre. O RPC ainda envia o token. |
-| POST   | `/agents/commands` (`sql.execute`)                              | `executeSql` — `options.execution_mode: preserve`                                                                                          |
-| POST   | `/agents/commands` (`client_token.getPolicy`)                   | `getClientTokenPolicy` (cache por hash)                                                                                                    |
+| Método | Caminho                                                         | Port                                                                                                                                                            |
+| ------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/client-auth/login`                                            | `login` via `UsuarioTokenManager`                                                                                                                               |
+| POST   | `/client-auth/refresh`                                          | `refresh` via `UsuarioTokenManager`                                                                                                                             |
+| POST   | `/client/me/agents`                                             | `requestAgentAccess`                                                                                                                                            |
+| GET    | `/client/me/agents/{agentId}`                                   | `getAgentAccessStatus`                                                                                                                                          |
+| GET    | `/client/me/agent-access-requests?search={agentId}&pageSize=20` | resolução de 403 (pending vs rejected/revoked)                                                                                                                  |
+| PUT    | `/client/me/agents/{agentId}/client-token`                      | `putClientToken` após gravar o acesso e quando o hub passa a `approved`. Best-effort: falha não desfaz o cofre. O RPC ainda envia o token.                      |
+| POST   | `/agents/commands` (`sql.execute`)                              | `executeSql` — sem página: `execution_mode: preserve`; com `page`+`page_size`: omite o campo (`managed`). Resultado normaliza `column_metadata` e `pagination`. |
+| POST   | `/agents/commands` (`client_token.getPolicy`)                   | `getClientTokenPolicy` (cache por hash)                                                                                                                         |
 
 O MCP não lê o `client_token` de volta do hub — a cópia cifrada no cofre é a autoridade.
 

@@ -11,6 +11,7 @@ import {
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -41,11 +42,11 @@ describe("AtualizarDialeto", () => {
       clientToken: "tok-sql-123456",
     });
     await grafo.setDialeto(agentId, "sybase");
-    await grafo.mergeTabela({
+    await seedTabelaComColunas(grafo, {
       agentId,
+      usuarioId: created.usuarioId,
       nome: "produto",
-      origem: "validado_execucao",
-      autorUsuarioId: created.usuarioId,
+      colunas: ["codprod"],
     });
     const skill = await new CriarSkill(acessos, skills, grafo).execute(created.usuarioId, {
       acessoId: created.acessoId,
