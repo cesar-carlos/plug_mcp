@@ -18,10 +18,19 @@ import {
   ValidarConsulta,
 } from "../application/use-cases/consultar.js";
 import {
+  CancelarOperacao,
+  DescobrirTabela,
+  DetectarDerivaEsquema,
+  InspecionarConsulta,
+} from "../application/use-cases/inspecionar.js";
+import {
   AtualizarEscopoPadrao,
   HerdarCatalogo,
   ListarAuditoria,
+  ListarLacunas,
+  ListarMetricasAgente,
   RegistrarAprendizado,
+  RegistrarLacunaFerramenta,
   SalvarConsulta,
 } from "../application/use-cases/aprendizado.js";
 import {
@@ -109,9 +118,12 @@ export const compose = async (
   let anotacoes: InMemoryAnotacaoGrafoRepository | DrizzleAnotacaoGrafoRepository;
   let audit: InMemoryAuditLog | DrizzleAuditLog;
   let aprendizado: InMemoryAprendizadoRepository | DrizzleAprendizadoRepository;
+  let readinessCheck: (() => Promise<boolean>) | undefined;
+  let dbPool: { query: (sql: string) => Promise<unknown> } | undefined;
 
   if (config.DATABASE_URL) {
     const { db, pool } = createDb(config.DATABASE_URL);
+    dbPool = pool;
     usuarios = new DrizzleUsuarioRepository(db);
     acessos = new DrizzleAcessoRepository(db);
     grafo = new DrizzleGrafoRepository(db);
@@ -182,7 +194,10 @@ export const compose = async (
       config.MCP_TOKEN_TTL_DAYS,
     ),
     atualizarDialeto: new AtualizarDialeto(acessos, grafo, skills),
-    treinarComSql: new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit, skills),
+    treinarComSql: new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit, skills, {
+      cache: queryCache,
+      schemaDriftEnabled: config.MCP_SCHEMA_DRIFT_ENABLED,
+    }),
     consultarDados: new ConsultarDados(
       acessos,
       skills,
@@ -198,10 +213,15 @@ export const compose = async (
         anotacoes,
         cache: queryCache,
         cacheTtlMs: config.QUERY_CACHE_TTL_MS,
+        semanticQueryEnabled: config.MCP_SEMANTIC_QUERY_ENABLED,
       },
     ),
     explorarTabelas: new ExplorarTabelas(acessos, plug, sessions, crypto, audit),
-    mapearTabela: new MapearTabela(acessos, grafo, plug, sessions, crypto),
+    mapearTabela: new MapearTabela(acessos, grafo, plug, sessions, crypto, {
+      skills,
+      cache: queryCache,
+      schemaDriftEnabled: config.MCP_SCHEMA_DRIFT_ENABLED,
+    }),
     buscarContexto: new BuscarContexto(
       acessos,
       grafo,
@@ -241,7 +261,30 @@ export const compose = async (
     atualizarEscopoPadrao: new AtualizarEscopoPadrao(acessos),
     herdarCatalogo: new HerdarCatalogo(acessos, grafo),
     listarAuditoria: new ListarAuditoria(acessos, audit),
+    listarMetricasAgente: new ListarMetricasAgente(acessos, audit),
+    registrarLacunaFerramenta: new RegistrarLacunaFerramenta(acessos, aprendizado),
+    listarLacunas: new ListarLacunas(acessos, aprendizado),
+    inspecionarConsulta: new InspecionarConsulta(
+      acessos,
+      skills,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+    ),
+    descobrirTabela: new DescobrirTabela(acessos, skills, grafo, plug, sessions, crypto),
+    detectarDerivaEsquema: new DetectarDerivaEsquema(acessos, grafo, skills, queryCache),
+    cancelarOperacao: new CancelarOperacao(),
   };
+
+  if (dbPool) {
+    const pool = dbPool;
+    readinessCheck = async () => {
+      await pool.query("select 1");
+      return true;
+    };
+  }
 
   const { app, dispose } = createExpressApp({
     config,
@@ -254,6 +297,7 @@ export const compose = async (
     setup,
     pino,
     mcpRateLimitStore,
+    readinessCheck,
   });
   disposers.push(dispose);
 

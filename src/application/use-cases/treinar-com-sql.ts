@@ -11,6 +11,7 @@ import type {
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
+import { paresDoRelacionamento } from "../../domain/entities/escopo.js";
 import {
   parseSqlModelo,
   sqlAmostra,
@@ -18,7 +19,15 @@ import {
   sqlParaOdbc,
 } from "./shared/sql-modelo.js";
 import { inferirPapelColuna } from "./shared/inferir-papel.js";
-import { enriquecerPerfilCompleto } from "./shared/enriquecer-perfil.js";
+import {
+  enriquecerPerfilCompleto,
+  PERFIL_MAX_QUERIES,
+  type AvisoPerfil,
+} from "./shared/enriquecer-perfil.js";
+import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
+import type { QueryResultCachePort } from "../../domain/ports/query-result-cache.port.js";
+import { aplicarDerivaTabelaNoGrafo } from "./shared/schema-drift.js";
+import { sincronizarEscopoComGrafo } from "./shared/sincronizar-escopo.js";
 import { fluxoForAgentSkill, pickSkillInProgress } from "./shared/fluxo-treino.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
@@ -43,6 +52,7 @@ export class TreinarComSql {
     private readonly crypto: CryptoPort,
     private readonly audit: AuditLogPort,
     private readonly skills: SkillRepositoryPort,
+    private readonly extras: { cache?: QueryResultCachePort; schemaDriftEnabled?: boolean } = {},
   ) {}
 
   async execute(
@@ -61,8 +71,9 @@ export class TreinarComSql {
     relacionamentos: number;
     conflitos: number;
     fluxoTreino: Awaited<ReturnType<typeof fluxoForAgentSkill>>;
-    avisos: { code: string; message: string }[];
+    avisos: AvisoPerfil[];
     hint: string;
+    progresso?: { operacaoId: string; fase: string; queriesUsadas: number; queriesLimite: number };
   }> {
     const started = Date.now();
     const uid = requireUsuario(usuarioId);
@@ -74,6 +85,7 @@ export class TreinarComSql {
       uid,
     );
     const modelo = parseSqlModelo(input.sql ?? "");
+    const escopo = escopoFromSqlModelo(modelo);
     const origem = "validado_execucao" as const;
     const params = bindParamsForValidation(modelo.sql, input.params);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
@@ -132,7 +144,6 @@ export class TreinarComSql {
       }
       let conflitos = 0;
       const tabelaIds = new Map<string, string>();
-      const escopo = escopoFromSqlModelo(modelo);
       for (const tabela of modelo.tabelas) {
         const result = await this.grafo.mergeTabela({
           agentId: acesso.agentId,
@@ -170,30 +181,38 @@ export class TreinarComSql {
         if (!origemId || !destinoId) {
           continue;
         }
-        const leftCol = await this.grafo.mergeColuna({
-          tabelaId: origemId,
-          nome: rel.colunaOrigem,
-          origem,
-          autorUsuarioId: uid,
-        });
-        if (leftCol.conflito) {
-          conflitos += 1;
+        const pares = paresDoRelacionamento(rel);
+        for (const par of pares) {
+          const leftCol = await this.grafo.mergeColuna({
+            tabelaId: origemId,
+            nome: par.colunaOrigem,
+            origem,
+            autorUsuarioId: uid,
+          });
+          if (leftCol.conflito) {
+            conflitos += 1;
+          }
+          const rightCol = await this.grafo.mergeColuna({
+            tabelaId: destinoId,
+            nome: par.colunaDestino,
+            origem,
+            autorUsuarioId: uid,
+          });
+          if (rightCol.conflito) {
+            conflitos += 1;
+          }
         }
-        const rightCol = await this.grafo.mergeColuna({
-          tabelaId: destinoId,
-          nome: rel.colunaDestino,
-          origem,
-          autorUsuarioId: uid,
-        });
-        if (rightCol.conflito) {
-          conflitos += 1;
+        const first = pares[0];
+        if (!first) {
+          continue;
         }
         const result = await this.grafo.mergeRelacionamento({
           agentId: acesso.agentId,
           tabelaOrigemId: origemId,
-          colunaOrigem: rel.colunaOrigem,
+          colunaOrigem: first.colunaOrigem,
           tabelaDestinoId: destinoId,
-          colunaDestino: rel.colunaDestino,
+          colunaDestino: first.colunaDestino,
+          pares,
           tipoJoin: rel.tipoJoin,
           origem,
           autorUsuarioId: uid,
@@ -206,27 +225,47 @@ export class TreinarComSql {
       return { conflitos, rels };
     });
 
-    const avisos: { code: string; message: string }[] = [];
+    const avisos: AvisoPerfil[] = [];
+    let progresso:
+      | { operacaoId: string; fase: string; queriesUsadas: number; queriesLimite: number }
+      | undefined;
     if (input.enriquecer === "completo") {
-      const perfil = await enriquecerPerfilCompleto({
-        grafo: this.grafo,
-        executeSql: async (sql, params) =>
-          withHubAuth(this.sessions, uid, (accessToken) =>
-            this.plug.executeSql({
-              accessToken,
-              agentId: acesso.agentId,
-              clientToken,
-              sql: sqlParaOdbc(sql),
-              params: params ?? {},
-              options: { maxRows: 300 },
-            }),
-          ),
-        agentId: acesso.agentId,
-        dialeto: acesso.dialeto,
-        autorUsuarioId: uid,
-        modelo,
+      const op = registroOperacoesGlobal.iniciar(uid, "treinar_com_sql", PERFIL_MAX_QUERIES);
+      try {
+        const perfil = await enriquecerPerfilCompleto({
+          grafo: this.grafo,
+          executeSql: async (sql, params) =>
+            withHubAuth(this.sessions, uid, (accessToken) =>
+              this.plug.executeSql({
+                accessToken,
+                agentId: acesso.agentId,
+                clientToken,
+                sql: sqlParaOdbc(sql),
+                params: params ?? {},
+                options: { maxRows: 300 },
+              }),
+            ),
+          agentId: acesso.agentId,
+          dialeto: acesso.dialeto,
+          autorUsuarioId: uid,
+          modelo,
+          escopo,
+          escopoPadrao: acesso.escopoPadrao
+            ? { empresa: acesso.escopoPadrao.empresa, filial: acesso.escopoPadrao.filial }
+            : undefined,
+          signal: op.signal,
+          onProgress: (item) => {
+            progresso = op.report(item.fase, item.queriesUsadas);
+          },
+        });
+        avisos.push(...perfil.avisos);
+        progresso = op.report("concluido", progresso?.queriesUsadas ?? 0);
+      } finally {
+        registroOperacoesGlobal.finalizar(op.operacaoId);
+      }
+      await sincronizarEscopoComGrafo(this.skills, this.grafo, acesso.agentId, {
+        tabelas: modelo.tabelas.map((tabela) => tabela.nome),
       });
-      avisos.push(...perfil.avisos);
     }
 
     await this.audit.append({
@@ -239,6 +278,24 @@ export class TreinarComSql {
       linhasRetornadas: 1,
       duracaoMs: Date.now() - started,
     });
+
+    if (this.extras.schemaDriftEnabled !== false) {
+      for (const tabela of modelo.tabelas) {
+        const deriva = await aplicarDerivaTabelaNoGrafo({
+          grafo: this.grafo,
+          skills: this.skills,
+          cache: this.extras.cache,
+          agentId: acesso.agentId,
+          tabelaNome: tabela.nome,
+        });
+        if (deriva.drifted) {
+          avisos.push({
+            code: "SCHEMA_DRIFT",
+            message: `Assinatura de ${tabela.nome} mudou. Skills afetadas foram para revalidação.`,
+          });
+        }
+      }
+    }
 
     const catalog = await this.skills.listByAgent(acesso.agentId);
     const emAndamento = pickSkillInProgress(catalog, modelo.sql);
@@ -258,6 +315,7 @@ export class TreinarComSql {
       conflitos: merged.conflitos,
       fluxoTreino,
       avisos,
+      progresso,
       hint:
         avisos.length > 0
           ? `${hintBase} Perfilamento: ${avisos.map((item) => item.message).join(" ")}`

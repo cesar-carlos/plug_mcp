@@ -16,11 +16,18 @@ import type {
 } from "../../../domain/entities/aprendizado.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
 import { escopoVazio } from "../../../domain/entities/escopo.js";
+import {
+  fingerprintPares,
+  fingerprintParesInvertidos,
+  paresDeInput,
+} from "../../../domain/entities/relacionamento.js";
+import { parseSensibilidadeColuna } from "../../../domain/entities/privacidade.js";
 import type {
   ColunaGrafo,
   GrafoDialeto,
   OrigemFato,
   RelacionamentoGrafo,
+  SchemaSnapshotGrafo,
   TabelaGrafo,
 } from "../../../domain/entities/grafo.js";
 import { decidirMerge } from "../../../domain/entities/merge-fato.js";
@@ -189,6 +196,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   private readonly tabelas = new Map<string, TabelaGrafo>();
   private readonly colunas = new Map<string, ColunaGrafo>();
   private readonly rels = new Map<string, RelacionamentoGrafo>();
+  private readonly snapshots = new Map<string, SchemaSnapshotGrafo>();
   private readonly locks = new Map<string, Promise<void>>();
 
   async withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
@@ -276,6 +284,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         papel: input.papel ?? null,
         formato: input.formato ?? null,
         perfil: input.perfil ?? null,
+        sensibilidade: parseSensibilidadeColuna(input.sensibilidade ?? "livre"),
         origem: input.origem,
         status: "vigente",
         autorUsuarioId: input.autorUsuarioId,
@@ -290,6 +299,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         descricao: existing.descricao,
         dicionario: existing.dicionario,
         tipo: existing.tipo,
+        formato: existing.formato,
       },
       {
         origem: input.origem,
@@ -297,6 +307,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         descricao: input.descricao ?? null,
         dicionario: input.dicionario ?? null,
         tipo: input.tipo ?? null,
+        formato: input.formato ?? null,
       },
     );
     if (!merge.aplicar) {
@@ -309,8 +320,11 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
       descricao: merge.descricao,
       dicionario: merge.dicionario ?? existing.dicionario,
       papel: input.papel ?? existing.papel,
-      formato: input.formato ?? existing.formato,
+      formato: merge.formato ?? existing.formato,
       perfil: input.perfil ?? existing.perfil,
+      sensibilidade: input.sensibilidade
+        ? parseSensibilidadeColuna(input.sensibilidade)
+        : existing.sensibilidade,
       origem: merge.origem,
       status: merge.status,
       autorUsuarioId: input.autorUsuarioId,
@@ -322,25 +336,41 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   async mergeRelacionamento(
     input: MergeRelacionamentoInput,
   ): Promise<{ relacionamento: RelacionamentoGrafo; conflito: boolean }> {
-    const existing = [...this.rels.values()].find(
-      (row) =>
-        row.agentId === input.agentId &&
+    const pares = paresDeInput(input);
+    if (pares.length === 0) {
+      throw new Error("relacionamento exige ao menos um par de colunas");
+    }
+    const fp = fingerprintPares(pares);
+    const fpInv = fingerprintParesInvertidos(pares);
+    const existing = [...this.rels.values()].find((row) => {
+      if (row.agentId !== input.agentId) {
+        return false;
+      }
+      const direto =
         row.tabelaOrigemId === input.tabelaOrigemId &&
         row.tabelaDestinoId === input.tabelaDestinoId &&
-        lower(row.colunaOrigem) === lower(input.colunaOrigem) &&
-        lower(row.colunaDestino) === lower(input.colunaDestino),
-    );
+        row.paresFingerprint === fp;
+      const inverso =
+        row.tabelaOrigemId === input.tabelaDestinoId &&
+        row.tabelaDestinoId === input.tabelaOrigemId &&
+        row.paresFingerprint === fpInv;
+      return direto || inverso;
+    });
+    const first = pares[0]!;
     if (!existing) {
       const relacionamento: RelacionamentoGrafo = {
         id: id(),
         agentId: input.agentId,
         tabelaOrigemId: input.tabelaOrigemId,
-        colunaOrigem: input.colunaOrigem,
+        colunaOrigem: first.colunaOrigem,
         tabelaDestinoId: input.tabelaDestinoId,
-        colunaDestino: input.colunaDestino,
+        colunaDestino: first.colunaDestino,
+        pares,
+        paresFingerprint: fp,
         tipoJoin: input.tipoJoin,
         cardinalidade: input.cardinalidade ?? null,
         descricao: input.descricao ?? null,
+        escopoValidacao: input.escopoValidacao ?? null,
         origem: input.origem,
         status: "vigente",
         autorUsuarioId: input.autorUsuarioId,
@@ -360,7 +390,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         descricao: input.descricao ?? null,
       },
     );
-    if (!merge.aplicar) {
+    if (!merge.aplicar && input.cardinalidade == null && input.escopoValidacao == null) {
       return { relacionamento: existing, conflito: false };
     }
     const relacionamento: RelacionamentoGrafo = {
@@ -368,6 +398,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
       tipoJoin: input.tipoJoin,
       cardinalidade: input.cardinalidade ?? existing.cardinalidade,
       descricao: merge.descricao,
+      escopoValidacao: input.escopoValidacao ?? existing.escopoValidacao,
       origem: merge.origem,
       status: merge.status,
       autorUsuarioId: input.autorUsuarioId,
@@ -415,6 +446,27 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         (row) => row.tabelaId === tabelaId && lower(row.nome) === lower(nome),
       ) ?? null
     );
+  }
+
+  async saveSchemaSnapshot(input: {
+    agentId: string;
+    tabelaNome: string;
+    assinatura: string;
+  }): Promise<{ drifted: boolean; anterior: string | null }> {
+    const key = `${input.agentId}:${input.tabelaNome.toLowerCase()}`;
+    const existing = this.snapshots.get(key);
+    const anterior = existing?.assinatura ?? null;
+    const drifted = anterior !== null && anterior !== input.assinatura;
+    this.snapshots.set(key, {
+      agentId: input.agentId,
+      tabelaNome: input.tabelaNome,
+      assinatura: input.assinatura,
+    });
+    return { drifted, anterior };
+  }
+
+  async listSchemaSnapshots(agentId: string): Promise<readonly SchemaSnapshotGrafo[]> {
+    return [...this.snapshots.values()].filter((row) => row.agentId === agentId);
   }
 
   async resolverConflito(input: {
@@ -493,6 +545,8 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
       pacoteVersao: input.pacoteVersao ?? input.escopo?.pacoteVersao ?? 1,
       status: "rascunho",
       motivoRevalidacao: input.motivoRevalidacao ?? null,
+      consultaSemantica: input.consultaSemantica ?? null,
+      politicaConsulta: input.politicaConsulta ?? null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -513,6 +567,8 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
         | "escopo"
         | "pacoteVersao"
         | "motivoRevalidacao"
+        | "consultaSemantica"
+        | "politicaConsulta"
       >
     >,
   ): Promise<Skill> {
@@ -783,9 +839,28 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     return { consultas, sinonimos: before - kept.length };
   }
 
-  async registrarLacuna(agentId: string, pergunta: string): Promise<LacunaConsulta> {
-    const row: LacunaConsulta = { id: id(), agentId, pergunta, createdAt: now() };
+  async registrarLacuna(
+    agentId: string,
+    pergunta: string,
+    tipo: "skill_gap" | "ferramenta" = "skill_gap",
+    contrato: Record<string, unknown> | null = null,
+  ): Promise<LacunaConsulta> {
+    const row: LacunaConsulta = {
+      id: id(),
+      agentId,
+      pergunta,
+      tipo,
+      contrato,
+      createdAt: now(),
+    };
     this.lacunas.push(row);
     return row;
+  }
+
+  async listarLacunas(agentId: string, limite: number): Promise<readonly LacunaConsulta[]> {
+    return this.lacunas
+      .filter((row) => row.agentId === agentId)
+      .slice(-limite)
+      .reverse();
   }
 }

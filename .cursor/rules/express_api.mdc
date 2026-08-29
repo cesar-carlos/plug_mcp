@@ -1,5 +1,5 @@
 ---
-description: "Convenções Express: health, setup, MCP"
+description: "Convenções Express: health, setup, MCP e metadata sem AS"
 globs: ["src/infrastructure/http/**/*.ts", "src/infrastructure/mcp/**/*.ts", "src/main.ts", "src/composition/**/*.ts"]
 alwaysApply: false
 ---
@@ -8,7 +8,8 @@ alwaysApply: false
 
 - `GET /health` público. Não fala com o plug-server.
 - `GET /setup/:code` público, HTML one-shot do token MCP.
-- `POST|GET|DELETE /mcp` Streamable HTTP. CORS expõe `Mcp-Session-Id` e `mcp-protocol-version`.
+- `GET /.well-known/oauth-protected-resource` público: metadata do recurso **sem** Authorization Server (só `bearer_methods_supported: header`).
+- `POST|GET|DELETE /mcp` Streamable HTTP. CORS expõe `Mcp-Session-Id` e `mcp-protocol-version`. Origin inválido → 403.
 - Sem rotas de Authorization Server, sem cookie de sessão.
 - Rate limit: bootstrap por IP; autenticado por hash do Bearer. Redis se `REDIS_URL`.
 - `helmet` ligado; não comprimir `text/event-stream`.

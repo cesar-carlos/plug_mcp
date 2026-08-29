@@ -5,9 +5,16 @@ import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
 import type { AnotacaoGrafo, Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
 import {
   PACOTE_VERSAO_ATUAL,
+  paresDoRelacionamento,
   uniaoEscopos,
+  type Cardinalidade,
   type EscopoSkill,
 } from "../../domain/entities/escopo.js";
+import {
+  fingerprintPares,
+  fingerprintParesInvertidos,
+  paresDeInput,
+} from "../../domain/entities/relacionamento.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
@@ -37,7 +44,11 @@ import {
 import { validarSqlNoEscopo } from "./shared/validar-escopo.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
-import { enriquecerPerfilCompleto } from "./shared/enriquecer-perfil.js";
+import {
+  overlayCardinalidadeDoGrafo,
+  sincronizarEscopoComGrafo,
+} from "./shared/sincronizar-escopo.js";
+import { enriquecerPerfilCompleto, type AvisoPerfil } from "./shared/enriquecer-perfil.js";
 import {
   bindParamsForValidation,
   parseSqlModelo,
@@ -51,6 +62,9 @@ import {
   requireUsuario,
 } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
+import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
+import { parsePoliticaConsulta } from "../../domain/entities/politica-consulta.js";
+import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
 import { guiaDialeto } from "./shared/guia-dialeto.js";
 
 interface ParamInput {
@@ -103,6 +117,8 @@ export class CriarSkill {
       descricao?: string;
       sqlModelo?: string;
       params?: readonly ParamInput[];
+      consultaSemantica?: unknown;
+      politicaConsulta?: unknown;
     },
   ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
@@ -118,7 +134,14 @@ export class CriarSkill {
       });
     }
     const modelo = parseSqlModelo(sqlModelo);
-    const escopo = escopoFromSqlModelo(modelo);
+    const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
+    const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
+    const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
+    const escopo = overlayCardinalidadeDoGrafo(
+      escopoFromSqlModelo(modelo),
+      grafoRels,
+      nomeById,
+    );
     const missing = await missingGraphTables(
       this.grafo,
       acesso.agentId,
@@ -132,6 +155,11 @@ export class CriarSkill {
       });
     }
     await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopo);
+    const consultaSemantica = parseConsultaSemantica(input.consultaSemantica);
+    if (consultaSemantica) {
+      compilarConsultaSemantica(consultaSemantica, escopo);
+    }
+    const politicaConsulta = parsePoliticaConsulta(input.politicaConsulta);
     const params = mergeParamInput(paramsFromSql(sqlModelo), normalizeParamInput(input.params));
     const slugInput = input.slug?.trim();
     const slugNome = slugify(nome);
@@ -156,6 +184,8 @@ export class CriarSkill {
       escopo,
       autorUsuarioId: uid,
       pacoteVersao: PACOTE_VERSAO_ATUAL,
+      consultaSemantica,
+      politicaConsulta,
     });
     return {
       success: true,
@@ -181,6 +211,8 @@ export class AtualizarSkill {
       descricao?: string;
       sqlModelo?: string;
       params?: readonly ParamInput[];
+      consultaSemantica?: unknown;
+      politicaConsulta?: unknown;
     },
   ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
@@ -208,13 +240,26 @@ export class AtualizarSkill {
     }
     const baseParams = paramsFromSql(sqlModelo, skill.params);
     const params = mergeParamInput(baseParams, normalizeParamInput(input.params));
+    const escopoNext = sqlChanged ? escopoFromSqlModelo(parseSqlModelo(sqlModelo)) : skill.escopo;
+    const consultaSemantica =
+      input.consultaSemantica !== undefined
+        ? parseConsultaSemantica(input.consultaSemantica)
+        : skill.consultaSemantica;
+    if (consultaSemantica) {
+      compilarConsultaSemantica(consultaSemantica, escopoNext);
+    }
     const updated = await this.skills.update(skill.id, {
       nome: input.nome?.trim() ? input.nome.trim() : skill.nome,
       descricao: input.descricao?.trim() ? input.descricao.trim() : skill.descricao,
       sqlModelo,
       params,
-      escopo: sqlChanged ? escopoFromSqlModelo(parseSqlModelo(sqlModelo)) : skill.escopo,
+      escopo: escopoNext,
       status: sqlChanged ? "rascunho" : skill.status,
+      consultaSemantica,
+      politicaConsulta:
+        input.politicaConsulta !== undefined
+          ? parsePoliticaConsulta(input.politicaConsulta)
+          : skill.politicaConsulta,
     });
     return {
       success: true,
@@ -266,7 +311,7 @@ export class ValidarSkill {
     skill: Skill;
     statusPreservado: boolean;
     fluxoTreino: FluxoTreino;
-    avisos: { code: string; message: string }[];
+    avisos: AvisoPerfil[];
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await refreshAndRequireAcessoAprovado(
@@ -292,7 +337,14 @@ export class ValidarSkill {
       });
     }
     const modelo = parseSqlModelo(skill.sqlModelo);
-    const escopo = escopoFromSqlModelo(modelo);
+    const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
+    const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
+    const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
+    const escopo = overlayCardinalidadeDoGrafo(
+      escopoFromSqlModelo(modelo),
+      grafoRels,
+      nomeById,
+    );
     await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopo);
     if (acesso.dialeto !== "firebird") {
       validarSqlNoEscopo(skill.sqlModelo, acesso.dialeto, escopo);
@@ -318,7 +370,7 @@ export class ValidarSkill {
     const updated = preservarPublicada
       ? persisted
       : await this.skills.setStatus(persisted.id, "validada");
-    const avisos: { code: string; message: string }[] = [];
+    const avisos: AvisoPerfil[] = [];
     if (input.enriquecer === "completo") {
       const perfil = await enriquecerPerfilCompleto({
         grafo: this.grafo,
@@ -337,14 +389,25 @@ export class ValidarSkill {
         dialeto: acesso.dialeto,
         autorUsuarioId: uid,
         modelo,
+        escopo,
+        escopoPadrao: acesso.escopoPadrao
+          ? { empresa: acesso.escopoPadrao.empresa, filial: acesso.escopoPadrao.filial }
+          : undefined,
       });
       avisos.push(...perfil.avisos);
     }
+    const [sincronizada] = await sincronizarEscopoComGrafo(
+      this.skills,
+      this.grafo,
+      acesso.agentId,
+      { skillId: updated.id },
+    );
+    const skillFinal = sincronizada ?? updated;
     return {
       success: true,
-      skill: updated,
+      skill: skillFinal,
       statusPreservado: preservarPublicada,
-      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updated),
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, skillFinal),
       avisos,
     };
   }
@@ -511,6 +574,7 @@ export class ObterSkill {
         formato: string | null;
         descricao: string | null;
         perfil: unknown;
+        sensibilidade: string;
         origem: string;
         status: string;
       }[];
@@ -519,10 +583,12 @@ export class ObterSkill {
         destino: string;
         colunaOrigem: string;
         colunaDestino: string;
+        pares: { colunaOrigem: string; colunaDestino: string }[];
         tipoJoin: string;
         cardinalidade: string | null;
         descricao: string | null;
         origemFato: string;
+        escopoValidacao: { empresa?: string; filial?: string } | null;
       }[];
       regras: AnotacaoGrafo[];
       metricas: AnotacaoGrafo[];
@@ -590,6 +656,7 @@ export class ObterSkill {
       formato: string | null;
       descricao: string | null;
       perfil: unknown;
+      sensibilidade: string;
       origem: string;
       status: string;
     }[] = [];
@@ -609,6 +676,7 @@ export class ObterSkill {
           formato: coluna.formato,
           descricao: coluna.descricao,
           perfil: coluna.perfil,
+          sensibilidade: coluna.sensibilidade,
           origem: coluna.origem,
           status: coluna.status,
         });
@@ -620,26 +688,30 @@ export class ObterSkill {
         destino: idToNome.get(rel.tabelaDestinoId) ?? "",
         colunaOrigem: rel.colunaOrigem,
         colunaDestino: rel.colunaDestino,
+        pares: [...rel.pares],
         tipoJoin: rel.tipoJoin,
         cardinalidade: rel.cardinalidade,
         descricao: rel.descricao,
         origemFato: rel.origem,
+        escopoValidacao: rel.escopoValidacao,
       }))
       .filter((rel) => {
         if (!rel.origem || !rel.destino) {
           return false;
         }
+        const fp = fingerprintPares(rel.pares);
+        const fpInv = fingerprintParesInvertidos(rel.pares);
         return escopo.relacionamentos.some((item) => {
+          const pares = paresDoRelacionamento(item);
+          const itemFp = fingerprintPares(pares);
           const direto =
             item.tabelaOrigem.toLowerCase() === rel.origem.toLowerCase() &&
             item.tabelaDestino.toLowerCase() === rel.destino.toLowerCase() &&
-            item.colunaOrigem.toLowerCase() === rel.colunaOrigem.toLowerCase() &&
-            item.colunaDestino.toLowerCase() === rel.colunaDestino.toLowerCase();
+            itemFp === fp;
           const inverso =
             item.tabelaOrigem.toLowerCase() === rel.destino.toLowerCase() &&
             item.tabelaDestino.toLowerCase() === rel.origem.toLowerCase() &&
-            item.colunaOrigem.toLowerCase() === rel.colunaDestino.toLowerCase() &&
-            item.colunaDestino.toLowerCase() === rel.colunaOrigem.toLowerCase();
+            itemFp === fpInv;
           return direto || inverso;
         });
       });
@@ -903,13 +975,21 @@ export class ExpandirEscopo {
     const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
     const conhecidas = new Set([...base.tabelas, ...extras].map((nome) => nome.toLowerCase()));
     const relacionamentos = grafoRels
-      .map((rel) => ({
-        tabelaOrigem: nomeById.get(rel.tabelaOrigemId) ?? "",
-        colunaOrigem: rel.colunaOrigem,
-        tabelaDestino: nomeById.get(rel.tabelaDestinoId) ?? "",
-        colunaDestino: rel.colunaDestino,
-        tipoJoin: rel.tipoJoin,
-      }))
+      .map((rel) => {
+        const first = rel.pares[0] ?? {
+          colunaOrigem: rel.colunaOrigem,
+          colunaDestino: rel.colunaDestino,
+        };
+        return {
+          tabelaOrigem: nomeById.get(rel.tabelaOrigemId) ?? "",
+          colunaOrigem: first.colunaOrigem,
+          tabelaDestino: nomeById.get(rel.tabelaDestinoId) ?? "",
+          colunaDestino: first.colunaDestino,
+          pares: rel.pares.length > 0 ? [...rel.pares] : [first],
+          tipoJoin: rel.tipoJoin,
+          cardinalidade: rel.cardinalidade ?? undefined,
+        };
+      })
       .filter(
         (rel) =>
           rel.tabelaOrigem &&
@@ -976,22 +1056,24 @@ export class ConfirmarRelacionamento {
       colunaOrigem?: string;
       tabelaDestino?: string;
       colunaDestino?: string;
+      pares?: { colunaOrigem?: string; colunaDestino?: string }[];
       tipoJoin?: string;
+      cardinalidade?: Cardinalidade;
     },
   ): Promise<{ success: true; skill?: Skill }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const origemNome = input.tabelaOrigem?.trim() ?? "";
     const destinoNome = input.tabelaDestino?.trim() ?? "";
-    const colunaOrigem = input.colunaOrigem?.trim() ?? "";
-    const colunaDestino = input.colunaDestino?.trim() ?? "";
-    if (!origemNome || !destinoNome || !colunaOrigem || !colunaDestino) {
+    const pares = paresDeInput(input);
+    if (!origemNome || !destinoNome || pares.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: "tabelaOrigem, colunaOrigem, tabelaDestino e colunaDestino são obrigatórios.",
-        hint: "Use obter_skill para ver o grafo conhecido.",
+        message: "tabelaOrigem, tabelaDestino e pares (ou colunaOrigem/colunaDestino) são obrigatórios.",
+        hint: "Use obter_skill para ver o grafo conhecido. JOIN composto: envie pares[].",
       });
     }
+    const first = pares[0]!;
     const skillId = input.skillId?.trim() ?? "";
     const skill = skillId ? await this.skills.findById(skillId) : null;
     if (skillId && skill?.agentId !== acesso.agentId) {
@@ -1002,6 +1084,12 @@ export class ConfirmarRelacionamento {
       });
     }
     const tipoJoin = input.tipoJoin?.trim() ? input.tipoJoin.trim() : "inner";
+    const escopoValidacao = acesso.escopoPadrao
+      ? {
+          ...(acesso.escopoPadrao.empresa ? { empresa: acesso.escopoPadrao.empresa } : {}),
+          ...(acesso.escopoPadrao.filial ? { filial: acesso.escopoPadrao.filial } : {}),
+        }
+      : null;
     await this.grafo.withAgentLock(acesso.agentId, async () => {
       const origem = await this.grafo.findTabelaByNome(acesso.agentId, origemNome);
       const destino = await this.grafo.findTabelaByNome(acesso.agentId, destinoNome);
@@ -1012,13 +1100,31 @@ export class ConfirmarRelacionamento {
           hint: "Chame treinar_com_sql ou mapear_tabela.",
         });
       }
+      for (const par of pares) {
+        await this.grafo.mergeColuna({
+          tabelaId: origem.id,
+          nome: par.colunaOrigem,
+          origem: "confirmado_usuario",
+          autorUsuarioId: uid,
+        });
+        await this.grafo.mergeColuna({
+          tabelaId: destino.id,
+          nome: par.colunaDestino,
+          origem: "confirmado_usuario",
+          autorUsuarioId: uid,
+        });
+      }
       await this.grafo.mergeRelacionamento({
         agentId: acesso.agentId,
         tabelaOrigemId: origem.id,
-        colunaOrigem,
+        colunaOrigem: first.colunaOrigem,
         tabelaDestinoId: destino.id,
-        colunaDestino,
+        colunaDestino: first.colunaDestino,
+        pares,
         tipoJoin,
+        cardinalidade: input.cardinalidade,
+        escopoValidacao:
+          escopoValidacao && Object.keys(escopoValidacao).length > 0 ? escopoValidacao : null,
         origem: "confirmado_usuario",
         autorUsuarioId: uid,
       });
@@ -1029,16 +1135,18 @@ export class ConfirmarRelacionamento {
     const extraEscopo: EscopoSkill = {
       tabelas: [origemNome, destinoNome],
       colunasPorTabela: {
-        [origemNome]: [colunaOrigem],
-        [destinoNome]: [colunaDestino],
+        [origemNome]: pares.map((par) => par.colunaOrigem),
+        [destinoNome]: pares.map((par) => par.colunaDestino),
       },
       relacionamentos: [
         {
           tabelaOrigem: origemNome,
-          colunaOrigem,
+          colunaOrigem: first.colunaOrigem,
           tabelaDestino: destinoNome,
-          colunaDestino,
+          colunaDestino: first.colunaDestino,
+          pares,
           tipoJoin,
+          ...(input.cardinalidade ? { cardinalidade: input.cardinalidade } : {}),
         },
       ],
       graoPorTabela: {},
@@ -1049,6 +1157,12 @@ export class ConfirmarRelacionamento {
     const updated = await this.skills.update(skill.id, {
       escopo: uniaoEscopos([skill.escopo, extraEscopo]),
     });
-    return { success: true, skill: updated };
+    const [sincronizada] = await sincronizarEscopoComGrafo(
+      this.skills,
+      this.grafo,
+      acesso.agentId,
+      { skillId: updated.id },
+    );
+    return { success: true, skill: sincronizada ?? updated };
   }
 }

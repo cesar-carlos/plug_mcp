@@ -59,6 +59,8 @@ export const requireAcessoAprovado = (acesso: Acesso): Acesso => {
       message: "Acesso ao agente ainda aguarda aprovação no plug-server.",
       hint: "Chame verificar_acesso. Peça ao dono do Agent para aprovar o Client. Não faça polling agressivo.",
       retryable: true,
+      source: "client_agent_access",
+      stage: "requireAcessoAprovado",
     });
   }
   if (acesso.statusAcesso === "revoked") {
@@ -66,6 +68,8 @@ export const requireAcessoAprovado = (acesso: Acesso): Acesso => {
       code: ERROR_CODES.ACCESS_REVOKED,
       message: "Acesso ao agente está revogado.",
       hint: "Reabra o pedido com adicionar_acesso ou registrar_acesso.",
+      source: "client_agent_access",
+      stage: "requireAcessoAprovado",
     });
   }
   return acesso;

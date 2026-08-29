@@ -18,12 +18,22 @@ import type {
 } from "../../domain/ports/plug-server-gateway.port.js";
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
 import type { Skill } from "../../domain/entities/skill.js";
+import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
+import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
+import { assertFanoutSeguro } from "./shared/assert-fanout.js";
+import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
+import { assertOrcamentoConsulta } from "./shared/assert-orcamento.js";
+import { avisosKpiDesalinhado } from "./shared/avisos-kpi.js";
+import { lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
+import { aplicarDerivaTabelaNoGrafo } from "./shared/schema-drift.js";
+import { sincronizarEscopoComGrafo } from "./shared/sincronizar-escopo.js";
 import { uniaoEscopos } from "../../domain/entities/escopo.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
 import {
   bindNamedParams,
   coerceBoundParams,
+  expandirInListas,
   parseSqlModelo,
   sqlValidacaoVazia,
   bindParamsForValidation,
@@ -72,6 +82,7 @@ import {
   sqlExplorarTabelas,
 } from "./shared/schema-introspection.js";
 import { inferirFormatoColuna, inferirPapelColuna } from "./shared/inferir-papel.js";
+import { inferirSensibilidadeColuna } from "../../domain/entities/privacidade.js";
 
 const QUERY_CELL_MAX_CHARS = 2_048;
 
@@ -273,6 +284,8 @@ export class ConsultarDados {
       anotacoes?: AnotacaoGrafoRepositoryPort;
       cache?: QueryResultCachePort;
       cacheTtlMs?: number;
+      semanticQueryEnabled?: boolean;
+      schemaDriftEnabled?: boolean;
     } = {},
   ) {}
 
@@ -283,6 +296,7 @@ export class ConsultarDados {
       skillId?: string;
       skillIds?: string[];
       sql?: string;
+      consultaSemantica?: unknown;
       pergunta?: string;
       aprendizado?: readonly ItemAprendizadoInput[];
       params?: Record<string, unknown>;
@@ -369,6 +383,40 @@ export class ConsultarDados {
     }
     const skill = skillsComEscopo[0]!;
     const sqlLivre = input.sql?.trim() ?? "";
+    let sqlSemantico: string | null = null;
+    let avisoSemantico: { code: string; message: string } | null = null;
+    const consultaSemantica = parseConsultaSemantica(input.consultaSemantica);
+    if (consultaSemantica) {
+      if (this.extras.semanticQueryEnabled === false) {
+        throw new DomainError({
+          code: ERROR_CODES.FEATURE_DESLIGADA,
+          message: "Consulta semântica está desligada.",
+          hint: "Use SQL livre validado ou ligue MCP_SEMANTIC_QUERY_ENABLED.",
+        });
+      }
+      if (skillsComEscopo.length !== 1) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Consulta semântica vale para uma skill.",
+          hint: "Cruze skills com SQL livre no escopo unido.",
+        });
+      }
+      const compiled = compilarConsultaSemantica(
+        consultaSemantica,
+        skillsComEscopo[0]!.escopo.tabelas.length > 0
+          ? skillsComEscopo[0]!.escopo
+          : escopoFromSqlModelo(parseSqlModelo(skillsComEscopo[0]!.sqlModelo)),
+        {
+          empresa: Boolean(acesso.escopoPadrao?.empresa),
+          filial: Boolean(acesso.escopoPadrao?.filial),
+        },
+      );
+      sqlSemantico = compiled.sql;
+      avisoSemantico = {
+        code: "CONSULTA_SEMANTICA",
+        message: `SQL compilado dos elementos certificados: ${compiled.elementos.join(", ")}.`,
+      };
+    }
     const perguntaUsada = input.pergunta?.trim() ?? "";
     if (!perguntaUsada) {
       throw new DomainError({
@@ -386,6 +434,9 @@ export class ConsultarDados {
     }
     const contratoParams = unirContratosParams(skillsComEscopo);
     const avisos: { code: string; message: string }[] = [];
+    if (avisoSemantico) {
+      avisos.push(avisoSemantico);
+    }
     if (!acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial) {
       avisos.push({
         code: "ESCOPO_CONSOLIDADO",
@@ -395,21 +446,29 @@ export class ConsultarDados {
     }
     let sqlExecutar = skill.sqlModelo;
     let modelo = parseSqlModelo(sqlExecutar);
-    if (sqlLivre) {
-      const escopo = uniaoEscopos(
-        skillsComEscopo.map((item) =>
-          item.escopo.tabelas.length > 0
-            ? item.escopo
-            : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
-        ),
-      );
-      const ast = validarSqlNoEscopo(sqlLivre, acesso.dialeto, escopo, {
+    const sqlParaValidar = sqlLivre.length > 0 ? sqlLivre : (sqlSemantico ?? "");
+    const escopoConsulta = uniaoEscopos(
+      skillsComEscopo.map((item) =>
+        item.escopo.tabelas.length > 0
+          ? item.escopo
+          : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
+      ),
+    );
+    if (sqlParaValidar) {
+      const ast = validarSqlNoEscopo(sqlParaValidar, acesso.dialeto, escopoConsulta, {
         page: input.options?.page,
         pageSize: input.options?.page_size,
       });
       avisos.push(...coletarAvisosValidacao(ast));
       sqlExecutar = ast.sql;
-      modelo = parseSqlModelo(sqlLivre);
+      modelo = parseSqlModelo(sqlParaValidar);
+      assertFanoutSeguro(ast, escopoConsulta);
+      avisos.push(...avisosKpiDesalinhado(ast, escopoConsulta));
+    } else {
+      const astModelo = tryParseSelect(sqlExecutar, acesso.dialeto);
+      if (astModelo) {
+        assertFanoutSeguro(astModelo, escopoConsulta);
+      }
     }
     const colunasDasTabelas: Record<string, string[]> = {};
     if (this.extras.grafo) {
@@ -420,6 +479,15 @@ export class ConsultarDados {
         }
         const cols = await this.extras.grafo.listColunas(found.id);
         colunasDasTabelas[tabela.nome] = cols.map((coluna) => coluna.nome);
+      }
+      const astPriv = tryParseSelect(sqlExecutar, acesso.dialeto);
+      if (astPriv) {
+        const lookup = await lookupSensibilidadeGrafo(
+          this.extras.grafo,
+          acesso.agentId,
+          astPriv.tabelas.map((item) => item.nome),
+        );
+        assertPrivacidadeAntesDoHub({ ast: astPriv, lookup, negar: ["segredo", "pessoal"] });
       }
     }
     exigirFiltroEscopoPadrao({
@@ -446,16 +514,21 @@ export class ConsultarDados {
         }
       }
     }
+    const mergedParams = mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao);
+    const expandido = expandirInListas(sqlExecutar, mergedParams);
+    sqlExecutar = expandido.sql;
     const params = coerceBoundParams(
-      bindNamedParams(
-        modelo.sql,
-        mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao),
-        contratoParams,
-      ),
+      bindNamedParams(sqlExecutar, expandido.params, contratoParams),
       contratoParams,
     );
     const requested = input.options?.max_rows ?? this.defaultMaxRows;
-    const maxRows = Math.min(Math.max(1, requested), this.absoluteMaxRows);
+    const orcamento = assertOrcamentoConsulta({
+      ast: tryParseSelect(sqlExecutar, acesso.dialeto),
+      politica: skillsComEscopo[0]?.politicaConsulta ?? null,
+      maxRows: Math.min(Math.max(1, requested), this.absoluteMaxRows),
+      timeoutMs: input.options?.timeout_ms,
+    });
+    const maxRows = orcamento.maxRows;
     const page = input.options?.page;
     const pageSize = input.options?.page_size;
     if (
@@ -586,7 +659,7 @@ export class ConsultarDados {
             maxRows: fetchMax,
             page: paginar ? input.options?.page : undefined,
             pageSize: paginar ? input.options?.page_size : undefined,
-            timeoutMs: input.options?.timeout_ms,
+            timeoutMs: orcamento.timeoutMs ?? input.options?.timeout_ms,
           },
         }),
       );
@@ -629,6 +702,9 @@ export class ConsultarDados {
           autorUsuarioId: uid,
           modelo,
         });
+      }
+      if (consultaSemantica && !skill.consultaSemantica) {
+        await this.skills.update(skill.id, { consultaSemantica });
       }
       if (cacheable && this.extras.cache) {
         await this.extras.cache.set(
@@ -884,6 +960,11 @@ export class MapearTabela {
     private readonly plug: PlugServerGatewayPort,
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
+    private readonly extras: {
+      skills?: SkillRepositoryPort;
+      cache?: QueryResultCachePort;
+      schemaDriftEnabled?: boolean;
+    } = {},
   ) {}
 
   async execute(
@@ -898,6 +979,7 @@ export class MapearTabela {
       nullable: string;
       papel: string;
       formato: "date" | "number" | null;
+      sensibilidade: string;
     }[];
     avisos: { code: string; message: string }[];
   }> {
@@ -959,11 +1041,32 @@ export class MapearTabela {
             tipo,
             papel: inferirPapelColuna(coluna.nome, tipo),
             formato: inferirFormatoColuna(tipo),
+            sensibilidade: inferirSensibilidadeColuna(coluna.nome, tipo),
             origem: "inferido",
             autorUsuarioId: uid,
           });
         }
       });
+      if (this.extras.skills) {
+        await sincronizarEscopoComGrafo(this.extras.skills, this.grafo, acesso.agentId, {
+          tabelas: [ident.tabela],
+        });
+      }
+      if (this.extras.schemaDriftEnabled !== false && this.extras.skills) {
+        const deriva = await aplicarDerivaTabelaNoGrafo({
+          grafo: this.grafo,
+          skills: this.extras.skills,
+          cache: this.extras.cache,
+          agentId: acesso.agentId,
+          tabelaNome: ident.tabela,
+        });
+        if (deriva.drifted) {
+          avisos.push({
+            code: "SCHEMA_DRIFT",
+            message: `Assinatura de ${ident.tabela} mudou. Skills ${deriva.skillsAfetadas.map((item) => item.slug).join(", ") || "(nenhuma)"} foram para revalidação.`,
+          });
+        }
+      }
       return {
         success: true,
         tabela: ident.tabela,
@@ -975,6 +1078,7 @@ export class MapearTabela {
             nullable: coluna.nullable,
             papel: inferirPapelColuna(coluna.nome, tipo || null),
             formato: inferirFormatoColuna(tipo || null),
+            sensibilidade: inferirSensibilidadeColuna(coluna.nome, tipo || null),
           };
         }),
         avisos,
@@ -1017,6 +1121,8 @@ export class BuscarContexto {
     grafoParaTreino?: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     fluxoTreino?: FluxoTreino;
     gap?: { code: "SKILL_GAP"; hint: string };
+    blockingReason?: "SKILL_NOT_PUBLISHED";
+    nextAction?: string;
     hint?: string;
   }> {
     const uid = requireUsuario(usuarioId);
@@ -1120,7 +1226,15 @@ export class BuscarContexto {
         ? "A busca por termos não prova ausência. Chame listar_skills antes de desistir. Não invente tabela, coluna nem JOIN."
         : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
     const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 2;
-    if (!consultaPermitida && !precisaListar && lacunaElegivel && this.aprendizado) {
+    const treinoCobre =
+      skillsParaTreino.length > 0 &&
+      (Boolean(emAndamento) ||
+        skillsParaTreino.some((item) => {
+          const text = haystack(item);
+          return tokens.some((token) => text.includes(token));
+        }));
+    const skillNaoPublicada = !consultaPermitida && treinoCobre;
+    if (!consultaPermitida && !precisaListar && !skillNaoPublicada && lacunaElegivel && this.aprendizado) {
       await this.aprendizado.registrarLacuna(acesso.agentId, query);
     }
     return {
@@ -1138,12 +1252,15 @@ export class BuscarContexto {
             anotacoes: notas,
           },
       fluxoTreino,
-      gap: consultaPermitida
-        ? undefined
-        : {
-            code: "SKILL_GAP",
-            hint: gapHint,
-          },
+      blockingReason: skillNaoPublicada ? "SKILL_NOT_PUBLISHED" : undefined,
+      nextAction: skillNaoPublicada ? (fluxoTreino.proximoPasso ?? "publicar_skill") : undefined,
+      gap:
+        consultaPermitida || skillNaoPublicada
+          ? undefined
+          : {
+              code: "SKILL_GAP",
+              hint: gapHint,
+            },
       hint: hintConsultasAprendidas(query, consultasAprendidas),
     };
   }

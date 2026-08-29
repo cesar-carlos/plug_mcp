@@ -3,6 +3,10 @@ import type { EscopoPadraoAcesso } from "./escopo.js";
 
 export type StatusAcesso = "pending" | "approved" | "revoked";
 
+export type SqlAccessState = "unknown" | "pending" | "active" | "revoked";
+
+export type SqlAccessSource = "vault" | "hub" | "policy";
+
 export interface Acesso {
   readonly id: string;
   readonly usuarioId: string;
@@ -36,6 +40,8 @@ export interface AcessoPublico {
   readonly dialeto: Dialeto;
   readonly nomeAmigavel: string;
   readonly statusAcesso: StatusAcesso;
+  readonly sqlAccessState: SqlAccessState;
+  readonly sqlAccessSource: SqlAccessSource;
   readonly clientTokenMasked: string;
 }
 
@@ -46,11 +52,32 @@ export const maskToken = (token: string): string => {
   return `${token.slice(0, 4)}…${token.slice(-4)}`;
 };
 
-export const toAcessoPublico = (acesso: Acesso, tokenPlain?: string): AcessoPublico => ({
-  id: acesso.id,
-  agentId: acesso.agentId,
-  dialeto: acesso.dialeto,
-  nomeAmigavel: acesso.nomeAmigavel,
-  statusAcesso: acesso.statusAcesso,
-  clientTokenMasked: tokenPlain ? maskToken(tokenPlain) : "••••",
-});
+export const sqlAccessFromVault = (
+  statusAcesso: StatusAcesso,
+): { sqlAccessState: SqlAccessState; sqlAccessSource: SqlAccessSource } => {
+  if (statusAcesso === "pending") {
+    return { sqlAccessState: "pending", sqlAccessSource: "vault" };
+  }
+  if (statusAcesso === "revoked") {
+    return { sqlAccessState: "revoked", sqlAccessSource: "vault" };
+  }
+  return { sqlAccessState: "unknown", sqlAccessSource: "vault" };
+};
+
+export const toAcessoPublico = (
+  acesso: Acesso,
+  tokenPlain?: string,
+  sqlAccess?: { sqlAccessState: SqlAccessState; sqlAccessSource: SqlAccessSource },
+): AcessoPublico => {
+  const derived = sqlAccess ?? sqlAccessFromVault(acesso.statusAcesso);
+  return {
+    id: acesso.id,
+    agentId: acesso.agentId,
+    dialeto: acesso.dialeto,
+    nomeAmigavel: acesso.nomeAmigavel,
+    statusAcesso: acesso.statusAcesso,
+    sqlAccessState: derived.sqlAccessState,
+    sqlAccessSource: derived.sqlAccessSource,
+    clientTokenMasked: tokenPlain ? maskToken(tokenPlain) : "••••",
+  };
+};

@@ -45,7 +45,14 @@ describe("ValidarSkill", () => {
       agentId,
       usuarioId: created.usuarioId,
       nome: "produto",
-      colunas: ["codprod", "dtcad"],
+      colunas: ["codprod"],
+    });
+    const produto = await grafo.findTabelaByNome(agentId, "produto");
+    await grafo.mergeColuna({
+      tabelaId: produto!.id,
+      nome: "dtcad",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
     });
     const sessions = {
       getAccessToken: async () => "access-test",
@@ -219,7 +226,14 @@ describe("ValidarSkill", () => {
       agentId,
       usuarioId: created.usuarioId,
       nome: "produto",
-      colunas: ["codprod", "dtcad"],
+      colunas: ["codprod"],
+    });
+    const produto = await grafo.findTabelaByNome(agentId, "produto");
+    await grafo.mergeColuna({
+      tabelaId: produto!.id,
+      nome: "dtcad",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
     });
     const sessions = {
       getAccessToken: async () => "access-test",
@@ -232,15 +246,18 @@ describe("ValidarSkill", () => {
       acessoId: created.acessoId,
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
-      params: [],
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.dtcad >= :dataInicio",
+      params: [{ nome: "dataInicio", descricao: "Data inicial" }],
     });
     plug.sqlImpl = async () => {
       const sql = plug.lastSql ?? "";
       if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
         return {
           columns: ["column_name", "data_type"],
-          rows: [{ column_name: "codprod", data_type: "int" }],
+          rows: [
+            { column_name: "codprod", data_type: "int" },
+            { column_name: "dtcad", data_type: "datetime" },
+          ],
         };
       }
       if (/MIN\(/i.test(sql)) {
@@ -261,6 +278,9 @@ describe("ValidarSkill", () => {
     const cols = tabela ? await grafo.listColunas(tabela.id) : [];
     expect(
       cols.some((coluna) => coluna.nome.toLowerCase() === "codprod" && coluna.tipo === "int"),
+    ).toBe(true);
+    expect(
+      cols.some((coluna) => coluna.nome.toLowerCase() === "dtcad" && coluna.tipo === "datetime"),
     ).toBe(true);
   });
 });

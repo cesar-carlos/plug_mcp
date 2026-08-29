@@ -5,6 +5,7 @@ import {
   type TipoParametroSkill,
 } from "../../../domain/entities/skill.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
+import { listarFatosIncompletos } from "./gates-skill.js";
 import { extractNamedParams, parseSqlModelo } from "./sql-modelo.js";
 
 export type { ParametroSkill, TipoParametroSkill };
@@ -146,11 +147,13 @@ export const buildFluxoTreino = (input: {
   treinado: boolean;
   skill: Skill | null;
   conflitosPendentes: number;
+  perfilCompleto?: boolean;
 }): FluxoTreino => {
   const skill = input.skill;
   const params = skill?.params ?? [];
   const paramsOk = paramsDescribed(params);
   const conflitosOk = input.conflitosPendentes === 0;
+  const perfilOk = input.perfilCompleto !== false;
 
   const treinar = input.treinado
     ? passo("treinar_sql", "feito", "SQL treinado no grafo.")
@@ -211,6 +214,7 @@ export const buildFluxoTreino = (input: {
     Boolean(skill) &&
     paramsOk &&
     conflitosOk &&
+    perfilOk &&
     (skill?.status === "validada" || skill?.status === "publicada");
 
   let publicar: PassoTreino;
@@ -221,6 +225,12 @@ export const buildFluxoTreino = (input: {
       "publicar_skill",
       "pendente",
       "Mostre o resumo ao usuário e só então chame publicar_skill com confirmadoPeloUsuario: true.",
+    );
+  } else if (!perfilOk && skill?.status === "validada") {
+    publicar = passo(
+      "publicar_skill",
+      "bloqueado",
+      "Perfil incompleto (tipo/formato/cardinalidade). Chame validar_skill enriquecer=completo.",
     );
   } else {
     publicar = passo(
@@ -234,7 +244,8 @@ export const buildFluxoTreino = (input: {
   const primeiroPendente = passos.find((item) => item.status === "pendente");
   const passoAtual =
     primeiroPendente?.id ?? (skill?.status === "publicada" ? "publicar_skill" : "treinar_sql");
-  const podeLiberar = skill?.status === "validada" && paramsOk && conflitosOk && Boolean(skill);
+  const podeLiberar =
+    skill?.status === "validada" && paramsOk && conflitosOk && perfilOk && Boolean(skill);
 
   return {
     passoAtual,
@@ -263,5 +274,13 @@ export const fluxoForAgentSkill = async (
     const tabelas = await grafo.listTabelas(agentId);
     treinado = tabelas.length > 0;
   }
-  return buildFluxoTreino({ treinado, skill, conflitosPendentes });
+  let perfilCompleto = true;
+  if (skill && skill.escopo.tabelas.length > 0) {
+    const faltas = await listarFatosIncompletos(grafo, agentId, skill.escopo, {
+      exigirCardinalidade: skill.escopo.relacionamentos.length > 0,
+      exigirTipoColuna: skill.escopo.metricasSaida.length > 0,
+    });
+    perfilCompleto = faltas.filter((item) => item.kind === "perfil").length === 0;
+  }
+  return buildFluxoTreino({ treinado, skill, conflitosPendentes, perfilCompleto });
 };

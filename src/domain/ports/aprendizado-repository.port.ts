@@ -32,5 +32,11 @@ export interface AprendizadoRepositoryPort {
     agentId: string,
     skillId: string,
   ): Promise<{ consultas: number; sinonimos: number }>;
-  registrarLacuna(agentId: string, pergunta: string): Promise<LacunaConsulta>;
+  registrarLacuna(
+    agentId: string,
+    pergunta: string,
+    tipo?: "skill_gap" | "ferramenta",
+    contrato?: Record<string, unknown> | null,
+  ): Promise<LacunaConsulta>;
+  listarLacunas(agentId: string, limite: number): Promise<readonly LacunaConsulta[]>;
 }

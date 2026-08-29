@@ -11,8 +11,54 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Fixed
+
+- JOIN composto: se o pacote tem `pares[]` com mais de um par, o `ON` incompleto é recusado (fallback v1 só quando não há composto). Evita consulta que “passa” com chave parcial.
+- Pacote da skill recebe cardinalidade/tipo do grafo (`sincronizarEscopoComGrafo` em criar/validar/mapear/confirmar/treino); `uniaoEscopos` não apaga cardinalidade já gravada. Fan-out deixa de dar falso positivo em JOIN já perfilado.
+- `PERFIL_TETO` é retomável: pula JOIN/coluna já perfilados (`details.retomavel: true`).
+- Privacidade resolve alias → tabela física; `segredo` nunca sai (nem em `MAX`/`MIN`); `pessoal` só em `COUNT`. Fan-out também no `sqlModelo` (consulta exemplo / `skill_*`).
+- Cache de consulta: chave e deriva usam prefixo `mcp:query:{agentId}:` — invalidar um agente não limpa os outros.
+- `IN (:lista)` com array em `params` vira um placeholder por valor; lista vazia é `VALIDATION_ERROR`. Compilador semântico qualifica colunas quando há JOIN.
+- `inspecionar_consulta` no Firebird executa a consulta exemplo (sem `sql`); SQL livre continua `DIALECT_UNSUPPORTED`.
+
 ### Added
 
+- `sqlAccessState` / `sqlAccessSource` em `listar_acessos` (só cofre) e `verificar_acesso` (hub + policy).
+- Envelope de erro com `source`, `stage`, `category`, `nextAction`, `documentationUrl` e `details`.
+- `buscar_contexto.blockingReason: SKILL_NOT_PUBLISHED` distinto de `SKILL_GAP`.
+- Pré-check `PRIVACIDADE_NEGADA` antes do hub; inspeção continua mascarando pessoal/sensível.
+- Compilador semântico emite JOIN a partir de `pares[]`; IR persistido em `criar_skill` / sucesso de consulta.
+- Contrato KPI em `metricasSaida` e `politicaConsulta` (migration `0015_politica_lacuna.sql`). Erros `CONSULTA_ORCAMENTO` e aviso `KPI_DESALINHADO`.
+- Resources `guia://paginacao` e `guia://dialeto/{dialeto}`; `skill://` inclui IR, política e guia.
+- Tools `listar_metricas_agente`, `registrar_lacuna_ferramenta` e `listar_lacunas`.
+
+### Changed
+
+- `publicar_skill` / `podeLiberar` bloqueiam `PERFIL_AUSENTE` (faltas de tipo/cardinalidade).
+- Fan-out só nos JOINs do AST ∩ pacote; regex `valor|saldo` é fallback sem `metricasSaida`.
+- Deriva automática após `mapear_tabela` (e treino se a flag estiver ligada); primeiro snapshot não rebaixa skill.
+- Relacionamentos compostos nativos (`pares[]` + uma cardinalidade) no grafo, no pacote v2 e em `confirmar_relacionamento`. Migration `0014_relacionamento_composto.sql` com backfill do par legado.
+- Tool `inspecionar_consulta`: amostra de até 100 linhas, finalidade obrigatória, mascaramento de PII/segredos por linhagem SQL, sem cache/aprendizado/paginação. `SELECT *` é expandido para colunas conhecidas.
+- Tool `descobrir_tabela`: estrutura de skills publicadas (colunas, tipos, chaves, sensibilidade, relacionamentos) sem linhas nem DDL.
+- Classificação persistida de coluna (`livre`/`pessoal`/`sensivel`/`segredo`) e mascaramento determinístico por sessão.
+- Consulta semântica versionada (`consultaSemantica`: métrica, dimensões, filtros, período, ordenação) compilada só com elementos certificados no pacote.
+- Detecção de deriva de esquema (`detectar_deriva_esquema`): impacta só as skills da tabela, invalida cache e move para `rascunho_revalidacao`. Não repara schema automaticamente.
+- Progresso/cancelamento cooperativo de perfilamento (`cancelar_operacao`) e flags `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`.
+- `GET /health` versionado (versão, SHA, buildTime, uptime) e `GET /ready` quando há banco.
+- Erros `FANOUT_NAO_DECLARADO`, `FEATURE_DESLIGADA`, `OPERACAO_CANCELADA`. Códigos reservados `PRIVACIDADE_NEGADA` e `SCHEMA_DRIFT` (deriva devolve `drifted` sem throw; inspeção mascara em vez de recusar).
+
+### Changed
+
+- Validador de JOIN exige o conjunto de igualdades (com fallback legado de pares isolados). Cardinalidade composta é perfilada no recorte de empresa/filial.
+- `confirmar_relacionamento` grava o recorte em que a cardinalidade foi validada (`escopoValidacao`).
+
+### Security
+
+- Inspeção e descoberta estrutural não persistem amostras. Segredos saem `[redacted]`; PII é pseudonimizada por sessão (`p_<hmac>`); texto livre sai `[texto oculto]`. Auditoria de inspeção grava só metadados (skill, finalidade, colunas).
+
+### Added
+
+- `confirmar_relacionamento.cardinalidade` opcional (`1:1`, `1:N`, `N:1`, `N:N`) para persistir a cardinalidade confirmada no grafo e no pacote de skill.
 - Pacote versionado (`pacoteVersao`), `graoPorTabela`/`graoResultado`, `metricasSaida` no escopo da skill. Conhecimento skill-scoped (`anotacao_grafo.skill_id`) e `consulta_aprendida_skill` (multi-skill). Migration `0013_pacote_conhecimento.sql`.
 - Validador fail-closed em UNION/INTERSECT/EXCEPT, subqueries em HAVING/JOIN/ORDER, alias desconhecido e coluna ambígua. Tokenizer ignora `::cast`, `@@var` e comentários.
 - Erros `ALIAS_DESCONHECIDO`, `COLUNA_AMBIGUA`, `PACOTE_INCOMPLETO`, `MULTI_SKILL_PARAMS`, `METADATA_CONTRATO`.
@@ -20,6 +66,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Changed
 
+- Perfilamento completo inclui colunas usadas em filtros do escopo e `PERFIL_TETO` informa fase, orçamento e pendências; `mapear_tabela` completa tipo/formato físico ausente sem rebaixar a origem validada.
 - Cutover quebrável: `obter_skill` e `skill://` usam só o pacote da skill (não o grafo inteiro). Publicadas entram em `rascunho_revalidacao` no backfill (`npm run db:backfill-escopo`), que reconstrói o AST, associa consultas/anotações e limpa o cache `mcp:query:*`.
 - Treino grava só nomes físicos (aliases/expressões viram métricas). `criar_skill`/`publicar_skill` exigem fatos confirmados no grafo do escopo. `confirmar_relacionamento` com `skillId` persiste o JOIN no pacote (só o grafo não libera consulta).
 - `consultar_dados.pergunta` obrigatória. Cruzar skills exige SQL. Params opcionais viram `null`. Defaults de empresa/filial são imutáveis. Paginação exige metadata do agente.
@@ -28,6 +75,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 ### Security
 
 - Cache de consulta deixa de ser compartilhado só por `agentId`; isola usuário/token/policy/skill.
+
+### Fixed
+
+- Persistência Drizzle passa a atualizar cardinalidade de relacionamentos já existentes, alinhada ao repositório em memória.
 
 ### Added
 

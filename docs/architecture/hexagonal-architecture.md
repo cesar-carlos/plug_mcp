@@ -5,14 +5,14 @@ Cliente MCP
    │  Streamable HTTP
    │  Bearer token MCP  (ou bootstrap sem Bearer)
    ▼
-Express  /mcp  /setup/:code  /health  /.well-known/oauth-protected-resource
+Express  /mcp  /setup/:code  /health  /ready  /.well-known/oauth-protected-resource
    │
 use-cases  →  ports  ←  adapters (Drizzle, REST plug-server, crypto)
 ```
 
 - **domain**: entidades (`UsuarioMcp`, `Acesso`, grafo, skill), ports, `DomainError`.
-- **application**: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `skills`, `aprendizado`).
-- **infrastructure**: HTTP, MCP SDK, Drizzle, adapter REST, Pino. Tools `skill_*` por sessão atrás de `MCP_SKILL_TOOLS_ENABLED`; resource `skill://`; prompts. Cache de resultado agregado (Redis opcional).
+- **application**: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `inspecionar`, `skills`, `aprendizado`).
+- **infrastructure**: HTTP, MCP SDK, Drizzle, adapter REST, Pino. Tools `skill_*` por sessão atrás de `MCP_SKILL_TOOLS_ENABLED`; resources `skill://`; prompts. Tools de inspeção/descoberta/deriva atrás de flags (`MCP_INSPECTION_ENABLED` etc.). Cache de resultado agregado (Redis opcional). `GET /health` versionado; `GET /ready` checa o banco quando há `DATABASE_URL`.
 - **composition**: `compose.ts` escolhe memória ou Postgres (`DATABASE_URL`).
 
 ## Identidade
@@ -27,4 +27,4 @@ Bearer MCP → hash SHA-256 → `usuario_mcp`. ALS só na borda (`currentAccount
 
 Escrita do grafo com `withAgentLock`. Dialeto no primeiro merge. Leitura filtrada por `getClientTokenPolicy`.
 
-O grafo apoia o treino e acumula fatos confirmados pela execução. A consulta na sessão usa skill publicada como **escopo**: sem `sql`, o servidor executa a consulta exemplo (`sqlModelo`); com `sql`, o validador recusa tabela/coluna/JOIN fora do pacote. Sem skill capaz, a IA admite a lacuna.
+O grafo apoia o treino e acumula fatos confirmados pela execução. Relacionamento composto = `pares[]` + uma cardinalidade (recorte empresa/filial). A consulta na sessão usa skill publicada como **escopo**: sem `sql`, o servidor executa a consulta exemplo (`sqlModelo`); com `sql` ou `consultaSemantica`, o validador recusa tabela/coluna/JOIN fora do pacote. Amostra estrutural: `inspecionar_consulta` (teto 100, PII mascarado). Sem skill capaz, a IA admite a lacuna.

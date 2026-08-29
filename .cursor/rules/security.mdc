@@ -1,5 +1,5 @@
 ---
-description: "Segurança: cofre, token MCP opaco e client_token"
+description: "Segurança: cofre, token MCP, client_token e isolamento de cache"
 globs: ["src/**/*.ts"]
 alwaysApply: false
 ---
@@ -22,3 +22,9 @@ Este processo não emite JWT de conta, não faz DCR e não usa cookie de sessão
 
 403 de Client pending/blocked → `CLIENT_NOT_ACTIVE`, não senha errada.
 `CREDENTIAL_STALE` quando o hub recusa a senha cifrada → `atualizar_credencial_plug`.
+
+## Portões de autorização
+
+Segredos armazenados não são autorização. Cada consulta passa por três portões independentes: JWT do Client no hub, `ClientAgentAccess` para o `agentId` e policy do `client_token` no `plug_agente`. O pacote da skill recorta o que a IA pode pedir; a policy recorta o que o hub executa. Preserve a origem ao mapear falhas (`CLIENT_NOT_ACTIVE`, `AGENT_ACCESS_PENDING`, `ACCESS_REVOKED`, `PERMISSION_DENIED`, `INVALID_SQL`). Não faça retry cego nem exponha policy ou tokens.
+
+Cache de resultado (`mcp:query:{agentId}:{hash}`) inclui `usuarioId`, hash do token, fingerprint da policy e versões da skill. Não compartilhe só por `agentId`. Deriva/`deleteByPrefix` limpa **só** o prefixo daquele agente. Backfill de cutover também.

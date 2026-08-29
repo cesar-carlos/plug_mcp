@@ -255,6 +255,7 @@ export class HerdarCatalogo {
           colunaOrigem: rel.colunaOrigem,
           tabelaDestinoId: destinoId,
           colunaDestino: rel.colunaDestino,
+          pares: [{ colunaOrigem: rel.colunaOrigem, colunaDestino: rel.colunaDestino }],
           tipoJoin: rel.tipoJoin,
           cardinalidade: rel.cardinalidade,
           origem: "inferido",
@@ -301,6 +302,120 @@ export class ListarAuditoria {
         codigoErro: row.codigoErro,
         linhasRetornadas: row.linhasRetornadas,
         duracaoMs: row.duracaoMs,
+      })),
+    };
+  }
+}
+
+export class ListarMetricasAgente {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly audit: AuditLogPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: { acessoId?: string; limite?: number },
+  ): Promise<{
+    success: true;
+    porTool: Record<string, { total: number; erros: number; duracaoMs: number; linhas: number }>;
+    porCodigo: Record<string, number>;
+  }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const limite = Math.min(Math.max(50, input.limite ?? 400), 1000);
+    const rows = (await this.audit.listByUsuario(uid, limite * 2)).filter(
+      (row) => row.acessoId === acesso.id,
+    );
+    const porTool: Record<string, { total: number; erros: number; duracaoMs: number; linhas: number }> = {};
+    const porCodigo: Record<string, number> = {};
+    for (const row of rows) {
+      const bucket = porTool[row.tool] ?? { total: 0, erros: 0, duracaoMs: 0, linhas: 0 };
+      bucket.total += 1;
+      if (!row.sucesso) {
+        bucket.erros += 1;
+      }
+      bucket.duracaoMs += row.duracaoMs ?? 0;
+      bucket.linhas += row.linhasRetornadas ?? 0;
+      porTool[row.tool] = bucket;
+      if (row.codigoErro) {
+        porCodigo[row.codigoErro] = (porCodigo[row.codigoErro] ?? 0) + 1;
+      }
+    }
+    return { success: true, porTool, porCodigo };
+  }
+}
+
+export class RegistrarLacunaFerramenta {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly aprendizado: AprendizadoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      objetivo?: string;
+      entradas?: string;
+      saidas?: string;
+      permissao?: string;
+      teto?: string;
+      aceite?: string;
+    },
+  ): Promise<{ success: true; lacunaId: string }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const objetivo = input.objetivo?.trim() ?? "";
+    if (!objetivo) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "objetivo é obrigatório.",
+        hint: "Descreva a tool que falta sem inventar SQL.",
+      });
+    }
+    const row = await this.aprendizado.registrarLacuna(acesso.agentId, objetivo, "ferramenta", {
+      entradas: input.entradas ?? null,
+      saidas: input.saidas ?? null,
+      permissao: input.permissao ?? null,
+      teto: input.teto ?? null,
+      aceite: input.aceite ?? null,
+    });
+    return { success: true, lacunaId: row.id };
+  }
+}
+
+export class ListarLacunas {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly aprendizado: AprendizadoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: { acessoId?: string; limite?: number },
+  ): Promise<{
+    success: true;
+    lacunas: {
+      id: string;
+      tipo: string;
+      pergunta: string;
+      contrato: Record<string, unknown> | null;
+      createdAt: string;
+    }[];
+  }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const limite = Math.min(Math.max(1, input.limite ?? 20), 100);
+    const rows = await this.aprendizado.listarLacunas(acesso.agentId, limite);
+    return {
+      success: true,
+      lacunas: rows.map((row) => ({
+        id: row.id,
+        tipo: row.tipo,
+        pergunta: row.pergunta,
+        contrato: row.contrato,
+        createdAt: row.createdAt.toISOString(),
       })),
     };
   }

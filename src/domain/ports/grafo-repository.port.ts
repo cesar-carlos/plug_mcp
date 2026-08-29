@@ -1,11 +1,15 @@
 import type {
   ColunaGrafo,
+  EscopoValidacaoRel,
   GrafoDialeto,
   OrigemFato,
   RelacionamentoGrafo,
+  SchemaSnapshotGrafo,
   TabelaGrafo,
 } from "../entities/grafo.js";
 import type { Cardinalidade, PapelColuna, PerfilColuna } from "../entities/escopo.js";
+import type { ParRelacionamento } from "../entities/relacionamento.js";
+import type { SensibilidadeColuna } from "../entities/privacidade.js";
 
 export interface MergeTabelaInput {
   readonly agentId: string;
@@ -25,6 +29,7 @@ export interface MergeColunaInput {
   readonly papel?: PapelColuna | null;
   readonly formato?: string | null;
   readonly perfil?: PerfilColuna | null;
+  readonly sensibilidade?: SensibilidadeColuna | null;
   readonly origem: OrigemFato;
   readonly autorUsuarioId: string | null;
 }
@@ -32,12 +37,14 @@ export interface MergeColunaInput {
 export interface MergeRelacionamentoInput {
   readonly agentId: string;
   readonly tabelaOrigemId: string;
-  readonly colunaOrigem: string;
+  readonly colunaOrigem?: string;
   readonly tabelaDestinoId: string;
-  readonly colunaDestino: string;
+  readonly colunaDestino?: string;
+  readonly pares?: readonly ParRelacionamento[];
   readonly tipoJoin: string;
   readonly cardinalidade?: Cardinalidade | null;
   readonly descricao?: string | null;
+  readonly escopoValidacao?: EscopoValidacaoRel | null;
   readonly origem: OrigemFato;
   readonly autorUsuarioId: string | null;
 }
@@ -57,6 +64,12 @@ export interface GrafoRepositoryPort {
   countConflitos(agentId: string): Promise<number>;
   findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null>;
   findColuna(tabelaId: string, nome: string): Promise<ColunaGrafo | null>;
+  saveSchemaSnapshot(input: {
+    agentId: string;
+    tabelaNome: string;
+    assinatura: string;
+  }): Promise<{ drifted: boolean; anterior: string | null }>;
+  listSchemaSnapshots(agentId: string): Promise<readonly SchemaSnapshotGrafo[]>;
   resolverConflito(input: {
     tabelaId?: string;
     colunaId?: string;

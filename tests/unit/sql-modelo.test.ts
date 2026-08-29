@@ -5,6 +5,7 @@ import {
   bindParamsForValidation,
   coerceBoundParams,
   columnQualifier,
+  expandirInListas,
   extractNamedParams,
   parseJoinEqualities,
   parseSqlModelo,
@@ -181,7 +182,8 @@ describe("escopoFromSqlModelo grao", () => {
     const cliente = escopo.colunasPorTabela.cliente?.map((item) => item.toLowerCase()) ?? [];
     expect(produto).toEqual(expect.arrayContaining(["codprod", "codcli", "empresa", "ativo"]));
     expect(cliente).toEqual(expect.arrayContaining(["nome", "codcli", "empresa"]));
-    expect(escopo.relacionamentos.length).toBe(2);
+    expect(escopo.relacionamentos.length).toBe(1);
+    expect(escopo.relacionamentos[0]?.pares).toHaveLength(2);
   });
 });
 
@@ -223,5 +225,26 @@ describe("sqlParaOdbc / limites", () => {
     expect(
       extractNamedParams("SELECT p.codprod FROM produto p WHERE p.codprod = :id -- @comentario"),
     ).toEqual(["id"]);
+  });
+
+  it("expande IN (:lista) em um placeholder por valor", () => {
+    const expanded = expandirInListas(
+      "SELECT r.valor FROM receber r WHERE r.empresa IN (:empresas) AND r.valor > 0",
+      { empresas: ["1", "2"] },
+    );
+    expect(expanded.sql).toMatch(/IN \(:empresas_0, :empresas_1\)/i);
+    expect(expanded.params).toEqual({ empresas_0: "1", empresas_1: "2" });
+    expect(bindNamedParams(expanded.sql, expanded.params)).toEqual({
+      empresas_0: "1",
+      empresas_1: "2",
+    });
+  });
+
+  it("recusa lista IN vazia", () => {
+    expect(() =>
+      expandirInListas("SELECT r.valor FROM receber r WHERE r.empresa IN (:empresas)", {
+        empresas: [],
+      }),
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.VALIDATION_ERROR }));
   });
 });

@@ -4,6 +4,7 @@ import type {
   RelacionamentoEscopo,
 } from "../../../domain/entities/escopo.js";
 import { PACOTE_VERSAO_ATUAL } from "../../../domain/entities/escopo.js";
+import { paresDeIgualdades } from "../../../domain/entities/relacionamento.js";
 import { lastIdent, type SqlModelo } from "./sql-modelo.js";
 import { tryParseSelect, walkSelectTree, type SqlAstSelect, type SqlAstTabela } from "./sql-ast.js";
 
@@ -106,25 +107,49 @@ export const escopoFromAst = (ast: SqlAstSelect): EscopoSkill => {
       addRef(item, colunasPorTabela, ref.table, ref.column);
     }
     for (const join of item.joins) {
+      const eqs: {
+        leftTable: string;
+        leftColumn: string;
+        rightTable: string;
+        rightColumn: string;
+      }[] = [];
       for (const eq of join.equalities) {
         const origem = addRef(item, colunasPorTabela, eq.leftAlias, eq.leftColumn);
         const destino = addRef(item, colunasPorTabela, eq.rightAlias, eq.rightColumn);
         if (!origem || !destino) {
           continue;
         }
-        const key = [origem, eq.leftColumn, destino, eq.rightColumn].join("|").toLowerCase();
-        if (relSeen.has(key)) {
-          continue;
-        }
-        relSeen.add(key);
-        relacionamentos.push({
-          tabelaOrigem: origem,
-          colunaOrigem: eq.leftColumn,
-          tabelaDestino: destino,
-          colunaDestino: eq.rightColumn,
-          tipoJoin: join.tipoJoin,
+        eqs.push({
+          leftTable: origem,
+          leftColumn: eq.leftColumn,
+          rightTable: destino,
+          rightColumn: eq.rightColumn,
         });
       }
+      const grouped = paresDeIgualdades(eqs);
+      if (!grouped) {
+        continue;
+      }
+      const key = [
+        grouped.tabelaOrigem,
+        grouped.tabelaDestino,
+        grouped.pares.map((par) => `${par.colunaOrigem}=${par.colunaDestino}`).join("&"),
+      ]
+        .join("|")
+        .toLowerCase();
+      if (relSeen.has(key)) {
+        continue;
+      }
+      relSeen.add(key);
+      const first = grouped.pares[0]!;
+      relacionamentos.push({
+        tabelaOrigem: grouped.tabelaOrigem,
+        colunaOrigem: first.colunaOrigem,
+        tabelaDestino: grouped.tabelaDestino,
+        colunaDestino: first.colunaDestino,
+        pares: grouped.pares,
+        tipoJoin: join.tipoJoin,
+      });
     }
   });
 

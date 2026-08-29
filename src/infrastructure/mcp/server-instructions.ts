@@ -16,19 +16,23 @@ Aprendizado constante (obrigatório, não opcional):
 Consulta: só skill publicada. consultar_dados sem sql executa a consulta exemplo; com sql, o SELECT precisa ficar no escopo. Cruze skills só se o relacionamento já estiver no pacote. SKILL_GAP da busca por termos não prova ausência — chame listar_skills.
 
 Montar o SQL (params, WHERE, paginação):
-- Params: placeholders :nome no SQL + objeto params. Nunca literal de texto para valor do usuário (aviso LITERAL_TEXTO). @nome ainda é aceito e reescrito para :nome no fio. skill.params[].tipo (string/number/integer/decimal/date/datetime/boolean) valida o valor. Opcionais (obrigatorio=false) viram null. Listas/IN: um placeholder por valor.
+- Params: placeholders :nome no SQL + objeto params. Nunca literal de texto para valor do usuário (aviso LITERAL_TEXTO). @nome ainda é aceito e reescrito para :nome no fio. skill.params[].tipo (string/number/integer/decimal/date/datetime/boolean) valida o valor. Opcionais (obrigatorio=false) viram null. Listas/IN: IN (:nome) com array em params vira um placeholder por valor (lista vazia é recusada).
 - Empresa/filial: se o acesso tem escopo padrão, declare :empresa/:filial no predicado (coluna = :empresa). O servidor impõe o valor do acesso; params não sobrescrevem.
 - Recorte: SQL livre exige WHERE ou agregação em cada ramo (UNION inclusive) — senão CONSULTA_SEM_RECORTE. Agregue no banco.
 - Dois padrões de corte: consulta única limitada usa TOP/LIMIT/FIRST do guia (sem options.page). Paginação de páginas: não escreva TOP/LIMIT/FETCH/FIRST — só ORDER BY no SELECT externo, e envie options.page + options.page_size juntos (page_size <= max_rows).
-- CTE/subquery, GROUP BY, janelas, cardinalidade/double-count, NULL, períodos semiabertos, identificadores quoted, decimal/bigint: siga o pacote; não invente JOIN.
-- PERFIL_AUSENTE bloqueia inferência; não invente tipo, dicionário, grão ou JOIN.
-- Firebird: somente consulta exemplo (consultar_dados sem sql). Sem SQL livre nem paginação gerenciada.
+- CTE/subquery, GROUP BY, janelas, cardinalidade/double-count (JOIN composto = pares[] + uma cardinalidade no recorte empresa/filial; ON incompleto é recusado se o pacote tem composto), NULL, períodos semiabertos, identificadores quoted, decimal/bigint: siga o pacote; não invente JOIN.
+- Inspeção de amostra: inspecionar_consulta (finalidade obrigatória, teto 100, PII mascarado). Segredo em SELECT é PRIVACIDADE_NEGADA antes do hub (também MAX/MIN). Pessoal só COUNT em consultar_dados. Não use para KPI. Descoberta estrutural: descobrir_tabela (skill publicada, sem linhas). Treino continua com explorar_tabelas/mapear_tabela.
+- Consulta semântica: consultar_dados.consultaSemantica só com métrica/dimensões/filtros certificados no pacote. Colunas são qualificadas quando há JOIN. SQL livre permanece o caminho ad hoc validado.
+- PERFIL_AUSENTE bloqueia inferência e a primeira publicação; não invente tipo, dicionário, grão ou JOIN. CONSULTA_ORCAMENTO respeita politicaConsulta da skill.
+- listar_acessos.sqlAccessState é só do cofre (approved → unknown). verificar_acesso sonda hub+policy (active|revoked|unknown). Vários acessoId do mesmo agentId são independentes; escolha o active — o servidor não deduplica.
+- buscar_contexto: skill capaz ainda não publicada → blockingReason SKILL_NOT_PUBLISHED (não é SKILL_GAP). Sem skill capaz: SKILL_GAP e, se faltar tool, registrar_lacuna_ferramenta.
+- Firebird: somente consulta exemplo (consultar_dados e inspecionar_consulta sem sql). Sem SQL livre nem paginação gerenciada.
 
 Ler o retorno de consultar_dados:
 - columns/rows/columnsMetadata: tipos JS string/number/boolean/null; datas como string ISO. Cite sqlExecutado, asOf, recorte e escopoAplicado. Zero linhas ainda traz colunas/metadata.
 - truncated = teto max_rows (resultado parcial). paginacao.hasNextPage = há próxima página — incremente options.page com o mesmo ORDER BY e page_size.
 - Cache: aviso CACHE distingue dataDoResultado de servidoEm; não trate cache como leitura ao vivo.
-- avisos[].code são sinais a agir: LITERAL_TEXTO, ESCOPO_CONSOLIDADO, TIMEZONE_INVALIDO, PLACEHOLDER_ESCOPO, PERFIL_AUSENTE, CACHE.
+- avisos[].code são sinais a agir: LITERAL_TEXTO, ESCOPO_CONSOLIDADO, TIMEZONE_INVALIDO, PLACEHOLDER_ESCOPO, PERFIL_AUSENTE, CACHE, KPI_DESALINHADO, SCHEMA_DRIFT.
 
 Sem linha retornada, não invente KPI. Não misture agentId/acessos sem declarar. Distinga fato de estimativa.`;
 
@@ -40,12 +44,12 @@ Bootstrap (sem Bearer): só registrar_acesso. A tool NÃO devolve o token MCP. D
 
 Com Bearer: um e-mail/senha por usuário MCP. Novos agentId/client_token via adicionar_acesso (sem senha de novo). Unique (usuarioId, agentId, clientTokenHash).
 
-Pergunta de dados: buscar_contexto (candidatos + cobertura completa|parcial|desconhecida; leia consultasAprendidas) / listar_skills / obter_skill (pacote canônico = validador + guia de dialeto). Escreva SELECT no dialeto. validar_consulta antes de consultar_dados quando o SQL for novo. consultar_dados(skillIds, sql, params, pergunta). Cruzamento exige skillIds de todos os domínios e SQL customizado. Firebird: só consulta exemplo (sem SQL livre).
+Pergunta de dados: buscar_contexto (candidatos + cobertura completa|parcial|desconhecida; leia consultasAprendidas) / listar_skills / obter_skill (pacote canônico = validador + guia de dialeto). Escreva SELECT no dialeto. validar_consulta antes de consultar_dados quando o SQL for novo. consultar_dados(skillIds, sql, params, pergunta). Cruzamento exige skillIds de todos os domínios e SQL customizado. Firebird: só consulta exemplo (consultar_dados e inspecionar_consulta sem sql).
 SKILL_GAP da busca por termos não prova ausência — chame listar_skills. Match textual isolado não autoriza consulta (cobertura precisa ser completa).
 
 Se não houver skill capaz: seja honesta. Mostre fluxoTreino e oriente o usuário. Não complete com achismo. Se buscar_contexto indicar skill em andamento, continue o próximoPasso.
 
-Treino (passo a passo): 1) explique o objetivo; 2) treinar_com_sql com SELECT de colunas nomeadas (proibido SELECT *; JOIN exige ON com igualdade alias.coluna = alias.coluna); 3) criar_skill; 4) descrever params; 5) validar_skill; 6) publicar_skill com confirmadoPeloUsuario: true. Dialeto: o primeiro escritor trava; outro dialeto → atualizar_dialeto. Precedência: validado_execucao > confirmado_usuario > inferido. expandir_escopo e herdar_catalogo também exigem confirmação.
+Treino (passo a passo): 1) explique o objetivo; 2) treinar_com_sql com SELECT de colunas nomeadas (proibido SELECT *; JOIN exige ON com igualdade alias.coluna = alias.coluna; JOIN composto vira um relacionamento com pares[]); 3) criar_skill; 4) descrever params; 5) validar_skill; 6) publicar_skill com confirmadoPeloUsuario: true. Confirme cardinalidade de JOIN (simples ou composto) apenas quando o usuário a declarar, usando confirmar_relacionamento (pares[] e 1:1, 1:N, N:1 ou N:N). Dialeto: o primeiro escritor trava; outro dialeto → atualizar_dialeto. Precedência: validado_execucao > confirmado_usuario > inferido. expandir_escopo e herdar_catalogo também exigem confirmação.
 
 Client pending/blocked não é senha errada — peça ao dono do Agent para ativar o Client. Acesso pending: verificar_acesso, sem polling agressivo. 429: respeite Retry-After.`;
 

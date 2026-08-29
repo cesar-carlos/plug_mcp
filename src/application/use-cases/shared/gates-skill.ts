@@ -1,6 +1,8 @@
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
-import type { EscopoSkill } from "../../../domain/entities/escopo.js";
+import { paresDoRelacionamento, type EscopoSkill } from "../../../domain/entities/escopo.js";
+import { fingerprintPares, fingerprintParesInvertidos } from "../../../domain/entities/relacionamento.js";
+import { labelPares } from "../../../domain/entities/relacionamento.js";
 import type { OrigemFato } from "../../../domain/entities/grafo.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import { parseSqlModelo } from "./sql-modelo.js";
@@ -66,49 +68,51 @@ export const listarFatosIncompletos = async (
   for (const rel of escopo.relacionamentos) {
     const origemTabela = await grafo.findTabelaByNome(agentId, rel.tabelaOrigem);
     const destinoTabela = await grafo.findTabelaByNome(agentId, rel.tabelaDestino);
+    const pares = paresDoRelacionamento(rel);
+    const label = labelPares(rel.tabelaOrigem, rel.tabelaDestino, pares);
     if (!origemTabela || !destinoTabela) {
       out.push({
         kind: "join",
-        message: `JOIN ${rel.tabelaOrigem}.${rel.colunaOrigem} = ${rel.tabelaDestino}.${rel.colunaDestino} não confirmado no grafo.`,
+        message: `JOIN ${label} não confirmado no grafo.`,
       });
       continue;
     }
+    const fp = fingerprintPares(pares);
+    const fpInv = fingerprintParesInvertidos(pares);
     const match = rels.find((item) => {
       const direto =
         item.tabelaOrigemId === origemTabela.id &&
         item.tabelaDestinoId === destinoTabela.id &&
-        item.colunaOrigem.toLowerCase() === rel.colunaOrigem.toLowerCase() &&
-        item.colunaDestino.toLowerCase() === rel.colunaDestino.toLowerCase();
+        item.paresFingerprint === fp;
       const inverso =
         item.tabelaOrigemId === destinoTabela.id &&
         item.tabelaDestinoId === origemTabela.id &&
-        item.colunaOrigem.toLowerCase() === rel.colunaDestino.toLowerCase() &&
-        item.colunaDestino.toLowerCase() === rel.colunaOrigem.toLowerCase();
+        item.paresFingerprint === fpInv;
       return direto || inverso;
     });
     if (!match) {
       out.push({
         kind: "join",
-        message: `JOIN ${rel.tabelaOrigem}.${rel.colunaOrigem} = ${rel.tabelaDestino}.${rel.colunaDestino} não confirmado no grafo.`,
+        message: `JOIN ${label} não confirmado no grafo.`,
       });
       continue;
     }
     if (match.status === "conflito") {
       out.push({
         kind: "conflito",
-        message: `JOIN ${rel.tabelaOrigem}.${rel.colunaOrigem} em conflito.`,
+        message: `JOIN ${label} em conflito.`,
       });
     }
     if (!ORIGENS_OK.has(match.origem)) {
       out.push({
         kind: "join",
-        message: `JOIN ${rel.tabelaOrigem}.${rel.colunaOrigem} ainda é ${match.origem}.`,
+        message: `JOIN ${label} ainda é ${match.origem}.`,
       });
     }
     if (opts.exigirCardinalidade && !match.cardinalidade) {
       out.push({
         kind: "perfil",
-        message: `JOIN ${rel.tabelaOrigem}.${rel.colunaOrigem} sem cardinalidade.`,
+        message: `JOIN ${label} sem cardinalidade.`,
       });
     }
   }
@@ -146,10 +150,15 @@ export const exigirPacotePublicavel = async (
     exigirTipoColuna: escopo.metricasSaida.length > 0,
   });
   if (faltas.length > 0) {
+    const perfil = faltas.filter((item) => item.kind === "perfil");
     throw new DomainError({
-      code: ERROR_CODES.PACOTE_INCOMPLETO,
-      message: "Pacote da skill incompleto para publicar.",
+      code: perfil.length > 0 ? ERROR_CODES.PERFIL_AUSENTE : ERROR_CODES.PACOTE_INCOMPLETO,
+      message:
+        perfil.length > 0
+          ? "Perfil incompleto: tipo, formato ou cardinalidade ausentes."
+          : "Pacote da skill incompleto para publicar.",
       hint: faltas.map((item) => item.message).join(" "),
+      details: { faltas },
     });
   }
   const ast = tryParseSelect(sqlModelo);

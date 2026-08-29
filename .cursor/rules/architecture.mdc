@@ -1,5 +1,5 @@
 ---
-description: "Arquitetura hexagonal do se7e-mcp-server: camadas, direção de dependências e composition root"
+description: "Arquitetura hexagonal: camadas, composition root, pacote vs grafo e cache"
 globs: ["src/**/*.ts"]
 alwaysApply: false
 ---
@@ -9,8 +9,8 @@ alwaysApply: false
 Ports & Adapters. Dependências apontam para dentro.
 
 - `src/domain`: entidades, ports, `DomainError`. Sem Express, Drizzle, MCP SDK, `fetch`.
-- `src/application/use-cases`: um caso de uso por tool. Só ports.
-- `src/infrastructure`: HTTP, MCP, Drizzle, adapter REST do plug-server, crypto, Pino.
+- `src/application/use-cases`: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `skills`, `aprendizado`). SQL compartilhado em `use-cases/shared/` (`sql-ast`, `sql-scan`, `validar-escopo`, `gates-skill`, `query-cache-key`). Só ports.
+- `src/infrastructure`: HTTP, MCP, Drizzle, adapter REST, crypto, Pino, cache de resultado (`mcp:query:{agentId}:`).
 - `src/composition/compose.ts`: único composition root.
 - `src/config/env.ts`: env via Zod. Nenhum `process.env` fora daqui (exceção: `tests/helpers/live-env.ts`).
 
@@ -18,4 +18,4 @@ Identidade: Bearer opaco → SHA-256 → `usuario_mcp`. ALS só na borda MCP. Ca
 
 Plug-server: `PlugServerGatewayPort` (login/refresh/getClientTokenPolicy/executeSql). JWT do hub por usuário (`UsuarioTokenManager`). Cache de policy em memória e Redis.
 
-Grafo por `agentId` com lock. Leitura filtrada pela policy do `client_token`.
+Grafo por `agentId` com lock. Leitura filtrada pela policy do `client_token`. Consulta autorizada pelo **pacote publicado**, não pelo grafo. Cache de query isolado por usuário, acesso, fingerprint da policy e versões da skill — nunca só `agentId`.

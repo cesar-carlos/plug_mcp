@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { isDialeto, type Dialeto } from "../../domain/entities/dialeto.js";
-import { toAcessoPublico, type AcessoPublico } from "../../domain/entities/acesso.js";
-import { DomainError } from "../../domain/errors/domain-error.js";
+import { toAcessoPublico, type AcessoPublico, type SqlAccessSource, type SqlAccessState } from "../../domain/entities/acesso.js";
+import { DomainError, isDomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
@@ -305,7 +305,46 @@ export class VerificarAcesso {
         );
       });
     }
-    return { success: true, acesso: toAcessoPublico({ ...acesso, statusAcesso }), hub };
+    const sqlAccess = await this.probeSqlAccess(uid, acesso, hub.state);
+    return {
+      success: true,
+      acesso: toAcessoPublico({ ...acesso, statusAcesso }, undefined, sqlAccess),
+      hub,
+    };
+  }
+
+  private async probeSqlAccess(
+    usuarioId: string,
+    acesso: { agentId: string; clientTokenEnc: string },
+    hubState: string,
+  ): Promise<{ sqlAccessState: SqlAccessState; sqlAccessSource: SqlAccessSource }> {
+    if (hubState === "revoked") {
+      return { sqlAccessState: "revoked", sqlAccessSource: "hub" };
+    }
+    if (hubState !== "approved") {
+      return { sqlAccessState: "pending", sqlAccessSource: "hub" };
+    }
+    try {
+      await withHubAuth(this.sessions, usuarioId, (accessToken) =>
+        this.plug.getClientTokenPolicy({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+        }),
+      );
+      return { sqlAccessState: "active", sqlAccessSource: "policy" };
+    } catch (error) {
+      if (isDomainError(error)) {
+        if (
+          error.code === ERROR_CODES.ACCESS_REVOKED ||
+          error.code === ERROR_CODES.PERMISSION_DENIED ||
+          error.code === ERROR_CODES.MISSING_CLIENT_TOKEN
+        ) {
+          return { sqlAccessState: "revoked", sqlAccessSource: "policy" };
+        }
+      }
+      return { sqlAccessState: "unknown", sqlAccessSource: "hub" };
+    }
   }
 }
 

@@ -236,16 +236,24 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
       response.headers.get("retry-after"),
       response.headers.get("ratelimit-reset"),
     );
+    const commandMethod = asRecord(asRecord(body)?.command)?.method;
+    const stage =
+      commandMethod === "client_token.getPolicy"
+        ? "getPolicy"
+        : commandMethod === "sql.execute"
+          ? "sql.execute"
+          : "rpc";
     if (!response.ok) {
       this.logger.warn("plug-server http error", { method, path, status: response.status });
       throw mapPlugServerFailure(
         { status: response.status, body: json, retryAfterMs },
         this.logger,
+        stage,
       );
     }
     const rpc = asRecord(asRecord(asRecord(json)?.response)?.item)?.error;
     if (rpc) {
-      throw mapPlugServerFailure({ status: 200, body: json, retryAfterMs }, this.logger);
+      throw mapPlugServerFailure({ status: 200, body: json, retryAfterMs }, this.logger, stage);
     }
     return json;
   }

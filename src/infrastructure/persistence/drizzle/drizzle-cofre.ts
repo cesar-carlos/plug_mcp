@@ -17,6 +17,7 @@ import type {
   GrafoDialeto,
   OrigemFato,
   RelacionamentoGrafo,
+  SchemaSnapshotGrafo,
   StatusFato,
   TabelaGrafo,
 } from "../../../domain/entities/grafo.js";
@@ -24,6 +25,15 @@ import { decidirMerge } from "../../../domain/entities/merge-fato.js";
 import { parseParametroSkillList } from "../../../domain/entities/skill.js";
 import { parseEscopoPadrao, parseEscopoSkill } from "../../../domain/entities/escopo.js";
 import type { Cardinalidade, PapelColuna } from "../../../domain/entities/escopo.js";
+import {
+  fingerprintPares,
+  fingerprintParesInvertidos,
+  paresDeInput,
+  type ParRelacionamento,
+} from "../../../domain/entities/relacionamento.js";
+import { parseSensibilidadeColuna } from "../../../domain/entities/privacidade.js";
+import { parseConsultaSemantica } from "../../../domain/entities/consulta-semantica.js";
+import { parsePoliticaConsulta } from "../../../domain/entities/politica-consulta.js";
 import type { AcessoRepositoryPort } from "../../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../../domain/ports/usuario-repository.port.js";
 import type {
@@ -249,6 +259,7 @@ const toColuna = (row: typeof schema.colunaGrafo.$inferSelect): ColunaGrafo => (
   papel: (row.papel as PapelColuna | null) ?? null,
   formato: row.formato,
   perfil: row.perfil ?? null,
+  sensibilidade: parseSensibilidadeColuna(row.sensibilidade),
   origem: row.origem as OrigemFato,
   status: row.status as StatusFato,
   autorUsuarioId: row.autorUsuarioId,
@@ -256,20 +267,30 @@ const toColuna = (row: typeof schema.colunaGrafo.$inferSelect): ColunaGrafo => (
 
 const toRelacionamento = (
   row: typeof schema.relacionamentoGrafo.$inferSelect,
-): RelacionamentoGrafo => ({
-  id: row.id,
-  agentId: row.agentId,
-  tabelaOrigemId: row.tabelaOrigemId,
-  colunaOrigem: row.colunaOrigem,
-  tabelaDestinoId: row.tabelaDestinoId,
-  colunaDestino: row.colunaDestino,
-  tipoJoin: row.tipoJoin,
-  cardinalidade: (row.cardinalidade as Cardinalidade | null) ?? null,
-  descricao: row.descricao,
-  origem: row.origem as OrigemFato,
-  status: row.status as StatusFato,
-  autorUsuarioId: row.autorUsuarioId,
-});
+  pares: readonly ParRelacionamento[] = [],
+): RelacionamentoGrafo => {
+  const resolved =
+    pares.length > 0
+      ? pares
+      : [{ colunaOrigem: row.colunaOrigem, colunaDestino: row.colunaDestino }];
+  return {
+    id: row.id,
+    agentId: row.agentId,
+    tabelaOrigemId: row.tabelaOrigemId,
+    colunaOrigem: row.colunaOrigem,
+    tabelaDestinoId: row.tabelaDestinoId,
+    colunaDestino: row.colunaDestino,
+    pares: resolved,
+    paresFingerprint: row.paresFingerprint,
+    tipoJoin: row.tipoJoin,
+    cardinalidade: (row.cardinalidade as Cardinalidade | null) ?? null,
+    descricao: row.descricao,
+    escopoValidacao: row.escopoValidacao ?? null,
+    origem: row.origem as OrigemFato,
+    status: row.status as StatusFato,
+    autorUsuarioId: row.autorUsuarioId,
+  };
+};
 
 const grafoTx = new AsyncLocalStorage<Db>();
 
@@ -358,6 +379,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
           papel: input.papel ?? null,
           formato: input.formato ?? null,
           perfil: input.perfil ?? null,
+          sensibilidade: parseSensibilidadeColuna(input.sensibilidade ?? "livre"),
           origem: input.origem,
           status: "vigente",
           autorUsuarioId: input.autorUsuarioId,
@@ -375,6 +397,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         descricao: existing.descricao,
         dicionario: existing.dicionario,
         tipo: existing.tipo,
+        formato: existing.formato,
       },
       {
         origem: input.origem,
@@ -382,6 +405,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         descricao: input.descricao ?? null,
         dicionario: input.dicionario ?? null,
         tipo: input.tipo ?? null,
+        formato: input.formato ?? null,
       },
     );
     if (!merge.aplicar) {
@@ -395,8 +419,11 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         descricao: merge.descricao,
         dicionario: merge.dicionario ?? existing.dicionario,
         papel: input.papel ?? existing.papel,
-        formato: input.formato ?? existing.formato,
+        formato: merge.formato ?? existing.formato,
         perfil: input.perfil ?? existing.perfil,
+        sensibilidade: input.sensibilidade
+          ? parseSensibilidadeColuna(input.sensibilidade)
+          : existing.sensibilidade,
         origem: merge.origem,
         status: merge.status,
         autorUsuarioId: input.autorUsuarioId,
@@ -413,43 +440,106 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
   async mergeRelacionamento(
     input: MergeRelacionamentoInput,
   ): Promise<{ relacionamento: RelacionamentoGrafo; conflito: boolean }> {
+    const pares = paresDeInput(input);
+    if (pares.length === 0) {
+      throw new Error("relacionamento exige ao menos um par de colunas");
+    }
+    const fp = fingerprintPares(pares);
+    const fpInv = fingerprintParesInvertidos(pares);
+    const first = pares[0]!;
     const [existing] = await this.conn()
       .select()
       .from(schema.relacionamentoGrafo)
       .where(
         and(
           eq(schema.relacionamentoGrafo.agentId, input.agentId),
-          eq(schema.relacionamentoGrafo.tabelaOrigemId, input.tabelaOrigemId),
-          eq(schema.relacionamentoGrafo.tabelaDestinoId, input.tabelaDestinoId),
-          eq(schema.relacionamentoGrafo.colunaOrigem, input.colunaOrigem),
-          eq(schema.relacionamentoGrafo.colunaDestino, input.colunaDestino),
+          or(
+            and(
+              eq(schema.relacionamentoGrafo.tabelaOrigemId, input.tabelaOrigemId),
+              eq(schema.relacionamentoGrafo.tabelaDestinoId, input.tabelaDestinoId),
+              eq(schema.relacionamentoGrafo.paresFingerprint, fp),
+            ),
+            and(
+              eq(schema.relacionamentoGrafo.tabelaOrigemId, input.tabelaDestinoId),
+              eq(schema.relacionamentoGrafo.tabelaDestinoId, input.tabelaOrigemId),
+              eq(schema.relacionamentoGrafo.paresFingerprint, fpInv),
+            ),
+          ),
         ),
       )
       .limit(1);
+    const writePares = async (relacionamentoId: string): Promise<void> => {
+      await this.conn()
+        .delete(schema.relacionamentoGrafoPar)
+        .where(eq(schema.relacionamentoGrafoPar.relacionamentoId, relacionamentoId));
+      await this.conn()
+        .insert(schema.relacionamentoGrafoPar)
+        .values(
+          pares.map((par, ordem) => ({
+            relacionamentoId,
+            ordem,
+            colunaOrigem: par.colunaOrigem,
+            colunaDestino: par.colunaDestino,
+          })),
+        );
+    };
     if (!existing) {
       const [row] = await this.conn()
         .insert(schema.relacionamentoGrafo)
         .values({
           agentId: input.agentId,
           tabelaOrigemId: input.tabelaOrigemId,
-          colunaOrigem: input.colunaOrigem,
+          colunaOrigem: first.colunaOrigem,
           tabelaDestinoId: input.tabelaDestinoId,
-          colunaDestino: input.colunaDestino,
+          colunaDestino: first.colunaDestino,
+          paresFingerprint: fp,
           tipoJoin: input.tipoJoin,
           cardinalidade: input.cardinalidade ?? null,
           descricao: input.descricao ?? null,
+          escopoValidacao: input.escopoValidacao ?? null,
           origem: input.origem,
           autorUsuarioId: input.autorUsuarioId,
         })
         .returning();
+      await writePares(row!.id);
       return {
-        relacionamento: toRelacionamento(row!),
+        relacionamento: toRelacionamento(row!, pares),
         conflito: false,
       };
     }
+    const merge = decidirMerge(
+      {
+        origem: existing.origem as OrigemFato,
+        status: existing.status as StatusFato,
+        descricao: existing.descricao,
+      },
+      {
+        origem: input.origem,
+        status: "vigente",
+        descricao: input.descricao ?? null,
+      },
+    );
+    if (!merge.aplicar && input.cardinalidade == null && input.escopoValidacao == null) {
+      return { relacionamento: toRelacionamento(existing, pares), conflito: false };
+    }
+    const [row] = await this.conn()
+      .update(schema.relacionamentoGrafo)
+      .set({
+        tipoJoin: input.tipoJoin,
+        cardinalidade: input.cardinalidade ?? existing.cardinalidade,
+        descricao: merge.descricao,
+        escopoValidacao: input.escopoValidacao ?? existing.escopoValidacao,
+        origem: merge.origem,
+        status: merge.status,
+        autorUsuarioId: input.autorUsuarioId,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.relacionamentoGrafo.id, existing.id))
+      .returning();
+    await writePares(existing.id);
     return {
-      relacionamento: toRelacionamento(existing),
-      conflito: false,
+      relacionamento: toRelacionamento(row!, pares),
+      conflito: merge.conflito,
     };
   }
 
@@ -474,7 +564,25 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       .select()
       .from(schema.relacionamentoGrafo)
       .where(eq(schema.relacionamentoGrafo.agentId, agentId));
-    return rows.map(toRelacionamento);
+    if (rows.length === 0) {
+      return [];
+    }
+    const paresRows = await this.conn()
+      .select()
+      .from(schema.relacionamentoGrafoPar)
+      .where(
+        inArray(
+          schema.relacionamentoGrafoPar.relacionamentoId,
+          rows.map((row) => row.id),
+        ),
+      );
+    const byId = new Map<string, ParRelacionamento[]>();
+    for (const par of [...paresRows].sort((a, b) => a.ordem - b.ordem)) {
+      const list = byId.get(par.relacionamentoId) ?? [];
+      list.push({ colunaOrigem: par.colunaOrigem, colunaDestino: par.colunaDestino });
+      byId.set(par.relacionamentoId, list);
+    }
+    return rows.map((row) => toRelacionamento(row, byId.get(row.id) ?? []));
   }
 
   async countConflitos(agentId: string): Promise<number> {
@@ -523,6 +631,50 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       return null;
     }
     return toColuna(row);
+  }
+
+  async saveSchemaSnapshot(input: {
+    agentId: string;
+    tabelaNome: string;
+    assinatura: string;
+  }): Promise<{ drifted: boolean; anterior: string | null }> {
+    const [existing] = await this.conn()
+      .select()
+      .from(schema.schemaSnapshot)
+      .where(
+        and(
+          eq(schema.schemaSnapshot.agentId, input.agentId),
+          eq(schema.schemaSnapshot.tabelaNome, input.tabelaNome),
+        ),
+      )
+      .limit(1);
+    const anterior = existing?.assinatura ?? null;
+    const drifted = anterior !== null && anterior !== input.assinatura;
+    if (!existing) {
+      await this.conn().insert(schema.schemaSnapshot).values({
+        agentId: input.agentId,
+        tabelaNome: input.tabelaNome,
+        assinatura: input.assinatura,
+      });
+    } else {
+      await this.conn()
+        .update(schema.schemaSnapshot)
+        .set({ assinatura: input.assinatura, updatedAt: new Date() })
+        .where(eq(schema.schemaSnapshot.id, existing.id));
+    }
+    return { drifted, anterior };
+  }
+
+  async listSchemaSnapshots(agentId: string): Promise<readonly SchemaSnapshotGrafo[]> {
+    const rows = await this.conn()
+      .select()
+      .from(schema.schemaSnapshot)
+      .where(eq(schema.schemaSnapshot.agentId, agentId));
+    return rows.map((row) => ({
+      agentId: row.agentId,
+      tabelaNome: row.tabelaNome,
+      assinatura: row.assinatura,
+    }));
   }
 
   async resolverConflito(input: {
@@ -616,10 +768,12 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
           graoPorTabela: {},
           graoResultado: [],
           metricasSaida: [],
-          pacoteVersao: 1,
+          pacoteVersao: 2,
         },
-        pacoteVersao: input.pacoteVersao ?? input.escopo?.pacoteVersao ?? 1,
+        pacoteVersao: input.pacoteVersao ?? input.escopo?.pacoteVersao ?? 2,
         motivoRevalidacao: input.motivoRevalidacao ?? null,
+        consultaSemantica: input.consultaSemantica ?? null,
+        politicaConsulta: input.politicaConsulta ?? null,
         autorUsuarioId: input.autorUsuarioId,
       })
       .returning();
@@ -639,6 +793,8 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
         | "escopo"
         | "pacoteVersao"
         | "motivoRevalidacao"
+        | "consultaSemantica"
+        | "politicaConsulta"
       >
     >,
   ): Promise<Skill> {
@@ -749,6 +905,8 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
       pacoteVersao: row.pacoteVersao,
       status: row.status as StatusSkill,
       motivoRevalidacao: row.motivoRevalidacao,
+      consultaSemantica: parseConsultaSemantica(row.consultaSemantica),
+      politicaConsulta: parsePoliticaConsulta(row.politicaConsulta),
       autorUsuarioId: row.autorUsuarioId,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -1132,16 +1290,40 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     return { consultas: consultas.length, sinonimos: sinonimos.length };
   }
 
-  async registrarLacuna(agentId: string, pergunta: string): Promise<LacunaConsulta> {
+  async registrarLacuna(
+    agentId: string,
+    pergunta: string,
+    tipo: "skill_gap" | "ferramenta" = "skill_gap",
+    contrato: Record<string, unknown> | null = null,
+  ): Promise<LacunaConsulta> {
     const [row] = await this.db
       .insert(schema.lacunaConsulta)
-      .values({ agentId, pergunta })
+      .values({ agentId, pergunta, tipo, contrato })
       .returning();
     return {
       id: row!.id,
       agentId: row!.agentId,
       pergunta: row!.pergunta,
+      tipo: row!.tipo === "ferramenta" ? "ferramenta" : "skill_gap",
+      contrato: row!.contrato ?? null,
       createdAt: row!.createdAt,
     };
+  }
+
+  async listarLacunas(agentId: string, limite: number): Promise<readonly LacunaConsulta[]> {
+    const rows = await this.db
+      .select()
+      .from(schema.lacunaConsulta)
+      .where(eq(schema.lacunaConsulta.agentId, agentId))
+      .orderBy(desc(schema.lacunaConsulta.createdAt))
+      .limit(limite);
+    return rows.map((row) => ({
+      id: row.id,
+      agentId: row.agentId,
+      pergunta: row.pergunta,
+      tipo: row.tipo === "ferramenta" ? "ferramenta" : "skill_gap",
+      contrato: row.contrato ?? null,
+      createdAt: row.createdAt,
+    }));
   }
 }

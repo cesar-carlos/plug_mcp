@@ -7,7 +7,7 @@ import {
   PublicarSkill,
   ValidarSkill,
 } from "../../src/application/use-cases/skills.js";
-import { pickSkillInProgress } from "../../src/application/use-cases/shared/fluxo-treino.js";
+import { pickSkillInProgress, buildFluxoTreino } from "../../src/application/use-cases/shared/fluxo-treino.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
@@ -259,6 +259,8 @@ describe("fluxo guiado de treino", () => {
       params: [],
       pacoteVersao: 1,
       motivoRevalidacao: null,
+      consultaSemantica: null,
+      politicaConsulta: null,
       escopo: {
         tabelas: [],
         colunasPorTabela: {},
@@ -292,5 +294,43 @@ describe("fluxo guiado de treino", () => {
         "SELECT p.codprod AS codigo, p.descricao FROM produto p WHERE p.codprod = 1",
       )?.id,
     ).toBe("2");
+  });
+
+  it("podeLiberar fica falso com perfil incompleto mesmo skill validada", () => {
+    const skill = {
+      id: "1",
+      agentId,
+      slug: "a",
+      nome: "A",
+      descricao: "d",
+      sqlModelo: "SELECT SUM(p.valor) AS total FROM produto p WHERE p.codprod > 0",
+      params: [],
+      versao: 1,
+      pacoteVersao: 2,
+      motivoRevalidacao: null,
+      consultaSemantica: null,
+      politicaConsulta: null,
+      autorUsuarioId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: "validada" as const,
+      escopo: {
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["valor"] },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [{ alias: "total", expr: "SUM(p.valor)" }],
+        pacoteVersao: 2,
+      },
+    };
+    const fluxo = buildFluxoTreino({
+      treinado: true,
+      skill,
+      conflitosPendentes: 0,
+      perfilCompleto: false,
+    });
+    expect(fluxo.podeLiberar).toBe(false);
+    expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.status).toBe("bloqueado");
   });
 });

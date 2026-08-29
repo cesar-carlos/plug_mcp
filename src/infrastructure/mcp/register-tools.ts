@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
+import { DomainError } from "../../domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import { currentAccountId } from "./account-context.js";
 import { createToolRunner } from "./tool-result.js";
 import type {
@@ -24,6 +26,12 @@ import type {
   ValidarConsulta,
 } from "../../application/use-cases/consultar.js";
 import type {
+  CancelarOperacao,
+  DescobrirTabela,
+  DetectarDerivaEsquema,
+  InspecionarConsulta,
+} from "../../application/use-cases/inspecionar.js";
+import type {
   AnotarGrafo,
   AtualizarSkill,
   ConfirmarColuna,
@@ -42,7 +50,10 @@ import type {
   AtualizarEscopoPadrao,
   HerdarCatalogo,
   ListarAuditoria,
+  ListarLacunas,
+  ListarMetricasAgente,
   RegistrarAprendizado,
+  RegistrarLacunaFerramenta,
   SalvarConsulta,
 } from "../../application/use-cases/aprendizado.js";
 
@@ -80,6 +91,13 @@ export interface ToolUseCases {
   atualizarEscopoPadrao: AtualizarEscopoPadrao;
   herdarCatalogo: HerdarCatalogo;
   listarAuditoria: ListarAuditoria;
+  listarMetricasAgente: ListarMetricasAgente;
+  registrarLacunaFerramenta: RegistrarLacunaFerramenta;
+  listarLacunas: ListarLacunas;
+  inspecionarConsulta: InspecionarConsulta;
+  descobrirTabela: DescobrirTabela;
+  detectarDerivaEsquema: DetectarDerivaEsquema;
+  cancelarOperacao: CancelarOperacao;
 }
 
 import type { RateLimitStore } from "../http/rate-limit.js";
@@ -117,6 +135,39 @@ const paramSkillShape = z.object({
   descricao: z.string().optional(),
   obrigatorio: z.boolean().optional(),
   tipo: z.enum(["string", "number", "date", "boolean"]).optional(),
+});
+
+const consultaSemanticaShape = z.object({
+  versao: z.literal(1).optional(),
+  metrica: z.string(),
+  dimensoes: z.array(z.string()).optional(),
+  filtros: z
+    .array(
+      z.object({
+        coluna: z.string(),
+        op: z.enum(["=", "!=", ">", ">=", "<", "<=", "in"]),
+        param: z.string(),
+      }),
+    )
+    .optional(),
+  periodo: z
+    .object({
+      coluna: z.string(),
+      de: z.string(),
+      ate: z.string(),
+    })
+    .optional(),
+  ordenacao: z
+    .array(z.object({ coluna: z.string(), dir: z.enum(["asc", "desc"]).optional() }))
+    .optional(),
+});
+
+const politicaConsultaShape = z.object({
+  maxRows: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  exigirRecorteTemporal: z.boolean().optional(),
+  maxTabelas: z.number().int().positive().optional(),
+  modoPreferencial: z.enum(["agregado", "detalhe"]).optional(),
 });
 
 export const registerTools = (
@@ -174,7 +225,7 @@ export const registerTools = (
 
   server.tool(
     "listar_acessos",
-    "Lista acessos do usuário autenticado (client_token mascarado).",
+    "Lista acessos do usuário autenticado (client_token mascarado). sqlAccessState vem só do cofre (approved → unknown).",
     emptyShape,
     readList,
     async () => run("listar_acessos", () => useCases.listarAcessos.execute(currentAccountId())),
@@ -182,7 +233,7 @@ export const registerTools = (
 
   server.tool(
     "verificar_acesso",
-    "Consulta o status do pedido de acesso no plug-server. Não faça polling agressivo.",
+    "Consulta o status do pedido de acesso no plug-server e a prontidão SQL (hub + policy). Não faça polling agressivo. hasClientToken false no hub não prova token morto.",
     { acessoId: z.string().optional() },
     readWorld,
     async (args) =>
@@ -265,7 +316,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Candidatos ranqueados com cobertura (completa|parcial|desconhecida). consultaPermitida só se cobertura completa. Reuse consultasAprendidas. SKILL_GAP da busca por termos: listar_skills antes de desistir. grafoParaTreino só no fluxo de gap.",
+    "Candidatos ranqueados com cobertura (completa|parcial|desconhecida). consultaPermitida só se cobertura completa. Skill validada/rascunho que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED (não é SKILL_GAP). Reuse consultasAprendidas. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -297,6 +348,32 @@ export const registerTools = (
         skillId: z.string().optional(),
         skillIds: z.array(z.string()).optional(),
         sql: z.string().optional(),
+        consultaSemantica: z
+          .object({
+            versao: z.literal(1).optional(),
+            metrica: z.string(),
+            dimensoes: z.array(z.string()).optional(),
+            filtros: z
+              .array(
+                z.object({
+                  coluna: z.string(),
+                  op: z.enum(["=", "!=", ">", ">=", "<", "<=", "in"]),
+                  param: z.string(),
+                }),
+              )
+              .optional(),
+            periodo: z
+              .object({
+                coluna: z.string(),
+                de: z.string(),
+                ate: z.string(),
+              })
+              .optional(),
+            ordenacao: z
+              .array(z.object({ coluna: z.string(), dir: z.enum(["asc", "desc"]).optional() }))
+              .optional(),
+          })
+          .optional(),
         pergunta: z.string(),
         aprendizado: z
           .array(
@@ -388,6 +465,8 @@ export const registerTools = (
       descricao: z.string().optional(),
       sqlModelo: z.string().optional(),
       params: z.array(paramSkillShape).optional(),
+      consultaSemantica: consultaSemanticaShape.optional(),
+      politicaConsulta: politicaConsultaShape.optional(),
     },
     writeLocal,
     async (args) => run("criar_skill", () => useCases.criarSkill.execute(currentAccountId(), args)),
@@ -403,6 +482,8 @@ export const registerTools = (
       descricao: z.string().optional(),
       sqlModelo: z.string().optional(),
       params: z.array(paramSkillShape).optional(),
+      consultaSemantica: consultaSemanticaShape.optional(),
+      politicaConsulta: politicaConsultaShape.optional(),
     },
     writeLocal,
     async (args) =>
@@ -508,7 +589,7 @@ export const registerTools = (
 
   server.tool(
     "confirmar_relacionamento",
-    "Confirma um JOIN no grafo (origem confirmado_usuario). Com skillId, persiste no pacote da skill — só o grafo não libera consulta.",
+    "Confirma um JOIN no grafo (origem confirmado_usuario). pares[] para chave composta; colunaOrigem/colunaDestino continuam válidos (um par). Com skillId, persiste no pacote da skill — só o grafo não libera consulta.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -516,7 +597,11 @@ export const registerTools = (
       colunaOrigem: z.string().optional(),
       tabelaDestino: z.string().optional(),
       colunaDestino: z.string().optional(),
+      pares: z
+        .array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() }))
+        .optional(),
       tipoJoin: z.string().optional(),
+      cardinalidade: z.enum(["1:1", "1:N", "N:1", "N:N"]).optional(),
     },
     writeLocal,
     async (args) =>
@@ -657,6 +742,114 @@ export const registerTools = (
     readList,
     async (args) =>
       run("listar_auditoria", () => useCases.listarAuditoria.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
+    "listar_metricas_agente",
+    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Sem SQL, params ou linhas de ERP.",
+    { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
+    readList,
+    async (args) =>
+      run("listar_metricas_agente", () =>
+        useCases.listarMetricasAgente.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "registrar_lacuna_ferramenta",
+    "Registra contrato da tool que falta (objetivo, entradas, saídas, permissão, teto, aceite) sem inventar SQL.",
+    {
+      acessoId: z.string().optional(),
+      objetivo: z.string().optional(),
+      entradas: z.string().optional(),
+      saidas: z.string().optional(),
+      permissao: z.string().optional(),
+      teto: z.string().optional(),
+      aceite: z.string().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("registrar_lacuna_ferramenta", () =>
+        useCases.registrarLacunaFerramenta.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "listar_lacunas",
+    "Lista lacunas de skill (SKILL_GAP) e de ferramenta deste agentId.",
+    { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
+    readList,
+    async (args) =>
+      run("listar_lacunas", () => useCases.listarLacunas.execute(currentAccountId(), args)),
+  );
+
+  const requireFlag = (enabled: boolean, tool: string): void => {
+    if (!enabled) {
+      throw new DomainError({
+        code: ERROR_CODES.FEATURE_DESLIGADA,
+        message: `Tool ${tool} está desligada.`,
+        hint: "Desligue só para rollback. Religue a flag correspondente no servidor.",
+      });
+    }
+  };
+
+  if (config.MCP_INSPECTION_ENABLED) {
+    server.tool(
+      "inspecionar_consulta",
+      "Amostra estrutural (máx. 100 linhas) de skill publicada. Exige finalidade (validar_tipo|avaliar_nulos|verificar_join|amostra_estrutura). Mascara PII/segredos. Sem cache, aprendizado ou paginação. SELECT * é expandido para colunas conhecidas.",
+      {
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        skillIds: z.array(z.string()).optional(),
+        sql: z.string().optional(),
+        finalidade: z.enum(["validar_tipo", "avaliar_nulos", "verificar_join", "amostra_estrutura"]),
+        params: z.record(z.unknown()).optional(),
+        options: z.object({ timeout_ms: z.number().int().positive().optional() }).optional(),
+      },
+      readWorld,
+      async (args) =>
+        run("inspecionar_consulta", () => {
+          requireFlag(config.MCP_INSPECTION_ENABLED, "inspecionar_consulta");
+          return useCases.inspecionarConsulta.execute(currentAccountId(), args);
+        }),
+    );
+  }
+
+  if (config.MCP_DISCOVERY_QUERY_ENABLED) {
+    server.tool(
+      "descobrir_tabela",
+      "Estrutura (colunas, tipos, chaves, sensibilidade, relacionamentos) só de tabelas em skills publicadas. Sem linhas, contagens, DDL ou valores.",
+      { acessoId: z.string().optional(), tabela: z.string().optional() },
+      readList,
+      async (args) =>
+        run("descobrir_tabela", () => {
+          requireFlag(config.MCP_DISCOVERY_QUERY_ENABLED, "descobrir_tabela");
+          return useCases.descobrirTabela.execute(currentAccountId(), args);
+        }),
+    );
+  }
+
+  if (config.MCP_SCHEMA_DRIFT_ENABLED) {
+    server.tool(
+      "detectar_deriva_esquema",
+      "Compara a assinatura mapeada da tabela com a última versão. Lista skills afetadas, invalida cache e move só essas skills para revalidação. Não repara schema automaticamente.",
+      { acessoId: z.string().optional(), tabela: z.string().optional() },
+      writeLocal,
+      async (args) =>
+        run("detectar_deriva_esquema", () => {
+          requireFlag(config.MCP_SCHEMA_DRIFT_ENABLED, "detectar_deriva_esquema");
+          return useCases.detectarDerivaEsquema.execute(currentAccountId(), args);
+        }),
+    );
+  }
+
+  server.tool(
+    "cancelar_operacao",
+    "Cancela perfilamento/descoberta longa pelo operacaoId. Estado parcial não inclui dados sensíveis.",
+    { operacaoId: z.string().optional() },
+    writeLocal,
+    async (args) =>
+      run("cancelar_operacao", () => useCases.cancelarOperacao.execute(currentAccountId(), args)),
   );
 
   if (options?.catalog) {

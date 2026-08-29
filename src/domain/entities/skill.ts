@@ -1,4 +1,6 @@
 import type { EscopoSkill } from "./escopo.js";
+import type { ConsultaSemantica } from "./consulta-semantica.js";
+import type { PoliticaConsulta } from "./politica-consulta.js";
 
 export type StatusSkill = "rascunho" | "validada" | "publicada" | "rascunho_revalidacao";
 
@@ -65,6 +67,8 @@ export interface Skill {
   readonly pacoteVersao: number;
   readonly status: StatusSkill;
   readonly motivoRevalidacao: string | null;
+  readonly consultaSemantica: ConsultaSemantica | null;
+  readonly politicaConsulta: PoliticaConsulta | null;
   readonly autorUsuarioId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -81,6 +85,8 @@ export interface NovaSkill {
   readonly autorUsuarioId: string | null;
   readonly pacoteVersao?: number;
   readonly motivoRevalidacao?: string | null;
+  readonly consultaSemantica?: ConsultaSemantica | null;
+  readonly politicaConsulta?: PoliticaConsulta | null;
 }
 
 export interface AnotacaoGrafo {

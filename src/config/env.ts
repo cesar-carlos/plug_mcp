@@ -31,6 +31,26 @@ const envSchema = z.object({
     .optional()
     .default("false")
     .transform((value) => !["false", "0", "no"].includes(value.toLowerCase())),
+  MCP_INSPECTION_ENABLED: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((value) => !["false", "0", "no"].includes(value.toLowerCase())),
+  MCP_DISCOVERY_QUERY_ENABLED: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((value) => !["false", "0", "no"].includes(value.toLowerCase())),
+  MCP_SEMANTIC_QUERY_ENABLED: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((value) => !["false", "0", "no"].includes(value.toLowerCase())),
+  MCP_SCHEMA_DRIFT_ENABLED: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((value) => !["false", "0", "no"].includes(value.toLowerCase())),
   QUERY_CACHE_TTL_MS: z.coerce.number().int().positive().default(60_000),
 });
 

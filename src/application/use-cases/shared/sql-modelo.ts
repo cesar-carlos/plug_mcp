@@ -310,6 +310,42 @@ export const bindNamedParams = (
   return bound;
 };
 
+export const expandirInListas = (
+  sql: string,
+  params: Record<string, unknown>,
+): { sql: string; params: Record<string, unknown> } => {
+  let nextSql = sql;
+  const nextParams: Record<string, unknown> = { ...params };
+  for (const [nome, value] of Object.entries(params)) {
+    if (!Array.isArray(value)) {
+      continue;
+    }
+    const escaped = nome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const hasIn = new RegExp(`IN\\s*\\(\\s*:${escaped}\\s*\\)`, "i").test(sql);
+    if (!hasIn) {
+      continue;
+    }
+    if (value.length === 0) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Lista IN :${nome} está vazia.`,
+        hint: "Envie pelo menos um valor, ou um placeholder por item (IN (:a, :b)).",
+      });
+    }
+    const placeholders = value.map((_, index) => {
+      const key = `${nome}_${String(index)}`;
+      nextParams[key] = value[index];
+      return `:${key}`;
+    });
+    delete nextParams[nome];
+    nextSql = nextSql.replace(
+      new RegExp(`IN\\s*\\(\\s*:${escaped}\\s*\\)`, "gi"),
+      `IN (${placeholders.join(", ")})`,
+    );
+  }
+  return { sql: nextSql, params: nextParams };
+};
+
 /** Bind tolerante: placeholder ausente vira `null` (treino/validação de schema, não consulta). */
 export const bindParamsForValidation = (
   sql: string,

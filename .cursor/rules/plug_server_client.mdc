@@ -1,5 +1,5 @@
 ---
-description: "Integração com o plug-server: gateway, token por usuário e erros"
+description: "Integração com o plug-server: gateway, token por usuário, paginação e erros"
 globs: ["src/infrastructure/plug-server/**/*.ts", "src/domain/ports/plug-server-gateway.port.ts", "src/application/use-cases/**/*.ts"]
 alwaysApply: false
 ---
@@ -12,10 +12,14 @@ O MCP autentica **como o Client do usuário** (e-mail/senha do cofre). Não cada
 
 Rotas (prefixo `/api/v1`): `POST /client-auth/login|refresh`, `POST /client/me/agents`, `GET /client/me/agents/{id}`, `GET /client/me/agent-access-requests?search=`, `PUT .../client-token`, `POST /agents/commands`.
 
-RPCs: `sql.execute` com `execution_mode: preserve`; `client_token.getPolicy`. Contrato vivo: `D:/Developer/plug_database/plug_server/docs` e `GET /docs` no hub.
+RPCs: `sql.execute`; `client_token.getPolicy`. Contrato vivo: `plug_server/docs` e `GET /docs` no hub.
 
-`UsuarioTokenManager`: JWT por `usuarioId`, refresh ~60s antes do `exp`, `inflight` por usuário, fallback login com senha cifrada.
+- Sem paginação: enviar `execution_mode: preserve` (não deixar o hub reescrever `SUM`/`COUNT`).
+- Com `page`+`page_size`: **omitir** `execution_mode` (hub usa `managed`). Sem metadata `pagination` do agente → `METADATA_CONTRATO`.
+- SQL que o agente não classifica (`-32002` + classification) → `INVALID_SQL`, não `ACCESS_REVOKED`. Hint cita tabelas e dialeto.
+
+`UsuarioTokenManager`: JWT por `usuarioId`, refresh ~60s antes do `exp`, `inflight` por usuário. HTTP 401: invalida JWT, reloga com senha do cofre e **repete uma vez**. Senha recusada → `CREDENTIAL_STALE`.
 
 429: `Retry-After` / `RateLimit-Reset`. Cache de policy (memória + Redis) por `agentId` + hash do `client_token`.
 
-`isHubConnected` é snapshot — `false` não prova agente offline; tente o SQL e mapeie o erro.
+`isHubConnected` é snapshot — `false` não prova agente offline. Distinga falhas do JWT Client, `ClientAgentAccess`, policy do `client_token` e SQL inválido; não tente SQL amplo nem retry cego como diagnóstico.

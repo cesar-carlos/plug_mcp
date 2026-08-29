@@ -32,7 +32,7 @@ A base evolui a cada consulta, sem depender da IA lembrar de um passo extra:
 
 ## Comunicação com o ERP
 
-O MCP **não** abre o banco. É um `Client` REST do plug-server: login (`/client-auth/login`), pedido de acesso ao Agent, depois `POST /api/v1/agents/commands` com `sql.execute` e `client_token`. Detalhe: [`../plug-server/communication.md`](../plug-server/communication.md).
+O MCP **não** abre o banco. É um `Client` REST do plug-server: login (`/client-auth/login`), pedido de acesso ao Agent, depois `POST /api/v1/agents/commands` com `sql.execute` e `client_token`. Detalhe: [`../plug-server/communication.md`](../plug-server/communication.md). Firebird só executa a consulta exemplo (sem SQL livre nem inspeção ad hoc).
 
 ## Cofre e permissão
 

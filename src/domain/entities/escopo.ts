@@ -1,8 +1,16 @@
+import {
+  fingerprintPares,
+  parseParesRelacionamento,
+  type ParRelacionamento,
+} from "./relacionamento.js";
+
+export type { ParRelacionamento } from "./relacionamento.js";
+
 export type PapelColuna = "chave" | "dimensao" | "medida" | "codigo" | "data";
 
 export type Cardinalidade = "1:1" | "1:N" | "N:1" | "N:N";
 
-export const PACOTE_VERSAO_ATUAL = 1;
+export const PACOTE_VERSAO_ATUAL = 2;
 
 export interface PerfilColuna {
   readonly min?: string | number | null;
@@ -17,12 +25,39 @@ export interface RelacionamentoEscopo {
   readonly colunaOrigem: string;
   readonly tabelaDestino: string;
   readonly colunaDestino: string;
+  readonly pares: readonly ParRelacionamento[];
   readonly tipoJoin: string;
+  readonly cardinalidade?: Cardinalidade | null;
 }
+
+export const paresDoRelacionamento = (
+  rel: Pick<RelacionamentoEscopo, "pares" | "colunaOrigem" | "colunaDestino">,
+): readonly ParRelacionamento[] => {
+  if (rel.pares && rel.pares.length > 0) {
+    return rel.pares;
+  }
+  if (rel.colunaOrigem && rel.colunaDestino) {
+    return [{ colunaOrigem: rel.colunaOrigem, colunaDestino: rel.colunaDestino }];
+  }
+  return [];
+};
+
+export const chaveRelacionamentoEscopo = (rel: RelacionamentoEscopo): string => {
+  const pares = paresDoRelacionamento(rel);
+  const tables = [rel.tabelaOrigem, rel.tabelaDestino].map((nome) => nome.trim().toLowerCase());
+  tables.sort();
+  return `${tables.join("~")}|${fingerprintPares(pares)}`;
+};
 
 export interface MetricaSaida {
   readonly alias: string;
   readonly expr: string;
+  readonly definicao?: string;
+  readonly grao?: string;
+  readonly dimensoesPermitidas?: readonly string[];
+  readonly statusIncluidos?: readonly string[];
+  readonly statusExcluidos?: readonly string[];
+  readonly colunaData?: string;
 }
 
 export interface EscopoSkill {
@@ -90,10 +125,31 @@ const parseMetricas = (value: unknown): MetricaSaida[] => {
     if (!alias) {
       continue;
     }
-    out.push({ alias, expr });
+    const definicao = typeof rec.definicao === "string" ? rec.definicao.trim() : "";
+    const grao = typeof rec.grao === "string" ? rec.grao.trim() : "";
+    const colunaData = typeof rec.colunaData === "string" ? rec.colunaData.trim() : "";
+    out.push({
+      alias,
+      expr,
+      ...(definicao ? { definicao } : {}),
+      ...(grao ? { grao } : {}),
+      ...(asStringArray(rec.dimensoesPermitidas).length > 0
+        ? { dimensoesPermitidas: asStringArray(rec.dimensoesPermitidas) }
+        : {}),
+      ...(asStringArray(rec.statusIncluidos).length > 0
+        ? { statusIncluidos: asStringArray(rec.statusIncluidos) }
+        : {}),
+      ...(asStringArray(rec.statusExcluidos).length > 0
+        ? { statusExcluidos: asStringArray(rec.statusExcluidos) }
+        : {}),
+      ...(colunaData ? { colunaData } : {}),
+    });
   }
   return out;
 };
+
+const parseCardinalidade = (value: unknown): Cardinalidade | null =>
+  value === "1:1" || value === "1:N" || value === "N:1" || value === "N:N" ? value : null;
 
 export const parseEscopoSkill = (value: unknown): EscopoSkill => {
   if (!value || typeof value !== "object") {
@@ -108,18 +164,29 @@ export const parseEscopoSkill = (value: unknown): EscopoSkill => {
       }
       const rel = item as Record<string, unknown>;
       const tabelaOrigem = typeof rel.tabelaOrigem === "string" ? rel.tabelaOrigem : "";
-      const colunaOrigem = typeof rel.colunaOrigem === "string" ? rel.colunaOrigem : "";
       const tabelaDestino = typeof rel.tabelaDestino === "string" ? rel.tabelaDestino : "";
-      const colunaDestino = typeof rel.colunaDestino === "string" ? rel.colunaDestino : "";
-      if (!tabelaOrigem || !colunaOrigem || !tabelaDestino || !colunaDestino) {
+      const paresParsed = parseParesRelacionamento(rel.pares);
+      const colunaOrigem = typeof rel.colunaOrigem === "string" ? rel.colunaOrigem.trim() : "";
+      const colunaDestino = typeof rel.colunaDestino === "string" ? rel.colunaDestino.trim() : "";
+      const pares =
+        paresParsed.length > 0
+          ? paresParsed
+          : colunaOrigem && colunaDestino
+            ? [{ colunaOrigem, colunaDestino }]
+            : [];
+      const first = pares[0];
+      const cardinalidade = parseCardinalidade(rel.cardinalidade);
+      if (!tabelaOrigem || !tabelaDestino || !first) {
         continue;
       }
       relacionamentos.push({
         tabelaOrigem,
-        colunaOrigem,
+        colunaOrigem: first.colunaOrigem,
         tabelaDestino,
-        colunaDestino,
+        colunaDestino: first.colunaDestino,
+        pares,
         tipoJoin: typeof rel.tipoJoin === "string" ? rel.tipoJoin : "inner",
+        ...(cardinalidade ? { cardinalidade } : {}),
       });
     }
   }
@@ -216,10 +283,16 @@ export const uniaoEscopos = (escopos: readonly EscopoSkill[]): EscopoSkill => {
     mergeStringMap(colunasPorTabela, escopo.colunasPorTabela);
     mergeStringMap(graoPorTabela, escopo.graoPorTabela);
     for (const rel of escopo.relacionamentos) {
-      const key = [rel.tabelaOrigem, rel.colunaOrigem, rel.tabelaDestino, rel.colunaDestino]
-        .join("|")
-        .toLowerCase();
-      relKeys.set(key, rel);
+      const key = chaveRelacionamentoEscopo(rel);
+      const prev = relKeys.get(key);
+      if (!prev) {
+        relKeys.set(key, rel);
+        continue;
+      }
+      relKeys.set(key, {
+        ...rel,
+        ...(rel.cardinalidade ? { cardinalidade: rel.cardinalidade } : prev.cardinalidade ? { cardinalidade: prev.cardinalidade } : {}),
+      });
     }
     for (const item of escopo.graoResultado) {
       graoResultado.add(item);

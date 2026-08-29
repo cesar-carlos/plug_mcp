@@ -11,10 +11,10 @@ Regras de prioridade mais alta (segurança, arquitetura, camada de domínio) pre
 ## Legibilidade e responsabilidade
 
 - Prefira módulos simples e funções pequenas. Evite abstrações prematuras.
-- Mantenha arquivos focados em uma responsabilidade. Quebre controllers, services ou middlewares grandes antes que se tornem difíceis de ler.
-- Use nomes descritivos do domínio ou do contexto: `consultarDados`, `ambienteId`, `dialeto`.
-- Siga o padrão de nomenclatura do projeto de forma consistente; prefira nomes que revelem feature + responsabilidade.
-- Substitua literais com significado de negócio por constantes nomeadas (timeouts, limites, thresholds, counts de retry).
+- Mantenha arquivos focados em uma responsabilidade. Quebre use-cases grandes (`consultar`, `skills`) extraindo helpers em `use-cases/shared/`, não inchando o arquivo.
+- Use nomes descritivos do domínio: `consultarDados`, `agentId`, `acessoId`, `dialeto`, `escopo`, `pacoteVersao`.
+- Siga o padrão de nomenclatura do projeto; prefira nomes que revelem feature + responsabilidade.
+- Substitua literais com significado de negócio por constantes nomeadas (timeouts, limites, `GROUP_BY_MAX_EXPRESSIONS`, tetos de perfil, prefixo `mcp:query:{agentId}:`).
 
 ## Comentários
 
@@ -27,8 +27,8 @@ Regras de prioridade mais alta (segurança, arquitetura, camada de domínio) pre
 - Trate falhas explicitamente — nunca engula erros silenciosamente.
 - Prefira retornos antecipados (`early return`) sobre nesting profundo.
 - Sempre use chaves em `if`/`else`/`for`/`while` (`curly: all`). Compare com `===` (`eqeqeq`; `== null` permitido para nullish).
-- Erros de domínio usam `DomainError` com `code`, `message`, `hint`, `retryable`. Nunca lance strings ou erros genéricos de dentro de casos de uso.
-- Logs de aplicação passam por `LoggerPort`. Não use `console.*` em `src/` (exceto `main.ts` e scripts CLI de migrate/seed).
+- Erros de domínio usam `DomainError` com `code`, `message`, `hint`, `retryable`. Nunca lance strings ou erros genéricos de dentro de casos de uso. Preserve a origem (JWT vs acesso vs policy vs SQL vs pacote).
+- Logs de aplicação passam por `LoggerPort`. Não use `console.*` em `src/` (exceto `main.ts` e scripts CLI de migrate/backfill).
 - Não crie README/wiki/changelog **extra**. O changelog canônico é `CHANGELOG.md`; a docs viva é `docs/`. Mantenha os dois atualizados (rule `changelog_and_docs`).
 
 ## Coesão e anti-padrões
@@ -36,5 +36,5 @@ Regras de prioridade mais alta (segurança, arquitetura, camada de domínio) pre
 - Um módulo deve ter uma razão primária para mudar. Se um arquivo detém workflows não relacionados, divida.
 - Prefira extrair um novo caso de uso, serviço, helper ou mapper a estender um módulo grande "só mais uma vez".
 - Mantenha funções em um único nível de abstração: orquestração *ou* detalhe, nunca os dois.
-- Evite Feature Envy: não navegue pela estrutura de outro módulo para tomar decisões; pergunte ao tipo dono ou a uma policy dedicada.
+- Evite Feature Envy: não navegue pela estrutura de outro módulo para tomar decisões; pergunte ao tipo dono ou a uma policy dedicada (`EscopoSkill`, `gates-skill`, validador).
 - Evite Long Parameter Lists: introduza um objeto de params tipado quando vários valores sempre andam juntos.

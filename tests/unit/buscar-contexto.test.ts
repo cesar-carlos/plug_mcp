@@ -90,7 +90,9 @@ describe("BuscarContexto", () => {
       query: "produtos",
     });
     expect(result.consultaPermitida).toBe(false);
-    expect(result.gap?.hint).toMatch(/em andamento/i);
+    expect(result.blockingReason).toBe("SKILL_NOT_PUBLISHED");
+    expect(result.gap).toBeUndefined();
+    expect(result.nextAction).toBeTruthy();
     expect(result.fluxoTreino?.proximoPasso).toBeTruthy();
   });
 
@@ -195,7 +197,8 @@ describe("BuscarContexto", () => {
       query: "faturamento cliente",
     });
     expect(result.consultaPermitida).toBe(false);
-    expect(result.gap?.hint).toMatch(/Faturamento por cliente/);
+    expect(result.blockingReason).toBe("SKILL_NOT_PUBLISHED");
+    expect(result.gap).toBeUndefined();
     expect(result.skillsParaTreino[0]?.id).toBe(relevant.id);
   });
 

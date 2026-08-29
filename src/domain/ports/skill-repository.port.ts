@@ -15,6 +15,8 @@ export interface SkillRepositoryPort {
         | "escopo"
         | "pacoteVersao"
         | "motivoRevalidacao"
+        | "consultaSemantica"
+        | "politicaConsulta"
       >
     >,
   ): Promise<Skill>;

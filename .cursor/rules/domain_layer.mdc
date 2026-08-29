@@ -1,5 +1,5 @@
 ---
-description: "Camada de domínio: ports, DomainError, grafo"
+description: "Camada de domínio: ports, DomainError, EscopoSkill e grafo"
 globs: ["src/domain/**/*.ts", "src/application/**/*.ts"]
 alwaysApply: false
 ---
@@ -8,10 +8,10 @@ alwaysApply: false
 
 Domain não importa application/infrastructure/Express/Drizzle/MCP SDK/`fetch`.
 
-Falhas: `throw new DomainError({ code, message, hint, retryable })` com `ERROR_CODES`.
+Falhas: `throw new DomainError({ code, message, hint, retryable })` com `ERROR_CODES`. Códigos novos de pacote/SQL (`ALIAS_DESCONHECIDO`, `COLUNA_AMBIGUA`, `PACOTE_INCOMPLETO`, `MULTI_SKILL_PARAMS`, `METADATA_CONTRATO`, `TABELA_FORA_DO_ESCOPO`, …) entram em `error-codes.ts` e `docs/mcp/error-mapping.md`.
 
 Identidade nas tools autenticadas: `usuarioId` explícito. Application não lê ALS.
 
-Grafo: lock por `agentId`. Dialeto no primeiro merge. Precedência de origem no merge.
+Grafo: lock por `agentId`. Dialeto no primeiro merge. Precedência de origem no merge. SQL de treino: SELECT nomeado; JOIN se >1 tabela; merge só após execute + policy; só nomes físicos.
 
-SQL de treino: SELECT nomeado; JOIN se >1 tabela; merge só após execute + policy.
+`EscopoSkill` é o contrato do pacote (`pacoteVersao`, tabelas, colunas físicas, relacionamentos, grãos, `metricasSaida`). `StatusSkill` inclui `rascunho_revalidacao`. Params: `string|number|integer|decimal|date|datetime|boolean`. Ports de skill/aprendizado usam `skillIds[]` e `pacoteVersao`/`motivoRevalidacao` — não trate o grafo como licença de consulta.

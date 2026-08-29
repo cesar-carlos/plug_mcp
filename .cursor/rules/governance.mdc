@@ -8,7 +8,7 @@ alwaysApply: false
 
 Precedência: product_objective > security > architecture/domain > mcp_protocol/plug_server_client > catalog/express > changelog_and_docs > performance > typescript/lint > testing > coding_standards.
 
-Não inverter o objetivo: consulta ao ERP via skill publicada; grafo só no treino; sem skill, não inventar SQL.
+Não inverter o objetivo: consulta ao ERP via **pacote de skill publicada**; grafo só no treino e na confirmação de fatos; sem skill, não inventar SQL. Não tratar o grafo, match textual ou skill em `rascunho_revalidacao` como licença de consulta.
 
 Antes de concluir mudança de produção:
 
@@ -16,6 +16,6 @@ Antes de concluir mudança de produção:
 2. `npm run format:check` (ou `npm run format`)
 3. `npx tsc -p tsconfig.json --noEmit`
 4. `npm test` se use-case, adapter, erros, MCP ou HTTP mudaram
-5. `CHANGELOG.md` (Unreleased) e `docs/` se comportamento, contrato, tools, erros ou env mudaram (ver `changelog_and_docs`)
+5. `CHANGELOG.md` (Unreleased), `docs/` e as rules desta pasta se comportamento, contrato, tools, erros ou env mudaram (ver `changelog_and_docs`)
 
-Não reintroduzir login próprio do MCP, JWT de conta, Client de serviço no `.env`, catálogo pronto, nem devolver token MCP na tool.
+Não reintroduzir login próprio do MCP, JWT de conta, Client de serviço no `.env`, catálogo pronto, nem devolver token MCP na tool. Cutover de pacote: `npm run db:backfill-escopo` reconstrói AST, associa aprendizado e rebaixa publicadas — não pule a revalidação.

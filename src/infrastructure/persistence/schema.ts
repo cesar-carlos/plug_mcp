@@ -11,8 +11,11 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { ParametroSkill } from "../../domain/entities/skill.js";
+import type { ConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
+import type { PoliticaConsulta } from "../../domain/entities/politica-consulta.js";
 import type { EscopoSkill } from "../../domain/entities/escopo.js";
 import type { PerfilColuna } from "../../domain/entities/escopo.js";
+import type { EscopoValidacaoRel } from "../../domain/entities/grafo.js";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -99,6 +102,7 @@ export const colunaGrafo = pgTable(
     papel: text("papel"),
     formato: text("formato"),
     perfil: jsonb("perfil").$type<PerfilColuna | null>(),
+    sensibilidade: text("sensibilidade").notNull().default("livre"),
     origem: text("origem").notNull(),
     status: text("status").notNull().default("vigente"),
     autorUsuarioId: uuid("autor_usuario_id"),
@@ -120,24 +124,50 @@ export const relacionamentoGrafo = pgTable(
       .notNull()
       .references(() => tabelaGrafo.id, { onDelete: "cascade" }),
     colunaDestino: text("coluna_destino").notNull(),
+    paresFingerprint: text("pares_fingerprint").notNull(),
     tipoJoin: text("tipo_join").notNull().default("inner"),
     cardinalidade: text("cardinalidade"),
     descricao: text("descricao"),
+    escopoValidacao: jsonb("escopo_validacao").$type<EscopoValidacaoRel | null>(),
     origem: text("origem").notNull(),
     status: text("status").notNull().default("vigente"),
     autorUsuarioId: uuid("autor_usuario_id"),
     ...timestamps,
   },
   (t) => [
-    uniqueIndex("rel_grafo_uidx").on(
+    uniqueIndex("rel_grafo_pares_uidx").on(
       t.agentId,
       t.tabelaOrigemId,
-      t.colunaOrigem,
       t.tabelaDestinoId,
-      t.colunaDestino,
+      t.paresFingerprint,
     ),
     index("rel_grafo_agent_idx").on(t.agentId),
   ],
+);
+
+export const relacionamentoGrafoPar = pgTable(
+  "relacionamento_grafo_par",
+  {
+    relacionamentoId: uuid("relacionamento_id")
+      .notNull()
+      .references(() => relacionamentoGrafo.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull(),
+    colunaOrigem: text("coluna_origem").notNull(),
+    colunaDestino: text("coluna_destino").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.relacionamentoId, t.ordem] })],
+);
+
+export const schemaSnapshot = pgTable(
+  "schema_snapshot",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id").notNull(),
+    tabelaNome: text("tabela_nome").notNull(),
+    assinatura: text("assinatura").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("schema_snapshot_agent_tabela_uidx").on(t.agentId, t.tabelaNome)],
 );
 
 export const skill = pgTable(
@@ -157,12 +187,14 @@ export const skill = pgTable(
       graoPorTabela: {},
       graoResultado: [],
       metricasSaida: [],
-      pacoteVersao: 1,
+      pacoteVersao: 2,
     }),
     versao: integer("versao").notNull().default(1),
-    pacoteVersao: integer("pacote_versao").notNull().default(1),
+    pacoteVersao: integer("pacote_versao").notNull().default(2),
     status: text("status").notNull().default("rascunho"),
     motivoRevalidacao: text("motivo_revalidacao"),
+    consultaSemantica: jsonb("consulta_semantica").$type<ConsultaSemantica | null>(),
+    politicaConsulta: jsonb("politica_consulta").$type<PoliticaConsulta | null>(),
     autorUsuarioId: uuid("autor_usuario_id"),
     ...timestamps,
   },
@@ -267,6 +299,8 @@ export const lacunaConsulta = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     agentId: uuid("agent_id").notNull(),
     pergunta: text("pergunta").notNull(),
+    tipo: text("tipo").notNull().default("skill_gap"),
+    contrato: jsonb("contrato").$type<Record<string, unknown> | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("lacuna_consulta_agent_idx").on(t.agentId)],

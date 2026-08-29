@@ -1,4 +1,6 @@
 import type { Cardinalidade, PapelColuna, PerfilColuna } from "./escopo.js";
+import type { ParRelacionamento } from "./relacionamento.js";
+import type { SensibilidadeColuna } from "./privacidade.js";
 
 export type OrigemFato = "inferido" | "confirmado_usuario" | "validado_execucao";
 export type StatusFato = "vigente" | "conflito";
@@ -29,9 +31,15 @@ export interface ColunaGrafo {
   readonly papel: PapelColuna | null;
   readonly formato: string | null;
   readonly perfil: PerfilColuna | null;
+  readonly sensibilidade: SensibilidadeColuna;
   readonly origem: OrigemFato;
   readonly status: StatusFato;
   readonly autorUsuarioId: string | null;
+}
+
+export interface EscopoValidacaoRel {
+  readonly empresa?: string;
+  readonly filial?: string;
 }
 
 export interface RelacionamentoGrafo {
@@ -41,12 +49,21 @@ export interface RelacionamentoGrafo {
   readonly colunaOrigem: string;
   readonly tabelaDestinoId: string;
   readonly colunaDestino: string;
+  readonly pares: readonly ParRelacionamento[];
+  readonly paresFingerprint: string;
   readonly tipoJoin: string;
   readonly cardinalidade: Cardinalidade | null;
   readonly descricao: string | null;
+  readonly escopoValidacao: EscopoValidacaoRel | null;
   readonly origem: OrigemFato;
   readonly status: StatusFato;
   readonly autorUsuarioId: string | null;
+}
+
+export interface SchemaSnapshotGrafo {
+  readonly agentId: string;
+  readonly tabelaNome: string;
+  readonly assinatura: string;
 }
 
 export const origemRank = (origem: OrigemFato): number => {

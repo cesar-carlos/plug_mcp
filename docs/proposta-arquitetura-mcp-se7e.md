@@ -16,7 +16,7 @@ O que já está certo e deve ser preservado: treino a partir de SELECT real do u
 
 ## 2. Diagnóstico — estado alvo atingido e lacunas restantes
 
-O núcleo das fases 0–6 **já está no código**. A skill publicada é o **escopo** (tabelas, colunas, JOINs), não uma query congelada. `consultar_dados` aceita o SELECT da IA dentro desse pacote; sem `sql`, executa a consulta exemplo (`sqlModelo`). Parser AST, validador de escopo, tools de aprendizado, auto-gravação em `consulta_aprendida`, flag `MCP_SKILL_TOOLS_ENABLED`, cache agregado e `herdar_catalogo` existem.
+O núcleo das fases 0–6 **já está no código**. A skill publicada é o **escopo** (tabelas, colunas, JOINs compostos com `pares[]`), não uma query congelada. `consultar_dados` aceita o SELECT da IA ou `consultaSemantica` compilada só com elementos certificados; sem `sql`, executa a consulta exemplo (`sqlModelo`). Parser AST, validador de escopo, tools de aprendizado, auto-gravação em `consulta_aprendida`, inspeção mascarada (`inspecionar_consulta`), descoberta de pacote (`descobrir_tabela`), deriva (`detectar_deriva_esquema`), flags de rollback, cache agregado e `herdar_catalogo` existem.
 
 Uma tool MCP por skill (`skill_titulos-a-receber`) **não escala**: a lista de tools é contexto injetado em toda conversa. Catálogo continua sendo dado consultado sob demanda (`listar_skills` / `obter_skill` / `buscar_contexto`). Tools `skill_*` são opcionais (`MCP_SKILL_TOOLS_ENABLED`).
 
@@ -41,7 +41,7 @@ Lacunas reais deste ciclo (não reimplementar o núcleo):
 ```mermaid
 flowchart TB
   subgraph aprender [Aprender]
-    explorar["explorar_tabelas / mapear_tabela"]
+    explorar["explorar_tabelas / mapear_tabela (treino)"]
     treino["treinar_com_sql + enriquecimento"]
     publicar["publicar_skill (confirmacao do usuario)"]
     explorar --> treino --> publicar
@@ -101,7 +101,7 @@ A tool devolve o pacote completo, filtrado pelo que a policy do `client_token` r
 
 A IA **escreve SQL**. O servidor valida contra o escopo e executa via plug-server.
 
-`consultar_dados(acessoId, skillIds[], sql?, params?, options?)`
+`consultar_dados(acessoId, skillIds[], sql?, consultaSemantica?, pergunta, params?, options?)`
 
 - **Sem `sql`:** executa a consulta exemplo da skill (`sqlModelo`). Compatibilidade preservada.
 - **Com `sql`:** valida contra a **união** dos escopos das skills publicadas em `skillIds`. Aceitar mais de uma skill permite cruzar financeiro e vendas **sem inventar relacionamento**.

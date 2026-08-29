@@ -8,12 +8,12 @@ alwaysApply: false
 
 Node.js 24 LTS (Krypton, `.nvmrc` = 24.19.0), TypeScript ESM (`NodeNext`, imports com `.js`).
 
-Produção: `@modelcontextprotocol/sdk`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`.
+Produção: `@modelcontextprotocol/sdk`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`, `node-sql-parser`.
 
-Não usar: `jose`, `bcryptjs`, `cookie-parser`, `jsonwebtoken`, `dotenv`, `uuid`, `moment`.
+Não usar: `jose`, `bcryptjs`, `cookie-parser`, `jsonwebtoken`, `dotenv`, `uuid`, `moment`. Sem embedding obrigatório.
 
 Env só em `src/config/env.ts`. `.env` via `--env-file-if-exists`.
 
 UUID: `crypto.randomUUID()`. Crypto: AES-256-GCM + SHA-256 nativos.
 
-Postgres em produção. Redis opcional (`REDIS_URL`): rate limit e cache de policy. Sessão MCP fica in-process (sticky `mcp-session-id`).
+Postgres em produção. Redis opcional (`REDIS_URL`): rate limit, cache de policy e cache de resultado (`QUERY_CACHE_TTL_MS`, prefixo `mcp:query:{agentId}:`). Sessão MCP fica in-process (sticky `mcp-session-id`).

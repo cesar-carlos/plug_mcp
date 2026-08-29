@@ -1,17 +1,21 @@
 ---
-description: "Grafo compartilhado por agentId, SQL modelo e skills"
+description: "Grafo de treino vs pacote publicado: autoridade de consulta, gates e conhecimento skill-scoped"
 globs: ["src/domain/**/*.ts", "src/application/use-cases/**/*.ts", "src/infrastructure/persistence/**/*.ts"]
 alwaysApply: false
 ---
 
 # Grafo e skills
 
-Não existe catálogo `Fonte` nem seed `vendas/produtos/clientes`. O conhecimento de **schema** é um grafo por `agentId`. O conhecimento de **consulta** é skill publicada.
+Não existe catálogo `Fonte` nem seed `vendas/produtos/clientes`. Schema vive no **grafo** por `agentId`. Consulta só com **pacote** de skill publicada (`EscopoSkill` + `sqlModelo`). Grafo não licencia JOIN.
 
-- Escrita do grafo acumula (qualquer usuário com acesso àquele agente).
-- Leitura recortada por `client_token.getPolicy` (`allTables` / `tables`).
+- Escrita do grafo acumula (qualquer acesso daquele agente). Leitura recortada por `client_token.getPolicy`.
 - Proveniência: `validado_execucao` > `confirmado_usuario` > `inferido`. Empate de texto → `conflito` até `resolver_conflito`.
-- Dialeto: o primeiro escritor trava; outro dialeto no mesmo `agentId` → `DIALECT_CONFLICT`.
-- `treinar_com_sql`: só SELECT com colunas nomeadas; proibir `SELECT *`; multi-tabela exige JOIN; merge só após `sql.execute` + policy. Depois do treino, cadastre a skill — é o que a IA usará na pergunta do usuário.
-- Skills: rascunho → validada → publicada. Consulta ao ERP na sessão usa `sqlModelo` de skill publicada. Sem skill capaz (incluindo cruzamento), não derivar SQL do grafo; orientar o cadastro.
-- `buscar_contexto` consulta o grafo/skills/anotações; não despejar o schema em `instructions`. Na pergunta de dados, priorize hits de skill.
+- Dialeto: primeiro escritor trava; outro → `DIALECT_CONFLICT` (use `atualizar_dialeto`).
+- `treinar_com_sql`: SELECT com colunas nomeadas; proibir `SELECT *`; JOIN se >1 tabela; `ON` com igualdade `alias.coluna = alias.coluna`. Merge só após `sql.execute` + policy. `mapear_tabela` pode preencher tipo/formato físico vazio sem rebaixar origem validada. Gravar **nomes físicos**; alias/expressão → `metricasSaida`.
+- Escopo da skill: `tabelas`, `colunasPorTabela` físicas, relacionamentos compostos, `graoPorTabela`/`graoResultado`, `metricasSaida`, `pacoteVersao`. SQL imparesável não publica.
+- Status: `rascunho` → `validada` → `publicada`. Cutover/backfill rebaixa a `rascunho_revalidacao` (`motivoRevalidacao`). Gates em `gates-skill.ts`: fatos `validado_execucao`/`confirmado_usuario` no grafo do escopo; JOIN com cardinalidade; params com `descricao`. `PACOTE_INCOMPLETO` na publicação.
+- `confirmar_relacionamento` com `skillId` persiste o JOIN em `skill.escopo`. Cardinalidade (`1:1`, `1:N`, `N:1`, `N:N`) só é aceita quando confirmada pelo usuário. Sem isso o validador recusa (`JOIN_DESCONHECIDO`). JOIN composto: se o pacote tem `pares.length > 1` para o par de tabelas, o `ON` precisa do conjunto inteiro (fallback v1 só quando não há composto).
+- Validador fail-closed (`validar-escopo.ts` + AST completa): cada ramo UNION/subquery/CTE, alias desconhecido (`ALIAS_DESCONHECIDO`), coluna ambígua (`COLUNA_AMBIGUA`). Tokenizer ignora `::cast`, `@@var` e comentários.
+- Pacote vs grafo: `sincronizarEscopoComGrafo` overlay de cardinalidade/tipo no JSON da skill (criar/validar/mapear/confirmar/treino). `uniaoEscopos` não apaga cardinalidade já gravada. `PERFIL_TETO.details.retomavel` pula JOIN/coluna já perfilados.
+- Conhecimento skill-scoped: `anotacao_grafo.skill_id`; `consulta_aprendida_skill` (N:N). `skill_id` nulo não é global silencioso. `obter_skill` / `skill://` devolvem **só** o pacote, não o grafo inteiro.
+- `buscar_contexto`: `cobertura` (`completa|parcial|desconhecida`) + `consultaPermitida` só se completa. Match textual isolado não autoriza. Rascunhos/`rascunho_revalidacao` em `skillsParaTreino`. Sem skill capaz, não derivar SQL do grafo.

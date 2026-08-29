@@ -16,18 +16,18 @@ alwaysApply: true
 
 ## Tipagem
 
-- Nunca use `any`. Prefira `unknown` com narrowing explícito. `req.body` / `req.cookies` do Express são `any` — normalize na fronteira (`formField`, `cookieValue`).
+- Nunca use `any`. Prefira `unknown` com narrowing explícito. `req.body` do Express é `any` — normalize na fronteira (`formField` ou schema Zod da tool).
 - Funções exportadas e métodos públicos têm tipo de retorno explícito (`explicit-module-boundary-types`).
 - Use `interface` para contratos de objeto e `type` para unions, mapped types e branded primitives (`consistent-type-definitions`).
-- Prefira tipos que comunicam intenção de domínio no ponto de chamada (ex.: `AmbienteId` em vez de `string`).
+- Prefira tipos de domínio no ponto de chamada (`AcessoId`, `AgentId`, `EscopoSkill`, `StatusSkill`) em vez de `string`/`object` genéricos.
 - Use `interface` para os ports do domínio — facilita implementação de adapters e mocking.
 
 ## Segurança de tipos
 
-- Valide dados externos na fronteira antes de tratá-los como tipo TypeScript confiável. Use Zod na entrada de tools e variáveis de ambiente.
+- Valide dados externos na fronteira antes de tratá-los como tipo TypeScript confiável. Use Zod na entrada de tools, env e JSON persistido (`escopo`, `params`, `perfil`).
 - Capture erros como `unknown` e faça narrowing antes de ler propriedades (`error instanceof DomainError`).
-- Prefira `readonly`, `as const` e transformações imutáveis para estruturas de dados compartilhadas.
-- Modele estados de domínio, outcomes e variantes de mensagem com discriminated unions ou `DomainError`; aplique tratamento exaustivo com `never`.
+- Prefira `readonly`, `as const` e transformações imutáveis para estruturas de dados compartilhadas (`EscopoSkill`, policy, cache key).
+- Modele estados de domínio, outcomes e variantes de mensagem com discriminated unions ou `DomainError`; aplique tratamento exaustivo com `never` (`StatusSkill`, `cobertura`, origem do fato).
 - Não deixe Promises flutuando (`no-floating-promises`). Em handlers Express, `no-misused-promises` está ligado com `checksVoidReturn.arguments/attributes: false`.
 
 ## Imports e módulos

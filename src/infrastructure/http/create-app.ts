@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import type { Logger as PinoLogger } from "pino";
 import type { AppConfig } from "../../config/env.js";
+import { buildInfo } from "../../config/build-info.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { UsuarioRepositoryPort } from "../../domain/ports/usuario-repository.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
@@ -27,6 +28,7 @@ export const createExpressApp = (input: {
   setup: SetupCodeStore;
   pino?: PinoLogger;
   mcpRateLimitStore?: RateLimitStore;
+  readinessCheck?: () => Promise<boolean>;
 }): { app: Express; dispose: () => void } => {
   const app = express();
   app.disable("x-powered-by");
@@ -104,7 +106,34 @@ export const createExpressApp = (input: {
   });
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", service: "se7e-mcp-server" });
+    const info = buildInfo();
+    res.json({
+      status: "ok",
+      service: "se7e-mcp-server",
+      version: info.version,
+      sha: info.sha,
+      buildTime: info.buildTime,
+      uptimeSec: info.uptimeSec,
+    });
+  });
+
+  app.get("/ready", (_req, res) => {
+    const check = input.readinessCheck;
+    if (!check) {
+      res.json({ status: "ready", database: "skipped" });
+      return;
+    }
+    void check()
+      .then((ok) => {
+        if (!ok) {
+          res.status(503).json({ status: "not_ready", database: "error" });
+          return;
+        }
+        res.json({ status: "ready", database: "ok" });
+      })
+      .catch(() => {
+        res.status(503).json({ status: "not_ready", database: "error" });
+      });
   });
 
   app.get("/setup/:code", (req, res) => {

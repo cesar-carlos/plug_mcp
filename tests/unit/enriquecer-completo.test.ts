@@ -127,4 +127,73 @@ describe("treinar_com_sql enriquecer=completo", () => {
     const tabelas = await grafo.listTabelas(agentId);
     expect(tabelas.some((tabela) => tabela.nome.toLowerCase() === "produto")).toBe(true);
   });
+
+  it("informa fase, orçamento e pendências ao atingir o teto", async () => {
+    const { treinar, created } = await setup();
+    const colunas = Array.from(
+      { length: 17 },
+      (_, index) => `p.col${String(index + 1)} AS col${String(index + 1)}`,
+    ).join(", ");
+    const result = await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: `SELECT ${colunas} FROM produto p`,
+      enriquecer: "completo",
+    });
+
+    const teto = result.avisos.find((aviso) => aviso.code === "PERFIL_TETO");
+    expect(teto?.details).toMatchObject({
+      fase: "perfil",
+      queriesUsadas: 16,
+      queriesLimite: 16,
+      retomavel: true,
+    });
+    expect(teto?.details?.pendencias.length).toBeGreaterThan(0);
+  });
+
+  it("retoma sem reconsultar JOIN já com cardinalidade", async () => {
+    const { plug, treinar, created } = await setup();
+    let countDistinct = 0;
+    plug.sqlImpl = async () => {
+      const sql = plug.lastSql ?? "";
+      if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
+        return {
+          columns: ["column_name", "data_type", "is_nullable"],
+          rows: [
+            { column_name: "codprod", data_type: "int" },
+            { column_name: "codcli", data_type: "int" },
+            { column_name: "nome", data_type: "varchar" },
+          ],
+        };
+      }
+      if (/COUNT\s*\(\s*DISTINCT/i.test(sql) && !/MIN\(/i.test(sql)) {
+        countDistinct += 1;
+        return { columns: ["total", "distintos"], rows: [{ total: 10, distintos: 10 }] };
+      }
+      if (/MIN\(/i.test(sql)) {
+        return {
+          columns: ["min_v", "max_v", "nulos", "total", "distintos"],
+          rows: [{ min_v: 1, max_v: 9, nulos: 0, total: 10, distintos: 3 }],
+        };
+      }
+      if (/SELECT DISTINCT/i.test(sql)) {
+        return { columns: ["valor"], rows: [{ valor: "A" }, { valor: "B" }] };
+      }
+      return { columns: ["ok"], rows: [{ ok: 1 }] };
+    };
+    const sql =
+      "SELECT p.codprod AS codigo, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli";
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql,
+      enriquecer: "completo",
+    });
+    const primeiro = countDistinct;
+    expect(primeiro).toBeGreaterThan(0);
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql,
+      enriquecer: "completo",
+    });
+    expect(countDistinct).toBe(primeiro);
+  });
 });

@@ -42,13 +42,14 @@ O Compose publica o Postgres na porta `5433` do host (para não colidir com um P
 
 Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fechar numa skill publicada — é ela que a IA usa na consulta.
 
-- Health: `GET http://127.0.0.1:3333/health`
+- Health: `GET http://127.0.0.1:3333/health` (`version`, `sha`, `buildTime`, `uptimeSec`)
+- Ready: `GET http://127.0.0.1:3333/ready` (`database: ok|skipped|error`; 503 se o banco falhar)
 - MCP: `POST http://127.0.0.1:3333/mcp`
 - Token MCP (one-shot): `GET http://127.0.0.1:3333/setup/{code}`
 
 ## Bootstrap
 
-Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql`, o SELECT precisa ficar no escopo. Sem skill capaz, `buscar_contexto` devolve `SKILL_GAP`. Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
+Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. Sem skill capaz, `buscar_contexto` devolve `SKILL_GAP`. Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
 
 1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
 2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**

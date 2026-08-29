@@ -1,4 +1,9 @@
 import type { EscopoSkill } from "../../../domain/entities/escopo.js";
+import { paresDoRelacionamento } from "../../../domain/entities/escopo.js";
+import {
+  igualdadesCobremRelacionamento,
+  type IgualdadeResolvida,
+} from "../../../domain/entities/relacionamento.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
@@ -73,7 +78,7 @@ const resolveTabela = (
   return null;
 };
 
-const joinConhecido = (
+const joinParConhecido = (
   escopo: EscopoSkill,
   leftTable: string,
   leftCol: string,
@@ -81,18 +86,69 @@ const joinConhecido = (
   rightCol: string,
 ): boolean =>
   escopo.relacionamentos.some((rel) => {
+    const pares = paresDoRelacionamento(rel);
     const a =
       lower(rel.tabelaOrigem) === lower(leftTable) &&
-      lower(rel.colunaOrigem) === lower(leftCol) &&
       lower(rel.tabelaDestino) === lower(rightTable) &&
-      lower(rel.colunaDestino) === lower(rightCol);
+      pares.some(
+        (par) =>
+          lower(par.colunaOrigem) === lower(leftCol) && lower(par.colunaDestino) === lower(rightCol),
+      );
     const b =
       lower(rel.tabelaOrigem) === lower(rightTable) &&
-      lower(rel.colunaOrigem) === lower(rightCol) &&
       lower(rel.tabelaDestino) === lower(leftTable) &&
-      lower(rel.colunaDestino) === lower(leftCol);
+      pares.some(
+        (par) =>
+          lower(par.colunaOrigem) === lower(rightCol) && lower(par.colunaDestino) === lower(leftCol),
+      );
     return a || b;
   });
+
+const tabelasDoJoin = (eqs: readonly IgualdadeResolvida[]): Set<string> => {
+  const names = new Set<string>();
+  for (const eq of eqs) {
+    names.add(lower(eq.leftTable));
+    names.add(lower(eq.rightTable));
+  }
+  return names;
+};
+
+const temRelacionamentoCompostoNoPar = (
+  escopo: EscopoSkill,
+  tabelas: ReadonlySet<string>,
+): boolean =>
+  escopo.relacionamentos.some((rel) => {
+    const pares = paresDoRelacionamento(rel);
+    if (pares.length <= 1) {
+      return false;
+    }
+    return tabelas.has(lower(rel.tabelaOrigem)) && tabelas.has(lower(rel.tabelaDestino));
+  });
+
+const joinConjuntoConhecido = (
+  escopo: EscopoSkill,
+  eqs: readonly IgualdadeResolvida[],
+): boolean => {
+  if (eqs.length === 0) {
+    return false;
+  }
+  const composto = escopo.relacionamentos.some((rel) =>
+    igualdadesCobremRelacionamento(eqs, {
+      tabelaOrigem: rel.tabelaOrigem,
+      tabelaDestino: rel.tabelaDestino,
+      pares: paresDoRelacionamento(rel),
+    }),
+  );
+  if (composto) {
+    return true;
+  }
+  if (temRelacionamentoCompostoNoPar(escopo, tabelasDoJoin(eqs))) {
+    return false;
+  }
+  return eqs.every((eq) =>
+    joinParConhecido(escopo, eq.leftTable, eq.leftColumn, eq.rightTable, eq.rightColumn),
+  );
+};
 
 const validarSelect = (
   ast: SqlAstSelect,
@@ -187,6 +243,7 @@ const validarSelect = (
         hint: "Use ON alias.coluna = alias.coluna de um relacionamento publicado. Chame confirmar_relacionamento para ensinar um novo.",
       });
     }
+    const eqs: IgualdadeResolvida[] = [];
     for (const eq of join.equalities) {
       if (!aliasConhecido(ast, cteNomes, eq.leftAlias)) {
         throw new DomainError({
@@ -214,13 +271,22 @@ const validarSelect = (
       if (leftTable.skipEscopo || rightTable.skipEscopo) {
         continue;
       }
-      if (!joinConhecido(escopo, leftTable.nome, eq.leftColumn, rightTable.nome, eq.rightColumn)) {
-        throw new DomainError({
-          code: ERROR_CODES.JOIN_DESCONHECIDO,
-          message: `JOIN ${leftTable.nome}.${eq.leftColumn} = ${rightTable.nome}.${eq.rightColumn} não está no escopo.`,
-          hint: "Não invente relacionamento. Confirme com o usuário e chame confirmar_relacionamento / expandir_escopo.",
-        });
-      }
+      eqs.push({
+        leftTable: leftTable.nome,
+        leftColumn: eq.leftColumn,
+        rightTable: rightTable.nome,
+        rightColumn: eq.rightColumn,
+      });
+    }
+    if (eqs.length > 0 && !joinConjuntoConhecido(escopo, eqs)) {
+      const label = eqs
+        .map((eq) => `${eq.leftTable}.${eq.leftColumn} = ${eq.rightTable}.${eq.rightColumn}`)
+        .join(" AND ");
+      throw new DomainError({
+        code: ERROR_CODES.JOIN_DESCONHECIDO,
+        message: `JOIN ${label} não está no escopo como conjunto.`,
+        hint: "Não invente relacionamento. Confirme o JOIN composto com confirmar_relacionamento (pares[]) / expandir_escopo.",
+      });
     }
   }
   const cteProximo = new Set([...cteNomes, ...ast.cteNomes.map(lower)]);

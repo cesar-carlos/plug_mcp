@@ -133,6 +133,7 @@ const logPlugDetail = (
 export const mapPlugServerFailure = (
   failure: PlugHttpFailure,
   logger?: LoggerPort,
+  stage = "rpc",
 ): DomainError => {
   const rpc = extractRpcError(failure.body);
   if (typeof rpc.code === "number") {
@@ -147,6 +148,8 @@ export const mapPlugServerFailure = (
           hint: hintSqlNaoClassificavel(),
           retryable: false,
           retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
+          source: "client_token_rpc",
+          stage: "sql.execute",
         });
       }
       return new DomainError({
@@ -155,6 +158,8 @@ export const mapPlugServerFailure = (
         hint: mapped.hint,
         retryable: mapped.retryable,
         retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
+        source: "client_token_rpc",
+        stage,
       });
     }
   }
@@ -167,6 +172,8 @@ export const mapPlugServerFailure = (
       message: "JWT do Client no plug-server recusado.",
       hint: "O MCP tenta refresh e, se falhar, login de novo com e-mail/senha do cofre. Se persistir, chame atualizar_credencial_plug.",
       retryable: true,
+      source: "plug_server_http",
+      stage,
     });
   }
   if (failure.status === 403) {
@@ -177,12 +184,16 @@ export const mapPlugServerFailure = (
         code: ERROR_CODES.CLIENT_NOT_ACTIVE,
         message: "O Client existe no plug-server mas não está ativo.",
         hint: "Peça ao dono do ERP para ativar o Client. Não trate como senha errada.",
+        source: "plug_server_http",
+        stage,
       });
     }
     return new DomainError({
       code: ERROR_CODES.AGENT_ACCESS_DENIED,
       message: "Client sem acesso aprovado a este agente.",
       hint: "Peça ao dono do Agent para ativar o Client e aprovar o acesso. Não trate como senha errada.",
+      source: "client_agent_access",
+      stage,
     });
   }
   if (failure.status === 429) {
@@ -192,6 +203,8 @@ export const mapPlugServerFailure = (
       hint: "Respeite retryAfterMs / RateLimit-Reset antes de nova chamada.",
       retryable: true,
       retryAfterMs: failure.retryAfterMs ?? rpc.retryAfterMs ?? 5000,
+      source: "client_token_rpc",
+      stage,
     });
   }
   if (failure.status === 503) {
@@ -201,6 +214,8 @@ export const mapPlugServerFailure = (
       hint: "Fila cheia ou agente offline. Tente de novo com backoff.",
       retryable: true,
       retryAfterMs: failure.retryAfterMs ?? 3000,
+      source: "client_token_rpc",
+      stage,
     });
   }
 
@@ -215,6 +230,8 @@ export const mapPlugServerFailure = (
       code: ERROR_CODES.PERMISSION_DENIED,
       message: "O client_token não autoriza esta operação.",
       hint: "O client_token não cobre esta tabela/operação. Peça liberação no ERP ou ajuste o SQL.",
+      source: "client_token_rpc",
+      stage,
     });
   }
 
@@ -224,6 +241,8 @@ export const mapPlugServerFailure = (
     hint: "Ajuste o SQL ou verifique o status do ambiente. Se retryable não estiver indicado, não insista no mesmo comando.",
     retryable: failure.status >= 500,
     retryAfterMs: failure.retryAfterMs ?? null,
+    source: "client_token_rpc",
+    stage,
   });
 };
 

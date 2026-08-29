@@ -7,9 +7,9 @@ O MCP é cofre + grafo de treino + **skill como pacote de conhecimento e escopo 
 - Cofre: `usuario_mcp` + `acesso` (N pares `agentId`/`client_token`, escopo empresa/filial e fuso).
 - Tool pré-auth `registrar_acesso` + `GET /setup/{code}`.
 - `UsuarioTokenManager` com e-mail/senha cifrados; login/refresh no hub por usuário.
-- Grafo compartilhado por `agentId` (tabela/coluna/relacionamento com proveniência, papel, perfil, cardinalidade).
-- `treinar_com_sql`: SELECT nomeado, JOIN se >1 tabela, merge só após `sql.execute` + policy; enriquecimento opcional.
-- Skills (rascunho → validada → publicada): pacote de conhecimento + allowlist de tabelas/colunas/JOINs. `sqlModelo` é consulta exemplo. SQL da IA só executa no escopo publicado. Escopo vazio é persistido na primeira leitura (e via `db:backfill-escopo`).
+- Grafo compartilhado por `agentId` (tabela/coluna/relacionamento composto com `pares[]`, proveniência, papel, perfil, `sensibilidade`, cardinalidade no recorte organizacional).
+- `treinar_com_sql`: SELECT nomeado, JOIN se >1 tabela (um JOIN com várias igualdades vira um relacionamento), merge só após `sql.execute` + policy; enriquecimento opcional.
+- Skills (rascunho → validada → publicada): pacote v2 de conhecimento + allowlist de tabelas/colunas/JOINs. `sqlModelo` é consulta exemplo. SQL da IA só executa no escopo publicado. Inspeção mascarada (`inspecionar_consulta`) e descoberta estrutural (`descobrir_tabela`) só com skill publicada. Escopo vazio é persistido na primeira leitura (e via `db:backfill-escopo`).
 - Loop de aprendizado: consultas aprendidas visíveis em `buscar_contexto` / `obter_skill`, sinônimos, lacunas, promoção a `validado_execucao`. `asOf` usa o timezone do acesso.
 - `treinar_com_sql enriquecer=completo` (opt-in): cardinalidade, tipo/formato, perfil min/max/nulos e candidatos a dicionário, com teto de 16 queries. `validar_skill` aceita o mesmo parâmetro.
 - Postgres obrigatório em produção. Redis opcional para rate limit, cache de policy e cache de resultado agregado.

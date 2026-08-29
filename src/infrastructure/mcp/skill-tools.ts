@@ -2,9 +2,11 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
+import { DIALETOS, isDialeto } from "../../domain/entities/dialeto.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import { extractNamedParams } from "../../application/use-cases/shared/sql-modelo.js";
+import { guiaDialeto } from "../../application/use-cases/shared/guia-dialeto.js";
 import { currentAccountId } from "./account-context.js";
 import { PRE_TREINO_SESSAO } from "./server-instructions.js";
 import type { ToolRunner } from "./tool-result.js";
@@ -194,6 +196,15 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
       if (!skill) {
         return { contents: [] };
       }
+      const acessos = await ports.acessos.listByUsuario(uid);
+      const dialeto = acessos.find((acesso) => acesso.agentId === skill.agentId)?.dialeto ?? "sybase";
+      const avisos: { code: string; message: string }[] = [];
+      if (skill.escopo.relacionamentos.some((rel) => rel.cardinalidade == null)) {
+        avisos.push({
+          code: "PERFIL_AUSENTE",
+          message: "JOIN sem cardinalidade no pacote. Chame obter_skill e confirmar_relacionamento.",
+        });
+      }
       return {
         contents: [
           {
@@ -208,10 +219,68 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
               sqlModelo: skill.sqlModelo,
               params: skill.params,
               escopo: skill.escopo,
+              consultaSemantica: skill.consultaSemantica,
+              politicaConsulta: skill.politicaConsulta,
+              guiaDialeto: guiaDialeto(dialeto),
               versao: skill.versao,
               pacoteVersao: skill.pacoteVersao,
               status: skill.status,
+              avisos,
             }),
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    "guia-paginacao",
+    "guia://paginacao",
+    {
+      description: "Regras de paginação MCP: consulta única limitada vs options.page + page_size.",
+      mimeType: "text/plain",
+    },
+    (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/plain",
+          text: DIALETOS.map((dialeto) => {
+            const guia = guiaDialeto(dialeto);
+            return `${dialeto}: ${guia.paginacao}`;
+          }).join("\n"),
+        },
+      ],
+    }),
+  );
+
+  server.registerResource(
+    "guia-dialeto",
+    new ResourceTemplate("guia://dialeto/{dialeto}", {
+      list: () => ({
+        resources: DIALETOS.map((dialeto) => ({
+          uri: `guia://dialeto/${dialeto}`,
+          name: `Guia ${dialeto}`,
+          description: `Datas, concatenação, cast e limite do dialeto ${dialeto}.`,
+          mimeType: "application/json",
+        })),
+      }),
+    }),
+    {
+      description: "Guia de dialeto (paginação, datas, concatenação, cast) sem round-trip ao ERP.",
+      mimeType: "application/json",
+    },
+    (uri, variables) => {
+      const raw = String(variables.dialeto ?? "").toLowerCase();
+      if (!isDialeto(raw)) {
+        return { contents: [] };
+      }
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(guiaDialeto(raw)),
           },
         ],
       };

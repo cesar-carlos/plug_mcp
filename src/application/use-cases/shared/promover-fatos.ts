@@ -1,5 +1,6 @@
 import type { OrigemFato } from "../../../domain/entities/grafo.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
+import { paresDoRelacionamento } from "../../../domain/entities/escopo.js";
 import { escopoFromSqlModelo } from "./escopo-from-modelo.js";
 import type { SqlModelo } from "./sql-modelo.js";
 
@@ -43,24 +44,32 @@ export const promoverFatosDaExecucao = async (input: {
       if (!origemId || !destinoId) {
         continue;
       }
-      await input.grafo.mergeColuna({
-        tabelaId: origemId,
-        nome: rel.colunaOrigem,
-        origem: ORIGEM,
-        autorUsuarioId: input.autorUsuarioId,
-      });
-      await input.grafo.mergeColuna({
-        tabelaId: destinoId,
-        nome: rel.colunaDestino,
-        origem: ORIGEM,
-        autorUsuarioId: input.autorUsuarioId,
-      });
+      const pares = paresDoRelacionamento(rel);
+      for (const par of pares) {
+        await input.grafo.mergeColuna({
+          tabelaId: origemId,
+          nome: par.colunaOrigem,
+          origem: ORIGEM,
+          autorUsuarioId: input.autorUsuarioId,
+        });
+        await input.grafo.mergeColuna({
+          tabelaId: destinoId,
+          nome: par.colunaDestino,
+          origem: ORIGEM,
+          autorUsuarioId: input.autorUsuarioId,
+        });
+      }
+      const first = pares[0];
+      if (!first) {
+        continue;
+      }
       await input.grafo.mergeRelacionamento({
         agentId: input.agentId,
         tabelaOrigemId: origemId,
-        colunaOrigem: rel.colunaOrigem,
+        colunaOrigem: first.colunaOrigem,
         tabelaDestinoId: destinoId,
-        colunaDestino: rel.colunaDestino,
+        colunaDestino: first.colunaDestino,
+        pares,
         tipoJoin: rel.tipoJoin,
         origem: ORIGEM,
         autorUsuarioId: input.autorUsuarioId,

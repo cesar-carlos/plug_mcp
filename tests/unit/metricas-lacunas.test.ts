@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import {
+  ListarLacunas,
+  ListarMetricasAgente,
+  RegistrarLacunaFerramenta,
+} from "../../src/application/use-cases/aprendizado.js";
+import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
+import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
+import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
+import {
+  InMemoryAcessoRepository,
+  InMemoryAprendizadoRepository,
+  InMemoryAuditLog,
+  InMemoryUsuarioRepository,
+} from "../../src/infrastructure/persistence/memory/memory-cofre.js";
+import { FakePlugServer } from "../helpers/fake-plug-server.js";
+
+const crypto = new NodeCryptoAdapter(
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+);
+const agentId = "11111111-1111-4111-8111-111111111111";
+
+describe("métricas e lacunas de ferramenta", () => {
+  const setup = async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const aprendizado = new InMemoryAprendizadoRepository();
+    const audit = new InMemoryAuditLog();
+    const created = await new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    return { acessos, aprendizado, audit, created };
+  };
+
+  it("agrega auditoria por tool e código", async () => {
+    const { acessos, audit, created } = await setup();
+    await audit.append({
+      usuarioId: created.usuarioId,
+      acessoId: created.acessoId,
+      tool: "consultar_dados",
+      sqlEnviado: null,
+      sucesso: false,
+      codigoErro: "INVALID_SQL",
+      linhasRetornadas: 0,
+      duracaoMs: 12,
+    });
+    await audit.append({
+      usuarioId: created.usuarioId,
+      acessoId: created.acessoId,
+      tool: "consultar_dados",
+      sqlEnviado: null,
+      sucesso: true,
+      codigoErro: null,
+      linhasRetornadas: 3,
+      duracaoMs: 8,
+    });
+    const result = await new ListarMetricasAgente(acessos, audit).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+    });
+    expect(result.porTool.consultar_dados?.total).toBe(2);
+    expect(result.porTool.consultar_dados?.erros).toBe(1);
+    expect(result.porCodigo.INVALID_SQL).toBe(1);
+  });
+
+  it("registra e lista lacuna de ferramenta", async () => {
+    const { acessos, aprendizado, created } = await setup();
+    const registrar = new RegistrarLacunaFerramenta(acessos, aprendizado);
+    const createdLacuna = await registrar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      objetivo: "listar gráficos certificados da skill",
+      entradas: "skillId",
+      saidas: "spec vega-lite",
+      permissao: "leitura",
+      teto: "sem ERP",
+      aceite: "resource skill:// inclui chartSpec",
+    });
+    const lista = await new ListarLacunas(acessos, aprendizado).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+    });
+    expect(lista.lacunas[0]?.id).toBe(createdLacuna.lacunaId);
+    expect(lista.lacunas[0]?.tipo).toBe("ferramenta");
+    expect(lista.lacunas[0]?.contrato).toMatchObject({ entradas: "skillId" });
+  });
+});

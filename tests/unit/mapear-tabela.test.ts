@@ -51,6 +51,18 @@ describe("mapear_tabela", () => {
       invalidate: () => undefined,
       remember: () => undefined,
     };
+    const seeded = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaReceber",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: seeded.tabela.id,
+      nome: "Valor",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
     const mapear = new MapearTabela(acessos, grafo, plug, sessions, crypto);
     const result = await mapear.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -71,5 +83,6 @@ describe("mapear_tabela", () => {
     expect(cols.find((coluna) => coluna.nome === "DtEmissao")?.tipo).toBeNull();
     expect(cols.find((coluna) => coluna.nome === "Valor")?.tipo).toBe("numeric");
     expect(cols.find((coluna) => coluna.nome === "Valor")?.formato).toBe("number");
+    expect(cols.find((coluna) => coluna.nome === "Valor")?.origem).toBe("validado_execucao");
   });
 });

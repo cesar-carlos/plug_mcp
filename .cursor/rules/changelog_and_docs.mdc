@@ -1,5 +1,5 @@
 ---
-description: "Manter CHANGELOG.md e docs/ alinhados a cada mudança de comportamento"
+description: "Manter CHANGELOG.md, docs/ e rules alinhados a cada mudança de comportamento"
 alwaysApply: true
 ---
 
@@ -13,23 +13,24 @@ Toda mudança de **comportamento**, contrato ou operação entra no changelog **
 - Escreva em **Unreleased** (Added / Changed / Deprecated / Removed / Fixed / Security).
 - Não invente número de versão nem data de release. Só promova Unreleased → `[x.y.z]` quando o usuário pedir o release.
 - Uma ou duas frases no **porquê/impacto**, em português. Sem dump de diff.
-- **Não** registre: lint, Prettier, rename interno sem efeito, ajuste de teste que não muda contrato.
+- **Não** registre: lint, Prettier, rename interno sem efeito, ajuste de teste que não muda contrato, revisão só de rules sem mudança de produto.
 
-## docs/
+## docs/ e rules
 
 Atualize o arquivo que o usuário/IA vai ler, não um doc extra:
 
 | Mudou | Atualize |
 | ----- | -------- |
-| Tool, auth MCP, bootstrap | `docs/mcp/tools.md`, `docs/auth/vault-and-mcp-token.md` |
-| Erro / hint | `docs/mcp/error-mapping.md` |
-| Hub REST / RPC / papéis | `docs/plug-server/{communication,auth,rest-integration}.md` |
-| Modelo / skill / grafo | `docs/data/data-model.md`, `docs/product/objective.md` |
-| Objetivo de consulta (skill vs grafo) | `docs/product/objective.md` + rule `product_objective` |
-| Setup, env, scripts | `README.md`, `.env.example` |
+| Tool, auth MCP, bootstrap | `docs/mcp/tools.md`, `docs/auth/vault-and-mcp-token.md`, rules `mcp_protocol` / `express_api` |
+| Erro / hint | `docs/mcp/error-mapping.md`, rule `domain_layer` se o código for novo |
+| Hub REST / RPC / papéis | `docs/plug-server/{communication,auth,rest-integration}.md`, rule `plug_server_client` |
+| Modelo / skill / grafo / pacote | `docs/data/data-model.md`, `docs/product/objective.md`, rules `catalog` / `architecture` |
+| Objetivo de consulta / pre-treino | `docs/product/objective.md` + `product_objective` + `src/infrastructure/mcp/server-instructions.ts` + `tests/unit/pre-treino-sessao.test.ts` + `AGENTS.md` |
+| Cache, tetos, paginação | rules `performance` / `security` / `testing` |
+| Setup, env, scripts | `README.md`, `.env.example`, rule `project_stack` |
 
 Novo tipo de doc só se o usuário pedir. Índice: `docs/README.md`.
 
 ## Fechar a tarefa
 
-Não conclua se Unreleased ou a tabela acima ficaram desatualizados. Typo/format-only: pule o changelog.
+Não conclua se Unreleased, a tabela acima ou as rules desta pasta ficaram desatualizados em mudança de produto. Typo/format-only: pule o changelog.

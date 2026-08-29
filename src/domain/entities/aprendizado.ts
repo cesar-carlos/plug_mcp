@@ -25,5 +25,7 @@ export interface LacunaConsulta {
   readonly id: string;
   readonly agentId: string;
   readonly pergunta: string;
+  readonly tipo: "skill_gap" | "ferramenta";
+  readonly contrato: Record<string, unknown> | null;
   readonly createdAt: Date;
 }

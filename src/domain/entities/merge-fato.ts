@@ -7,6 +7,7 @@ export interface FatoMerge {
   readonly descricao: string | null;
   readonly dicionario?: string | null;
   readonly tipo?: string | null;
+  readonly formato?: string | null;
 }
 
 export interface MergeResultado extends FatoMerge {
@@ -32,6 +33,17 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
     return { ...incoming, status: "vigente", conflito: false, aplicar: true };
   }
   if (rankNovo < rankAtual) {
+    const tipo = atual.tipo ?? incoming.tipo;
+    const formato = atual.formato ?? incoming.formato;
+    if (tipo !== atual.tipo || formato !== atual.formato) {
+      return {
+        ...atual,
+        tipo,
+        formato,
+        conflito: false,
+        aplicar: true,
+      };
+    }
     return { ...atual, conflito: false, aplicar: false };
   }
   const conflito =
@@ -47,6 +59,7 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
     descricao: atual.descricao ?? incoming.descricao,
     dicionario: atual.dicionario ?? incoming.dicionario,
     tipo: atual.tipo ?? incoming.tipo,
+    formato: atual.formato ?? incoming.formato,
     conflito: false,
     aplicar: true,
   };

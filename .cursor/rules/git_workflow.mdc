@@ -3,8 +3,12 @@ description: "Git branch workflow — no new branches unless explicitly requeste
 alwaysApply: true
 ---
 
-# Git workflow (agents)
+# Fluxo Git
 
-- Do not create a new Git branch unless the user explicitly requests it (for example by naming the branch or clearly instructing you to create a branch for the work).
-- Default to working on the current branch unless the user specifies a different branch or workflow.
-- Do not initiate feature-branch or multi-branch workflows on your own; follow explicit Git instructions only.
+- Não crie branch Git sem solicitação explícita do usuário, por exemplo ao nomear a
+  branch ou instruir claramente sua criação.
+- Trabalhe na branch atual por padrão, salvo quando o usuário indicar outro fluxo.
+- Não inicie fluxos de feature branches ou múltiplas branches por conta própria;
+  siga somente instruções Git explícitas.
+- Não faça commit, push ou release sem o usuário pedir. Changelog em Unreleased
+  não é número de versão.
