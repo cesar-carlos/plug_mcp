@@ -26,7 +26,9 @@ documentação de produto e os testes correspondentes.
 - Agregações, filtros e paginação devem acontecer no banco.
 - Treinamento segue `treinar_com_sql` → `criar_skill` → params →
   `validar_skill` → confirmação → `publicar_skill`. Rascunho, validada ou
-  `rascunho_revalidacao` não consultam.
+  `rascunho_revalidacao` não consultam (`rascunho_revalidacao`: validar →
+  republicar). `listar_skills` devolve status/`fluxoTreino`; o pacote fica em
+  `obter_skill`. `despublicar_skill` rebaixa para validada sem apagar.
 
 ## Segurança e autorização
 

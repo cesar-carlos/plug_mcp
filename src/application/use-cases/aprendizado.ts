@@ -89,6 +89,7 @@ export class RegistrarAprendizado {
     private readonly grafo: GrafoRepositoryPort,
     private readonly anotacoes: AnotacaoGrafoRepositoryPort,
     private readonly aprendizado: AprendizadoRepositoryPort,
+    private readonly skills?: SkillRepositoryPort,
   ) {}
 
   async execute(
@@ -131,6 +132,8 @@ export class RegistrarAprendizado {
       grafo: this.grafo,
       anotacoes: this.anotacoes,
       aprendizado: this.aprendizado,
+      skills: this.skills,
+      strictMetricas: true,
       itens: [{ tipo, titulo, texto, tabela: input.tabela, skillId: input.skillId }],
     });
     if (tipo === "sinonimo") {
@@ -327,7 +330,10 @@ export class ListarMetricasAgente {
     const rows = (await this.audit.listByUsuario(uid, limite * 2)).filter(
       (row) => row.acessoId === acesso.id,
     );
-    const porTool: Record<string, { total: number; erros: number; duracaoMs: number; linhas: number }> = {};
+    const porTool: Record<
+      string,
+      { total: number; erros: number; duracaoMs: number; linhas: number }
+    > = {};
     const porCodigo: Record<string, number> = {};
     for (const row of rows) {
       const bucket = porTool[row.tool] ?? { total: 0, erros: 0, duracaoMs: 0, linhas: 0 };

@@ -21,7 +21,7 @@ import type {
   StatusFato,
   TabelaGrafo,
 } from "../../../domain/entities/grafo.js";
-import { decidirMerge } from "../../../domain/entities/merge-fato.js";
+import { decidirMerge, sensibilidadeAposMerge } from "../../../domain/entities/merge-fato.js";
 import { parseParametroSkillList } from "../../../domain/entities/skill.js";
 import { parseEscopoPadrao, parseEscopoSkill } from "../../../domain/entities/escopo.js";
 import type { Cardinalidade, PapelColuna } from "../../../domain/entities/escopo.js";
@@ -421,9 +421,12 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         papel: input.papel ?? existing.papel,
         formato: merge.formato ?? existing.formato,
         perfil: input.perfil ?? existing.perfil,
-        sensibilidade: input.sensibilidade
-          ? parseSensibilidadeColuna(input.sensibilidade)
-          : existing.sensibilidade,
+        sensibilidade: sensibilidadeAposMerge({
+          existenteOrigem: existing.origem,
+          existenteSensibilidade: existing.sensibilidade,
+          incomingOrigem: input.origem,
+          incomingSensibilidade: input.sensibilidade,
+        }),
         origem: merge.origem,
         status: merge.status,
         autorUsuarioId: input.autorUsuarioId,
@@ -795,6 +798,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
         | "motivoRevalidacao"
         | "consultaSemantica"
         | "politicaConsulta"
+        | "slug"
       >
     >,
   ): Promise<Skill> {

@@ -30,7 +30,7 @@ import type {
   SchemaSnapshotGrafo,
   TabelaGrafo,
 } from "../../../domain/entities/grafo.js";
-import { decidirMerge } from "../../../domain/entities/merge-fato.js";
+import { decidirMerge, sensibilidadeAposMerge } from "../../../domain/entities/merge-fato.js";
 import type { AcessoRepositoryPort } from "../../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../../domain/ports/usuario-repository.port.js";
 import type {
@@ -322,9 +322,12 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
       papel: input.papel ?? existing.papel,
       formato: merge.formato ?? existing.formato,
       perfil: input.perfil ?? existing.perfil,
-      sensibilidade: input.sensibilidade
-        ? parseSensibilidadeColuna(input.sensibilidade)
-        : existing.sensibilidade,
+      sensibilidade: sensibilidadeAposMerge({
+        existenteOrigem: existing.origem,
+        existenteSensibilidade: existing.sensibilidade,
+        incomingOrigem: input.origem,
+        incomingSensibilidade: input.sensibilidade,
+      }),
       origem: merge.origem,
       status: merge.status,
       autorUsuarioId: input.autorUsuarioId,
@@ -569,6 +572,7 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
         | "motivoRevalidacao"
         | "consultaSemantica"
         | "politicaConsulta"
+        | "slug"
       >
     >,
   ): Promise<Skill> {

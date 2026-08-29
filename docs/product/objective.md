@@ -18,14 +18,14 @@ Se não houver skill capaz de buscar o dado **ou** de cruzar as informações pe
 
 1. Ser honesta e pragmática: não há habilidade cadastrada para isso.
 2. Não inventar JOIN, tabela, coluna nem dicionário de códigos.
-3. Orientar o usuário no passo a passo até **liberar** a skill: `treinar_com_sql` → `criar_skill` → descrever params (incluindo `tipo`) → `validar_skill` → confirmação no chat → `publicar_skill` com `confirmadoPeloUsuario: true`. Cada tool devolve `fluxoTreino`; o servidor recusa pular.
+3. Orientar o usuário no passo a passo até **liberar** a skill: `treinar_com_sql` → `criar_skill` → descrever params (incluindo `tipo`) → `validar_skill` → confirmação no chat → `publicar_skill` com `confirmadoPeloUsuario: true`. Skill em `rascunho_revalidacao`: validar de novo e republicar. Manutenção: `listar_skills` (status/`fluxoTreino`; `obter_skill` para o pacote), overlay de KPI em `metricasSaida`, `despublicar_skill` (volta a validada sem apagar), rename de slug com confirmação. Cada tool devolve `fluxoTreino`; o servidor recusa pular.
 
 ## Aprendizado
 
 A base evolui a cada consulta, sem depender da IA lembrar de um passo extra:
 
 1. **`consultar_dados` grava o SQL que funcionou** (`consulta_aprendida` associada a todas as `skillIds`). `pergunta` é obrigatória.
-2. **Regra, dicionário, glossário, métrica ou sinônimo** que o usuário ensinou no chat: `consultar_dados.aprendizado[]` na mesma chamada, ou a tool `registrar_aprendizado`. Dicionário exige tabela+coluna. Não deixe só no texto da resposta.
+2. **Regra, dicionário, glossário, métrica ou sinônimo** que o usuário ensinou no chat: `consultar_dados.aprendizado[]` na mesma chamada, ou a tool `registrar_aprendizado`. Dicionário exige tabela+coluna. `tipo=metrica` + `skillId` overlaya `definicao` no alias já existente em `metricasSaida` (alias inventado → `COLUNA_FORA_DO_ESCOPO`). Não deixe só no texto da resposta.
 3. **`salvar_consulta`** (com `confirmadoPeloUsuario`) amarra uma pergunta clara a um SQL já comprovado — exemplo curado para reuso.
 4. Execução bem-sucedida promove colunas e JOINs a `validado_execucao`.
 5. `SKILL_GAP` vira `lacuna_consulta` só quando a busca é específica o bastante. `buscar_contexto` devolve `consultasAprendidas` para a IA reusar em vez de reinventar.

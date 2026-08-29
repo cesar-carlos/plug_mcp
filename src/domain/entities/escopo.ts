@@ -1,3 +1,5 @@
+import { DomainError } from "../errors/domain-error.js";
+import { ERROR_CODES } from "../errors/error-codes.js";
 import {
   fingerprintPares,
   parseParesRelacionamento,
@@ -291,7 +293,11 @@ export const uniaoEscopos = (escopos: readonly EscopoSkill[]): EscopoSkill => {
       }
       relKeys.set(key, {
         ...rel,
-        ...(rel.cardinalidade ? { cardinalidade: rel.cardinalidade } : prev.cardinalidade ? { cardinalidade: prev.cardinalidade } : {}),
+        ...(rel.cardinalidade
+          ? { cardinalidade: rel.cardinalidade }
+          : prev.cardinalidade
+            ? { cardinalidade: prev.cardinalidade }
+            : {}),
       });
     }
     for (const item of escopo.graoResultado) {
@@ -311,3 +317,137 @@ export const uniaoEscopos = (escopos: readonly EscopoSkill[]): EscopoSkill => {
     pacoteVersao,
   };
 };
+
+export interface MetricaSaidaPatch {
+  readonly alias: string;
+  readonly expr?: string;
+  readonly definicao?: string;
+  readonly grao?: string;
+  readonly dimensoesPermitidas?: readonly string[];
+  readonly statusIncluidos?: readonly string[];
+  readonly statusExcluidos?: readonly string[];
+  readonly colunaData?: string;
+}
+
+const optionalTrim = (value: string | undefined): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : "";
+};
+
+const overlayKpiField = (
+  existing: string | undefined,
+  incoming: string | undefined,
+): string | undefined => {
+  if (incoming === undefined) {
+    return existing;
+  }
+  return incoming.length > 0 ? incoming : undefined;
+};
+
+const overlayKpiList = (
+  existing: readonly string[] | undefined,
+  incoming: readonly string[] | undefined,
+): readonly string[] | undefined => {
+  if (incoming === undefined) {
+    return existing;
+  }
+  return incoming.length > 0 ? incoming : undefined;
+};
+
+const toMetricaPatch = (metrica: MetricaSaida): MetricaSaidaPatch => ({
+  alias: metrica.alias,
+  ...(metrica.definicao !== undefined ? { definicao: metrica.definicao } : {}),
+  ...(metrica.grao !== undefined ? { grao: metrica.grao } : {}),
+  ...(metrica.dimensoesPermitidas !== undefined
+    ? { dimensoesPermitidas: metrica.dimensoesPermitidas }
+    : {}),
+  ...(metrica.statusIncluidos !== undefined ? { statusIncluidos: metrica.statusIncluidos } : {}),
+  ...(metrica.statusExcluidos !== undefined ? { statusExcluidos: metrica.statusExcluidos } : {}),
+  ...(metrica.colunaData !== undefined ? { colunaData: metrica.colunaData } : {}),
+});
+
+export const patchesKpiDeMetricas = (metricas: readonly MetricaSaida[]): MetricaSaidaPatch[] =>
+  metricas
+    .map(toMetricaPatch)
+    .filter(
+      (item) =>
+        item.definicao !== undefined ||
+        item.grao !== undefined ||
+        item.dimensoesPermitidas !== undefined ||
+        item.statusIncluidos !== undefined ||
+        item.statusExcluidos !== undefined ||
+        item.colunaData !== undefined,
+    );
+
+export const overlayMetricasSaida = (
+  escopo: EscopoSkill,
+  patch: readonly MetricaSaidaPatch[],
+  options?: { readonly ignoreUnknown?: boolean },
+): EscopoSkill => {
+  if (patch.length === 0) {
+    return escopo;
+  }
+  const byAlias = new Map(escopo.metricasSaida.map((item) => [item.alias.toLowerCase(), item]));
+  const aliasesDisponiveis =
+    escopo.metricasSaida.map((item) => item.alias).join(", ") || "(nenhum)";
+  for (const item of patch) {
+    const alias = item.alias.trim();
+    if (!alias) {
+      continue;
+    }
+    const existing = byAlias.get(alias.toLowerCase());
+    if (!existing) {
+      if (options?.ignoreUnknown) {
+        continue;
+      }
+      throw new DomainError({
+        code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
+        message: `Métrica "${alias}" não está no pacote desta skill.`,
+        hint: `Use só aliases já gerados pelo sqlModelo. Disponíveis: ${aliasesDisponiveis}.`,
+      });
+    }
+    const exprPatch = optionalTrim(item.expr);
+    if (
+      exprPatch &&
+      exprPatch.toLowerCase() !== existing.expr.toLowerCase() &&
+      !options?.ignoreUnknown
+    ) {
+      throw new DomainError({
+        code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
+        message: `Não reescreva a expressão da métrica "${existing.alias}".`,
+        hint: "O overlay de KPI só atualiza definição, grão, dimensões, status e coluna de data. Para mudar a expressão, altere o sqlModelo.",
+      });
+    }
+    const definicao = overlayKpiField(existing.definicao, optionalTrim(item.definicao));
+    const grao = overlayKpiField(existing.grao, optionalTrim(item.grao));
+    const colunaData = overlayKpiField(existing.colunaData, optionalTrim(item.colunaData));
+    const dimensoesPermitidas = overlayKpiList(
+      existing.dimensoesPermitidas,
+      item.dimensoesPermitidas,
+    );
+    const statusIncluidos = overlayKpiList(existing.statusIncluidos, item.statusIncluidos);
+    const statusExcluidos = overlayKpiList(existing.statusExcluidos, item.statusExcluidos);
+    byAlias.set(alias.toLowerCase(), {
+      alias: existing.alias,
+      expr: existing.expr,
+      ...(definicao ? { definicao } : {}),
+      ...(grao ? { grao } : {}),
+      ...(dimensoesPermitidas ? { dimensoesPermitidas } : {}),
+      ...(statusIncluidos ? { statusIncluidos } : {}),
+      ...(statusExcluidos ? { statusExcluidos } : {}),
+      ...(colunaData ? { colunaData } : {}),
+    });
+  }
+  return { ...escopo, metricasSaida: [...byAlias.values()] };
+};
+
+export const reaplicarKpiOverlay = (
+  escopoNovo: EscopoSkill,
+  escopoAnterior: EscopoSkill,
+): EscopoSkill =>
+  overlayMetricasSaida(escopoNovo, patchesKpiDeMetricas(escopoAnterior.metricasSaida), {
+    ignoreUnknown: true,
+  });

@@ -1,5 +1,6 @@
 import type { OrigemFato, StatusFato } from "./grafo.js";
 import { origemRank } from "./grafo.js";
+import { parseSensibilidadeColuna, type SensibilidadeColuna } from "./privacidade.js";
 
 export interface FatoMerge {
   readonly origem: OrigemFato;
@@ -63,4 +64,22 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
     conflito: false,
     aplicar: true,
   };
+};
+
+/** Enriquecimento (`validado_execucao`/`inferido`) não apaga classe confirmada pelo usuário. */
+export const sensibilidadeAposMerge = (input: {
+  readonly existenteOrigem: OrigemFato;
+  readonly existenteSensibilidade: SensibilidadeColuna;
+  readonly incomingOrigem: OrigemFato;
+  readonly incomingSensibilidade?: SensibilidadeColuna | null;
+}): SensibilidadeColuna => {
+  const preservar =
+    input.existenteOrigem === "confirmado_usuario" && input.incomingOrigem !== "confirmado_usuario";
+  if (preservar) {
+    return input.existenteSensibilidade;
+  }
+  if (input.incomingSensibilidade) {
+    return parseSensibilidadeColuna(input.incomingSensibilidade);
+  }
+  return input.existenteSensibilidade;
 };

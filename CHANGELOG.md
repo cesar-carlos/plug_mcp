@@ -11,6 +11,18 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Added
+
+- Overlay de KPI (`metricasSaida[]`) em `criar_skill` / `atualizar_skill`: só aliases já no pacote (`definicao`, `grao`, dimensões, status, `colunaData`). Alias/expr inventados → `COLUNA_FORA_DO_ESCOPO`. `registrar_aprendizado` com `tipo=metrica` + `skillId` usa o mesmo overlay.
+- `confirmar_coluna.skillId` persiste a coluna no pacote e sincroniza com o grafo. `sensibilidade` só com `confirmadoPeloUsuario`.
+- Tool `despublicar_skill`: publicada → validada sem apagar pacote, params nem consultas aprendidas.
+
+### Changed
+
+- `listar_skills` devolve status, `motivoRevalidacao`, `podeLiberar` e `fluxoTreino` (sem `sqlModelo`). `rascunho_revalidacao` pede `validar_skill` e depois `publicar_skill`.
+- Rename de `slug` em `atualizar_skill` exige confirmação; conflito → `CONFLICT`; não rebaixa status. Patch de KPI também preserva status.
+- Perfil/`validado_execucao` não apaga `sensibilidade` confirmada pelo usuário.
+
 ### Fixed
 
 - JOIN composto: se o pacote tem `pares[]` com mais de um par, o `ON` incompleto é recusado (fallback v1 só quando não há composto). Evita consulta que “passa” com chave parcial.

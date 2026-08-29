@@ -194,6 +194,7 @@ const gravarAprendizadoDaConsulta = async (input: {
     grafo?: GrafoRepositoryPort;
     aprendizado?: AprendizadoRepositoryPort;
     anotacoes?: AnotacaoGrafoRepositoryPort;
+    skills?: SkillRepositoryPort;
   };
   agentId: string;
   skillIds: readonly string[];
@@ -225,6 +226,8 @@ const gravarAprendizadoDaConsulta = async (input: {
       grafo: input.extras.grafo,
       anotacoes: input.extras.anotacoes,
       aprendizado: input.extras.aprendizado,
+      skills: input.extras.skills,
+      strictMetricas: false,
     });
     avisos.push(...extra.avisos);
     itens = extra.anotacoes.length + extra.sinonimos;
@@ -607,7 +610,7 @@ export class ConsultarDados {
           const parsed = parseCachedQuery(cached);
           if (parsed) {
             const loop = await gravarAprendizadoDaConsulta({
-              extras: this.extras,
+              extras: { ...this.extras, skills: this.skills },
               agentId: acesso.agentId,
               skillIds: skillsComEscopo.map((item) => item.id),
               pergunta: perguntaUsada,
@@ -724,7 +727,7 @@ export class ConsultarDados {
         );
       }
       const loop = await gravarAprendizadoDaConsulta({
-        extras: this.extras,
+        extras: { ...this.extras, skills: this.skills },
         agentId: acesso.agentId,
         skillIds: skillsComEscopo.map((item) => item.id),
         pergunta: perguntaUsada,
@@ -1234,7 +1237,13 @@ export class BuscarContexto {
           return tokens.some((token) => text.includes(token));
         }));
     const skillNaoPublicada = !consultaPermitida && treinoCobre;
-    if (!consultaPermitida && !precisaListar && !skillNaoPublicada && lacunaElegivel && this.aprendizado) {
+    if (
+      !consultaPermitida &&
+      !precisaListar &&
+      !skillNaoPublicada &&
+      lacunaElegivel &&
+      this.aprendizado
+    ) {
       await this.aprendizado.registrarLacuna(acesso.agentId, query);
     }
     return {

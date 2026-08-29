@@ -1,7 +1,13 @@
 import type { AnotacaoGrafo, ParametroSkill } from "../../../domain/entities/skill.js";
 import type { ConsultaAprendida } from "../../../domain/entities/aprendizado.js";
+import { overlayMetricasSaida } from "../../../domain/entities/escopo.js";
+import { DomainError, isDomainError } from "../../../domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
-import type { AnotacaoGrafoRepositoryPort } from "../../../domain/ports/skill-repository.port.js";
+import type {
+  AnotacaoGrafoRepositoryPort,
+  SkillRepositoryPort,
+} from "../../../domain/ports/skill-repository.port.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 
 export const TIPOS_APRENDIZADO = new Set([
@@ -46,6 +52,8 @@ export const persistirItensAprendizado = async (input: {
   grafo: GrafoRepositoryPort;
   anotacoes: AnotacaoGrafoRepositoryPort;
   aprendizado: AprendizadoRepositoryPort;
+  skills?: SkillRepositoryPort;
+  strictMetricas?: boolean;
 }): Promise<{
   anotacoes: AnotacaoGrafo[];
   sinonimos: number;
@@ -111,6 +119,40 @@ export const persistirItensAprendizado = async (input: {
         origem: "confirmado_usuario",
         autorUsuarioId: input.autorUsuarioId,
       });
+    }
+    if (tipo === "metrica" && skillId && input.skills) {
+      const skill = await input.skills.findById(skillId);
+      if (skill?.agentId !== input.agentId) {
+        if (input.strictMetricas !== false) {
+          throw new DomainError({
+            code: ERROR_CODES.SKILL_NOT_FOUND,
+            message: "Skill não encontrada neste agentId.",
+            hint: "Métrica no pacote exige skillId do mesmo acesso.",
+          });
+        }
+        avisos.push({
+          code: "APRENDIZADO_IGNORADO",
+          message: "Métrica não overlayada: skillId ausente ou de outro agentId.",
+        });
+      } else {
+        try {
+          const next = overlayMetricasSaida(skill.escopo, [{ alias: titulo, definicao: texto }]);
+          await input.skills.update(skill.id, { escopo: next, status: skill.status });
+        } catch (err) {
+          if (
+            input.strictMetricas === false &&
+            isDomainError(err) &&
+            err.code === ERROR_CODES.COLUNA_FORA_DO_ESCOPO
+          ) {
+            avisos.push({
+              code: "APRENDIZADO_IGNORADO",
+              message: err.message,
+            });
+          } else {
+            throw err;
+          }
+        }
+      }
     }
     const anotacao = await input.anotacoes.create({
       agentId: input.agentId,

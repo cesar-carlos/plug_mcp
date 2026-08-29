@@ -197,12 +197,14 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
         return { contents: [] };
       }
       const acessos = await ports.acessos.listByUsuario(uid);
-      const dialeto = acessos.find((acesso) => acesso.agentId === skill.agentId)?.dialeto ?? "sybase";
+      const dialeto =
+        acessos.find((acesso) => acesso.agentId === skill.agentId)?.dialeto ?? "sybase";
       const avisos: { code: string; message: string }[] = [];
       if (skill.escopo.relacionamentos.some((rel) => rel.cardinalidade == null)) {
         avisos.push({
           code: "PERFIL_AUSENTE",
-          message: "JOIN sem cardinalidade no pacote. Chame obter_skill e confirmar_relacionamento.",
+          message:
+            "JOIN sem cardinalidade no pacote. Chame obter_skill e confirmar_relacionamento.",
         });
       }
       return {
@@ -337,7 +339,7 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
               "Explique o objetivo da skill ao usuário.",
               "1) Peça o SQL e chame treinar_com_sql (SELECT nomeado; JOIN se várias tabelas; colunas qualificadas).",
               "2) Mostre o fluxoTreino e peça nome/descrição → criar_skill (tabelas já no grafo).",
-              "3) Se houver placeholders :nome/@nome, peça significado e tipo (string/number/date/boolean) → atualizar_skill com params[{ nome, descricao, tipo }].",
+              "3) Se houver placeholders :nome/@nome, peça significado e tipo (string/number/integer/decimal/date/datetime/boolean) → atualizar_skill com params[{ nome, descricao, tipo }].",
               "4) Se fluxoTreino indicar conflitos, chame resolver_conflito.",
               "5) validar_skill (envelope vazio).",
               "6) Mostre o resumo e só chame publicar_skill com confirmadoPeloUsuario: true se o usuário confirmar. Sem confirmação, não publique.",

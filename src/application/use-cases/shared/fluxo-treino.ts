@@ -202,6 +202,13 @@ export const buildFluxoTreino = (input: {
     validar = passo("validar_skill", "bloqueado", "Crie a skill antes de validar.");
   } else if (skill.status === "validada" || skill.status === "publicada") {
     validar = passo("validar_skill", "feito", "Skill validada no ERP (envelope vazio).");
+  } else if (skill.status === "rascunho_revalidacao") {
+    const motivo = skill.motivoRevalidacao?.trim();
+    validar = passo(
+      "validar_skill",
+      "pendente",
+      `${motivo ? `Revalidação: ${motivo}. ` : "Skill em rascunho_revalidacao. "}Chame validar_skill (envelope vazio) e, com o resumo, publicar_skill com confirmadoPeloUsuario: true.`,
+    );
   } else {
     validar = passo(
       "validar_skill",
@@ -232,6 +239,12 @@ export const buildFluxoTreino = (input: {
       "bloqueado",
       "Perfil incompleto (tipo/formato/cardinalidade). Chame validar_skill enriquecer=completo.",
     );
+  } else if (skill?.status === "rascunho_revalidacao") {
+    publicar = passo(
+      "publicar_skill",
+      "bloqueado",
+      "Revalide com validar_skill (status vira validada) e só então publique com confirmação.",
+    );
   } else {
     publicar = passo(
       "publicar_skill",
@@ -255,12 +268,12 @@ export const buildFluxoTreino = (input: {
   };
 };
 
-export const fluxoForAgentSkill = async (
+const fluxoComConflitos = async (
   grafo: GrafoRepositoryPort,
   agentId: string,
   skill: Skill | null,
+  conflitosPendentes: number,
 ): Promise<FluxoTreino> => {
-  const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
   let treinado = false;
   if (skill) {
     const modelo = parseSqlModelo(skill.sqlModelo);
@@ -283,4 +296,26 @@ export const fluxoForAgentSkill = async (
     perfilCompleto = faltas.filter((item) => item.kind === "perfil").length === 0;
   }
   return buildFluxoTreino({ treinado, skill, conflitosPendentes, perfilCompleto });
+};
+
+export const fluxoForAgentSkill = async (
+  grafo: GrafoRepositoryPort,
+  agentId: string,
+  skill: Skill | null,
+): Promise<FluxoTreino> => {
+  const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
+  return fluxoComConflitos(grafo, agentId, skill, conflitosPendentes);
+};
+
+export const fluxoForAgentSkills = async (
+  grafo: GrafoRepositoryPort,
+  agentId: string,
+  skills: readonly Skill[],
+): Promise<readonly FluxoTreino[]> => {
+  const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
+  const out: FluxoTreino[] = [];
+  for (const skill of skills) {
+    out.push(await fluxoComConflitos(grafo, agentId, skill, conflitosPendentes));
+  }
+  return out;
 };

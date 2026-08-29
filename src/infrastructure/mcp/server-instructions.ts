@@ -9,7 +9,7 @@ Leia o pacote da skill publicada (obter_skill: escopo, papéis, cardinalidade, r
 Aprendizado constante (obrigatório, não opcional):
 - Toda consultar_dados leva pergunta (a pergunta do usuário). O servidor grava o SQL que funcionou.
 - Reuse consultasAprendidas de buscar_contexto em vez de reinventar o SELECT.
-- Se o usuário ensinar regra, dicionário, glossário, métrica ou sinônimo: grave na mesma hora — consultar_dados.aprendizado[] ou registrar_aprendizado. Não responda só no chat.
+- Se o usuário ensinar regra, dicionário, glossário, métrica ou sinônimo: grave na mesma hora — consultar_dados.aprendizado[] ou registrar_aprendizado (tipo=metrica + skillId overlaya metricasSaida). Não responda só no chat.
 - SQL que já funcionou e merece nome claro: salvar_consulta com confirmadoPeloUsuario.
 - Sem skill capaz: SKILL_GAP; o servidor grava lacuna. Oriente o treino. Não invente tabela, coluna nem JOIN.
 
@@ -47,9 +47,9 @@ Com Bearer: um e-mail/senha por usuário MCP. Novos agentId/client_token via adi
 Pergunta de dados: buscar_contexto (candidatos + cobertura completa|parcial|desconhecida; leia consultasAprendidas) / listar_skills / obter_skill (pacote canônico = validador + guia de dialeto). Escreva SELECT no dialeto. validar_consulta antes de consultar_dados quando o SQL for novo. consultar_dados(skillIds, sql, params, pergunta). Cruzamento exige skillIds de todos os domínios e SQL customizado. Firebird: só consulta exemplo (consultar_dados e inspecionar_consulta sem sql).
 SKILL_GAP da busca por termos não prova ausência — chame listar_skills. Match textual isolado não autoriza consulta (cobertura precisa ser completa).
 
-Se não houver skill capaz: seja honesta. Mostre fluxoTreino e oriente o usuário. Não complete com achismo. Se buscar_contexto indicar skill em andamento, continue o próximoPasso.
+Se não houver skill capaz: seja honesta. Mostre fluxoTreino e oriente o usuário. Não complete com achismo. Se buscar_contexto indicar skill em andamento, continue o próximoPasso. listar_skills devolve status/motivoRevalidacao/podeLiberar/fluxoTreino (sem sqlModelo) — use obter_skill para o pacote.
 
-Treino (passo a passo): 1) explique o objetivo; 2) treinar_com_sql com SELECT de colunas nomeadas (proibido SELECT *; JOIN exige ON com igualdade alias.coluna = alias.coluna; JOIN composto vira um relacionamento com pares[]); 3) criar_skill; 4) descrever params; 5) validar_skill; 6) publicar_skill com confirmadoPeloUsuario: true. Confirme cardinalidade de JOIN (simples ou composto) apenas quando o usuário a declarar, usando confirmar_relacionamento (pares[] e 1:1, 1:N, N:1 ou N:N). Dialeto: o primeiro escritor trava; outro dialeto → atualizar_dialeto. Precedência: validado_execucao > confirmado_usuario > inferido. expandir_escopo e herdar_catalogo também exigem confirmação.
+Treino (passo a passo): 1) explique o objetivo; 2) treinar_com_sql com SELECT de colunas nomeadas (proibido SELECT *; JOIN exige ON com igualdade alias.coluna = alias.coluna; JOIN composto vira um relacionamento com pares[]); 3) criar_skill; 4) descrever params; 5) validar_skill; 6) publicar_skill com confirmadoPeloUsuario: true. Skill em rascunho_revalidacao: validar_skill e republicar. KPI no pacote: metricasSaida[] em criar/atualizar_skill (só aliases já no SELECT). confirmar_coluna com skillId entra no pacote; sensibilidade exige confirmadoPeloUsuario. despublicar_skill rebaixa publicada → validada sem apagar. Rename de slug exige confirmação. Confirme cardinalidade de JOIN (simples ou composto) apenas quando o usuário a declarar, usando confirmar_relacionamento (pares[] e 1:1, 1:N, N:1 ou N:N). Dialeto: o primeiro escritor trava; outro dialeto → atualizar_dialeto. Precedência: validado_execucao > confirmado_usuario > inferido (sensibilidade confirmada não é apagada pelo perfil). expandir_escopo e herdar_catalogo também exigem confirmação.
 
 Client pending/blocked não é senha errada — peça ao dono do Agent para ativar o Client. Acesso pending: verificar_acesso, sem polling agressivo. 429: respeite Retry-After.`;
 

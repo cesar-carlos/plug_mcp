@@ -31,5 +31,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(MCP_SERVER_INSTRUCTIONS.startsWith(PRE_TREINO_SESSAO)).toBe(true);
     expect(MCP_SERVER_INSTRUCTIONS).toContain("registrar_acesso");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("consultar_dados");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("despublicar_skill");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("metricasSaida");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("rascunho_revalidacao");
   });
 });

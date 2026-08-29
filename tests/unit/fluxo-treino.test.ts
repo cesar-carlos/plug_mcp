@@ -7,7 +7,10 @@ import {
   PublicarSkill,
   ValidarSkill,
 } from "../../src/application/use-cases/skills.js";
-import { pickSkillInProgress, buildFluxoTreino } from "../../src/application/use-cases/shared/fluxo-treino.js";
+import {
+  pickSkillInProgress,
+  buildFluxoTreino,
+} from "../../src/application/use-cases/shared/fluxo-treino.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
@@ -332,5 +335,50 @@ describe("fluxo guiado de treino", () => {
     });
     expect(fluxo.podeLiberar).toBe(false);
     expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.status).toBe("bloqueado");
+  });
+
+  it("rascunho_revalidacao pede validar_skill citando motivoRevalidacao", () => {
+    const skill = {
+      id: "1",
+      agentId,
+      slug: "a",
+      nome: "A",
+      descricao: "d",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      params: [],
+      versao: 1,
+      pacoteVersao: 2,
+      motivoRevalidacao: "SCHEMA_DRIFT em produto",
+      consultaSemantica: null,
+      politicaConsulta: null,
+      autorUsuarioId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: "rascunho_revalidacao" as const,
+      escopo: {
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["codprod"] },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [],
+        pacoteVersao: 2,
+      },
+    };
+    const fluxo = buildFluxoTreino({
+      treinado: true,
+      skill,
+      conflitosPendentes: 0,
+      perfilCompleto: true,
+    });
+    expect(fluxo.podeLiberar).toBe(false);
+    const validar = fluxo.passos.find((passo) => passo.id === "validar_skill");
+    expect(validar?.status).toBe("pendente");
+    expect(validar?.hint).toMatch(/SCHEMA_DRIFT em produto/);
+    expect(validar?.hint).toMatch(/publicar_skill/);
+    expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.status).toBe("bloqueado");
+    expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.hint).toMatch(
+      /validar_skill/,
+    );
   });
 });

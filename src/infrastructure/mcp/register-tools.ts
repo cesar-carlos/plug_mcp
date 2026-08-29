@@ -37,6 +37,7 @@ import type {
   ConfirmarColuna,
   ConfirmarRelacionamento,
   CriarSkill,
+  DespublicarSkill,
   ExpandirEscopo,
   ListarAnotacoes,
   ListarSkills,
@@ -77,6 +78,7 @@ export interface ToolUseCases {
   atualizarSkill: AtualizarSkill;
   validarSkill: ValidarSkill;
   publicarSkill: PublicarSkill;
+  despublicarSkill: DespublicarSkill;
   removerSkill: RemoverSkill;
   listarSkills: ListarSkills;
   obterSkill: ObterSkill;
@@ -134,7 +136,20 @@ const paramSkillShape = z.object({
   nome: z.string(),
   descricao: z.string().optional(),
   obrigatorio: z.boolean().optional(),
-  tipo: z.enum(["string", "number", "date", "boolean"]).optional(),
+  tipo: z
+    .enum(["string", "number", "integer", "decimal", "date", "datetime", "boolean"])
+    .optional(),
+});
+
+const metricaSaidaShape = z.object({
+  alias: z.string(),
+  expr: z.string().optional(),
+  definicao: z.string().optional(),
+  grao: z.string().optional(),
+  dimensoesPermitidas: z.array(z.string()).optional(),
+  statusIncluidos: z.array(z.string()).optional(),
+  statusExcluidos: z.array(z.string()).optional(),
+  colunaData: z.string().optional(),
 });
 
 const consultaSemanticaShape = z.object({
@@ -457,7 +472,7 @@ export const registerTools = (
 
   server.tool(
     "criar_skill",
-    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Params com descrição fecham o checklist antes de publicar. A IA consulta o ERP pela skill publicada, não pelo grafo.",
+    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. A IA consulta o ERP pela skill publicada, não pelo grafo.",
     {
       acessoId: z.string().optional(),
       slug: z.string().optional(),
@@ -467,6 +482,7 @@ export const registerTools = (
       params: z.array(paramSkillShape).optional(),
       consultaSemantica: consultaSemanticaShape.optional(),
       politicaConsulta: politicaConsultaShape.optional(),
+      metricasSaida: z.array(metricaSaidaShape).optional(),
     },
     writeLocal,
     async (args) => run("criar_skill", () => useCases.criarSkill.execute(currentAccountId(), args)),
@@ -474,16 +490,19 @@ export const registerTools = (
 
   server.tool(
     "atualizar_skill",
-    "Atualiza nome/descrição/SQL/params. Se o SQL mudar, as tabelas precisam estar no grafo e o status volta a rascunho. Patch só de nome/descrição/params mantém o status.",
+    "Atualiza nome/descrição/SQL/params/KPI. Se o SQL mudar, as tabelas precisam estar no grafo e o status volta a rascunho. Patch só de nome/descrição/params/KPI/slug mantém o status. Renomear slug exige confirmadoPeloUsuario.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
       nome: z.string().optional(),
       descricao: z.string().optional(),
+      slug: z.string().optional(),
       sqlModelo: z.string().optional(),
       params: z.array(paramSkillShape).optional(),
       consultaSemantica: consultaSemanticaShape.optional(),
       politicaConsulta: politicaConsultaShape.optional(),
+      metricasSaida: z.array(metricaSaidaShape).optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
     },
     writeLocal,
     async (args) =>
@@ -532,6 +551,26 @@ export const registerTools = (
   );
 
   server.tool(
+    "despublicar_skill",
+    "Rebaixa skill publicada para validada sem apagar pacote, params nem consultas aprendidas. Exige confirmadoPeloUsuario: true. Consulta volta a SKILL_NOT_PUBLISHED. Não confundir com remover_skill.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    destroyLocal,
+    async (args) =>
+      run("despublicar_skill", async () => {
+        const result = await useCases.despublicarSkill.execute(currentAccountId(), args);
+        const uid = currentAccountId();
+        if (uid && options?.onSkillsChanged) {
+          await options.onSkillsChanged(uid);
+        }
+        return result;
+      }),
+  );
+
+  server.tool(
     "remover_skill",
     "Apaga a skill (pacote e sqlModelo) deste agentId. Exige confirmadoPeloUsuario: true. O grafo permanece; consultas aprendidas ficam desvinculadas. Mostre nome/slug/status no chat antes.",
     {
@@ -554,7 +593,7 @@ export const registerTools = (
 
   server.tool(
     "listar_skills",
-    "Lista skills do agentId do acesso.",
+    "Lista skills do agentId (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino). Sem sqlModelo — use obter_skill para o pacote.",
     { acessoId: z.string().optional() },
     readList,
     async (args) =>
@@ -597,9 +636,7 @@ export const registerTools = (
       colunaOrigem: z.string().optional(),
       tabelaDestino: z.string().optional(),
       colunaDestino: z.string().optional(),
-      pares: z
-        .array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() }))
-        .optional(),
+      pares: z.array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() })).optional(),
       tipoJoin: z.string().optional(),
       cardinalidade: z.enum(["1:1", "1:N", "N:1", "N:N"]).optional(),
     },
@@ -627,13 +664,16 @@ export const registerTools = (
 
   server.tool(
     "confirmar_coluna",
-    "Confirma significado/dicionário de uma coluna no grafo compartilhado (origem confirmado_usuario).",
+    "Confirma significado/dicionário de uma coluna no grafo (origem confirmado_usuario). Com skillId, entra no pacote (colunasPorTabela) e sincroniza com o grafo. sensibilidade (livre|pessoal|sensivel|segredo) só com confirmadoPeloUsuario: true.",
     {
       acessoId: z.string().optional(),
+      skillId: z.string().optional(),
       tabela: z.string().optional(),
       coluna: z.string().optional(),
       descricao: z.string().optional(),
       dicionario: z.string().optional(),
+      sensibilidade: z.enum(["livre", "pessoal", "sensivel", "segredo"]).optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
     },
     writeLocal,
     async (args) =>
@@ -802,7 +842,12 @@ export const registerTools = (
         skillId: z.string().optional(),
         skillIds: z.array(z.string()).optional(),
         sql: z.string().optional(),
-        finalidade: z.enum(["validar_tipo", "avaliar_nulos", "verificar_join", "amostra_estrutura"]),
+        finalidade: z.enum([
+          "validar_tipo",
+          "avaliar_nulos",
+          "verificar_join",
+          "amostra_estrutura",
+        ]),
         params: z.record(z.unknown()).optional(),
         options: z.object({ timeout_ms: z.number().int().positive().optional() }).optional(),
       },

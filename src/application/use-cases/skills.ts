@@ -2,13 +2,21 @@ import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { Acesso } from "../../domain/entities/acesso.js";
 import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
-import type { AnotacaoGrafo, Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
+import type {
+  AnotacaoGrafo,
+  Skill,
+  StatusSkill,
+  TipoParametroSkill,
+} from "../../domain/entities/skill.js";
 import {
   PACOTE_VERSAO_ATUAL,
+  overlayMetricasSaida,
   paresDoRelacionamento,
+  reaplicarKpiOverlay,
   uniaoEscopos,
   type Cardinalidade,
   type EscopoSkill,
+  type MetricaSaidaPatch,
 } from "../../domain/entities/escopo.js";
 import {
   fingerprintPares,
@@ -29,6 +37,7 @@ import type {
 } from "../../domain/ports/plug-server-gateway.port.js";
 import {
   fluxoForAgentSkill,
+  fluxoForAgentSkills,
   mergeParamInput,
   missingGraphTables,
   paramsDescribed,
@@ -64,6 +73,10 @@ import {
 import { withHubAuth } from "./shared/hub-auth.js";
 import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
 import { parsePoliticaConsulta } from "../../domain/entities/politica-consulta.js";
+import {
+  parseSensibilidadeColuna,
+  type SensibilidadeColuna,
+} from "../../domain/entities/privacidade.js";
 import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
 import { guiaDialeto } from "./shared/guia-dialeto.js";
 
@@ -101,6 +114,22 @@ const slugify = (value: string): string =>
     .replace(/^-|-$/g, "")
     .slice(0, 80);
 
+const aplicarMetricasSaida = (
+  escopo: EscopoSkill,
+  patch: readonly MetricaSaidaPatch[] | undefined,
+): EscopoSkill => (patch && patch.length > 0 ? overlayMetricasSaida(escopo, patch) : escopo);
+
+export interface SkillListItem {
+  readonly id: string;
+  readonly slug: string;
+  readonly nome: string;
+  readonly status: StatusSkill;
+  readonly versao: number;
+  readonly motivoRevalidacao: string | null;
+  readonly podeLiberar: boolean;
+  readonly fluxoTreino: FluxoTreino;
+}
+
 export class CriarSkill {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -119,6 +148,7 @@ export class CriarSkill {
       params?: readonly ParamInput[];
       consultaSemantica?: unknown;
       politicaConsulta?: unknown;
+      metricasSaida?: readonly MetricaSaidaPatch[];
     },
   ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
@@ -137,10 +167,9 @@ export class CriarSkill {
     const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
     const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
     const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
-    const escopo = overlayCardinalidadeDoGrafo(
-      escopoFromSqlModelo(modelo),
-      grafoRels,
-      nomeById,
+    const escopo = aplicarMetricasSaida(
+      overlayCardinalidadeDoGrafo(escopoFromSqlModelo(modelo), grafoRels, nomeById),
+      input.metricasSaida,
     );
     const missing = await missingGraphTables(
       this.grafo,
@@ -209,10 +238,13 @@ export class AtualizarSkill {
       skillId?: string;
       nome?: string;
       descricao?: string;
+      slug?: string;
       sqlModelo?: string;
       params?: readonly ParamInput[];
       consultaSemantica?: unknown;
       politicaConsulta?: unknown;
+      metricasSaida?: readonly MetricaSaidaPatch[];
+      confirmadoPeloUsuario?: boolean;
     },
   ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
@@ -220,6 +252,25 @@ export class AtualizarSkill {
     const skill = await this.requireSkill(acesso.agentId, input.skillId);
     const sqlModelo = input.sqlModelo?.trim() ? input.sqlModelo.trim() : skill.sqlModelo;
     const sqlChanged = sqlModelo !== skill.sqlModelo;
+    const slugNovo = input.slug?.trim() ? input.slug.trim().slice(0, 80) : "";
+    const slugChanged = slugNovo.length > 0 && slugNovo !== skill.slug;
+    if (slugChanged && input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Renomear o slug exige confirmação do usuário.",
+        hint: `Mostre o slug atual (${skill.slug}) e o novo (${slugNovo}). Chame de novo com confirmadoPeloUsuario: true.`,
+      });
+    }
+    if (slugChanged) {
+      const dup = await this.skills.findBySlug(acesso.agentId, slugNovo);
+      if (dup && dup.id !== skill.id) {
+        throw new DomainError({
+          code: ERROR_CODES.CONFLICT,
+          message: "Já existe skill com este slug neste agentId.",
+          hint: "Escolha outro slug. Unique (agentId, slug).",
+        });
+      }
+    }
     if (sqlChanged) {
       const modelo = parseSqlModelo(sqlModelo);
       const missing = await missingGraphTables(
@@ -240,7 +291,10 @@ export class AtualizarSkill {
     }
     const baseParams = paramsFromSql(sqlModelo, skill.params);
     const params = mergeParamInput(baseParams, normalizeParamInput(input.params));
-    const escopoNext = sqlChanged ? escopoFromSqlModelo(parseSqlModelo(sqlModelo)) : skill.escopo;
+    const escopoBase = sqlChanged
+      ? reaplicarKpiOverlay(escopoFromSqlModelo(parseSqlModelo(sqlModelo)), skill.escopo)
+      : skill.escopo;
+    const escopoNext = aplicarMetricasSaida(escopoBase, input.metricasSaida);
     const consultaSemantica =
       input.consultaSemantica !== undefined
         ? parseConsultaSemantica(input.consultaSemantica)
@@ -251,6 +305,7 @@ export class AtualizarSkill {
     const updated = await this.skills.update(skill.id, {
       nome: input.nome?.trim() ? input.nome.trim() : skill.nome,
       descricao: input.descricao?.trim() ? input.descricao.trim() : skill.descricao,
+      ...(slugChanged ? { slug: slugNovo } : {}),
       sqlModelo,
       params,
       escopo: escopoNext,
@@ -340,10 +395,9 @@ export class ValidarSkill {
     const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
     const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
     const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
-    const escopo = overlayCardinalidadeDoGrafo(
-      escopoFromSqlModelo(modelo),
-      grafoRels,
-      nomeById,
+    const escopo = reaplicarKpiOverlay(
+      overlayCardinalidadeDoGrafo(escopoFromSqlModelo(modelo), grafoRels, nomeById),
+      skill.escopo,
     );
     await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopo);
     if (acesso.dialeto !== "firebird") {
@@ -473,6 +527,50 @@ export class PublicarSkill {
   }
 }
 
+export class DespublicarSkill {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: { acessoId?: string; skillId?: string; confirmadoPeloUsuario?: boolean },
+  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const skill = await this.skills.findById(input.skillId ?? "");
+    if (skill?.agentId !== acesso.agentId) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "Skill não encontrada neste agentId.",
+        hint: "Use listar_skills.",
+      });
+    }
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Despublicar exige confirmação do usuário.",
+        hint: `Mostre que "${skill.nome}" (slug ${skill.slug}) deixa de consultar o ERP e volta a validada. Pacote, params e consultas aprendidas permanecem. Chame de novo com confirmadoPeloUsuario: true.`,
+      });
+    }
+    if (skill.status !== "publicada") {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Só skill publicada pode ser despublicada.",
+        hint: "Despublicar rebaixa para validada. Para apagar, use remover_skill.",
+      });
+    }
+    const updated = await this.skills.setStatus(skill.id, "validada", skill.versao);
+    return {
+      success: true,
+      skill: updated,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updated),
+    };
+  }
+}
+
 export class RemoverSkill {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -532,15 +630,38 @@ export class ListarSkills {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
     input: { acessoId?: string },
-  ): Promise<{ success: true; skills: readonly Skill[] }> {
+  ): Promise<{ success: true; skills: readonly SkillListItem[] }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
-    return { success: true, skills: await this.skills.listByAgent(acesso.agentId) };
+    const rows = await this.skills.listByAgent(acesso.agentId);
+    const fluxos = await fluxoForAgentSkills(this.grafo, acesso.agentId, rows);
+    return {
+      success: true,
+      skills: rows.map((skill, index) => {
+        const fluxoTreino = fluxos[index] ?? {
+          passoAtual: "treinar_sql",
+          proximoPasso: "treinar_sql",
+          podeLiberar: false,
+          passos: [],
+        };
+        return {
+          id: skill.id,
+          slug: skill.slug,
+          nome: skill.nome,
+          status: skill.status,
+          versao: skill.versao,
+          motivoRevalidacao: skill.motivoRevalidacao,
+          podeLiberar: fluxoTreino.podeLiberar,
+          fluxoTreino,
+        };
+      }),
+    };
   }
 }
 
@@ -769,18 +890,22 @@ export class ConfirmarColuna {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly grafo: GrafoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
     input: {
       acessoId?: string;
+      skillId?: string;
       tabela?: string;
       coluna?: string;
       descricao?: string;
       dicionario?: string;
+      sensibilidade?: SensibilidadeColuna;
+      confirmadoPeloUsuario?: boolean;
     },
-  ): Promise<{ success: true; conflito: boolean }> {
+  ): Promise<{ success: true; conflito: boolean; skill?: Skill }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const tabelaNome = input.tabela?.trim() ?? "";
@@ -792,7 +917,23 @@ export class ConfirmarColuna {
         hint: "Use buscar_contexto / mapear_tabela para obter os nomes.",
       });
     }
-    return this.grafo.withAgentLock(acesso.agentId, async () => {
+    if (input.sensibilidade !== undefined && input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Gravar sensibilidade exige confirmação do usuário.",
+        hint: "Mostre a classe (livre|pessoal|sensivel|segredo) e chame de novo com confirmadoPeloUsuario: true.",
+      });
+    }
+    const skillId = input.skillId?.trim() ?? "";
+    const skill = skillId ? await this.skills.findById(skillId) : null;
+    if (skillId && skill?.agentId !== acesso.agentId) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "Skill não encontrada neste agentId.",
+        hint: "Confirmar coluna no pacote exige skillId do mesmo acesso.",
+      });
+    }
+    const conflito = await this.grafo.withAgentLock(acesso.agentId, async () => {
       const tabela = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
       if (!tabela) {
         throw new DomainError({
@@ -806,11 +947,36 @@ export class ConfirmarColuna {
         nome: colunaNome,
         descricao: input.descricao ?? null,
         dicionario: input.dicionario ?? null,
+        ...(input.sensibilidade !== undefined && input.confirmadoPeloUsuario === true
+          ? { sensibilidade: parseSensibilidadeColuna(input.sensibilidade) }
+          : {}),
         origem: "confirmado_usuario",
         autorUsuarioId: uid,
       });
-      return { success: true as const, conflito: result.conflito };
+      return result.conflito;
     });
+    if (!skill) {
+      return { success: true, conflito };
+    }
+    const extraEscopo: EscopoSkill = {
+      tabelas: [tabelaNome],
+      colunasPorTabela: { [tabelaNome]: [colunaNome] },
+      relacionamentos: [],
+      graoPorTabela: {},
+      graoResultado: [],
+      metricasSaida: [],
+      pacoteVersao: PACOTE_VERSAO_ATUAL,
+    };
+    const updated = await this.skills.update(skill.id, {
+      escopo: uniaoEscopos([skill.escopo, extraEscopo]),
+    });
+    const [sincronizada] = await sincronizarEscopoComGrafo(
+      this.skills,
+      this.grafo,
+      acesso.agentId,
+      { skillId: updated.id },
+    );
+    return { success: true, conflito, skill: sincronizada ?? updated };
   }
 }
 
@@ -1069,7 +1235,8 @@ export class ConfirmarRelacionamento {
     if (!origemNome || !destinoNome || pares.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: "tabelaOrigem, tabelaDestino e pares (ou colunaOrigem/colunaDestino) são obrigatórios.",
+        message:
+          "tabelaOrigem, tabelaDestino e pares (ou colunaOrigem/colunaDestino) são obrigatórios.",
         hint: "Use obter_skill para ver o grafo conhecido. JOIN composto: envie pares[].",
       });
     }
