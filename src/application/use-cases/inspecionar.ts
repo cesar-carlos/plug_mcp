@@ -105,24 +105,42 @@ export class InspecionarConsulta {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "skillId é obrigatório.",
-        hint: "Inspeção só no escopo de skill publicada.",
+        hint: "Inspeção no escopo de skill validada, rascunho_revalidacao ou publicada.",
       });
     }
-    const skillsPublicadas = [];
+    const skillsInspecao = [];
     for (const id of ids) {
       const found = await this.skills.findById(id);
-      if (found?.agentId !== acesso.agentId || found.status !== "publicada") {
+      if (found?.agentId !== acesso.agentId) {
         throw new DomainError({
-          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
-          message: "Só skill publicada pode inspecionar o ERP.",
-          hint: "Publique a skill antes. Inspeção não lê rascunho.",
+          code: ERROR_CODES.SKILL_NOT_FOUND,
+          message: "Skill não encontrada neste agentId.",
+          hint: "Use listar_skills.",
         });
       }
-      skillsPublicadas.push(await persistirEscopoSeVazio(this.skills, found));
+      if (found.status === "rascunho") {
+        throw new DomainError({
+          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+          message: "Skill em rascunho ainda não pode inspecionar o ERP.",
+          hint: "Chame validar_skill (envelope vazio) antes. Inspeção aceita validada, rascunho_revalidacao ou publicada.",
+        });
+      }
+      if (
+        found.status !== "publicada" &&
+        found.status !== "validada" &&
+        found.status !== "rascunho_revalidacao"
+      ) {
+        throw new DomainError({
+          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+          message: "Só skill validada, em revalidação ou publicada pode inspecionar o ERP.",
+          hint: "Valide a skill antes. Inspeção não lê rascunho sem envelope.",
+        });
+      }
+      skillsInspecao.push(await persistirEscopoSeVazio(this.skills, found));
     }
-    const skill = skillsPublicadas[0]!;
+    const skill = skillsInspecao[0]!;
     const escopo = uniaoEscopos(
-      skillsPublicadas.map((item) =>
+      skillsInspecao.map((item) =>
         item.escopo.tabelas.length > 0
           ? item.escopo
           : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
@@ -166,7 +184,7 @@ export class InspecionarConsulta {
       escopoPadrao: acesso.escopoPadrao,
       dialeto: acesso.dialeto,
     });
-    const contrato = skillsPublicadas.flatMap((item) => item.params);
+    const contrato = skillsInspecao.flatMap((item) => item.params);
     const params = coerceBoundParams(
       bindNamedParams(sql, mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao), contrato),
       contrato,

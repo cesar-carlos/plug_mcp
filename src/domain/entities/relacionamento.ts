@@ -53,6 +53,61 @@ export const fingerprintParesInvertidos = (pares: readonly ParRelacionamento[]):
     pares.map((par) => ({ colunaOrigem: par.colunaDestino, colunaDestino: par.colunaOrigem })),
   );
 
+const chavePar = (par: ParRelacionamento): string =>
+  `${lower(par.colunaOrigem)}=${lower(par.colunaDestino)}`;
+
+const chavesPares = (pares: readonly ParRelacionamento[], invertido: boolean): Set<string> =>
+  new Set(
+    pares.map((par) =>
+      invertido ? `${lower(par.colunaDestino)}=${lower(par.colunaOrigem)}` : chavePar(par),
+    ),
+  );
+
+export interface RelacaoComPares {
+  readonly tabelaOrigem: string;
+  readonly tabelaDestino: string;
+  readonly pares: readonly ParRelacionamento[];
+}
+
+const tabelasDoRel = (rel: RelacaoComPares): { a: string; b: string } => {
+  const nomes = [rel.tabelaOrigem, rel.tabelaDestino].map((nome) => lower(nome)).sort();
+  return { a: nomes[0] ?? "", b: nomes[1] ?? "" };
+};
+
+export const mesmoParDeTabelas = (a: RelacaoComPares, b: RelacaoComPares): boolean => {
+  const ta = tabelasDoRel(a);
+  const tb = tabelasDoRel(b);
+  return ta.a === tb.a && ta.b === tb.b;
+};
+
+export const paresSaoSubconjunto = (menor: RelacaoComPares, maior: RelacaoComPares): boolean => {
+  const paresMenor = menor.pares;
+  const paresMaior = maior.pares;
+  if (paresMenor.length === 0 || paresMenor.length >= paresMaior.length) {
+    return false;
+  }
+  if (!mesmoParDeTabelas(menor, maior)) {
+    return false;
+  }
+  const invertido = lower(menor.tabelaOrigem) !== lower(maior.tabelaOrigem);
+  const bigger = chavesPares(paresMaior, false);
+  const smaller = chavesPares(paresMenor, invertido);
+  for (const chave of smaller) {
+    if (!bigger.has(chave)) {
+      return false;
+    }
+  }
+  return true;
+};
+
+export const relacoesSemSubconjuntos = <T extends RelacaoComPares>(rels: readonly T[]): T[] =>
+  rels.filter(
+    (rel, index) =>
+      !rels.some(
+        (outro, j) => j !== index && paresSaoSubconjunto({ ...rel, pares: rel.pares }, outro),
+      ),
+  );
+
 export const paresEquivalentes = (
   a: readonly ParRelacionamento[],
   b: readonly ParRelacionamento[],
@@ -80,7 +135,9 @@ export interface IgualdadeResolvida {
   readonly rightColumn: string;
 }
 
-export const paresDeIgualdades = (eqs: readonly IgualdadeResolvida[]): {
+export const paresDeIgualdades = (
+  eqs: readonly IgualdadeResolvida[],
+): {
   tabelaOrigem: string;
   tabelaDestino: string;
   pares: ParRelacionamento[];

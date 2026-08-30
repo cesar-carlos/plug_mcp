@@ -7,6 +7,7 @@
  *   pm2 start ecosystem.config.cjs
  *   pm2 save
  */
+const { execSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -18,6 +19,15 @@ const nvmNode = path.join(
   `v${nvmrcVersion}`,
   "bin/node",
 );
+
+let gitSha = process.env.GIT_SHA || process.env.SOURCE_COMMIT || process.env.GITHUB_SHA;
+if (!gitSha) {
+  try {
+    gitSha = execSync("git rev-parse --short HEAD", { cwd, encoding: "utf8" }).trim();
+  } catch {
+    gitSha = "unknown";
+  }
+}
 
 module.exports = {
   apps: [
@@ -34,6 +44,7 @@ module.exports = {
         NODE_ENV: "production",
         HOST: "127.0.0.1",
         PORT: "3333",
+        GIT_SHA: gitSha,
       },
       max_memory_restart: "1G",
       autorestart: true,

@@ -1,6 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { isDialeto, type Dialeto } from "../../domain/entities/dialeto.js";
-import { toAcessoPublico, type AcessoPublico, type SqlAccessSource, type SqlAccessState } from "../../domain/entities/acesso.js";
+import {
+  toAcessoPublico,
+  type AcessoPublico,
+  type SqlAccessSource,
+  type SqlAccessState,
+} from "../../domain/entities/acesso.js";
 import { DomainError, isDomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";

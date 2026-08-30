@@ -5,7 +5,10 @@ import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { AuditLogPort } from "../../domain/ports/audit-log.port.js";
-import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
+import type {
+  ConflitoGrafo,
+  GrafoRepositoryPort,
+} from "../../domain/ports/grafo-repository.port.js";
 import type { QueryResultCachePort } from "../../domain/ports/query-result-cache.port.js";
 import type {
   AnotacaoGrafoRepositoryPort,
@@ -70,6 +73,7 @@ import {
   pickSkillInProgress,
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
+import { coberturaDeSkill, tokensCapacidade } from "./shared/cobertura-skill.js";
 import {
   agruparColunasCatalogo,
   cell,
@@ -1176,34 +1180,9 @@ export class BuscarContexto {
           ? this.aprendizado.buscarConsultas(acesso.agentId, expanded, 5)
           : Promise.resolve([] as ConsultaAprendida[]),
       ]);
-    const tokens = query
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .filter((item) => item.length >= 2);
-    const haystack = (skill: Skill): string => {
-      const synTermos = sinonimos
-        .filter((item) => {
-          const alvo = item.alvoId.toLowerCase();
-          return (
-            item.alvoId === skill.id ||
-            alvo === skill.slug.toLowerCase() ||
-            skill.nome.toLowerCase().includes(alvo)
-          );
-        })
-        .map((item) => item.termo);
-      return `${skill.nome} ${skill.descricao} ${skill.slug} ${skill.sqlModelo} ${synTermos.join(" ")}`.toLowerCase();
-    };
+    const tokens = tokensCapacidade(query);
     const candidatos = skillsPublicadas.map((skill) => {
-      const text = haystack(skill);
-      const termosEncontrados = tokens.filter((token) => text.includes(token));
-      const cobertura: "completa" | "parcial" | "desconhecida" =
-        tokens.length === 0
-          ? "desconhecida"
-          : termosEncontrados.length === tokens.length
-            ? "completa"
-            : termosEncontrados.length > 0
-              ? "parcial"
-              : "desconhecida";
+      const { cobertura, termosEncontrados } = coberturaDeSkill(skill, query, sinonimos);
       return {
         skillId: skill.id,
         slug: skill.slug,
@@ -1220,7 +1199,10 @@ export class BuscarContexto {
     const consultaPermitida = coberturaGeral === "completa";
     const todas = await this.skills.listByAgent(acesso.agentId);
     const publicadasNoAgent = todas.filter((item) => item.status === "publicada");
-    const emAndamento = pickSkillInProgress(skillsParaTreino);
+    const capazesTreino = skillsParaTreino.filter(
+      (item) => coberturaDeSkill(item, query, sinonimos).cobertura === "completa",
+    );
+    const emAndamento = pickSkillInProgress(capazesTreino);
     const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
     const precisaListar = !consultaPermitida && publicadasNoAgent.length > 0;
     const gapHint = emAndamento
@@ -1228,15 +1210,8 @@ export class BuscarContexto {
       : precisaListar
         ? "A busca por termos não prova ausência. Chame listar_skills antes de desistir. Não invente tabela, coluna nem JOIN."
         : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
-    const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 2;
-    const treinoCobre =
-      skillsParaTreino.length > 0 &&
-      (Boolean(emAndamento) ||
-        skillsParaTreino.some((item) => {
-          const text = haystack(item);
-          return tokens.some((token) => text.includes(token));
-        }));
-    const skillNaoPublicada = !consultaPermitida && treinoCobre;
+    const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 1;
+    const skillNaoPublicada = !consultaPermitida && capazesTreino.length > 0;
     if (
       !consultaPermitida &&
       !precisaListar &&
@@ -1252,7 +1227,7 @@ export class BuscarContexto {
       cobertura: coberturaGeral,
       candidatos,
       skillsPublicadas,
-      skillsParaTreino,
+      skillsParaTreino: capazesTreino,
       consultasAprendidas,
       grafoParaTreino: consultaPermitida
         ? undefined
@@ -1303,6 +1278,31 @@ export class ResolverConflito {
     });
     return {
       success: true,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
+    };
+  }
+}
+
+export class ListarConflitos {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: { acessoId?: string },
+  ): Promise<{
+    success: true;
+    conflitos: readonly ConflitoGrafo[];
+    fluxoTreino: FluxoTreino;
+  }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const conflitos = await this.grafo.listConflitos(acesso.agentId);
+    return {
+      success: true,
+      conflitos,
       fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
     };
   }

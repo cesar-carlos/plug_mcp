@@ -27,13 +27,17 @@ services:
 
   mcp:
     profiles: ["container"]
-    build: .
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     ports:
       - "127.0.0.1:3333:3333"
     environment:
       NODE_ENV: production
       HOST: "0.0.0.0"
       PORT: "3333"
+      GIT_SHA: ${GIT_SHA:-unknown}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://mcp.se7esistemassinop.com.br}
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/se7e_mcp

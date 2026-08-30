@@ -92,14 +92,16 @@ const joinParConhecido = (
       lower(rel.tabelaDestino) === lower(rightTable) &&
       pares.some(
         (par) =>
-          lower(par.colunaOrigem) === lower(leftCol) && lower(par.colunaDestino) === lower(rightCol),
+          lower(par.colunaOrigem) === lower(leftCol) &&
+          lower(par.colunaDestino) === lower(rightCol),
       );
     const b =
       lower(rel.tabelaOrigem) === lower(rightTable) &&
       lower(rel.tabelaDestino) === lower(leftTable) &&
       pares.some(
         (par) =>
-          lower(par.colunaOrigem) === lower(rightCol) && lower(par.colunaDestino) === lower(leftCol),
+          lower(par.colunaOrigem) === lower(rightCol) &&
+          lower(par.colunaDestino) === lower(leftCol),
       );
     return a || b;
   });

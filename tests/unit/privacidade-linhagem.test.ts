@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mascararLinhas, REDACTED, TEXTO_OCULTO } from "../../src/application/use-cases/shared/mascarar-linhagem.js";
+import {
+  mascararLinhas,
+  REDACTED,
+  TEXTO_OCULTO,
+} from "../../src/application/use-cases/shared/mascarar-linhagem.js";
 import { tryParseSelect } from "../../src/application/use-cases/shared/sql-ast.js";
 
 describe("mascaramento por linhagem", () => {

@@ -27,8 +27,12 @@ documentação de produto e os testes correspondentes.
 - Treinamento segue `treinar_com_sql` → `criar_skill` → params →
   `validar_skill` → confirmação → `publicar_skill`. Rascunho, validada ou
   `rascunho_revalidacao` não consultam (`rascunho_revalidacao`: validar →
-  republicar). `listar_skills` devolve status/`fluxoTreino`; o pacote fica em
-  `obter_skill`. `despublicar_skill` rebaixa para validada sem apagar.
+  republicar). `listar_skills` devolve status/`fluxoTreino`/`faltas[]`; o
+  pacote fica em `obter_skill`. Skill `validada` com perfil incompleto:
+  `proximoPasso` é a tool da primeira falta (nunca `null`). `despublicar_skill`
+  rebaixa para validada sem apagar. JOIN composto substitui pares isolados;
+  `remover_relacionamento` apaga um fingerprint. `inspecionar_consulta` aceita
+  `validada`. Cobertura de `buscar_contexto` não usa o SQL.
 
 ## Segurança e autorização
 

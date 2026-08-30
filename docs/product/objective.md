@@ -8,7 +8,7 @@ Todo `initialize` injeta um **pre-treino de sessão** (consultor + especialista 
 
 A skill publicada é o **pacote de conhecimento** e o **escopo** da consulta: tabelas, colunas físicas, relacionamentos compostos, dicionários, `graoPorTabela`/`graoResultado`, métricas de saída, cardinalidade, regras e consulta exemplo (`sqlModelo`). Fluxo: `buscar_contexto` (candidatos + `cobertura`) / `listar_skills` / `obter_skill` / resource `skill://` (mesmo pacote) → a IA escreve SELECT (agregação, `GROUP BY`, `WHERE` no banco) → `consultar_dados(acessoId, skillIds, sql, params, pergunta)`. Sem `sql`, o servidor executa a consulta exemplo (uma skill). Cruzamento exige `skillIds` de todos os domínios e SQL customizado.
 
-O validador recusa tabela, coluna, alias, UNION/subquery ou JOIN fora do escopo das skills publicadas informadas. `buscar_contexto` devolve `cobertura` (`completa` | `parcial` | `desconhecida`) e `consultaPermitida` só quando a cobertura é completa. `SKILL_GAP` da busca por termos não prova ausência — `listar_skills` antes de desistir. Se houver rascunho/validada/`rascunho_revalidacao`, o hint pede para continuar o `proximoPasso`.
+O validador recusa tabela, coluna, alias, UNION/subquery ou JOIN fora do escopo das skills publicadas informadas. `buscar_contexto` devolve `cobertura` (`completa` | `parcial` | `desconhecida`) e `consultaPermitida` só quando a cobertura é completa. Cobertura de capacidade usa nome, slug, descrição, params e `metricasSaida` — não o SQL. `SKILL_NOT_PUBLISHED` só se a skill em treino cobre a pergunta. `SKILL_GAP` da busca por termos não prova ausência — `listar_skills` antes de desistir. Se houver rascunho/validada/`rascunho_revalidacao` **capaz**, o hint pede para continuar o `proximoPasso` (`faltas[].nextAction` quando publicar está bloqueado).
 
 O grafo apoia o **treino** e acumula o que a execução confirma (`validado_execucao`). Não é licença para inventar tabela ou JOIN.
 
@@ -18,7 +18,7 @@ Se não houver skill capaz de buscar o dado **ou** de cruzar as informações pe
 
 1. Ser honesta e pragmática: não há habilidade cadastrada para isso.
 2. Não inventar JOIN, tabela, coluna nem dicionário de códigos.
-3. Orientar o usuário no passo a passo até **liberar** a skill: `treinar_com_sql` → `criar_skill` → descrever params (incluindo `tipo`) → `validar_skill` → confirmação no chat → `publicar_skill` com `confirmadoPeloUsuario: true`. Skill em `rascunho_revalidacao`: validar de novo e republicar. Manutenção: `listar_skills` (status/`fluxoTreino`; `obter_skill` para o pacote), overlay de KPI em `metricasSaida`, `despublicar_skill` (volta a validada sem apagar), rename de slug com confirmação. Cada tool devolve `fluxoTreino`; o servidor recusa pular.
+3. Orientar o usuário no passo a passo até **liberar** a skill: `treinar_com_sql` → `criar_skill` → descrever params (incluindo `tipo`) → `validar_skill` → confirmação no chat → `publicar_skill` com `confirmadoPeloUsuario: true`. Sem confirmação, a tool devolve `resumoPublicacao` e `faltas[]`. Skill em `rascunho_revalidacao`: validar de novo e republicar. Manutenção: `listar_skills` (status/`fluxoTreino`/`faltas[]`; `obter_skill` para o pacote), overlay de KPI em `metricasSaida`, `despublicar_skill` (volta a validada sem apagar), rename de slug com confirmação. JOIN composto substitui pares isolados; `remover_relacionamento` apaga um fingerprint. Skill `validada` com perfil incompleto: `proximoPasso` nunca é `null`. Cada tool devolve `fluxoTreino`; o servidor recusa pular.
 
 ## Aprendizado
 

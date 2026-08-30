@@ -1,5 +1,6 @@
 import type { OrigemFato, StatusFato } from "./grafo.js";
 import { origemRank } from "./grafo.js";
+import type { PapelColuna } from "./escopo.js";
 import { parseSensibilidadeColuna, type SensibilidadeColuna } from "./privacidade.js";
 
 export interface FatoMerge {
@@ -18,6 +19,103 @@ export interface MergeResultado extends FatoMerge {
 
 const norm = (value: string | null | undefined): string => (value ?? "").trim().toLowerCase();
 
+export type FamiliaTipoFisico = "uuid" | "temporal" | "numerico" | "texto" | "binario" | "outro";
+
+export const familiaTipoFisico = (tipo: string | null | undefined): FamiliaTipoFisico | null => {
+  const t = norm(tipo);
+  if (!t) {
+    return null;
+  }
+  if (t.includes("uniqueidentifier") || t.includes("uuid") || t.includes("guid")) {
+    return "uuid";
+  }
+  if (
+    t.includes("date") ||
+    t.includes("time") ||
+    t.includes("timestamp") ||
+    t.includes("interval")
+  ) {
+    return "temporal";
+  }
+  if (
+    t.includes("numeric") ||
+    t.includes("decimal") ||
+    t.includes("money") ||
+    t.includes("int") ||
+    t.includes("float") ||
+    t.includes("real") ||
+    t.includes("double") ||
+    t.includes("number") ||
+    t.includes("serial")
+  ) {
+    return "numerico";
+  }
+  if (
+    t.includes("char") ||
+    t.includes("text") ||
+    t.includes("clob") ||
+    t.includes("xml") ||
+    t.includes("json") ||
+    t.includes("string")
+  ) {
+    return "texto";
+  }
+  if (t.includes("binary") || t.includes("blob") || t.includes("image") || t.includes("bytea")) {
+    return "binario";
+  }
+  return "outro";
+};
+
+export const tiposFisicosIncompativeis = (
+  atual: string | null | undefined,
+  incoming: string | null | undefined,
+): boolean => {
+  const fa = familiaTipoFisico(atual);
+  const fb = familiaTipoFisico(incoming);
+  return fa !== null && fb !== null && fa !== fb;
+};
+
+export const tipoCompativelComPapel = (
+  tipo: string | null | undefined,
+  papel: PapelColuna | null | undefined,
+): boolean => {
+  if (papel !== "data") {
+    return true;
+  }
+  const familia = familiaTipoFisico(tipo);
+  return familia === null || familia === "temporal";
+};
+
+const tipoFisicoAposMerge = (
+  atual: string | null | undefined,
+  incoming: string | null | undefined,
+): string | null | undefined => {
+  if (!incoming) {
+    return atual;
+  }
+  if (!atual) {
+    return incoming;
+  }
+  if (tiposFisicosIncompativeis(atual, incoming) || norm(atual) !== norm(incoming)) {
+    return incoming;
+  }
+  return atual;
+};
+
+const formatoAposMerge = (
+  atual: string | null | undefined,
+  incoming: string | null | undefined,
+  tipoEscolhido: string | null | undefined,
+): string | null | undefined => {
+  if (incoming) {
+    return incoming;
+  }
+  if (tiposFisicosIncompativeis(atual, tipoEscolhido)) {
+    return incoming ?? null;
+  }
+  return atual ?? incoming;
+};
+
 const conflitaTexto = (
   atual: string | null | undefined,
   incoming: string | null | undefined,
@@ -30,12 +128,12 @@ const conflitaTexto = (
 export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResultado => {
   const rankAtual = origemRank(atual.origem);
   const rankNovo = origemRank(incoming.origem);
+  const tipo = tipoFisicoAposMerge(atual.tipo, incoming.tipo);
+  const formato = formatoAposMerge(atual.formato, incoming.formato, tipo);
   if (rankNovo > rankAtual) {
-    return { ...incoming, status: "vigente", conflito: false, aplicar: true };
+    return { ...incoming, tipo, formato, status: "vigente", conflito: false, aplicar: true };
   }
   if (rankNovo < rankAtual) {
-    const tipo = atual.tipo ?? incoming.tipo;
-    const formato = atual.formato ?? incoming.formato;
     if (tipo !== atual.tipo || formato !== atual.formato) {
       return {
         ...atual,
@@ -49,18 +147,17 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
   }
   const conflito =
     conflitaTexto(atual.descricao, incoming.descricao) ||
-    conflitaTexto(atual.dicionario, incoming.dicionario) ||
-    conflitaTexto(atual.tipo, incoming.tipo);
+    conflitaTexto(atual.dicionario, incoming.dicionario);
   if (conflito) {
-    return { ...atual, status: "conflito", conflito: true, aplicar: true };
+    return { ...atual, tipo, formato, status: "conflito", conflito: true, aplicar: true };
   }
   return {
     origem: atual.origem,
     status: atual.status === "conflito" ? "conflito" : "vigente",
     descricao: atual.descricao ?? incoming.descricao,
     dicionario: atual.dicionario ?? incoming.dicionario,
-    tipo: atual.tipo ?? incoming.tipo,
-    formato: atual.formato ?? incoming.formato,
+    tipo,
+    formato,
     conflito: false,
     aplicar: true,
   };

@@ -122,6 +122,7 @@ describe("manutenção de skill", () => {
       podeLiberar: false,
     });
     expect(item?.fluxoTreino.passos.length).toBeGreaterThan(0);
+    expect(item).toHaveProperty("faltas");
     expect(item).not.toHaveProperty("sqlModelo");
     expect(item).not.toHaveProperty("escopo");
   });

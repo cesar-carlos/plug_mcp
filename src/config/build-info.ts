@@ -29,7 +29,7 @@ export const buildInfo = (): {
   uptimeSec: number;
 } => ({
   version: process.env.MCP_VERSION ?? readPackageVersion(),
-  sha: process.env.GIT_SHA ?? process.env.SOURCE_COMMIT ?? "unknown",
+  sha: process.env.GIT_SHA ?? process.env.SOURCE_COMMIT ?? process.env.GITHUB_SHA ?? "unknown",
   buildTime: process.env.BUILD_TIME ?? new Date(startedAt).toISOString(),
   startedAt,
   uptimeSec: Math.floor((Date.now() - startedAt) / 1000),

@@ -78,8 +78,29 @@ describe("consultar_dados só com skill", () => {
         authed.sessionId,
       );
       const tools = toolsList.payload.result as {
-        tools?: { name: string; outputSchema?: unknown }[];
+        tools?: {
+          name: string;
+          outputSchema?: unknown;
+          inputSchema?: { properties?: Record<string, unknown> };
+        }[];
       };
+      const names = tools.tools?.map((tool) => tool.name) ?? [];
+      expect(names).toEqual(
+        expect.arrayContaining([
+          "despublicar_skill",
+          "listar_conflitos",
+          "remover_relacionamento",
+          "inspecionar_consulta",
+          "descobrir_tabela",
+          "detectar_deriva_esquema",
+          "cancelar_operacao",
+        ]),
+      );
+      const confirmar = tools.tools?.find((tool) => tool.name === "confirmar_relacionamento");
+      expect(confirmar?.inputSchema?.properties).toHaveProperty("pares");
+      expect(confirmar?.inputSchema?.properties).toHaveProperty("cardinalidade");
+      const criar = tools.tools?.find((tool) => tool.name === "criar_skill");
+      expect(criar?.inputSchema?.properties).toHaveProperty("metricasSaida");
       const consultarTool = tools.tools?.find((tool) => tool.name === "consultar_dados");
       expect(consultarTool).toBeDefined();
       expect(consultarTool?.outputSchema).toBeDefined();

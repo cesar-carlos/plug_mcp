@@ -13,7 +13,11 @@ export class RegistroOperacoes {
     { usuarioId: string; abort: AbortController; estado: ProgressoOperacao }
   >();
 
-  iniciar(usuarioId: string, tool: string, queriesLimite: number): {
+  iniciar(
+    usuarioId: string,
+    tool: string,
+    queriesLimite: number,
+  ): {
     operacaoId: string;
     signal: AbortSignal;
     report: (fase: string, queriesUsadas: number) => ProgressoOperacao;

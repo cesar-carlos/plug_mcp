@@ -168,12 +168,17 @@ export const compilarConsultaSemantica = (
     }
     const colQ = qualificarColuna(escopo, filtro.coluna);
     where.push(
-      filtro.op === "in" ? `${colQ} IN (:${filtro.param})` : `${colQ} ${filtro.op} :${filtro.param}`,
+      filtro.op === "in"
+        ? `${colQ} IN (:${filtro.param})`
+        : `${colQ} ${filtro.op} :${filtro.param}`,
     );
     elementos.push(`filtro:${filtro.coluna}`);
   }
   const statusIncluidos = metrica.statusIncluidos ?? [];
-  if (statusIncluidos.length > 0 && !consulta.filtros?.some((item) => /status/i.test(item.coluna))) {
+  if (
+    statusIncluidos.length > 0 &&
+    !consulta.filtros?.some((item) => /status/i.test(item.coluna))
+  ) {
     const lista = statusIncluidos.map((item) => `'${item.replaceAll("'", "''")}'`).join(", ");
     const colStatus =
       Object.values(escopo.colunasPorTabela)

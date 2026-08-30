@@ -7,7 +7,7 @@ alwaysApply: false
 # Testes
 
 - Unitário (`tests/unit`): casos de uso com repos in-memory e `FakePlugServer`. Sem I/O. Seed de grafo: `seedTabelaComColunas` (tabela sem coluna falha nos gates).
-- Integração (`tests/integration`): `supertest` na app de `compose()` com overrides. Bootstrap sem Bearer, rate limit, `GET /setup/:code`, schema de `tools/list`.
+- Integração (`tests/integration`): `supertest` na app de `compose()` com overrides. Bootstrap sem Bearer, rate limit, `GET /setup/:code`, schema de `tools/list` (inclui `listar_conflitos` e `remover_relacionamento`).
 - Live (`tests/live`, `npm run test:live`): adapter real contra o hub. `describe.skipIf(!getLiveEnv())`. Credenciais `E2E_*` só no `.env`. Nunca a conta de um Client real de produção. SQL só SELECT com FROM em catálogo de sistema. Sem mutação.
 
 Cobrir: `registrar_acesso` sem token na resposta; dois usuários no mesmo `agentId` acumulam grafo; `DIALECT_CONFLICT`; policy recorta leitura; 403 Client inativo ≠ senha; `SELECT *` recusado no treino; ciclo validar → publicar com `SKILL_NOT_PUBLISHED` antes da confirmação; `rascunho_revalidacao` não consulta; gates JWT / `ClientAgentAccess` / `client_token` como falhas distintas; `pergunta` obrigatória; validador fail-closed (UNION/subquery/alias/`SELECT *` aninhado); `obter_skill` só colunas do pacote; `columnsMetadata` com zero linhas; recorte obrigatório e paginação sem TOP/LIMIT; `METADATA_CONTRATO` sem pagination do agente; cache isolado por token/policy (`aprendizado-escala`); backfill (`backfill-pacote`); `execution_mode: preserve` só sem página.

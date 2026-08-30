@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { aplicarDerivaEsquema, assinaturaTabela } from "../../src/application/use-cases/shared/schema-drift.js";
+import {
+  aplicarDerivaEsquema,
+  assinaturaTabela,
+} from "../../src/application/use-cases/shared/schema-drift.js";
 import {
   InMemoryGrafoRepository,
   InMemorySkillRepository,

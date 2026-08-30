@@ -12,8 +12,8 @@ export const assertPrivacidadeAntesDoHub = (input: {
   lookup: (tabela: string | null, coluna: string) => SensibilidadeColuna | null;
   negar: readonly SensibilidadeColuna[];
 }): void => {
-  const output = input.ast.colunas.map(
-    (coluna) => (coluna.alias.length > 0 ? coluna.alias : (coluna.column ?? coluna.expr)),
+  const output = input.ast.colunas.map((coluna) =>
+    coluna.alias.length > 0 ? coluna.alias : (coluna.column ?? coluna.expr),
   );
   const linhagem = linhagemColunas(input.ast, output);
   const proibidas: string[] = [];

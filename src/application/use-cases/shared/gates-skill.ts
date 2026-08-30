@@ -1,8 +1,12 @@
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import { paresDoRelacionamento, type EscopoSkill } from "../../../domain/entities/escopo.js";
-import { fingerprintPares, fingerprintParesInvertidos } from "../../../domain/entities/relacionamento.js";
-import { labelPares } from "../../../domain/entities/relacionamento.js";
+import { tipoCompativelComPapel } from "../../../domain/entities/merge-fato.js";
+import {
+  fingerprintPares,
+  fingerprintParesInvertidos,
+  labelPares,
+} from "../../../domain/entities/relacionamento.js";
 import type { OrigemFato } from "../../../domain/entities/grafo.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import { parseSqlModelo } from "./sql-modelo.js";
@@ -10,12 +14,28 @@ import { tryParseSelect } from "./sql-ast.js";
 
 const ORIGENS_OK = new Set<OrigemFato>(["validado_execucao", "confirmado_usuario"]);
 
+export type FaltaNextAction =
+  | "treinar_sql"
+  | "confirmar_relacionamento"
+  | "mapear_tabela"
+  | "confirmar_coluna"
+  | "listar_conflitos";
+
 export interface FatoIncompleto {
   readonly kind: "tabela" | "coluna" | "join" | "perfil" | "conflito";
   readonly message: string;
+  readonly alvo: string;
+  readonly nextAction: FaltaNextAction;
 }
 
 const lower = (value: string): string => value.trim().toLowerCase();
+
+const falta = (
+  kind: FatoIncompleto["kind"],
+  alvo: string,
+  message: string,
+  nextAction: FaltaNextAction,
+): FatoIncompleto => ({ kind, alvo, message, nextAction });
 
 export const listarFatosIncompletos = async (
   grafo: GrafoRepositoryPort,
@@ -27,40 +47,58 @@ export const listarFatosIncompletos = async (
   for (const nome of escopo.tabelas) {
     const tabela = await grafo.findTabelaByNome(agentId, nome);
     if (!tabela) {
-      out.push({ kind: "tabela", message: `Tabela ${nome} ausente no grafo.` });
+      out.push(falta("tabela", nome, `Tabela ${nome} ausente no grafo.`, "treinar_sql"));
       continue;
     }
     if (tabela.status === "conflito") {
-      out.push({ kind: "conflito", message: `Tabela ${nome} em conflito.` });
+      out.push(falta("conflito", nome, `Tabela ${nome} em conflito.`, "listar_conflitos"));
     }
     if (!ORIGENS_OK.has(tabela.origem)) {
-      out.push({
-        kind: "tabela",
-        message: `Tabela ${nome} ainda é ${tabela.origem}; precisa validado_execucao ou confirmado_usuario.`,
-      });
+      out.push(
+        falta(
+          "tabela",
+          nome,
+          `Tabela ${nome} ainda é ${tabela.origem}; precisa validado_execucao ou confirmado_usuario.`,
+          "treinar_sql",
+        ),
+      );
     }
     const cols = await grafo.listColunas(tabela.id);
     const wanted = escopo.colunasPorTabela[nome] ?? [];
     for (const colunaNome of wanted) {
+      const alvo = `${nome}.${colunaNome}`;
       const coluna = cols.find((item) => lower(item.nome) === lower(colunaNome));
       if (!coluna) {
-        out.push({ kind: "coluna", message: `Coluna ${nome}.${colunaNome} ausente no grafo.` });
+        out.push(falta("coluna", alvo, `Coluna ${alvo} ausente no grafo.`, "confirmar_coluna"));
         continue;
       }
       if (coluna.status === "conflito") {
-        out.push({ kind: "conflito", message: `Coluna ${nome}.${colunaNome} em conflito.` });
+        out.push(falta("conflito", alvo, `Coluna ${alvo} em conflito.`, "listar_conflitos"));
       }
       if (!ORIGENS_OK.has(coluna.origem)) {
-        out.push({
-          kind: "coluna",
-          message: `Coluna ${nome}.${colunaNome} ainda é ${coluna.origem}.`,
-        });
+        out.push(
+          falta("coluna", alvo, `Coluna ${alvo} ainda é ${coluna.origem}.`, "confirmar_coluna"),
+        );
       }
       if (opts.exigirTipoColuna && !coluna.tipo && !coluna.formato) {
-        out.push({
-          kind: "perfil",
-          message: `Coluna ${nome}.${colunaNome} sem tipo/formato. Chame validar_skill enriquecer=completo.`,
-        });
+        out.push(
+          falta(
+            "perfil",
+            alvo,
+            `Coluna ${alvo} sem tipo/formato. Chame mapear_tabela.`,
+            "mapear_tabela",
+          ),
+        );
+      }
+      if (!tipoCompativelComPapel(coluna.tipo, coluna.papel)) {
+        out.push(
+          falta(
+            "perfil",
+            alvo,
+            `Coluna ${alvo} tem papel ${coluna.papel ?? "data"} incompatível com tipo ${coluna.tipo ?? "(vazio)"}. Chame mapear_tabela.`,
+            "mapear_tabela",
+          ),
+        );
       }
     }
   }
@@ -71,10 +109,9 @@ export const listarFatosIncompletos = async (
     const pares = paresDoRelacionamento(rel);
     const label = labelPares(rel.tabelaOrigem, rel.tabelaDestino, pares);
     if (!origemTabela || !destinoTabela) {
-      out.push({
-        kind: "join",
-        message: `JOIN ${label} não confirmado no grafo.`,
-      });
+      out.push(
+        falta("join", label, `JOIN ${label} não confirmado no grafo.`, "confirmar_relacionamento"),
+      );
       continue;
     }
     const fp = fingerprintPares(pares);
@@ -91,29 +128,28 @@ export const listarFatosIncompletos = async (
       return direto || inverso;
     });
     if (!match) {
-      out.push({
-        kind: "join",
-        message: `JOIN ${label} não confirmado no grafo.`,
-      });
+      out.push(
+        falta("join", label, `JOIN ${label} não confirmado no grafo.`, "confirmar_relacionamento"),
+      );
       continue;
     }
     if (match.status === "conflito") {
-      out.push({
-        kind: "conflito",
-        message: `JOIN ${label} em conflito.`,
-      });
+      out.push(falta("conflito", label, `JOIN ${label} em conflito.`, "listar_conflitos"));
     }
     if (!ORIGENS_OK.has(match.origem)) {
-      out.push({
-        kind: "join",
-        message: `JOIN ${label} ainda é ${match.origem}.`,
-      });
+      out.push(
+        falta("join", label, `JOIN ${label} ainda é ${match.origem}.`, "confirmar_relacionamento"),
+      );
     }
     if (opts.exigirCardinalidade && !match.cardinalidade) {
-      out.push({
-        kind: "perfil",
-        message: `JOIN ${label} sem cardinalidade.`,
-      });
+      out.push(
+        falta(
+          "perfil",
+          label,
+          `JOIN ${label} sem cardinalidade → confirmar_relacionamento.`,
+          "confirmar_relacionamento",
+        ),
+      );
     }
   }
   return out;
@@ -136,6 +172,7 @@ export const exigirEscopoNoGrafo = async (
     code: ERROR_CODES.PACOTE_INCOMPLETO,
     message: "O SQL da skill ainda não está confirmado no grafo.",
     hint: `${bloqueantes.map((item) => item.message).join(" ")} Chame treinar_com_sql e confirme relacionamentos no escopo da skill.`,
+    details: { faltas: bloqueantes },
   });
 };
 

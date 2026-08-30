@@ -12,9 +12,7 @@ export const parseSensibilidadeColuna = (value: unknown): SensibilidadeColuna =>
     ? value
     : "livre";
 
-export const maxSensibilidade = (
-  values: readonly SensibilidadeColuna[],
-): SensibilidadeColuna => {
+export const maxSensibilidade = (values: readonly SensibilidadeColuna[]): SensibilidadeColuna => {
   let max: SensibilidadeColuna = "livre";
   for (const value of values) {
     if (RANK[value] > RANK[max]) {
@@ -27,7 +25,8 @@ export const maxSensibilidade = (
 const PESSOAL =
   /\b(cpf|cnpj|rg|email|e-mail|telefone|celular|fone|nome|razao|endereco|end[eê]reco|cep|bairro|cidade|nascimento|mae|pai|documento)\b/i;
 const SEGREDO = /\b(senha|password|passwd|secret|token|api[_-]?key|chave|hash|salt|private)\b/i;
-const SENSIVEL = /\b(observa|historico|hist[oó]rico|comentario|coment[aá]rio|anotacao|anota[cç]ao|memo|texto|descricao_livre|obs)\b/i;
+const SENSIVEL =
+  /\b(observa|historico|hist[oó]rico|comentario|coment[aá]rio|anotacao|anota[cç]ao|memo|texto|descricao_livre|obs)\b/i;
 
 export const inferirSensibilidadeColuna = (
   nome: string,
