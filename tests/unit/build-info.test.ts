@@ -12,4 +12,15 @@ describe("buildInfo sha", () => {
       process.env.GIT_SHA = previous;
     }
   });
+
+  it("lê a versão do package.json na ausência de MCP_VERSION", () => {
+    const previous = process.env.MCP_VERSION;
+    delete process.env.MCP_VERSION;
+    expect(buildInfo().version).toBe("0.2.0");
+    if (previous === undefined) {
+      delete process.env.MCP_VERSION;
+    } else {
+      process.env.MCP_VERSION = previous;
+    }
+  });
 });

@@ -15,6 +15,11 @@ import { parseSqlModelo } from "./shared/sql-modelo.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { validarSqlNoEscopo } from "./shared/validar-escopo.js";
 import { catalogoSe7eParaDialeto } from "./shared/catalogo-se7e.js";
+import {
+  agregarTelemetriaBusca,
+  parseTagsTelemetriaBusca,
+  type TelemetriaBusca,
+} from "./shared/telemetria-busca.js";
 import { parseEscopoPadrao } from "../../domain/entities/escopo.js";
 import { persistirItensAprendizado, TIPOS_APRENDIZADO } from "./shared/persistir-aprendizado.js";
 
@@ -199,7 +204,13 @@ export class HerdarCatalogo {
   async execute(
     usuarioId: string | undefined,
     input: { acessoId?: string; confirmadoPeloUsuario?: boolean },
-  ): Promise<{ success: true; tabelas: number; relacionamentos: number }> {
+  ): Promise<{
+    success: true;
+    tabelas: number;
+    relacionamentos: number;
+    origem: "inferido";
+    publicaSkill: false;
+  }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     if (input.confirmadoPeloUsuario !== true) {
@@ -249,16 +260,17 @@ export class HerdarCatalogo {
       for (const rel of catalogo.relacionamentos) {
         const origemId = ids.get(rel.tabelaOrigem.toLowerCase());
         const destinoId = ids.get(rel.tabelaDestino.toLowerCase());
-        if (!origemId || !destinoId) {
+        const primeiro = rel.pares[0];
+        if (!origemId || !destinoId || !primeiro) {
           continue;
         }
         await this.grafo.mergeRelacionamento({
           agentId: acesso.agentId,
           tabelaOrigemId: origemId,
-          colunaOrigem: rel.colunaOrigem,
+          colunaOrigem: primeiro.colunaOrigem,
           tabelaDestinoId: destinoId,
-          colunaDestino: rel.colunaDestino,
-          pares: [{ colunaOrigem: rel.colunaOrigem, colunaDestino: rel.colunaDestino }],
+          colunaDestino: primeiro.colunaDestino,
+          pares: rel.pares,
           tipoJoin: rel.tipoJoin,
           cardinalidade: rel.cardinalidade,
           origem: "inferido",
@@ -267,7 +279,7 @@ export class HerdarCatalogo {
         relacionamentos += 1;
       }
     });
-    return { success: true, tabelas, relacionamentos };
+    return { success: true, tabelas, relacionamentos, origem: "inferido", publicaSkill: false };
   }
 }
 
@@ -289,6 +301,7 @@ export class ListarAuditoria {
       codigoErro: string | null;
       linhasRetornadas: number | null;
       duracaoMs: number | null;
+      telemetria?: TelemetriaBusca;
     }[];
   }> {
     const uid = requireUsuario(usuarioId);
@@ -298,14 +311,19 @@ export class ListarAuditoria {
     const doAcesso = rows.filter((row) => row.acessoId === acesso.id).slice(0, limite);
     return {
       success: true,
-      entradas: doAcesso.map((row) => ({
-        createdAt: row.createdAt.toISOString(),
-        tool: row.tool,
-        sucesso: row.sucesso,
-        codigoErro: row.codigoErro,
-        linhasRetornadas: row.linhasRetornadas,
-        duracaoMs: row.duracaoMs,
-      })),
+      entradas: doAcesso.map((row) => {
+        const telemetria =
+          row.tool === "buscar_contexto" ? parseTagsTelemetriaBusca(row.sqlEnviado) : null;
+        return {
+          createdAt: row.createdAt.toISOString(),
+          tool: row.tool,
+          sucesso: row.sucesso,
+          codigoErro: row.codigoErro,
+          linhasRetornadas: row.linhasRetornadas,
+          duracaoMs: row.duracaoMs,
+          ...(telemetria ? { telemetria } : {}),
+        };
+      }),
     };
   }
 }
@@ -323,6 +341,12 @@ export class ListarMetricasAgente {
     success: true;
     porTool: Record<string, { total: number; erros: number; duracaoMs: number; linhas: number }>;
     porCodigo: Record<string, number>;
+    busca: {
+      total: number;
+      consultaPermitida: number;
+      skillGap: number;
+      slotNarrativa: number;
+    };
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
@@ -348,7 +372,7 @@ export class ListarMetricasAgente {
         porCodigo[row.codigoErro] = (porCodigo[row.codigoErro] ?? 0) + 1;
       }
     }
-    return { success: true, porTool, porCodigo };
+    return { success: true, porTool, porCodigo, busca: agregarTelemetriaBusca(rows) };
   }
 }
 

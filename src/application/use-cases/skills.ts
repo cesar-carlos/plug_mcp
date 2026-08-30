@@ -713,6 +713,7 @@ export class ListarSkills {
           passoAtual: "treinar_sql" as const,
           proximoPasso: "treinar_sql" as const,
           podeLiberar: false,
+          pacoteMinimo: true,
           passos: [],
         };
         return {

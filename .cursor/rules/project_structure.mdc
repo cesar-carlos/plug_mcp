@@ -9,13 +9,13 @@ alwaysApply: false
 ```
 src/domain/entities|ports|errors
 src/application/use-cases/{cofre,treinar-com-sql,consultar,skills,aprendizado}.ts
-src/application/use-cases/shared/{sql-ast,sql-scan,validar-escopo,gates-skill,query-cache-key,backfill-pacote}.ts
+src/application/use-cases/shared/{sql-ast,sql-scan,validar-escopo,gates-skill,query-cache-key,backfill-pacote,telemetria-busca,esqueleto-semantico}.ts
 src/infrastructure/{http,mcp,plug-server,persistence,crypto,logging,cache}
 src/composition/compose.ts
 src/config/env.ts
 src/main.ts
 tests/{unit,integration,live,helpers}
-drizzle/0008_cofre_grafo.sql … 0018_fts_rank_trgm.sql
+drizzle/0008_cofre_grafo.sql … 0019_drop_unused_vector.sql
 ```
 
 Novo caso de uso → `use-cases/` + `register-tools.ts` + `compose.ts` + teste + `docs/mcp/tools.md` + `CHANGELOG.md` (Unreleased) + rule `catalog`/`mcp_protocol` se o contrato mudar.

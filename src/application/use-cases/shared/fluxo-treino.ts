@@ -37,6 +37,7 @@ export interface FluxoTreino {
   readonly passoAtual: PassoTreinoId;
   readonly proximoPasso: ProximoPassoTreino | null;
   readonly podeLiberar: boolean;
+  readonly pacoteMinimo: boolean;
   readonly passos: readonly PassoTreino[];
 }
 
@@ -176,7 +177,11 @@ export const buildFluxoTreino = (input: {
   const criar = skill
     ? passo("criar_skill", "feito", "Skill nomeada.")
     : input.treinado
-      ? passo("criar_skill", "pendente", "Nomeie a skill (criar_skill) com o SQL treinado.")
+      ? passo(
+          "criar_skill",
+          "pendente",
+          "Nomeie a skill (criar_skill) com o SQL treinado. Pacote mínimo: uma tabela, colunas nomeadas, WHERE ou agregação, params com descricao; JOIN/KPI só se o usuário pedir.",
+        )
       : passo("criar_skill", "bloqueado", "Treine o SQL antes de criar a skill.");
 
   let descrever: PassoTreino;
@@ -287,10 +292,15 @@ export const buildFluxoTreino = (input: {
     proximoPasso = null;
   }
 
+  const pacoteMinimo = skill
+    ? skill.escopo.relacionamentos.length === 0 && skill.escopo.metricasSaida.length === 0
+    : true;
+
   return {
     passoAtual,
     proximoPasso,
     podeLiberar,
+    pacoteMinimo,
     passos,
   };
 };

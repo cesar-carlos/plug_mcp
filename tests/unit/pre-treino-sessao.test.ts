@@ -28,6 +28,11 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toContain("listar_conflitos");
     expect(PRE_TREINO_SESSAO).toContain("conhecimentos[]");
     expect(PRE_TREINO_SESSAO).toContain("consultasExemplo");
+    expect(PRE_TREINO_SESSAO).toContain("consultasAprendidas[].id");
+    expect(PRE_TREINO_SESSAO).toContain("consultaSemanticaSugerida");
+    expect(PRE_TREINO_SESSAO).toMatch(/maior overlap/);
+    expect(PRE_TREINO_SESSAO).toContain("pacoteMinimo");
+    expect(PRE_TREINO_SESSAO).toMatch(/tipo=sinonimo/);
     expect(PRE_TREINO_SESSAO).toMatch(/consultaPermitida/);
     expect(PRE_TREINO_SESSAO).toContain("faltas");
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
@@ -43,5 +48,7 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(MCP_SERVER_INSTRUCTIONS).toContain("remover_relacionamento");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("resumoPublicacao");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("listar_conflitos");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("consultaSemanticaSugerida");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("Pacote mínimo");
   });
 });

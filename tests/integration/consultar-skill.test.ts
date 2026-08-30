@@ -1,11 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { testConfig } from "../../src/config/env.js";
 import { compose } from "../../src/composition/compose.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { mcpRpc, parseMcpPayload, readToolResult } from "../helpers/mcp-rpc.js";
-
-const agentId = "11111111-1111-4111-8111-111111111111";
 
 const initialize = async (app: Awaited<ReturnType<typeof compose>>["app"], token?: string) => {
   const req = request(app)
@@ -34,6 +33,7 @@ const initialize = async (app: Awaited<ReturnType<typeof compose>>["app"], token
 
 describe("consultar_dados só com skill", () => {
   it("sem skillId falha; com skill publicada envia só o SQL da skill ao plug", async () => {
+    const agentId = randomUUID();
     const plug = new FakePlugServer();
     plug.approve(agentId);
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });
@@ -52,11 +52,11 @@ describe("consultar_dados só com skill", () => {
           params: {
             name: "registrar_acesso",
             arguments: {
-              email: "client@example.com",
+              email: `client-${agentId.slice(0, 8)}@example.com`,
               senha: "secret-pass",
               agentId,
               dialeto: "sybase",
-              clientToken: "tok-sql-123456",
+              clientToken: `tok-sql-${agentId}`,
             },
           },
         });

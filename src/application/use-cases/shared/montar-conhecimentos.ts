@@ -186,13 +186,17 @@ export const montarConhecimentos = (input: {
 export const hintRegraParcial = (
   cobertura: "completa" | "parcial" | "desconhecida",
   conhecimentos: readonly HitConhecimento[],
+  temCandidatos = false,
 ): string | undefined => {
-  if (cobertura === "completa") {
+  if (!temCandidatos || cobertura === "completa") {
     return undefined;
   }
   const narrativa = conhecimentos.find(isNarrativaComSkill);
-  if (!narrativa) {
+  if (cobertura !== "parcial" && !narrativa) {
     return undefined;
   }
-  return `Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta. Match textual isolado não autoriza consultar_dados — registre sinônimo se o usuário confirmar o termo.`;
+  const prefixo = narrativa
+    ? "Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta."
+    : "Cobertura parcial. Leia obter_skill e validar_consulta.";
+  return `${prefixo} Match textual isolado não autoriza consultar_dados — registre sinônimo (registrar_aprendizado tipo=sinonimo) se o usuário confirmar o termo.`;
 };

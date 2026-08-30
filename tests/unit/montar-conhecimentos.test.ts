@@ -4,6 +4,7 @@ import type { AnotacaoGrafo, Skill } from "../../src/domain/entities/skill.js";
 import type { TabelaGrafo } from "../../src/domain/entities/grafo.js";
 import { CONHECIMENTOS_TETO } from "../../src/domain/entities/conhecimento.js";
 import {
+  hintRegraParcial,
   montarConhecimentos,
   type FiltroConhecimentos,
 } from "../../src/application/use-cases/shared/montar-conhecimentos.js";
@@ -226,5 +227,37 @@ describe("montarConhecimentos", () => {
     });
     expect(hits[0]?.id).toBe("s-high");
     expect(hits[0]?.score).toBeGreaterThan(hits[1]?.score ?? 0);
+  });
+});
+
+describe("hintRegraParcial", () => {
+  it("cobertura parcial sem anotação ainda pede sinônimo e obter_skill", () => {
+    const hint = hintRegraParcial("parcial", [], true);
+    expect(hint).toMatch(/obter_skill/);
+    expect(hint).toMatch(/sinonimo/);
+    expect(hintRegraParcial("parcial", [], false)).toBeUndefined();
+    expect(hintRegraParcial("completa", [], true)).toBeUndefined();
+    expect(hintRegraParcial("desconhecida", [], true)).toBeUndefined();
+  });
+
+  it("desconhecida com regra skill-scoped ainda pede obter_skill", () => {
+    const hint = hintRegraParcial(
+      "desconhecida",
+      [
+        {
+          tipo: "regra",
+          id: "n1",
+          titulo: "Fórmula",
+          trecho: "cashbackxyz",
+          fonte: "anotacao",
+          skillId: "s1",
+          tabelaId: null,
+          score: 1,
+        },
+      ],
+      true,
+    );
+    expect(hint).toMatch(/obter_skill/);
+    expect(hint).toMatch(/sinonimo/);
   });
 });

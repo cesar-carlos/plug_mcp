@@ -7,12 +7,15 @@ import {
   InMemoryAprendizadoRepository,
   InMemoryAcessoRepository,
   InMemoryAnotacaoGrafoRepository,
+  InMemoryAuditLog,
   InMemoryGrafoRepository,
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
-import { PACOTE_VERSAO_ATUAL } from "../../src/domain/entities/escopo.js";
+import { PACOTE_VERSAO_ATUAL, parseEscopoSkill } from "../../src/domain/entities/escopo.js";
+import { parseTagsTelemetriaBusca } from "../../src/application/use-cases/shared/telemetria-busca.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { SilentTestLogger } from "../helpers/silent-logger.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -50,6 +53,7 @@ describe("BuscarContexto", () => {
       invalidate: () => undefined,
       remember: () => undefined,
     };
+    const audit = new InMemoryAuditLog();
     const buscar = new BuscarContexto(
       acessos,
       grafo,
@@ -59,8 +63,10 @@ describe("BuscarContexto", () => {
       sessions,
       crypto,
       aprendizado,
+      audit,
+      new SilentTestLogger(),
     );
-    return { buscar, created, skills, aprendizado, anotacoes, grafo, plug };
+    return { buscar, created, skills, aprendizado, anotacoes, grafo, plug, audit };
   };
 
   it("sem skill publicada devolve consultaPermitida false e SKILL_GAP", async () => {
@@ -279,6 +285,8 @@ describe("BuscarContexto", () => {
     expect(result.consultasAprendidas.length).toBeGreaterThan(0);
     expect(result.consultasAprendidas[0]).not.toHaveProperty("sql");
     expect(result.skillsPublicadas[0]).not.toHaveProperty("sqlModelo");
+    expect(result.hint).toContain(result.consultasAprendidas[0]?.id ?? "");
+    expect(result.hint).toMatch(/consultasExemplo/);
     expect(result.hint).toMatch(/OVER\/LAG/);
   });
 
@@ -623,5 +631,130 @@ describe("BuscarContexto", () => {
       query: "orfaoskillxyz",
     });
     expect(result.conhecimentos.some((item) => item.trecho.includes("orfaoskillxyz"))).toBe(false);
+  });
+
+  it("grava telemetria no audit sem a pergunta", async () => {
+    const { buscar, created, audit } = await setup();
+    const query = "produto secretoxyzabc";
+    await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
+    const row = audit.entries.find((item) => item.tool === "buscar_contexto");
+    expect(row).toBeDefined();
+    expect(row?.sqlEnviado ?? "").not.toContain(query);
+    expect(row?.sqlEnviado ?? "").not.toContain("secretoxyzabc");
+    const tags = parseTagsTelemetriaBusca(row?.sqlEnviado ?? null);
+    expect(tags?.cobertura).toBe("desconhecida");
+    expect(tags?.consultaPermitida).toBe(false);
+    expect(tags?.gap).toBe("SKILL_GAP");
+  });
+
+  it("com KPI e cobertura completa devolve consultaSemanticaSugerida", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista de produtos",
+      sqlModelo: "SELECT SUM(p.valor) AS total FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(published.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["valor"] },
+        metricasSaida: [
+          {
+            alias: "total",
+            expr: "SUM(p.valor)",
+            dimensoesPermitidas: ["empresa"],
+            colunaData: "data",
+          },
+        ],
+      }),
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "produtos",
+    });
+    expect(result.consultaPermitida).toBe(true);
+    expect(result.consultaSemanticaSugerida).toEqual({
+      versao: 1,
+      metrica: "total",
+      dimensoes: ["empresa"],
+      colunaData: "data",
+    });
+    expect(result.hint).toMatch(/consultaSemantica/);
+    expect(result.skillsPublicadas[0]).not.toHaveProperty("sqlModelo");
+  });
+
+  it("com duas skills capazes escolhe o KPI cujo haystack overlap mais a pergunta", async () => {
+    const { buscar, created, skills } = await setup();
+    const produtos = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista de produtos",
+      sqlModelo: "SELECT SUM(p.qtd) AS saldo FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(produtos.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["qtd"] },
+        metricasSaida: [{ alias: "saldo", expr: "SUM(p.qtd)", definicao: "estoque atual" }],
+      }),
+    });
+    await skills.setStatus(produtos.id, "publicada");
+    const vendas = await skills.create({
+      agentId,
+      slug: "vendas-produtos",
+      nome: "Vendas de produtos",
+      descricao: "Lista de produtos vendidos",
+      sqlModelo: "SELECT SUM(v.valor) AS receita FROM produto v WHERE v.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(vendas.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["valor"] },
+        metricasSaida: [{ alias: "receita", expr: "SUM(v.valor)", definicao: "faturamento bruto" }],
+      }),
+    });
+    await skills.setStatus(vendas.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "produtos faturamento",
+    });
+    expect(result.consultaPermitida).toBe(true);
+    expect(result.consultaSemanticaSugerida).toMatchObject({ metrica: "receita" });
+  });
+
+  it("cobertura parcial com KPI não devolve esqueleto e pede sinônimo", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "titulos",
+      nome: "Títulos",
+      descricao: "Saldo financeiro",
+      sqlModelo: "SELECT SUM(t.valor) AS total FROM titulo t WHERE t.valor > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(published.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["titulo"],
+        colunasPorTabela: { titulo: ["valor"] },
+        metricasSaida: [{ alias: "total", expr: "SUM(t.valor)" }],
+      }),
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "saldo faturamentoabcxyz",
+    });
+    expect(result.cobertura).toBe("parcial");
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.consultaSemanticaSugerida).toBeUndefined();
+    expect(result.hint).toMatch(/sinonimo/);
+    expect(result.hint).toMatch(/obter_skill/);
   });
 });

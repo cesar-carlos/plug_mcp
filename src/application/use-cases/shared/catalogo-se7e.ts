@@ -1,5 +1,6 @@
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { Cardinalidade, PapelColuna } from "../../../domain/entities/escopo.js";
+import type { ParRelacionamento } from "../../../domain/entities/relacionamento.js";
 
 export interface ColunaCatalogo {
   readonly nome: string;
@@ -10,9 +11,8 @@ export interface ColunaCatalogo {
 
 export interface RelacionamentoCatalogo {
   readonly tabelaOrigem: string;
-  readonly colunaOrigem: string;
   readonly tabelaDestino: string;
-  readonly colunaDestino: string;
+  readonly pares: readonly ParRelacionamento[];
   readonly tipoJoin: string;
   readonly cardinalidade: Cardinalidade;
 }
@@ -28,6 +28,21 @@ export interface CatalogoSe7e {
   readonly tabelas: readonly TabelaCatalogo[];
   readonly relacionamentos: readonly RelacionamentoCatalogo[];
 }
+
+const colunasTitulo = (): readonly ColunaCatalogo[] => [
+  { nome: "codcli", tipo: "integer", papel: "chave", descricao: "Cliente" },
+  { nome: "documento", tipo: "varchar", papel: "codigo", descricao: "Número do título" },
+  { nome: "status", tipo: "varchar", papel: "codigo", descricao: "Situação do título" },
+  { nome: "valor", tipo: "numeric", papel: "medida", descricao: "Valor do título" },
+  { nome: "vencimento", tipo: "date", papel: "data", descricao: "Vencimento" },
+  { nome: "empresa", tipo: "integer", papel: "dimensao", descricao: "Empresa" },
+  { nome: "filial", tipo: "integer", papel: "dimensao", descricao: "Filial" },
+];
+
+const paresEmpresaFilial: readonly ParRelacionamento[] = [
+  { colunaOrigem: "empresa", colunaDestino: "empresa" },
+  { colunaOrigem: "filial", colunaDestino: "filial" },
+];
 
 const tabelasComuns = (): readonly TabelaCatalogo[] => [
   {
@@ -68,31 +83,49 @@ const tabelasComuns = (): readonly TabelaCatalogo[] => [
   },
   {
     nome: "receber",
-    descricao: "Títulos a receber.",
-    colunas: [
-      { nome: "codcli", tipo: "integer", papel: "chave", descricao: "Cliente" },
-      { nome: "valor", tipo: "numeric", papel: "medida", descricao: "Valor do título" },
-      { nome: "vencimento", tipo: "date", papel: "data", descricao: "Vencimento" },
-      { nome: "empresa", tipo: "integer", papel: "dimensao", descricao: "Empresa" },
-      { nome: "filial", tipo: "integer", papel: "dimensao", descricao: "Filial" },
-    ],
+    descricao: "Títulos a receber (template ilustrativo, não dump certificado).",
+    colunas: colunasTitulo(),
+  },
+  {
+    nome: "pagar",
+    descricao: "Títulos a pagar (template ilustrativo, não dump certificado).",
+    colunas: colunasTitulo(),
   },
 ];
 
 const relacionamentosComuns = (): readonly RelacionamentoCatalogo[] => [
   {
     tabelaOrigem: "filial",
-    colunaOrigem: "empresa",
     tabelaDestino: "empresa",
-    colunaDestino: "empresa",
+    pares: [{ colunaOrigem: "empresa", colunaDestino: "empresa" }],
+    tipoJoin: "inner",
+    cardinalidade: "N:1",
+  },
+  {
+    tabelaOrigem: "receber",
+    tabelaDestino: "filial",
+    pares: paresEmpresaFilial,
+    tipoJoin: "inner",
+    cardinalidade: "N:1",
+  },
+  {
+    tabelaOrigem: "pagar",
+    tabelaDestino: "filial",
+    pares: paresEmpresaFilial,
     tipoJoin: "inner",
     cardinalidade: "N:1",
   },
   {
     tabelaOrigem: "cliente",
-    colunaOrigem: "codcli",
     tabelaDestino: "receber",
-    colunaDestino: "codcli",
+    pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
+    tipoJoin: "inner",
+    cardinalidade: "1:N",
+  },
+  {
+    tabelaOrigem: "cliente",
+    tabelaDestino: "pagar",
+    pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
     tipoJoin: "inner",
     cardinalidade: "1:N",
   },

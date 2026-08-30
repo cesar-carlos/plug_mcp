@@ -234,6 +234,8 @@ export const compose = async (
       sessions,
       crypto,
       aprendizado,
+      audit,
+      logger,
     ),
     resolverConflito: new ResolverConflito(acessos, grafo),
     listarConflitos: new ListarConflitos(acessos, grafo),

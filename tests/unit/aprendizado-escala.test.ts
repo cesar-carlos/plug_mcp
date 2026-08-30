@@ -179,7 +179,12 @@ describe("aprendizado e escala", () => {
       confirmadoPeloUsuario: true,
     });
     expect(copied.tabelas).toBeGreaterThan(0);
+    expect(copied.origem).toBe("inferido");
+    expect(copied.publicaSkill).toBe(false);
     expect(await grafo.findTabelaByNome(agentId, "receber")).not.toBeNull();
+    expect(await grafo.findTabelaByNome(agentId, "pagar")).not.toBeNull();
+    const rels = await grafo.listRelacionamentos(agentId);
+    expect(rels.some((rel) => rel.pares.length > 1)).toBe(true);
   });
 
   it("escopo empresa/filial recusa SQL sem o predicado quando a coluna existe", () => {

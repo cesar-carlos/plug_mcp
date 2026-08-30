@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { AppConfig } from "../../config/env.js";
+import { buildInfo } from "../../config/build-info.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { RateLimitStore } from "../http/rate-limit.js";
 import { wwwAuthenticate, readBearer } from "./mcp-auth.js";
@@ -98,7 +99,7 @@ export const createMcpHttpHandler = (input: {
 
   const createSession = (bootstrap: boolean, usuarioId: string | null): Session => {
     const server = new McpServer(
-      { name: "se7e-mcp-server", version: "0.1.0" },
+      { name: "se7e-mcp-server", version: buildInfo().version },
       {
         capabilities: { tools: { listChanged: true }, prompts: {} },
         instructions: MCP_SERVER_INSTRUCTIONS,

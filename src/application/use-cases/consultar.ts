@@ -24,8 +24,10 @@ import type {
   HitConhecimento,
   SkillResumoContexto,
 } from "../../domain/entities/conhecimento.js";
+import { TIPOS_NARRATIVA_COM_SKILL } from "../../domain/entities/conhecimento.js";
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
 import type { Skill, StatusSkill } from "../../domain/entities/skill.js";
+import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
 import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
 import { assertFanoutSeguro } from "./shared/assert-fanout.js";
@@ -86,6 +88,15 @@ import {
   montarConhecimentos,
 } from "./shared/montar-conhecimentos.js";
 import {
+  esqueletoDaPrimeiraSkillComKpi,
+  type ConsultaSemanticaSugerida,
+} from "./shared/esqueleto-semantico.js";
+import {
+  formatarTagsTelemetriaBusca,
+  type GapBusca,
+  type TelemetriaBusca,
+} from "./shared/telemetria-busca.js";
+import {
   agruparColunasCatalogo,
   cell,
   DESCREVER_TABELA_MAX_ROWS,
@@ -104,6 +115,8 @@ const QUERY_CELL_MAX_CHARS = 2_048;
 const PERIODO_NA_PERGUNTA =
   /\b(per[ií]odo|ano|m[eê]s|yoy|versus|compar(ar|ação|acao)|trimestre|semestre)\b/i;
 
+const HINT_IDS_MAX = 3;
+
 const hintConsultasAprendidas = (
   query: string,
   consultas: readonly ConsultaAprendida[],
@@ -111,8 +124,13 @@ const hintConsultasAprendidas = (
   if (consultas.length === 0) {
     return undefined;
   }
+  const ids = consultas
+    .slice(0, HINT_IDS_MAX)
+    .map((item) => item.id)
+    .join(", ");
   const base =
-    "Reutilize as perguntas em consultasAprendidas (já comprovadas neste agentId). O SQL está em obter_skill (consultasExemplo). Adapte params; não invente tabela, coluna nem JOIN.";
+    `Reutilize consultasAprendidas[].id (${ids}) em obter_skill.pacote.consultasExemplo com o mesmo id. ` +
+    "Adapte params; não invente tabela, coluna nem JOIN. Não reinvente o SELECT.";
   if (PERIODO_NA_PERGUNTA.test(query)) {
     return `${base} Pergunta de período: reutilize a pergunta (params de data ou OVER/LAG); não reinventar a comparação.`;
   }
@@ -1175,6 +1193,8 @@ export class BuscarContexto {
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
     private readonly aprendizado?: AprendizadoRepositoryPort,
+    private readonly audit?: AuditLogPort,
+    private readonly logger?: LoggerPort,
   ) {}
 
   async execute(
@@ -1195,6 +1215,7 @@ export class BuscarContexto {
     skillsParaTreino: readonly SkillResumoContexto[];
     consultasAprendidas: readonly ConsultaAprendidaResumo[];
     conhecimentos: readonly HitConhecimento[];
+    consultaSemanticaSugerida?: ConsultaSemanticaSugerida;
     grafoParaTreino?: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     fluxoTreino?: FluxoTreino;
     gap?: { code: "SKILL_GAP"; hint: string };
@@ -1202,6 +1223,7 @@ export class BuscarContexto {
     nextAction?: string;
     hint?: string;
   }> {
+    const startedAt = Date.now();
     const uid = requireUsuario(usuarioId);
     const acesso = await refreshAndRequireAcessoAprovado(
       this.acessos,
@@ -1374,8 +1396,47 @@ export class BuscarContexto {
       ranksPorId,
     });
     const hintAprendidas = hintConsultasAprendidas(query, consultasAprendidas);
-    const hintRegra = hintRegraParcial(coberturaGeral, conhecimentos);
-    const hint = [hintAprendidas, hintRegra].filter(Boolean).join(" ") || undefined;
+    const hintRegra = hintRegraParcial(coberturaGeral, conhecimentos, candidatos.length > 0);
+    const skillsCompletas = skillsPublicadas.filter(
+      (skill) => coberturaDeSkill(skill, query, sinonimos).cobertura === "completa",
+    );
+    const consultaSemanticaSugerida = consultaPermitida
+      ? esqueletoDaPrimeiraSkillComKpi(skillsCompletas, query)
+      : undefined;
+    const hintSemantico = consultaSemanticaSugerida
+      ? "Prefira consultar_dados.consultaSemantica com metrica/dimensões do esqueleto; SQL livre só se faltar elemento certificado."
+      : undefined;
+    const hint = [hintAprendidas, hintRegra, hintSemantico].filter(Boolean).join(" ") || undefined;
+    const gapCode: GapBusca = skillNaoPublicada
+      ? "SKILL_NOT_PUBLISHED"
+      : consultaPermitida
+        ? "none"
+        : "SKILL_GAP";
+    const slotNarrativa = conhecimentos.some(
+      (item) => TIPOS_NARRATIVA_COM_SKILL.has(item.tipo) && Boolean(item.skillId),
+    );
+    const telemetria: TelemetriaBusca = {
+      conhecimentos: conhecimentos.length,
+      slotNarrativa,
+      cobertura: coberturaGeral,
+      consultaPermitida,
+      gap: gapCode,
+      listarSkills: precisaListar,
+    };
+    const camposLog: Record<string, unknown> = { ...telemetria };
+    this.logger?.info("buscar_contexto", camposLog);
+    if (this.audit) {
+      await this.audit.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: "buscar_contexto",
+        sqlEnviado: formatarTagsTelemetriaBusca(telemetria),
+        sucesso: true,
+        codigoErro: null,
+        linhasRetornadas: conhecimentos.length,
+        duracaoMs: Date.now() - startedAt,
+      });
+    }
     return {
       success: true as const,
       consultaPermitida,
@@ -1385,6 +1446,7 @@ export class BuscarContexto {
       skillsParaTreino: capazesTreino.map(resumoSkill),
       consultasAprendidas: consultasAprendidas.map(resumoConsulta),
       conhecimentos,
+      consultaSemanticaSugerida,
       grafoParaTreino: consultaPermitida
         ? undefined
         : {

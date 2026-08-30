@@ -1,6 +1,6 @@
 {
   "name": "se7e-mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Servidor MCP Se7e: cofre de credenciais do Client e grafo compartilhado por agentId",
   "type": "module",

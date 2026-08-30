@@ -35,7 +35,10 @@ documentação de produto e os testes correspondentes.
   `remover_relacionamento` apaga um fingerprint. `inspecionar_consulta` aceita
   `validada`. Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
   `conhecimentos[]` é evidência, não licença de consulta. Envelope de
-  `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — use `obter_skill`.
+  `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — reuse
+  `consultasAprendidas[].id` em `obter_skill`. `consultaSemanticaSugerida` só
+  com `consultaPermitida` e KPI (maior overlap da pergunta). `fluxoTreino.pacoteMinimo` oriente (uma
+  tabela) sem afrouxar gates.
 
 ## Segurança e autorização
 

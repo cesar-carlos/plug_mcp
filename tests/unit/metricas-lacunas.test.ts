@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  ListarAuditoria,
   ListarLacunas,
   ListarMetricasAgente,
   RegistrarLacunaFerramenta,
 } from "../../src/application/use-cases/aprendizado.js";
+import { formatarTagsTelemetriaBusca } from "../../src/application/use-cases/shared/telemetria-busca.js";
 import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
@@ -74,6 +76,12 @@ describe("métricas e lacunas de ferramenta", () => {
     expect(result.porTool.consultar_dados?.total).toBe(2);
     expect(result.porTool.consultar_dados?.erros).toBe(1);
     expect(result.porCodigo.INVALID_SQL).toBe(1);
+    expect(result.busca).toEqual({
+      total: 0,
+      consultaPermitida: 0,
+      skillGap: 0,
+      slotNarrativa: 0,
+    });
   });
 
   it("registra e lista lacuna de ferramenta", async () => {
@@ -94,5 +102,59 @@ describe("métricas e lacunas de ferramenta", () => {
     expect(lista.lacunas[0]?.id).toBe(createdLacuna.lacunaId);
     expect(lista.lacunas[0]?.tipo).toBe("ferramenta");
     expect(lista.lacunas[0]?.contrato).toMatchObject({ entradas: "skillId" });
+  });
+
+  it("listar_auditoria expõe telemetria só em buscar_contexto", async () => {
+    const { acessos, audit, created } = await setup();
+    await audit.append({
+      usuarioId: created.usuarioId,
+      acessoId: created.acessoId,
+      tool: "consultar_dados",
+      sqlEnviado: "SELECT 1",
+      sucesso: true,
+      codigoErro: null,
+      linhasRetornadas: 1,
+      duracaoMs: 4,
+    });
+    await audit.append({
+      usuarioId: created.usuarioId,
+      acessoId: created.acessoId,
+      tool: "buscar_contexto",
+      sqlEnviado: formatarTagsTelemetriaBusca({
+        conhecimentos: 2,
+        slotNarrativa: true,
+        cobertura: "completa",
+        consultaPermitida: true,
+        gap: "none",
+        listarSkills: false,
+      }),
+      sucesso: true,
+      codigoErro: null,
+      linhasRetornadas: 2,
+      duracaoMs: 9,
+    });
+    const auditoria = await new ListarAuditoria(acessos, audit).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+    });
+    const consulta = auditoria.entradas.find((item) => item.tool === "consultar_dados");
+    const busca = auditoria.entradas.find((item) => item.tool === "buscar_contexto");
+    expect(consulta).not.toHaveProperty("telemetria");
+    expect(busca?.telemetria).toEqual({
+      conhecimentos: 2,
+      slotNarrativa: true,
+      cobertura: "completa",
+      consultaPermitida: true,
+      gap: "none",
+      listarSkills: false,
+    });
+    const metricas = await new ListarMetricasAgente(acessos, audit).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+    });
+    expect(metricas.busca).toEqual({
+      total: 1,
+      consultaPermitida: 1,
+      skillGap: 0,
+      slotNarrativa: 1,
+    });
   });
 });

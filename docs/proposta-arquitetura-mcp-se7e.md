@@ -134,6 +134,6 @@ Critérios da proposta (ainda válidos como regressão). Detalhe operacional: [m
 14. `buscar_contexto` resolve sinônimos; devolve **perguntas** de consultas `ativa` (SQL em `obter_skill`).
 15. Tools `skill_*` desligáveis por flag.
 
-**Já entregue depois da proposta:** cruzar `skillIds[]` com união de **pacotes** (JOIN só se estiver no pacote unido, não no grafo solto); janelas `OVER`; cache `mcp:query:{agentId}:`; `pergunta` obrigatória; envelope slim + FTS.
+**Já entregue depois da proposta:** cruzar `skillIds[]` com união de **pacotes** (JOIN só se estiver no pacote unido, não no grafo solto); janelas `OVER`; cache `mcp:query:{agentId}:`; `pergunta` obrigatória; envelope slim + FTS (**não** RAG/embeddings).
 
 **Ainda fora:** parser Firebird para SQL livre.

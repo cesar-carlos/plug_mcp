@@ -11,15 +11,23 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-30
+
 ### Added
 
+- Telemetria de `buscar_contexto` em `audit_log` (counts/enums: conhecimentos, slot narrativo, cobertura, permitida, gap, `listarSkills`) **sem** a pergunta. `listar_auditoria` devolve `telemetria` só nessa tool; `listar_metricas_agente.busca` agrega totais.
+- `buscar_contexto.consultaSemanticaSugerida`: esqueleto (`metrica`/`dimensoes`/`colunaData`) só se `consultaPermitida` e houver KPI (`consultaSemantica` persistida ou `metricasSaida`). Entre skills com cobertura `completa`, escolhe o haystack de KPI (alias+definição+grão) com mais tokens da pergunta; empate: IR persistido, depois ordem. Prefira `consultar_dados.consultaSemantica`.
+- `fluxoTreino.pacoteMinimo`: orientação para publicar uma tabela com WHERE ou agregação. **Não** afrouxa os gates (JOIN sem cardinalidade continua bloqueado).
+- Template `herdar_catalogo`: tabela `pagar` e JOINs compostos empresa+filial (`pares[]`). Só grafo. Envelope `origem: "inferido"`, `publicaSkill: false` — não autoriza consulta.
 - `buscar_contexto.conhecimentos[]`: evidência léxica ranqueada (regra, glossário, métrica, pergunta aprendida, skill, tabela). Teto 8 (1 slot reservado para regra/glossário/métrica com `skillId`), trecho truncado. Hit FTS entra mesmo sem substring JS; `ts_rank` desempatra. **Não** autoriza SQL — `consultaPermitida` continua só com cobertura certificada. FTS (`portuguese` + `unaccent`) + `ILIKE` no Postgres; sinônimo resolve skill por id/slug/nome **sem** concatenar UUID na tsquery. Nota com `skillId` inclui a skill em `candidatos` mesmo se o nome não bater. Após deploy, reconectar o cliente MCP.
 - Tools `listar_conflitos` e `remover_relacionamento` (este com confirmação): o agente lista ids de conflito e apaga um JOIN pelo fingerprint, em vez de adivinhar.
 - `faltas[]` (`kind`, `alvo`, `nextAction`) em `listar_skills` / `obter_skill`. `publicar_skill` sem confirmação devolve `publicado: false`, `resumoPublicacao` e `faltas[]` — não invente o resumo.
 - Health injeta `GIT_SHA` / `SOURCE_COMMIT` / `GITHUB_SHA` no `sha` (PM2, Docker, CI). Snapshot de `tools/list` no teste de integração. Após deploy, reconectar o cliente MCP.
+- Rate limit da tool MCP preenche `source: "mcp"` e `stage: "rate_limit"` no envelope de erro. Não varre todos os `DomainError`. `CACHE` continua aviso; `SKILL_GAP` de `buscar_contexto` permanece no envelope de sucesso.
 
 ### Changed
 
+- Hint de `buscar_contexto` cita até 3 `consultasAprendidas[].id` para reuso em `obter_skill.consultasExemplo`. Cobertura parcial pede `registrar_aprendizado tipo=sinonimo` mesmo sem slot narrativo. Skill puxada só pela nota (cobertura `desconhecida`) com regra em `conhecimentos[]` também pede `obter_skill`. `McpServer.version` lê `buildInfo().version`.
 - Busca de `consulta_aprendida` ranqueia só a **pergunta** (não o SQL) e só status `ativa`. Cobertura certificada segue nome/slug/descrição/params/`metricasSaida`/sinônimos — corpo e título de regra não completam cobertura. Postgres: `ORDER BY ts_rank` (score até `conhecimentos[]`); `ILIKE` de skill lê nome/descrição de params e alias/definição/grão de `metricasSaida` (não dump JSON nem `expr`). Tsquery vazia cai só no `ILIKE`. `grafoParaTreino.anotacoes` recorta tabela pela policy (id irresolvível omite); nota sem tabela só entra se for global ou a `skillId` estiver nos candidatos.
 - `buscar_contexto` **não** devolve `sqlModelo` nem SQL de `consultasAprendidas` (só id/pergunta/skillIds/execucoes/status). O SELECT está em `obter_skill` (`consultasExemplo`). Após deploy, reconectar o cliente MCP.
 - Skill `validada` com perfil incompleto: `fluxoTreino.proximoPasso` aponta a tool da primeira falta (`confirmar_relacionamento`, `mapear_tabela`, `listar_conflitos`…) e nunca fica `null`.
@@ -30,6 +38,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Security
 
+- Migration `0019_drop_unused_vector.sql`: `DROP EXTENSION IF EXISTS vector` (pgvector de `0008` nunca usado; busca é FTS).
 - Migration `0017_fts_hardening.sql`: `SET search_path = pg_catalog, public` em `mcp_unaccent` / `mcp_skill_search_vec`; GIN composto `(agent_id, search_tsv)` com `btree_gin`.
 - Migration `0018_fts_rank_trgm.sql`: pesos FTS A/B/C em `mcp_skill_search_vec` (nome/slug, descrição/params, métricas) e `pg_trgm` em nome/slug/pergunta. O papel da migration precisa de `CREATE EXTENSION` (`unaccent`, `btree_gin`, `pg_trgm`).
 
@@ -47,6 +56,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- Typecheck: telemetria de `buscar_contexto` é espalhada em `Record<string, unknown>` antes do `LoggerPort`.
 - JOIN composto: se o pacote tem `pares[]` com mais de um par, o `ON` incompleto é recusado (fallback v1 só quando não há composto). Evita consulta que “passa” com chave parcial.
 - Pacote da skill recebe cardinalidade/tipo do grafo (`sincronizarEscopoComGrafo` em criar/validar/mapear/confirmar/treino); `uniaoEscopos` não apaga cardinalidade já gravada. Fan-out deixa de dar falso positivo em JOIN já perfilado.
 - `PERFIL_TETO` é retomável: pula JOIN/coluna já perfilados (`details.retomavel: true`).

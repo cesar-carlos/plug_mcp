@@ -335,7 +335,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência ranqueada (não autoriza SQL). Envelope sem sqlModelo nem SQL aprendido — use obter_skill. Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Reuse perguntas de consultasAprendidas. grafoParaTreino só no fluxo de gap.",
+    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência ranqueada (não autoriza SQL). Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida e houver KPI, consultaSemanticaSugerida (sem SQL). Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -485,7 +485,7 @@ export const registerTools = (
 
   server.tool(
     "criar_skill",
-    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. A IA consulta o ERP pela skill publicada, não pelo grafo.",
+    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Pacote mínimo: uma tabela, colunas nomeadas, WHERE ou agregação, params com descricao; JOIN/KPI só se o usuário pedir. Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. A IA consulta o ERP pela skill publicada, não pelo grafo.",
     {
       acessoId: z.string().optional(),
       slug: z.string().optional(),
@@ -798,7 +798,7 @@ export const registerTools = (
 
   server.tool(
     "herdar_catalogo",
-    "Copia o catálogo template Se7e (tabelas/colunas/relacionamentos) para o grafo do agentId. Origem inferido. Exige confirmadoPeloUsuario: true.",
+    "Copia o template ilustrativo Se7e (empresa/filial/cliente/produto/receber/pagar, JOINs simples e compostos empresa+filial) para o grafo. Envelope: origem inferido, publicaSkill false — não autoriza consultar_dados. Treino com SQL real continua obrigatório. Exige confirmadoPeloUsuario: true.",
     {
       acessoId: z.string().optional(),
       confirmadoPeloUsuario: z.boolean().optional(),
@@ -810,7 +810,7 @@ export const registerTools = (
 
   server.tool(
     "listar_auditoria",
-    "Lista as últimas execuções de tools deste acesso (sem SQL completo nem segredos).",
+    "Lista as últimas execuções de tools deste acesso (sem SQL completo nem segredos). buscar_contexto inclui telemetria (counts/enums, sem a pergunta).",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>
@@ -819,7 +819,7 @@ export const registerTools = (
 
   server.tool(
     "listar_metricas_agente",
-    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Sem SQL, params ou linhas de ERP.",
+    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, slot narrativo). Sem SQL, params ou linhas de ERP.",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>

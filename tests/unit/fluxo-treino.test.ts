@@ -350,6 +350,7 @@ describe("fluxo guiado de treino", () => {
     expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.hint).toMatch(
       /mapear_tabela/,
     );
+    expect(fluxo.pacoteMinimo).toBe(false);
   });
 
   it("rascunho_revalidacao pede validar_skill citando motivoRevalidacao", () => {
@@ -395,5 +396,17 @@ describe("fluxo guiado de treino", () => {
     expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.hint).toMatch(
       /validar_skill/,
     );
+    expect(fluxo.pacoteMinimo).toBe(true);
+  });
+
+  it("pacoteMinimo true sem skill; criar_skill pendente cita pacote mínimo", () => {
+    const fluxo = buildFluxoTreino({
+      treinado: true,
+      skill: null,
+      conflitosPendentes: 0,
+      perfilCompleto: true,
+    });
+    expect(fluxo.pacoteMinimo).toBe(true);
+    expect(fluxo.passos.find((passo) => passo.id === "criar_skill")?.hint).toMatch(/Pacote mínimo/);
   });
 });

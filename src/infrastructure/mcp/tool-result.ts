@@ -110,6 +110,8 @@ export const createToolRunner = (
             hint: `Aguarde ${Math.ceil(hit.retryAfterMs / 1000)}s e tente de novo.`,
             retryable: true,
             retryAfterMs: hit.retryAfterMs,
+            source: "mcp",
+            stage: "rate_limit",
           }),
           config,
           logger,
