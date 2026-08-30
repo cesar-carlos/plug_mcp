@@ -173,7 +173,7 @@ describe("fluxo guiado de treino", () => {
     expect(updated.skill.status).toBe("rascunho");
   });
 
-  it("publicar_skill falha sem confirmadoPeloUsuario", async () => {
+  it("publicar_skill sem confirmação devolve resumo e não publica", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
     await seedTabela(grafo, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
@@ -190,12 +190,14 @@ describe("fluxo guiado de treino", () => {
       acessoId: created.acessoId,
       skillId: createdSkill.skill.id,
     });
-    await expect(
-      publicar.execute(created.usuarioId, {
-        acessoId: created.acessoId,
-        skillId: createdSkill.skill.id,
-      }),
-    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+    const preview = await publicar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+    });
+    expect(preview.publicado).toBe(false);
+    expect(preview.skill.status).toBe("validada");
+    expect(preview.resumoPublicacao.slug).toBe(createdSkill.skill.slug);
+    expect(preview.resumoPublicacao.tabelas).toContain("produto");
   });
 
   it("publica quando o checklist está completo", async () => {
@@ -332,9 +334,22 @@ describe("fluxo guiado de treino", () => {
       skill,
       conflitosPendentes: 0,
       perfilCompleto: false,
+      faltas: [
+        {
+          kind: "perfil",
+          alvo: "produto.valor",
+          message: "Coluna produto.valor sem tipo/formato. Chame mapear_tabela.",
+          nextAction: "mapear_tabela",
+        },
+      ],
     });
     expect(fluxo.podeLiberar).toBe(false);
     expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.status).toBe("bloqueado");
+    expect(fluxo.passoAtual).toBe("publicar_skill");
+    expect(fluxo.proximoPasso).toBe("mapear_tabela");
+    expect(fluxo.passos.find((passo) => passo.id === "publicar_skill")?.hint).toMatch(
+      /mapear_tabela/,
+    );
   });
 
   it("rascunho_revalidacao pede validar_skill citando motivoRevalidacao", () => {

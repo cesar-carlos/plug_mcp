@@ -42,7 +42,7 @@ O Compose publica o Postgres na porta `5433` do host (para não colidir com um P
 
 Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fechar numa skill publicada — é ela que a IA usa na consulta.
 
-- Health: `GET http://127.0.0.1:3333/health` (`version`, `sha`, `buildTime`, `uptimeSec`)
+- Health: `GET http://127.0.0.1:3333/health` (`version`, `sha` via `GIT_SHA`/`SOURCE_COMMIT`/`GITHUB_SHA`, `buildTime`, `uptimeSec`). Após deploy, reconecte o cliente MCP para atualizar `tools/list`.
 - Ready: `GET http://127.0.0.1:3333/ready` (`database: ok|skipped|error`; 503 se o banco falhar)
 - MCP: `POST http://127.0.0.1:3333/mcp`
 - Token MCP (one-shot): `GET http://127.0.0.1:3333/setup/{code}`

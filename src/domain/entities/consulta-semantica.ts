@@ -36,7 +36,9 @@ export const parseConsultaSemantica = (value: unknown): ConsultaSemantica | null
     return null;
   }
   const dimensoes = Array.isArray(rec.dimensoes)
-    ? rec.dimensoes.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    ? rec.dimensoes.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      )
     : [];
   const filtros: FiltroSemantico[] = [];
   if (Array.isArray(rec.filtros)) {

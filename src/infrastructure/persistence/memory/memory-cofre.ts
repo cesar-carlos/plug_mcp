@@ -38,7 +38,9 @@ import type {
   MergeColunaInput,
   MergeRelacionamentoInput,
   MergeTabelaInput,
+  ConflitoGrafo,
 } from "../../../domain/ports/grafo-repository.port.js";
+import { montarListaConflitos } from "../montar-conflitos.js";
 import type {
   AnotacaoGrafoRepositoryPort,
   SkillRepositoryPort,
@@ -410,6 +412,10 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     return { relacionamento, conflito: merge.conflito };
   }
 
+  async deleteRelacionamento(id: string): Promise<boolean> {
+    return this.rels.delete(id);
+  }
+
   async listTabelas(agentId: string): Promise<readonly TabelaGrafo[]> {
     return [...this.tabelas.values()].filter((row) => row.agentId === agentId);
   }
@@ -433,6 +439,14 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
       (rel) => rel.agentId === agentId && rel.status === "conflito",
     ).length;
     return n;
+  }
+
+  async listConflitos(agentId: string): Promise<readonly ConflitoGrafo[]> {
+    const tabelas = [...this.tabelas.values()].filter((row) => row.agentId === agentId);
+    const tabelaIds = new Set(tabelas.map((tabela) => tabela.id));
+    const colunas = [...this.colunas.values()].filter((coluna) => tabelaIds.has(coluna.tabelaId));
+    const rels = [...this.rels.values()].filter((rel) => rel.agentId === agentId);
+    return montarListaConflitos(tabelas, colunas, rels);
   }
 
   async findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null> {
@@ -632,8 +646,10 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
       ),
       tokenizeQuery(query),
       (row) =>
-        `${row.nome} ${row.descricao} ${row.slug} ${row.sqlModelo} ${row.params
+        `${row.nome} ${row.descricao} ${row.slug} ${row.params
           .map((param) => `${param.nome} ${param.descricao} ${param.tipo}`)
+          .join(" ")} ${row.escopo.metricasSaida
+          .map((item) => `${item.alias} ${item.definicao ?? ""} ${item.grao ?? ""}`)
           .join(" ")}`,
       limite,
     );

@@ -21,6 +21,7 @@ import type {
   BuscarContexto,
   ConsultarDados,
   ExplorarTabelas,
+  ListarConflitos,
   MapearTabela,
   ResolverConflito,
   ValidarConsulta,
@@ -44,6 +45,7 @@ import type {
   ObterSkill,
   PublicarSkill,
   RemoverAnotacao,
+  RemoverRelacionamento,
   RemoverSkill,
   ValidarSkill,
 } from "../../application/use-cases/skills.js";
@@ -73,6 +75,7 @@ export interface ToolUseCases {
   mapearTabela: MapearTabela;
   buscarContexto: BuscarContexto;
   resolverConflito: ResolverConflito;
+  listarConflitos: ListarConflitos;
   validarConsulta: ValidarConsulta;
   criarSkill: CriarSkill;
   atualizarSkill: AtualizarSkill;
@@ -84,6 +87,7 @@ export interface ToolUseCases {
   obterSkill: ObterSkill;
   expandirEscopo: ExpandirEscopo;
   confirmarRelacionamento: ConfirmarRelacionamento;
+  removerRelacionamento: RemoverRelacionamento;
   confirmarColuna: ConfirmarColuna;
   anotarGrafo: AnotarGrafo;
   listarAnotacoes: ListarAnotacoes;
@@ -353,6 +357,15 @@ export const registerTools = (
       run("resolver_conflito", () => useCases.resolverConflito.execute(currentAccountId(), args)),
   );
 
+  server.tool(
+    "listar_conflitos",
+    "Lista fatos em conflito do agentId (kind, ids, nomes, hint) para resolver_conflito. Sem SQL e sem linhas de ERP.",
+    { acessoId: z.string().optional() },
+    readList,
+    async (args) =>
+      run("listar_conflitos", () => useCases.listarConflitos.execute(currentAccountId(), args)),
+  );
+
   server.registerTool(
     "consultar_dados",
     {
@@ -532,7 +545,7 @@ export const registerTools = (
 
   server.tool(
     "publicar_skill",
-    "Libera a skill só com checklist completo e confirmadoPeloUsuario: true. Mostre o resumo no chat antes de publicar.",
+    "Libera a skill só com checklist completo e confirmadoPeloUsuario: true. Sem confirmação devolve publicado:false, resumoPublicacao e faltas[] — não invente o resumo.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -593,7 +606,7 @@ export const registerTools = (
 
   server.tool(
     "listar_skills",
-    "Lista skills do agentId (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino). Sem sqlModelo — use obter_skill para o pacote.",
+    "Lista skills do agentId (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote.",
     { acessoId: z.string().optional() },
     readList,
     async (args) =>
@@ -602,7 +615,7 @@ export const registerTools = (
 
   server.tool(
     "obter_skill",
-    "Obtém o pacote da skill: escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas e guia de dialeto. Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios.",
+    "Obtém o pacote da skill: escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -644,6 +657,26 @@ export const registerTools = (
     async (args) =>
       run("confirmar_relacionamento", () =>
         useCases.confirmarRelacionamento.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "remover_relacionamento",
+    "Remove um JOIN (fingerprint dos pares) do grafo e, com skillId, do pacote. Um relacionamento por chamada. Exige confirmadoPeloUsuario: true.",
+    {
+      acessoId: z.string().optional(),
+      skillId: z.string().optional(),
+      tabelaOrigem: z.string().optional(),
+      tabelaDestino: z.string().optional(),
+      pares: z.array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() })).optional(),
+      colunaOrigem: z.string().optional(),
+      colunaDestino: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("remover_relacionamento", () =>
+        useCases.removerRelacionamento.execute(currentAccountId(), args),
       ),
   );
 
@@ -836,7 +869,7 @@ export const registerTools = (
   if (config.MCP_INSPECTION_ENABLED) {
     server.tool(
       "inspecionar_consulta",
-      "Amostra estrutural (máx. 100 linhas) de skill publicada. Exige finalidade (validar_tipo|avaliar_nulos|verificar_join|amostra_estrutura). Mascara PII/segredos. Sem cache, aprendizado ou paginação. SELECT * é expandido para colunas conhecidas.",
+      "Amostra estrutural (máx. 100 linhas) de skill validada, rascunho_revalidacao ou publicada. Exige finalidade (validar_tipo|avaliar_nulos|verificar_join|amostra_estrutura). Mascara PII/segredos. Sem cache, aprendizado ou paginação. SELECT * é expandido para colunas conhecidas. Recusa rascunho sem validação.",
       {
         acessoId: z.string().optional(),
         skillId: z.string().optional(),

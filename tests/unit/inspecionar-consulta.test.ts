@@ -183,4 +183,78 @@ describe("inspecionar_consulta", () => {
     expect(String(result.rows[0]?.nome)).toMatch(/^p_/);
     expect(plug.lastSql).toMatch(/cliente/i);
   });
+
+  it("aceita skill validada e recusa rascunho", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const skills = new InMemorySkillRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const sqlModelo = "SELECT c.codcli AS codigo FROM cliente c WHERE c.codcli > 0";
+    const rascunho = await skills.create({
+      agentId,
+      slug: "clientes-rascunho",
+      nome: "Clientes rascunho",
+      descricao: "cadastro",
+      sqlModelo,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sqlModelo)),
+      autorUsuarioId: created.usuarioId,
+    });
+    const validada = await skills.create({
+      agentId,
+      slug: "clientes-validada",
+      nome: "Clientes validada",
+      descricao: "cadastro",
+      sqlModelo,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sqlModelo)),
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(validada.id, "validada");
+    plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });
+    const inspecionar = new InspecionarConsulta(
+      acessos,
+      skills,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+    );
+    await expect(
+      inspecionar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: rascunho.id,
+        finalidade: "amostra_estrutura",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.SKILL_NOT_PUBLISHED });
+    const result = await inspecionar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: validada.id,
+      finalidade: "amostra_estrutura",
+    });
+    expect(result.rowCount).toBe(1);
+  });
 });

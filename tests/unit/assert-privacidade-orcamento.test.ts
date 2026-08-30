@@ -97,9 +97,7 @@ describe("pré-check de privacidade e orçamento", () => {
       parseEscopoSkill({
         tabelas: ["receber"],
         colunasPorTabela: { receber: ["valor", "empresa", "status"] },
-        metricasSaida: [
-          { alias: "total", expr: "SUM(r.valor)", statusIncluidos: ["A"] },
-        ],
+        metricasSaida: [{ alias: "total", expr: "SUM(r.valor)", statusIncluidos: ["A"] }],
       }),
     );
     expect(avisos.some((aviso) => aviso.code === "KPI_DESALINHADO")).toBe(true);

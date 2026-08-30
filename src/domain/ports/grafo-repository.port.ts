@@ -49,6 +49,17 @@ export interface MergeRelacionamentoInput {
   readonly autorUsuarioId: string | null;
 }
 
+export interface ConflitoGrafo {
+  readonly kind: "tabela" | "coluna" | "join";
+  readonly tabelaId?: string;
+  readonly colunaId?: string;
+  readonly relacionamentoId?: string;
+  readonly tabela?: string;
+  readonly coluna?: string;
+  readonly join?: string;
+  readonly hint: string;
+}
+
 export interface GrafoRepositoryPort {
   withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T>;
   getDialeto(agentId: string): Promise<GrafoDialeto | null>;
@@ -58,10 +69,12 @@ export interface GrafoRepositoryPort {
   mergeRelacionamento(
     input: MergeRelacionamentoInput,
   ): Promise<{ relacionamento: RelacionamentoGrafo; conflito: boolean }>;
+  deleteRelacionamento(id: string): Promise<boolean>;
   listTabelas(agentId: string): Promise<readonly TabelaGrafo[]>;
   listColunas(tabelaId: string): Promise<readonly ColunaGrafo[]>;
   listRelacionamentos(agentId: string): Promise<readonly RelacionamentoGrafo[]>;
   countConflitos(agentId: string): Promise<number>;
+  listConflitos(agentId: string): Promise<readonly ConflitoGrafo[]>;
   findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null>;
   findColuna(tabelaId: string, nome: string): Promise<ColunaGrafo | null>;
   saveSchemaSnapshot(input: {

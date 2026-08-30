@@ -27,6 +27,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_mcp_test
       MCP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       PLUG_SERVER_BASE_URL: http://plug-server.test
+      GIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

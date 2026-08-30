@@ -24,6 +24,9 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toContain("hasNextPage");
     expect(PRE_TREINO_SESSAO).toContain("LITERAL_TEXTO");
     expect(PRE_TREINO_SESSAO).toMatch(/inspecionar_consulta sem sql/i);
+    expect(PRE_TREINO_SESSAO).toMatch(/Aceita skill validada/i);
+    expect(PRE_TREINO_SESSAO).toContain("listar_conflitos");
+    expect(PRE_TREINO_SESSAO).toContain("faltas");
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
   });
 
@@ -34,5 +37,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(MCP_SERVER_INSTRUCTIONS).toContain("despublicar_skill");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("metricasSaida");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("rascunho_revalidacao");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("remover_relacionamento");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("resumoPublicacao");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("listar_conflitos");
   });
 });

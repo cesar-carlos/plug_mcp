@@ -36,6 +36,7 @@ import type {
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import {
+  fluxoEFaltasForAgentSkill,
   fluxoForAgentSkill,
   fluxoForAgentSkills,
   mergeParamInput,
@@ -49,6 +50,7 @@ import {
   exigirEscopoNoGrafo,
   exigirPacotePublicavel,
   listarFatosIncompletos,
+  type FatoIncompleto,
 } from "./shared/gates-skill.js";
 import { validarSqlNoEscopo } from "./shared/validar-escopo.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
@@ -71,6 +73,7 @@ import {
   requireUsuario,
 } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
+import { guiaDialeto } from "./shared/guia-dialeto.js";
 import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
 import { parsePoliticaConsulta } from "../../domain/entities/politica-consulta.js";
 import {
@@ -78,7 +81,7 @@ import {
   type SensibilidadeColuna,
 } from "../../domain/entities/privacidade.js";
 import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
-import { guiaDialeto } from "./shared/guia-dialeto.js";
+import { podarRelacionamentosSubsetNoGrafo } from "./shared/podar-relacionamentos.js";
 
 interface ParamInput {
   nome?: string;
@@ -128,7 +131,51 @@ export interface SkillListItem {
   readonly motivoRevalidacao: string | null;
   readonly podeLiberar: boolean;
   readonly fluxoTreino: FluxoTreino;
+  readonly faltas: readonly FatoIncompleto[];
 }
+
+export interface ResumoPublicacao {
+  readonly nome: string;
+  readonly slug: string;
+  readonly status: StatusSkill;
+  readonly tabelas: readonly string[];
+  readonly relacionamentos: readonly {
+    readonly origem: string;
+    readonly destino: string;
+    readonly pares: readonly { colunaOrigem: string; colunaDestino: string }[];
+    readonly cardinalidade: string | null;
+  }[];
+  readonly metricas: readonly { readonly alias: string; readonly definicao?: string }[];
+  readonly params: readonly {
+    readonly nome: string;
+    readonly descricao: string;
+    readonly tipo: string;
+  }[];
+  readonly podeLiberar: boolean;
+}
+
+const montarResumoPublicacao = (skill: Skill, podeLiberar: boolean): ResumoPublicacao => ({
+  nome: skill.nome,
+  slug: skill.slug,
+  status: skill.status,
+  tabelas: skill.escopo.tabelas,
+  relacionamentos: skill.escopo.relacionamentos.map((rel) => ({
+    origem: rel.tabelaOrigem,
+    destino: rel.tabelaDestino,
+    pares: [...paresDoRelacionamento(rel)],
+    cardinalidade: rel.cardinalidade ?? null,
+  })),
+  metricas: skill.escopo.metricasSaida.map((item) => ({
+    alias: item.alias,
+    ...(item.definicao ? { definicao: item.definicao } : {}),
+  })),
+  params: skill.params.map((param) => ({
+    nome: param.nome,
+    descricao: param.descricao,
+    tipo: param.tipo,
+  })),
+  podeLiberar,
+});
 
 export class CriarSkill {
   constructor(
@@ -477,7 +524,14 @@ export class PublicarSkill {
   async execute(
     usuarioId: string | undefined,
     input: { acessoId?: string; skillId?: string; confirmadoPeloUsuario?: boolean },
-  ): Promise<{ success: true; skill: Skill; fluxoTreino: FluxoTreino }> {
+  ): Promise<{
+    success: true;
+    publicado: boolean;
+    skill: Skill;
+    fluxoTreino: FluxoTreino;
+    resumoPublicacao: ResumoPublicacao;
+    faltas: readonly FatoIncompleto[];
+  }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const skill = await this.skills.findById(input.skillId ?? "");
@@ -488,12 +542,17 @@ export class PublicarSkill {
         hint: "Use listar_skills.",
       });
     }
+    const { fluxo, faltas } = await fluxoEFaltasForAgentSkill(this.grafo, acesso.agentId, skill);
+    const resumoPublicacao = montarResumoPublicacao(skill, fluxo.podeLiberar);
     if (input.confirmadoPeloUsuario !== true) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Publicar exige confirmação do usuário.",
-        hint: "Mostre o resumo da skill no chat e chame de novo com confirmadoPeloUsuario: true.",
-      });
+      return {
+        success: true,
+        publicado: false,
+        skill,
+        fluxoTreino: fluxo,
+        resumoPublicacao,
+        faltas,
+      };
     }
     if (skill.status !== "validada") {
       throw new DomainError({
@@ -514,15 +573,20 @@ export class PublicarSkill {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "Há conflitos pendentes no escopo desta skill.",
-        hint: "Chame resolver_conflito só para tabelas/colunas/JOINs deste pacote.",
+        hint: "Chame listar_conflitos e depois resolver_conflito só para tabelas/colunas/JOINs deste pacote.",
+        details: { faltas },
       });
     }
     await exigirPacotePublicavel(this.grafo, acesso.agentId, skill.escopo, skill.sqlModelo);
     const updated = await this.skills.setStatus(skill.id, "publicada", skill.versao);
+    const after = await fluxoEFaltasForAgentSkill(this.grafo, acesso.agentId, updated);
     return {
       success: true,
+      publicado: true,
       skill: updated,
-      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updated),
+      fluxoTreino: after.fluxo,
+      resumoPublicacao: montarResumoPublicacao(updated, after.fluxo.podeLiberar),
+      faltas: after.faltas,
     };
   }
 }
@@ -644,9 +708,10 @@ export class ListarSkills {
     return {
       success: true,
       skills: rows.map((skill, index) => {
-        const fluxoTreino = fluxos[index] ?? {
-          passoAtual: "treinar_sql",
-          proximoPasso: "treinar_sql",
+        const packed = fluxos[index];
+        const fluxoTreino = packed?.fluxo ?? {
+          passoAtual: "treinar_sql" as const,
+          proximoPasso: "treinar_sql" as const,
           podeLiberar: false,
           passos: [],
         };
@@ -659,6 +724,7 @@ export class ListarSkills {
           motivoRevalidacao: skill.motivoRevalidacao,
           podeLiberar: fluxoTreino.podeLiberar,
           fluxoTreino,
+          faltas: packed?.faltas ?? [],
         };
       }),
     };
@@ -720,6 +786,7 @@ export class ObterSkill {
     timezone: string | null;
     fluxoTreino: FluxoTreino;
     avisos: { code: string; message: string }[];
+    faltas: readonly FatoIncompleto[];
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await refreshAndRequireAcessoAprovado(
@@ -882,6 +949,7 @@ export class ObterSkill {
       timezone: acesso.timezone,
       fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, persisted),
       avisos,
+      faltas,
     };
   }
 }
@@ -1226,7 +1294,7 @@ export class ConfirmarRelacionamento {
       tipoJoin?: string;
       cardinalidade?: Cardinalidade;
     },
-  ): Promise<{ success: true; skill?: Skill }> {
+  ): Promise<{ success: true; skill?: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const origemNome = input.tabelaOrigem?.trim() ?? "";
@@ -1295,9 +1363,13 @@ export class ConfirmarRelacionamento {
         origem: "confirmado_usuario",
         autorUsuarioId: uid,
       });
+      await podarRelacionamentosSubsetNoGrafo(this.grafo, acesso.agentId);
     });
     if (!skill) {
-      return { success: true };
+      return {
+        success: true,
+        fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
+      };
     }
     const extraEscopo: EscopoSkill = {
       tabelas: [origemNome, destinoNome],
@@ -1330,6 +1402,116 @@ export class ConfirmarRelacionamento {
       acesso.agentId,
       { skillId: updated.id },
     );
-    return { success: true, skill: sincronizada ?? updated };
+    const finalSkill = sincronizada ?? updated;
+    return {
+      success: true,
+      skill: finalSkill,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, finalSkill),
+    };
+  }
+}
+
+export class RemoverRelacionamento {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      skillId?: string;
+      tabelaOrigem?: string;
+      tabelaDestino?: string;
+      pares?: { colunaOrigem?: string; colunaDestino?: string }[];
+      colunaOrigem?: string;
+      colunaDestino?: string;
+      confirmadoPeloUsuario?: boolean;
+    },
+  ): Promise<{ success: true; skill?: Skill; fluxoTreino: FluxoTreino }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Remover relacionamento exige confirmação do usuário.",
+        hint: "Mostre o JOIN (tabelas e pares) e chame de novo com confirmadoPeloUsuario: true.",
+      });
+    }
+    const origemNome = input.tabelaOrigem?.trim() ?? "";
+    const destinoNome = input.tabelaDestino?.trim() ?? "";
+    const pares = paresDeInput(input);
+    if (!origemNome || !destinoNome || pares.length === 0) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "tabelaOrigem, tabelaDestino e pares são obrigatórios.",
+        hint: "Um relacionamento por chamada. Use obter_skill para ver o fingerprint.",
+      });
+    }
+    const skillId = input.skillId?.trim() ?? "";
+    const skill = skillId ? await this.skills.findById(skillId) : null;
+    if (skillId && skill?.agentId !== acesso.agentId) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "Skill não encontrada neste agentId.",
+        hint: "Passe skillId do mesmo acesso ou omita para apagar só no grafo.",
+      });
+    }
+    const fp = fingerprintPares(pares);
+    const fpInv = fingerprintParesInvertidos(pares);
+    let updatedSkill = skill ?? undefined;
+    await this.grafo.withAgentLock(acesso.agentId, async () => {
+      const origem = await this.grafo.findTabelaByNome(acesso.agentId, origemNome);
+      const destino = await this.grafo.findTabelaByNome(acesso.agentId, destinoNome);
+      if (!origem || !destino) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Tabela ainda não está no grafo.",
+          hint: "Use obter_skill / listar_skills para conferir os nomes físicos.",
+        });
+      }
+      const rels = await this.grafo.listRelacionamentos(acesso.agentId);
+      const match = rels.find((item) => {
+        const direto =
+          item.tabelaOrigemId === origem.id &&
+          item.tabelaDestinoId === destino.id &&
+          item.paresFingerprint === fp;
+        const inverso =
+          item.tabelaOrigemId === destino.id &&
+          item.tabelaDestinoId === origem.id &&
+          item.paresFingerprint === fpInv;
+        return direto || inverso;
+      });
+      if (!match) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Relacionamento não encontrado no grafo.",
+          hint: "Confira tabelas e pares[]. Um relacionamento por chamada.",
+        });
+      }
+      await this.grafo.deleteRelacionamento(match.id);
+    });
+    if (skill) {
+      const nextRels = skill.escopo.relacionamentos.filter((rel) => {
+        const relPares = paresDoRelacionamento(rel);
+        const relFp = fingerprintPares(relPares);
+        const sameTables =
+          (rel.tabelaOrigem.toLowerCase() === origemNome.toLowerCase() &&
+            rel.tabelaDestino.toLowerCase() === destinoNome.toLowerCase()) ||
+          (rel.tabelaOrigem.toLowerCase() === destinoNome.toLowerCase() &&
+            rel.tabelaDestino.toLowerCase() === origemNome.toLowerCase());
+        return !(sameTables && (relFp === fp || relFp === fpInv));
+      });
+      updatedSkill = await this.skills.update(skill.id, {
+        escopo: { ...skill.escopo, relacionamentos: nextRels },
+      });
+    }
+    return {
+      success: true,
+      skill: updatedSkill,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, updatedSkill ?? null),
+    };
   }
 }

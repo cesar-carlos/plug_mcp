@@ -3,6 +3,7 @@ import { ERROR_CODES } from "../errors/error-codes.js";
 import {
   fingerprintPares,
   parseParesRelacionamento,
+  relacoesSemSubconjuntos,
   type ParRelacionamento,
 } from "./relacionamento.js";
 
@@ -310,13 +311,22 @@ export const uniaoEscopos = (escopos: readonly EscopoSkill[]): EscopoSkill => {
   return {
     tabelas: [...tabelas],
     colunasPorTabela: freezeMap(colunasPorTabela),
-    relacionamentos: [...relKeys.values()],
+    relacionamentos: relacoesSemSubconjuntos(
+      [...relKeys.values()].map((rel) => ({ ...rel, pares: paresDoRelacionamento(rel) })),
+    ),
     graoPorTabela: freezeMap(graoPorTabela),
     graoResultado: [...graoResultado],
     metricasSaida: [...metricas.values()],
     pacoteVersao,
   };
 };
+
+export const escopoSemRelacoesSubset = (escopo: EscopoSkill): EscopoSkill => ({
+  ...escopo,
+  relacionamentos: relacoesSemSubconjuntos(
+    escopo.relacionamentos.map((rel) => ({ ...rel, pares: paresDoRelacionamento(rel) })),
+  ),
+});
 
 export interface MetricaSaidaPatch {
   readonly alias: string;

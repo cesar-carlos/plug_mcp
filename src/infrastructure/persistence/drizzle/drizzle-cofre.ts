@@ -41,7 +41,9 @@ import type {
   MergeColunaInput,
   MergeRelacionamentoInput,
   MergeTabelaInput,
+  ConflitoGrafo,
 } from "../../../domain/ports/grafo-repository.port.js";
+import { montarListaConflitos } from "../montar-conflitos.js";
 import type {
   AnotacaoGrafoRepositoryPort,
   SkillRepositoryPort,
@@ -546,6 +548,14 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     };
   }
 
+  async deleteRelacionamento(id: string): Promise<boolean> {
+    const rows = await this.conn()
+      .delete(schema.relacionamentoGrafo)
+      .where(eq(schema.relacionamentoGrafo.id, id))
+      .returning({ id: schema.relacionamentoGrafo.id });
+    return rows.length > 0;
+  }
+
   async listTabelas(agentId: string): Promise<readonly TabelaGrafo[]> {
     const rows = await this.conn()
       .select()
@@ -613,6 +623,20 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         ),
       );
     return (tabelas?.n ?? 0) + (colunas?.n ?? 0) + (rels?.n ?? 0);
+  }
+
+  async listConflitos(agentId: string): Promise<readonly ConflitoGrafo[]> {
+    const tabelas = await this.listTabelas(agentId);
+    const tabelaIds = tabelas.map((tabela) => tabela.id);
+    const colunas =
+      tabelaIds.length === 0
+        ? []
+        : await this.conn()
+            .select()
+            .from(schema.colunaGrafo)
+            .where(inArray(schema.colunaGrafo.tabelaId, tabelaIds));
+    const rels = await this.listRelacionamentos(agentId);
+    return montarListaConflitos(tabelas, colunas.map(toColuna), rels);
   }
 
   async findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null> {
@@ -870,7 +894,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
         ilike(schema.skill.nome, like),
         ilike(schema.skill.descricao, like),
         ilike(schema.skill.slug, like),
-        ilike(schema.skill.sqlModelo, like),
+        sql`${schema.skill.params}::text ilike ${like}`,
       ];
     });
     const statusFilter =
@@ -888,8 +912,10 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
       rows.map((row) => this.toSkill(row)),
       terms,
       (row) =>
-        `${row.nome} ${row.descricao} ${row.slug} ${row.sqlModelo} ${row.params
+        `${row.nome} ${row.descricao} ${row.slug} ${row.params
           .map((param) => `${param.nome} ${param.descricao} ${param.tipo}`)
+          .join(" ")} ${row.escopo.metricasSaida
+          .map((item) => `${item.alias} ${item.definicao ?? ""} ${item.grao ?? ""}`)
           .join(" ")}`,
       limite,
     );

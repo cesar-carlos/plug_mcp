@@ -1,6 +1,7 @@
 import { ERROR_CODES, type ErrorCode } from "./error-codes.js";
 
-export type ErrorCategory = "auth" | "access" | "scope" | "sql" | "privacy" | "profile" | "budget" | "infra";
+export type ErrorCategory =
+  "auth" | "access" | "scope" | "sql" | "privacy" | "profile" | "budget" | "infra";
 
 export interface ErrorGuidance {
   readonly category: ErrorCategory;
@@ -95,10 +96,7 @@ const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
   },
 };
 
-export const guidanceFor = (
-  code: ErrorCode,
-  source?: string,
-): ErrorGuidance | undefined => {
+export const guidanceFor = (code: ErrorCode, source?: string): ErrorGuidance | undefined => {
   const base = MAP[code];
   if (!base) {
     return undefined;

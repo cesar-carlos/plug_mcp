@@ -51,11 +51,7 @@ describe("ConfirmarRelacionamento", () => {
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
-    const confirmar = new ConfirmarRelacionamento(
-      acessos,
-      grafo,
-      new InMemorySkillRepository(),
-    );
+    const confirmar = new ConfirmarRelacionamento(acessos, grafo, new InMemorySkillRepository());
 
     await confirmar.execute(created.usuarioId, {
       acessoId: created.acessoId,

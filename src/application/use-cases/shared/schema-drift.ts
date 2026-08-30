@@ -10,7 +10,10 @@ export const assinaturaTabela = (input: {
   relacionamentos: readonly { destino: string; fingerprint: string }[];
 }): string => {
   const cols = [...input.colunas]
-    .map((coluna) => `${coluna.nome.toLowerCase()}:${(coluna.tipo ?? "").toLowerCase()}:${coluna.nullable === false ? "n" : "y"}`)
+    .map(
+      (coluna) =>
+        `${coluna.nome.toLowerCase()}:${(coluna.tipo ?? "").toLowerCase()}:${coluna.nullable === false ? "n" : "y"}`,
+    )
     .sort()
     .join("|");
   const rels = [...input.relacionamentos]
@@ -20,12 +23,11 @@ export const assinaturaTabela = (input: {
   return `${cols}#${rels}`;
 };
 
-export const skillsAfetadasPorTabela = (
-  skills: readonly Skill[],
-  tabelaNome: string,
-): Skill[] => {
+export const skillsAfetadasPorTabela = (skills: readonly Skill[], tabelaNome: string): Skill[] => {
   const wanted = tabelaNome.toLowerCase();
-  return skills.filter((skill) => skill.escopo.tabelas.some((nome) => nome.toLowerCase() === wanted));
+  return skills.filter((skill) =>
+    skill.escopo.tabelas.some((nome) => nome.toLowerCase() === wanted),
+  );
 };
 
 export const aplicarDerivaEsquema = async (input: {
@@ -119,4 +121,3 @@ export const aplicarDerivaTabelaNoGrafo = async (input: {
     assinatura,
   });
 };
-

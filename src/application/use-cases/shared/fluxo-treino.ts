@@ -5,10 +5,14 @@ import {
   type TipoParametroSkill,
 } from "../../../domain/entities/skill.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
-import { listarFatosIncompletos } from "./gates-skill.js";
+import {
+  listarFatosIncompletos,
+  type FaltaNextAction,
+  type FatoIncompleto,
+} from "./gates-skill.js";
 import { extractNamedParams, parseSqlModelo } from "./sql-modelo.js";
 
-export type { ParametroSkill, TipoParametroSkill };
+export type { ParametroSkill, TipoParametroSkill, FatoIncompleto, FaltaNextAction };
 export { parseParametroSkillList };
 
 export type PassoTreinoId =
@@ -18,6 +22,8 @@ export type PassoTreinoId =
   | "resolver_conflito"
   | "validar_skill"
   | "publicar_skill";
+
+export type ProximoPassoTreino = PassoTreinoId | FaltaNextAction;
 
 export type StatusPassoTreino = "feito" | "pendente" | "bloqueado";
 
@@ -29,9 +35,14 @@ export interface PassoTreino {
 
 export interface FluxoTreino {
   readonly passoAtual: PassoTreinoId;
-  readonly proximoPasso: PassoTreinoId | null;
+  readonly proximoPasso: ProximoPassoTreino | null;
   readonly podeLiberar: boolean;
   readonly passos: readonly PassoTreino[];
+}
+
+export interface FluxoSkillResult {
+  readonly fluxo: FluxoTreino;
+  readonly faltas: readonly FatoIncompleto[];
 }
 
 export const paramsFromSql = (
@@ -148,12 +159,15 @@ export const buildFluxoTreino = (input: {
   skill: Skill | null;
   conflitosPendentes: number;
   perfilCompleto?: boolean;
+  faltas?: readonly FatoIncompleto[];
 }): FluxoTreino => {
   const skill = input.skill;
   const params = skill?.params ?? [];
   const paramsOk = paramsDescribed(params);
   const conflitosOk = input.conflitosPendentes === 0;
   const perfilOk = input.perfilCompleto !== false;
+  const faltas = input.faltas ?? [];
+  const primeiraFalta = faltas[0];
 
   const treinar = input.treinado
     ? passo("treinar_sql", "feito", "SQL treinado no grafo.")
@@ -193,7 +207,7 @@ export const buildFluxoTreino = (input: {
       ? passo(
           "resolver_conflito",
           "pendente",
-          `Há ${String(input.conflitosPendentes)} conflito(s). Chame resolver_conflito.`,
+          `Há ${String(input.conflitosPendentes)} conflito(s). Chame listar_conflitos para obter os ids e depois resolver_conflito.`,
         )
       : passo("resolver_conflito", "bloqueado", "Treine o SQL para ver conflitos.");
 
@@ -231,14 +245,13 @@ export const buildFluxoTreino = (input: {
     publicar = passo(
       "publicar_skill",
       "pendente",
-      "Mostre o resumo ao usuário e só então chame publicar_skill com confirmadoPeloUsuario: true.",
+      "Chame publicar_skill sem confirmação para ver o resumo; só então confirme com confirmadoPeloUsuario: true.",
     );
   } else if (!perfilOk && skill?.status === "validada") {
-    publicar = passo(
-      "publicar_skill",
-      "bloqueado",
-      "Perfil incompleto (tipo/formato/cardinalidade). Chame validar_skill enriquecer=completo.",
-    );
+    const hintFalta = primeiraFalta
+      ? `${primeiraFalta.message} Próximo: ${primeiraFalta.nextAction}.`
+      : "Perfil incompleto (tipo/formato/cardinalidade).";
+    publicar = passo("publicar_skill", "bloqueado", hintFalta);
   } else if (skill?.status === "rascunho_revalidacao") {
     publicar = passo(
       "publicar_skill",
@@ -255,14 +268,28 @@ export const buildFluxoTreino = (input: {
 
   const passos = [treinar, criar, descrever, conflitos, validar, publicar];
   const primeiroPendente = passos.find((item) => item.status === "pendente");
-  const passoAtual =
-    primeiroPendente?.id ?? (skill?.status === "publicada" ? "publicar_skill" : "treinar_sql");
   const podeLiberar =
     skill?.status === "validada" && paramsOk && conflitosOk && perfilOk && Boolean(skill);
 
+  let passoAtual: PassoTreinoId;
+  let proximoPasso: ProximoPassoTreino | null;
+  if (primeiroPendente) {
+    passoAtual = primeiroPendente.id;
+    proximoPasso = primeiroPendente.id;
+  } else if (skill?.status === "publicada") {
+    passoAtual = "publicar_skill";
+    proximoPasso = null;
+  } else if (skill?.status === "validada" && primeiraFalta) {
+    passoAtual = "publicar_skill";
+    proximoPasso = primeiraFalta.nextAction;
+  } else {
+    passoAtual = skill ? "publicar_skill" : "treinar_sql";
+    proximoPasso = null;
+  }
+
   return {
     passoAtual,
-    proximoPasso: primeiroPendente?.id ?? null,
+    proximoPasso,
     podeLiberar,
     passos,
   };
@@ -273,7 +300,7 @@ const fluxoComConflitos = async (
   agentId: string,
   skill: Skill | null,
   conflitosPendentes: number,
-): Promise<FluxoTreino> => {
+): Promise<FluxoSkillResult> => {
   let treinado = false;
   if (skill) {
     const modelo = parseSqlModelo(skill.sqlModelo);
@@ -287,15 +314,25 @@ const fluxoComConflitos = async (
     const tabelas = await grafo.listTabelas(agentId);
     treinado = tabelas.length > 0;
   }
+  let faltas: readonly FatoIncompleto[] = [];
   let perfilCompleto = true;
   if (skill && skill.escopo.tabelas.length > 0) {
-    const faltas = await listarFatosIncompletos(grafo, agentId, skill.escopo, {
+    faltas = await listarFatosIncompletos(grafo, agentId, skill.escopo, {
       exigirCardinalidade: skill.escopo.relacionamentos.length > 0,
       exigirTipoColuna: skill.escopo.metricasSaida.length > 0,
     });
     perfilCompleto = faltas.filter((item) => item.kind === "perfil").length === 0;
   }
-  return buildFluxoTreino({ treinado, skill, conflitosPendentes, perfilCompleto });
+  return {
+    fluxo: buildFluxoTreino({
+      treinado,
+      skill,
+      conflitosPendentes,
+      perfilCompleto,
+      faltas,
+    }),
+    faltas,
+  };
 };
 
 export const fluxoForAgentSkill = async (
@@ -304,6 +341,15 @@ export const fluxoForAgentSkill = async (
   skill: Skill | null,
 ): Promise<FluxoTreino> => {
   const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
+  return (await fluxoComConflitos(grafo, agentId, skill, conflitosPendentes)).fluxo;
+};
+
+export const fluxoEFaltasForAgentSkill = async (
+  grafo: GrafoRepositoryPort,
+  agentId: string,
+  skill: Skill | null,
+): Promise<FluxoSkillResult> => {
+  const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
   return fluxoComConflitos(grafo, agentId, skill, conflitosPendentes);
 };
 
@@ -311,9 +357,9 @@ export const fluxoForAgentSkills = async (
   grafo: GrafoRepositoryPort,
   agentId: string,
   skills: readonly Skill[],
-): Promise<readonly FluxoTreino[]> => {
+): Promise<readonly FluxoSkillResult[]> => {
   const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
-  const out: FluxoTreino[] = [];
+  const out: FluxoSkillResult[] = [];
   for (const skill of skills) {
     out.push(await fluxoComConflitos(grafo, agentId, skill, conflitosPendentes));
   }

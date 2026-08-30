@@ -46,8 +46,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 FROM alpine:3.24 AS runtime
+ARG GIT_SHA=unknown
 WORKDIR /app
 ENV NODE_ENV=production
+ENV GIT_SHA=${GIT_SHA}
 RUN apk add --no-cache libstdc++ ca-certificates \
   && addgroup -S mcp && adduser -S mcp -G mcp
 COPY --from=node-base /usr/local/bin/node /usr/local/bin/node

@@ -83,7 +83,10 @@ export const sincronizarEscopoComGrafo = async (
       continue;
     }
     const next = overlayCardinalidadeDoGrafo(base, grafoRels, nomeById);
-    if (relsIguais(next.relacionamentos, skill.escopo.relacionamentos) && skill.escopo.tabelas.length > 0) {
+    if (
+      relsIguais(next.relacionamentos, skill.escopo.relacionamentos) &&
+      skill.escopo.tabelas.length > 0
+    ) {
       continue;
     }
     updated.push(await skills.update(skill.id, { escopo: next }));
