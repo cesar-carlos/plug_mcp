@@ -15,7 +15,7 @@ src/composition/compose.ts
 src/config/env.ts
 src/main.ts
 tests/{unit,integration,live,helpers}
-drizzle/0008_cofre_grafo.sql … 0013_pacote_conhecimento.sql
+drizzle/0008_cofre_grafo.sql … 0016_conhecimento_fts.sql
 ```
 
 Novo caso de uso → `use-cases/` + `register-tools.ts` + `compose.ts` + teste + `docs/mcp/tools.md` + `CHANGELOG.md` (Unreleased) + rule `catalog`/`mcp_protocol` se o contrato mudar.

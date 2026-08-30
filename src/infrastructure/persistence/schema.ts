@@ -201,6 +201,7 @@ export const skill = pgTable(
   (t) => [
     uniqueIndex("skill_agent_slug_uidx").on(t.agentId, t.slug),
     index("skill_agent_idx").on(t.agentId),
+    // search_tsv GENERATED ALWAYS — drizzle/0016_conhecimento_fts.sql (não mapear no insert)
   ],
 );
 

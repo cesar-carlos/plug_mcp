@@ -335,7 +335,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Candidatos ranqueados com cobertura (completa|parcial|desconhecida). consultaPermitida só se cobertura completa. Skill validada/rascunho que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED (não é SKILL_GAP). Reuse consultasAprendidas. grafoParaTreino só no fluxo de gap.",
+    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência ranqueada (não autoriza SQL). Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Reuse consultasAprendidas. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>

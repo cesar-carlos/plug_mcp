@@ -59,3 +59,19 @@ export const rankByTerms = <T>(
     .slice(0, limite)
     .map((row) => row.item);
 };
+
+export const rankFetched = <T>(
+  items: readonly T[],
+  terms: readonly string[],
+  haystack: (item: T) => string,
+  limite: number,
+): T[] => {
+  if (terms.length === 0) {
+    return [...items].slice(0, limite);
+  }
+  return [...items]
+    .map((item) => ({ item, score: scoreByTerms(haystack(item), terms) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limite)
+    .map((row) => row.item);
+};

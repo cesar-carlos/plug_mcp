@@ -19,8 +19,9 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
+import type { HitConhecimento } from "../../domain/entities/conhecimento.js";
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
-import type { Skill } from "../../domain/entities/skill.js";
+import type { Skill, StatusSkill } from "../../domain/entities/skill.js";
 import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
 import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
 import { assertFanoutSeguro } from "./shared/assert-fanout.js";
@@ -74,6 +75,7 @@ import {
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
 import { coberturaDeSkill, tokensCapacidade } from "./shared/cobertura-skill.js";
+import { hintRegraParcial, montarConhecimentos } from "./shared/montar-conhecimentos.js";
 import {
   agruparColunasCatalogo,
   cell,
@@ -1096,6 +1098,32 @@ export class MapearTabela {
   }
 }
 
+const STATUS_TREINO: ReadonlySet<StatusSkill> = new Set([
+  "rascunho",
+  "validada",
+  "rascunho_revalidacao",
+]);
+
+const unirSkillsPorNotas = (
+  encontradas: readonly Skill[],
+  todas: readonly Skill[],
+  notas: readonly { skillId: string | null }[],
+  statuses: ReadonlySet<StatusSkill>,
+): Skill[] => {
+  const merged = new Map(encontradas.map((skill) => [skill.id, skill]));
+  const byId = new Map(todas.map((skill) => [skill.id, skill]));
+  const ids = [
+    ...new Set(notas.map((nota) => nota.skillId).filter((id): id is string => Boolean(id))),
+  ];
+  for (const skillId of ids) {
+    const skill = byId.get(skillId);
+    if (skill && statuses.has(skill.status) && !merged.has(skill.id)) {
+      merged.set(skill.id, skill);
+    }
+  }
+  return [...merged.values()];
+};
+
 export class BuscarContexto {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -1125,6 +1153,7 @@ export class BuscarContexto {
     skillsPublicadas: readonly Skill[];
     skillsParaTreino: readonly Skill[];
     consultasAprendidas: readonly ConsultaAprendida[];
+    conhecimentos: readonly HitConhecimento[];
     grafoParaTreino?: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     fluxoTreino?: FluxoTreino;
     gap?: { code: "SKILL_GAP"; hint: string };
@@ -1166,20 +1195,39 @@ export class BuscarContexto {
         clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
       }),
     );
-    const [tabelas, skillsPublicadas, skillsParaTreino, notas, consultasAprendidas] =
-      await Promise.all([
-        this.grafo.buscar(acesso.agentId, expanded, 12),
-        this.skills.buscar(acesso.agentId, expanded, 8, "publicada"),
-        this.skills.buscar(acesso.agentId, expanded, 8, [
-          "rascunho",
-          "validada",
-          "rascunho_revalidacao",
-        ]),
-        this.anotacoes.buscar(acesso.agentId, expanded, 8),
-        this.aprendizado
-          ? this.aprendizado.buscarConsultas(acesso.agentId, expanded, 5)
-          : Promise.resolve([] as ConsultaAprendida[]),
-      ]);
+    const [
+      tabelas,
+      skillsPublicadasBusca,
+      skillsParaTreinoBusca,
+      notas,
+      consultasAprendidas,
+      todas,
+    ] = await Promise.all([
+      this.grafo.buscar(acesso.agentId, expanded, 12),
+      this.skills.buscar(acesso.agentId, expanded, 8, "publicada"),
+      this.skills.buscar(acesso.agentId, expanded, 8, [
+        "rascunho",
+        "validada",
+        "rascunho_revalidacao",
+      ]),
+      this.anotacoes.buscar(acesso.agentId, expanded, 8),
+      this.aprendizado
+        ? this.aprendizado.buscarConsultas(acesso.agentId, expanded, 5)
+        : Promise.resolve([] as ConsultaAprendida[]),
+      this.skills.listByAgent(acesso.agentId),
+    ]);
+    const skillsPublicadas = unirSkillsPorNotas(
+      skillsPublicadasBusca,
+      todas,
+      notas,
+      new Set<StatusSkill>(["publicada"]),
+    );
+    const skillsParaTreinoUnidas = unirSkillsPorNotas(
+      skillsParaTreinoBusca,
+      todas,
+      notas,
+      STATUS_TREINO,
+    );
     const tokens = tokensCapacidade(query);
     const candidatos = skillsPublicadas.map((skill) => {
       const { cobertura, termosEncontrados } = coberturaDeSkill(skill, query, sinonimos);
@@ -1197,9 +1245,8 @@ export class BuscarContexto {
         ? "parcial"
         : "desconhecida";
     const consultaPermitida = coberturaGeral === "completa";
-    const todas = await this.skills.listByAgent(acesso.agentId);
     const publicadasNoAgent = todas.filter((item) => item.status === "publicada");
-    const capazesTreino = skillsParaTreino.filter(
+    const capazesTreino = skillsParaTreinoUnidas.filter(
       (item) => coberturaDeSkill(item, query, sinonimos).cobertura === "completa",
     );
     const emAndamento = pickSkillInProgress(capazesTreino);
@@ -1221,6 +1268,34 @@ export class BuscarContexto {
     ) {
       await this.aprendizado.registrarLacuna(acesso.agentId, query);
     }
+    const tabelasPolicy = tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy));
+    const skillIdsPermitidos = new Set(skillsPublicadas.map((skill) => skill.id));
+    const tabelasPermitidas = new Set(
+      consultaPermitida
+        ? skillsPublicadas.flatMap((skill) =>
+            skill.escopo.tabelas.map((nome) => nome.toLowerCase()),
+          )
+        : tabelasPolicy.map((tabela) => tabela.nome.toLowerCase()),
+    );
+    const tabelaNomePorId = new Map(tabelas.map((tabela) => [tabela.id, tabela.nome]));
+    const conhecimentos = montarConhecimentos({
+      query,
+      skills: consultaPermitida
+        ? skillsPublicadas
+        : [...skillsPublicadas, ...skillsParaTreinoUnidas],
+      anotacoes: notas,
+      consultas: consultasAprendidas,
+      tabelas: consultaPermitida ? tabelas : tabelasPolicy,
+      filtro: {
+        consultaPermitida,
+        skillIdsPermitidos,
+        tabelasPermitidas,
+        tabelaNomePorId,
+      },
+    });
+    const hintAprendidas = hintConsultasAprendidas(query, consultasAprendidas);
+    const hintRegra = hintRegraParcial(coberturaGeral, conhecimentos);
+    const hint = [hintAprendidas, hintRegra].filter(Boolean).join(" ") || undefined;
     return {
       success: true as const,
       consultaPermitida,
@@ -1229,10 +1304,11 @@ export class BuscarContexto {
       skillsPublicadas,
       skillsParaTreino: capazesTreino,
       consultasAprendidas,
+      conhecimentos,
       grafoParaTreino: consultaPermitida
         ? undefined
         : {
-            tabelas: tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy)),
+            tabelas: tabelasPolicy,
             anotacoes: notas,
           },
       fluxoTreino,
@@ -1245,7 +1321,7 @@ export class BuscarContexto {
               code: "SKILL_GAP",
               hint: gapHint,
             },
-      hint: hintConsultasAprendidas(query, consultasAprendidas),
+      hint,
     };
   }
 }

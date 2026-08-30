@@ -11,6 +11,7 @@ import {
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
+import { PACOTE_VERSAO_ATUAL } from "../../src/domain/entities/escopo.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 
 const crypto = new NodeCryptoAdapter(
@@ -59,7 +60,7 @@ describe("BuscarContexto", () => {
       crypto,
       aprendizado,
     );
-    return { buscar, created, skills, aprendizado };
+    return { buscar, created, skills, aprendizado, anotacoes, grafo };
   };
 
   it("sem skill publicada devolve consultaPermitida false e SKILL_GAP", async () => {
@@ -277,5 +278,154 @@ describe("BuscarContexto", () => {
     });
     expect(result.consultasAprendidas.length).toBeGreaterThan(0);
     expect(result.hint).toMatch(/OVER\/LAG/);
+  });
+
+  it("corpo de regra longo não completa cobertura certificada", async () => {
+    const { buscar, created, skills, anotacoes } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "titulos",
+      nome: "Títulos",
+      descricao: "Saldo financeiro",
+      sqlModelo: "SELECT t.valor FROM titulo t",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await anotacoes.create({
+      agentId,
+      tabelaId: null,
+      skillId: published.id,
+      tipo: "regra",
+      titulo: "Filtro operacional",
+      texto: "Clientes ativos em Sinop nunca devem misturar faturamento cancelado com produto.",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "clientes ativos sinop",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.conhecimentos.some((item) => item.tipo === "regra")).toBe(true);
+  });
+
+  it("SQL de consulta aprendida não ranqueia nem completa cobertura", async () => {
+    const { buscar, created, skills, aprendizado } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "itens",
+      nome: "Itens",
+      descricao: "Cadastro de itens",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await aprendizado.salvarConsulta({
+      agentId,
+      skillIds: [published.id],
+      pergunta: "lista de itens do catalogo",
+      sql: "SELECT p.codprodunico FROM produto p WHERE p.codprodunico > 0",
+      paramsContrato: [],
+      autorUsuarioId: created.usuarioId,
+    });
+    const bySql = await aprendizado.buscarConsultas(agentId, "codprodunico", 5);
+    expect(bySql).toHaveLength(0);
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "codprodunico",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.consultasAprendidas).toHaveLength(0);
+  });
+
+  it("nota com skillId inclui a skill em candidatos mesmo se nome não bate", async () => {
+    const { buscar, created, skills, anotacoes } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "contas-abertas",
+      nome: "Contas",
+      descricao: "Títulos em aberto",
+      sqlModelo: "SELECT t.valor FROM titulo t",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await anotacoes.create({
+      agentId,
+      tabelaId: null,
+      skillId: published.id,
+      tipo: "regra",
+      titulo: "Fórmula",
+      texto: "cashbackxyz usa validade do crédito como recorte.",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "cashbackxyz",
+    });
+    expect(result.skillsPublicadas.some((skill) => skill.id === published.id)).toBe(true);
+    expect(result.consultaPermitida).toBe(false);
+    expect(
+      result.conhecimentos.some(
+        (item) => item.tipo === "regra" && item.trecho.includes("cashbackxyz"),
+      ),
+    ).toBe(true);
+    expect(result.hint).toMatch(/obter_skill/);
+  });
+
+  it("não vaza conhecimentos de outro agentId", async () => {
+    const { buscar, created, anotacoes } = await setup();
+    const otherAgent = "22222222-2222-4222-8222-222222222222";
+    await anotacoes.create({
+      agentId: otherAgent,
+      tabelaId: null,
+      skillId: null,
+      tipo: "regra",
+      titulo: "Segredo",
+      texto: "nao vazedadosxyz em outro tenant.",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "vazedadosxyz",
+    });
+    expect(result.conhecimentos.some((item) => item.trecho.includes("vazedadosxyz"))).toBe(false);
+  });
+
+  it("com consultaPermitida não inclui tabela fora do pacote em conhecimentos", async () => {
+    const { buscar, created, skills, grafo } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "produtos",
+      nome: "Produtos",
+      descricao: "Lista de produtos",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      escopo: {
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["codprod"] },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [],
+        pacoteVersao: PACOTE_VERSAO_ATUAL,
+      },
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await grafo.mergeTabela({
+      agentId,
+      nome: "auditoria_produtos",
+      descricao: "produtos fora do pacote",
+      origem: "inferido",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "produtos",
+    });
+    expect(result.consultaPermitida).toBe(true);
+    expect(
+      result.conhecimentos.some(
+        (item) => item.tipo === "tabela" && item.titulo === "auditoria_produtos",
+      ),
+    ).toBe(false);
   });
 });

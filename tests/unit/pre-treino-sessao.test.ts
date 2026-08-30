@@ -26,6 +26,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/inspecionar_consulta sem sql/i);
     expect(PRE_TREINO_SESSAO).toMatch(/Aceita skill validada/i);
     expect(PRE_TREINO_SESSAO).toContain("listar_conflitos");
+    expect(PRE_TREINO_SESSAO).toContain("conhecimentos[]");
+    expect(PRE_TREINO_SESSAO).toMatch(/consultaPermitida/);
     expect(PRE_TREINO_SESSAO).toContain("faltas");
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
   });

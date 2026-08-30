@@ -13,12 +13,14 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- `buscar_contexto.conhecimentos[]`: evidência léxica ranqueada (regra, glossário, pergunta aprendida, skill, tabela). Teto 8, trecho truncado. **Não** autoriza SQL — `consultaPermitida` continua só com cobertura certificada. FTS (`portuguese` + `unaccent`) + `ILIKE` no Postgres; nota com `skillId` inclui a skill em `candidatos` mesmo se o nome não bater. Após deploy, reconectar o cliente MCP.
 - Tools `listar_conflitos` e `remover_relacionamento` (este com confirmação): o agente lista ids de conflito e apaga um JOIN pelo fingerprint, em vez de adivinhar.
 - `faltas[]` (`kind`, `alvo`, `nextAction`) em `listar_skills` / `obter_skill`. `publicar_skill` sem confirmação devolve `publicado: false`, `resumoPublicacao` e `faltas[]` — não invente o resumo.
 - Health injeta `GIT_SHA` / `SOURCE_COMMIT` / `GITHUB_SHA` no `sha` (PM2, Docker, CI). Snapshot de `tools/list` no teste de integração. Após deploy, reconectar o cliente MCP.
 
 ### Changed
 
+- Busca de `consulta_aprendida` ranqueia só a **pergunta** (não o SQL). Cobertura certificada segue nome/slug/descrição/params/`metricasSaida`/sinônimos — corpo e título de regra não completam cobertura.
 - Skill `validada` com perfil incompleto: `fluxoTreino.proximoPasso` aponta a tool da primeira falta (`confirmar_relacionamento`, `mapear_tabela`, `listar_conflitos`…) e nunca fica `null`.
 - JOIN composto substitui pares isolados (subconjunto) no grafo e no pacote. `uniaoEscopos` também descarta o subconjunto.
 - `mapear_tabela` substitui tipo físico incompatível (ex. uuid vs data) sem apagar descrição, dicionário ou `sensibilidade` confirmada. Gate de publicação trata papel `data` em família uuid como falta de perfil.

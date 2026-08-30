@@ -815,7 +815,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     return rankByTerms(
       this.consultas.filter((row) => row.agentId === agentId),
       terms,
-      (row) => `${row.pergunta} ${row.sql}`,
+      (row) => row.pergunta,
       limite,
     );
   }

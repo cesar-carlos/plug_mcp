@@ -32,7 +32,8 @@ documentação de produto e os testes correspondentes.
   `proximoPasso` é a tool da primeira falta (nunca `null`). `despublicar_skill`
   rebaixa para validada sem apagar. JOIN composto substitui pares isolados;
   `remover_relacionamento` apaga um fingerprint. `inspecionar_consulta` aceita
-  `validada`. Cobertura de `buscar_contexto` não usa o SQL.
+  `validada`. Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
+  `conhecimentos[]` é evidência, não licença de consulta.
 
 ## Segurança e autorização
 

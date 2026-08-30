@@ -25,7 +25,7 @@ Montar o SQL (params, WHERE, paginação):
 - Consulta semântica: consultar_dados.consultaSemantica só com métrica/dimensões/filtros certificados no pacote. Colunas são qualificadas quando há JOIN. SQL livre permanece o caminho ad hoc validado.
 - PERFIL_AUSENTE bloqueia inferência e a primeira publicação; não invente tipo, dicionário, grão ou JOIN. CONSULTA_ORCAMENTO respeita politicaConsulta da skill. Skill validada com perfil incompleto: listar_skills.faltas[] e fluxoTreino.proximoPasso nunca são nulos — chame a nextAction (confirmar_relacionamento, mapear_tabela, listar_conflitos).
 - listar_acessos.sqlAccessState é só do cofre (approved → unknown). verificar_acesso sonda hub+policy (active|revoked|unknown). Vários acessoId do mesmo agentId são independentes; escolha o active — o servidor não deduplica.
-- buscar_contexto: cobertura certificada (nome/slug/descrição/params/metricasSaida, não o SQL). Skill em treino que cobre a pergunta → blockingReason SKILL_NOT_PUBLISHED (não é SKILL_GAP). Sem skill capaz: SKILL_GAP e, se faltar tool, registrar_lacuna_ferramenta. listar_conflitos devolve ids para resolver_conflito.
+- buscar_contexto: cobertura certificada (nome/slug/descrição/params/metricasSaida, não o SQL nem o corpo da regra). Leia conhecimentos[] como evidência — não invente tabela/JOIN a partir deles e só chame consultar_dados se consultaPermitida. Cobertura parcial com regra: obter_skill e validar_consulta; sinônimo se o usuário confirmar o termo. Skill em treino que cobre a pergunta → blockingReason SKILL_NOT_PUBLISHED (não é SKILL_GAP). Sem skill capaz: SKILL_GAP e, se faltar tool, registrar_lacuna_ferramenta. listar_conflitos devolve ids para resolver_conflito.
 - Firebird: somente consulta exemplo (consultar_dados e inspecionar_consulta sem sql). Sem SQL livre nem paginação gerenciada.
 
 Ler o retorno de consultar_dados:
@@ -44,8 +44,8 @@ Bootstrap (sem Bearer): só registrar_acesso. A tool NÃO devolve o token MCP. D
 
 Com Bearer: um e-mail/senha por usuário MCP. Novos agentId/client_token via adicionar_acesso (sem senha de novo). Unique (usuarioId, agentId, clientTokenHash).
 
-Pergunta de dados: buscar_contexto (candidatos + cobertura completa|parcial|desconhecida; leia consultasAprendidas) / listar_skills / obter_skill (pacote canônico = validador + guia de dialeto). Escreva SELECT no dialeto. validar_consulta antes de consultar_dados quando o SQL for novo. consultar_dados(skillIds, sql, params, pergunta). Cruzamento exige skillIds de todos os domínios e SQL customizado. Firebird: só consulta exemplo (consultar_dados e inspecionar_consulta sem sql).
-SKILL_GAP da busca por termos não prova ausência — chame listar_skills. Match textual isolado não autoriza consulta (cobertura precisa ser completa). Cobertura de capacidade usa nome/slug/descrição/params/metricasSaida — não o sqlModelo.
+Pergunta de dados: buscar_contexto (candidatos + cobertura completa|parcial|desconhecida; leia conhecimentos[] e consultasAprendidas) / listar_skills / obter_skill (pacote canônico = validador + guia de dialeto). Escreva SELECT no dialeto. validar_consulta antes de consultar_dados quando o SQL for novo. consultar_dados(skillIds, sql, params, pergunta). Cruzamento exige skillIds de todos os domínios e SQL customizado. Firebird: só consulta exemplo (consultar_dados e inspecionar_consulta sem sql).
+SKILL_GAP da busca por termos não prova ausência — chame listar_skills. Match textual isolado e conhecimentos[] não autorizam consulta (cobertura precisa ser completa). Cobertura de capacidade usa nome/slug/descrição/params/metricasSaida — não o sqlModelo nem o corpo da regra.
 
 Se não houver skill capaz: seja honesta. Mostre fluxoTreino/faltas e oriente o usuário. Não complete com achismo. Se buscar_contexto indicar skill em andamento, continue o próximoPasso. listar_skills devolve status/motivoRevalidacao/podeLiberar/fluxoTreino/faltas (sem sqlModelo) — use obter_skill para o pacote.
 
