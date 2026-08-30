@@ -94,7 +94,7 @@ SQL precisa ser **classificável**: o agente identifica tabela/view no `FROM`. `
 
 ## O que o usuário final informa (e o que não informa)
 
-Informa, via tools MCP: `agentId`, `dialeto`, `client_token`.
+Informa, via tools MCP: e-mail e senha do Client (`registrar_acesso`), depois `agentId`, `dialeto`, `client_token`. Acessos extras (`adicionar_acesso`) não pedem senha de novo.
 
 Não informe senha, JWT do hub, `client_token` ou token MCP em log/tool. Ver [`../auth/vault-and-mcp-token.md`](../auth/vault-and-mcp-token.md).
 

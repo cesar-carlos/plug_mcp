@@ -2,7 +2,7 @@
 
 Sem formulário do SDK e sem catálogo pronto. Token MCP **nunca** aparece no JSON da tool.
 
-Consulta ao ERP: skill **publicada** define o escopo. Sem `sql`/`consultaSemantica`, executa a consulta exemplo. Com `sql`, a IA escreve SELECT no dialeto, validado contra o pacote (JOIN composto = conjunto de `pares[]`). Amostra estrutural: `inspecionar_consulta`. Sem skill capaz, `SKILL_GAP` — não inventar tabela, coluna nem JOIN.
+Consulta ao ERP: skill **publicada** define o escopo. Sem `sql`/`consultaSemantica`, executa a consulta exemplo. Com `sql`, a IA escreve SELECT no dialeto, validado contra o pacote (JOIN composto = conjunto de `pares[]`). Amostra estrutural: `inspecionar_consulta` (aceita validada / `rascunho_revalidacao` / publicada). Sem skill capaz: `SKILL_GAP`. Skill em treino que cobre a pergunta: `blockingReason SKILL_NOT_PUBLISHED` — não inventar tabela, coluna nem JOIN.
 
 ## Cofre
 

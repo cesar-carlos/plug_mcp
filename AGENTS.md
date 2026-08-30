@@ -6,8 +6,9 @@
 2. `.cursor/rules/security.mdc` — cofre, segredos, portões e isolamento de cache.
 3. `src/infrastructure/mcp/server-instructions.ts` — instruções runtime enviadas
    a IAs consumidoras no `initialize`.
-4. `docs/` — contrato detalhado; `docs/mcp/tools.md` e
-   `docs/mcp/error-mapping.md` são referências para tools e erros.
+4. `docs/` — contrato detalhado. Ordem de leitura: `docs/README.md`.
+   `docs/mcp/tools.md` e `docs/mcp/error-mapping.md` são as referências de tools e erros.
+   `docs/proposta-arquitetura-mcp-se7e.md` é histórico (três camadas), não o aceite.
 5. Regras especializadas em `.cursor/rules/` para arquitetura, domínio,
    catálogo, protocolo MCP, plug-server e testes.
 

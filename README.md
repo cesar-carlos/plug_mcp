@@ -49,7 +49,7 @@ Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fecha
 
 ## Bootstrap
 
-Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. Sem skill capaz, `buscar_contexto` devolve `SKILL_GAP`. Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
+Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. `buscar_contexto` não devolve SQL — use `obter_skill`. Skill em treino que cobre a pergunta: `blockingReason SKILL_NOT_PUBLISHED`. Sem skill capaz: `SKILL_GAP` (a busca por termos não prova ausência — `listar_skills`). Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
 
 1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
 2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**
@@ -77,4 +77,12 @@ Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.19.0 musl, sem npm no ru
 
 Ver [docs/clients/connecting-clients.md](docs/clients/connecting-clients.md).
 
-Documentação: [`docs/README.md`](docs/README.md). Histórico: [`CHANGELOG.md`](CHANGELOG.md).
+## Documentação
+
+Índice: [`docs/README.md`](docs/README.md). Histórico: [`CHANGELOG.md`](CHANGELOG.md).
+
+1. Norte — [docs/product/objective.md](docs/product/objective.md)
+2. Tools e erros — [docs/mcp/tools.md](docs/mcp/tools.md), [docs/mcp/error-mapping.md](docs/mcp/error-mapping.md)
+3. Modelo e FTS — [docs/data/data-model.md](docs/data/data-model.md)
+4. Hub REST — [docs/plug-server/](docs/plug-server/)
+5. Três camadas (histórico) — [docs/proposta-arquitetura-mcp-se7e.md](docs/proposta-arquitetura-mcp-se7e.md)

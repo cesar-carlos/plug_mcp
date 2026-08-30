@@ -21,9 +21,8 @@ Não há tabela de senha de conta MCP, cliente de Authorization Server nem catá
 ## Skills e notas
 
 - `skill`: `slug` unique por `agent_id` (rename em `atualizar_skill` exige confirmação), `sql_modelo` (consulta **exemplo**), `escopo` JSON (tabelas, `colunasPorTabela` físicas, relacionamentos com `pares[]` + `colunaOrigem`/`colunaDestino` legado, `graoPorTabela`/`graoResultado`, `metricasSaida` com campos opcionais de KPI `definicao`/`grao`/`dimensoesPermitidas`/`statusIncluidos`/`statusExcluidos`/`colunaData` — overlay fail-closed só em aliases já no pacote; `pacoteVersao` atual = **2**), `consulta_semantica` (IR opcional: métrica, dimensões, filtros, período, ordenação), `politica_consulta` (JSON: `maxRows`, `timeoutMs`, `exigirRecorteTemporal`, `maxTabelas`, `modoPreferencial`), `params`, `versao`, `pacote_versao`, `status` (`rascunho` | `validada` | `publicada` | `rascunho_revalidacao`), `motivo_revalidacao`. Pacotes v1 (par único) continuam legíveis. Skill **publicada** é a autoridade de consulta. `despublicar_skill` rebaixa para `validada` sem apagar o pacote. O pacote sincroniza cardinalidade/tipo do grafo em criar/validar/mapear/confirmar/treino (`sincronizarEscopoComGrafo`). Cutover: `npm run db:backfill-escopo` reconstrói o pacote e rebaixa publicadas para revalidação. Migration `0015_politica_lacuna.sql`.
-- `anotacao_grafo`: `skill_id` nullable; `skill_id=null` não é global silencioso — tabela inexistente é recusada.
-- `consulta_aprendida` + `consulta_aprendida_skill`: SQL que funcionou, associado a uma ou mais skills. Consultas sem associação não entram em todas as skills.
-- `anotacao_grafo`: nota/glossário/regra/métrica; `tabela_id` opcional; `tipo` inclui `regra` e `metrica`.
+- `anotacao_grafo`: nota/glossário/regra/métrica (`tipo` inclui `regra` e `metrica`); `tabela_id` opcional; `skill_id` nullable. `skill_id=null` não é global silencioso — tabela inexistente é recusada. Detalhe da busca e do recorte de policy: FTS acima e `buscar_contexto` em [tools.md](../mcp/tools.md).
+- `consulta_aprendida` + `consulta_aprendida_skill`: SQL que funcionou, associado a uma ou mais skills. Consultas sem associação não entram em todas as skills. Contrato de status e envelope: seção Aprendizado abaixo.
 
 ## Aprendizado (migration `0012`)
 

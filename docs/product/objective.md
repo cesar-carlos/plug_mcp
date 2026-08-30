@@ -43,3 +43,5 @@ Regras de tabela/operação: só no plug-server / `plug_agente`. O MCP não cria
 ## Fora de escopo
 
 Authorization Server próprio, JWT de conta MCP, Client de serviço no `.env`, catálogo pronto (`Fonte` / seed `vendas`). Socket/relay do hub.
+
+Índice e ordem de leitura: [../README.md](../README.md). O _porquê_ das três camadas (histórico): [../proposta-arquitetura-mcp-se7e.md](../proposta-arquitetura-mcp-se7e.md).
