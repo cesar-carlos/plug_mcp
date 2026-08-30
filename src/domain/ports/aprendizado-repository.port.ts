@@ -1,4 +1,5 @@
 import type { ConsultaAprendida, LacunaConsulta, Sinonimo } from "../entities/aprendizado.js";
+import type { HitBusca } from "../entities/hit-busca.js";
 import type { ParametroSkill } from "../entities/skill.js";
 
 export interface AprendizadoRepositoryPort {
@@ -20,7 +21,7 @@ export interface AprendizadoRepositoryPort {
     agentId: string,
     query: string,
     limite: number,
-  ): Promise<readonly ConsultaAprendida[]>;
+  ): Promise<readonly HitBusca<ConsultaAprendida>[]>;
   registrarSinonimo(input: {
     agentId: string;
     termo: string;

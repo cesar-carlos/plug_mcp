@@ -310,7 +310,7 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
               "Consulte o ERP só com skill publicada.",
               `Pergunta: ${pergunta}`,
               acessoId ? `acessoId: ${acessoId}` : "Use listar_acessos se precisar do acessoId.",
-              "Passos: buscar_contexto (reuse consultasAprendidas) → listar_skills / obter_skill → validar_consulta se o SQL for novo → consultar_dados(skillIds, sql, params, pergunta). Se o usuário ensinou regra/dicionário, envie aprendizado[] ou chame registrar_aprendizado.",
+              "Passos: buscar_contexto (reuse as perguntas de consultasAprendidas; SQL em obter_skill) → listar_skills / obter_skill → validar_consulta se o SQL for novo → consultar_dados(skillIds, sql, params, pergunta). Se o usuário ensinou regra/dicionário, envie aprendizado[] ou chame registrar_aprendizado.",
               "Se consultaPermitida for false ou gap.code SKILL_GAP, não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.",
             ].join("\n"),
           },

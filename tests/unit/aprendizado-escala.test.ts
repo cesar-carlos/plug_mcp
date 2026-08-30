@@ -122,7 +122,7 @@ describe("aprendizado e escala", () => {
     await aprendizado.salvarConsulta({
       agentId,
       skillIds: [skill.id],
-      pergunta: "inadimplencia da carteira",
+      pergunta: "duplicatas da carteira",
       sql: "SELECT SUM(r.valor) AS total FROM receber r WHERE r.vencimento < :hoje",
       paramsContrato: [],
       autorUsuarioId: created.usuarioId,

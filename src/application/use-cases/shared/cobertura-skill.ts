@@ -1,54 +1,6 @@
 import type { Skill } from "../../../domain/entities/skill.js";
 import type { Sinonimo } from "../../../domain/entities/aprendizado.js";
-
-const STOPWORDS_CAPACIDADE = new Set([
-  "para",
-  "com",
-  "por",
-  "uma",
-  "uns",
-  "umas",
-  "das",
-  "dos",
-  "nas",
-  "nos",
-  "que",
-  "sem",
-  "mais",
-  "pelo",
-  "pela",
-  "the",
-  "and",
-  "for",
-  "qual",
-  "quais",
-  "quanto",
-  "quantos",
-  "quantas",
-  "como",
-  "onde",
-  "quando",
-  "meu",
-  "minha",
-  "meus",
-  "minhas",
-  "seu",
-  "sua",
-  "seus",
-  "suas",
-  "nosso",
-  "nossa",
-  "tenho",
-  "tem",
-  "ter",
-  "existe",
-  "mensal",
-  "anual",
-  "diario",
-  "diaria",
-  "hoje",
-  "agora",
-]);
+import { STOPWORDS_BUSCA } from "../../../domain/entities/stopwords-busca.js";
 
 const stripAccents = (value: string): string =>
   value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -58,7 +10,7 @@ export const tokensCapacidade = (query: string): readonly string[] => {
     ...new Set(
       stripAccents(query)
         .split(/[^a-z0-9]+/)
-        .filter((term) => term.length >= 3 && !STOPWORDS_CAPACIDADE.has(term)),
+        .filter((term) => term.length >= 3 && !STOPWORDS_BUSCA.has(term)),
     ),
   ];
   return unique;

@@ -13,19 +13,25 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
-- `buscar_contexto.conhecimentos[]`: evidência léxica ranqueada (regra, glossário, pergunta aprendida, skill, tabela). Teto 8, trecho truncado. **Não** autoriza SQL — `consultaPermitida` continua só com cobertura certificada. FTS (`portuguese` + `unaccent`) + `ILIKE` no Postgres; nota com `skillId` inclui a skill em `candidatos` mesmo se o nome não bater. Após deploy, reconectar o cliente MCP.
+- `buscar_contexto.conhecimentos[]`: evidência léxica ranqueada (regra, glossário, métrica, pergunta aprendida, skill, tabela). Teto 8 (1 slot reservado para regra/glossário/métrica com `skillId`), trecho truncado. Hit FTS entra mesmo sem substring JS; `ts_rank` desempatra. **Não** autoriza SQL — `consultaPermitida` continua só com cobertura certificada. FTS (`portuguese` + `unaccent`) + `ILIKE` no Postgres; sinônimo resolve skill por id/slug/nome **sem** concatenar UUID na tsquery. Nota com `skillId` inclui a skill em `candidatos` mesmo se o nome não bater. Após deploy, reconectar o cliente MCP.
 - Tools `listar_conflitos` e `remover_relacionamento` (este com confirmação): o agente lista ids de conflito e apaga um JOIN pelo fingerprint, em vez de adivinhar.
 - `faltas[]` (`kind`, `alvo`, `nextAction`) em `listar_skills` / `obter_skill`. `publicar_skill` sem confirmação devolve `publicado: false`, `resumoPublicacao` e `faltas[]` — não invente o resumo.
 - Health injeta `GIT_SHA` / `SOURCE_COMMIT` / `GITHUB_SHA` no `sha` (PM2, Docker, CI). Snapshot de `tools/list` no teste de integração. Após deploy, reconectar o cliente MCP.
 
 ### Changed
 
-- Busca de `consulta_aprendida` ranqueia só a **pergunta** (não o SQL). Cobertura certificada segue nome/slug/descrição/params/`metricasSaida`/sinônimos — corpo e título de regra não completam cobertura.
+- Busca de `consulta_aprendida` ranqueia só a **pergunta** (não o SQL) e só status `ativa`. Cobertura certificada segue nome/slug/descrição/params/`metricasSaida`/sinônimos — corpo e título de regra não completam cobertura. Postgres: `ORDER BY ts_rank` (score até `conhecimentos[]`); `ILIKE` de skill lê nome/descrição de params e alias/definição/grão de `metricasSaida` (não dump JSON nem `expr`). Tsquery vazia cai só no `ILIKE`. `grafoParaTreino.anotacoes` recorta tabela pela policy (id irresolvível omite); nota sem tabela só entra se for global ou a `skillId` estiver nos candidatos.
+- `buscar_contexto` **não** devolve `sqlModelo` nem SQL de `consultasAprendidas` (só id/pergunta/skillIds/execucoes/status). O SELECT está em `obter_skill` (`consultasExemplo`). Após deploy, reconectar o cliente MCP.
 - Skill `validada` com perfil incompleto: `fluxoTreino.proximoPasso` aponta a tool da primeira falta (`confirmar_relacionamento`, `mapear_tabela`, `listar_conflitos`…) e nunca fica `null`.
 - JOIN composto substitui pares isolados (subconjunto) no grafo e no pacote. `uniaoEscopos` também descarta o subconjunto.
 - `mapear_tabela` substitui tipo físico incompatível (ex. uuid vs data) sem apagar descrição, dicionário ou `sensibilidade` confirmada. Gate de publicação trata papel `data` em família uuid como falta de perfil.
 - `inspecionar_consulta` aceita skill `validada` e `rascunho_revalidacao`; recusa rascunho. `descobrir_tabela` continua só em skill publicada.
 - `buscar_contexto` mede cobertura por nome, slug, descrição, params e `metricasSaida` — **não** pelo `sqlModelo`. `SKILL_NOT_PUBLISHED` só se a skill em treino cobre a pergunta.
+
+### Security
+
+- Migration `0017_fts_hardening.sql`: `SET search_path = pg_catalog, public` em `mcp_unaccent` / `mcp_skill_search_vec`; GIN composto `(agent_id, search_tsv)` com `btree_gin`.
+- Migration `0018_fts_rank_trgm.sql`: pesos FTS A/B/C em `mcp_skill_search_vec` (nome/slug, descrição/params, métricas) e `pg_trgm` em nome/slug/pergunta. O papel da migration precisa de `CREATE EXTENSION` (`unaccent`, `btree_gin`, `pg_trgm`).
 
 ### Added
 

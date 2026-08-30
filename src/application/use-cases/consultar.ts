@@ -19,7 +19,11 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
-import type { HitConhecimento } from "../../domain/entities/conhecimento.js";
+import type {
+  ConsultaAprendidaResumo,
+  HitConhecimento,
+  SkillResumoContexto,
+} from "../../domain/entities/conhecimento.js";
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
 import type { Skill, StatusSkill } from "../../domain/entities/skill.js";
 import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
@@ -75,7 +79,12 @@ import {
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
 import { coberturaDeSkill, tokensCapacidade } from "./shared/cobertura-skill.js";
-import { hintRegraParcial, montarConhecimentos } from "./shared/montar-conhecimentos.js";
+import { resolverSkillsPorSinonimos } from "./shared/resolver-sinonimos.js";
+import {
+  filtrarAnotacoes,
+  hintRegraParcial,
+  montarConhecimentos,
+} from "./shared/montar-conhecimentos.js";
 import {
   agruparColunasCatalogo,
   cell,
@@ -103,9 +112,9 @@ const hintConsultasAprendidas = (
     return undefined;
   }
   const base =
-    "Reutilize estes SQLs em consultasAprendidas (já comprovados neste agentId). Adapte params; não invente tabela, coluna nem JOIN.";
+    "Reutilize as perguntas em consultasAprendidas (já comprovadas neste agentId). O SQL está em obter_skill (consultasExemplo). Adapte params; não invente tabela, coluna nem JOIN.";
   if (PERIODO_NA_PERGUNTA.test(query)) {
-    return `${base} Pergunta de período: reutilize esses SQLs (params de data ou OVER/LAG); não reinventar a comparação.`;
+    return `${base} Pergunta de período: reutilize a pergunta (params de data ou OVER/LAG); não reinventar a comparação.`;
   }
   return base;
 };
@@ -1104,6 +1113,38 @@ const STATUS_TREINO: ReadonlySet<StatusSkill> = new Set([
   "rascunho_revalidacao",
 ]);
 
+const resumoSkill = (skill: Skill): SkillResumoContexto => ({
+  id: skill.id,
+  slug: skill.slug,
+  nome: skill.nome,
+  status: skill.status,
+});
+
+const resumoConsulta = (consulta: ConsultaAprendida): ConsultaAprendidaResumo => ({
+  id: consulta.id,
+  pergunta: consulta.pergunta,
+  skillIds: consulta.skillIds,
+  execucoes: consulta.execucoes,
+  status: consulta.status,
+});
+
+const unirSkills = (
+  encontradas: readonly Skill[],
+  extras: readonly Skill[],
+  statuses?: ReadonlySet<StatusSkill>,
+): Skill[] => {
+  const merged = new Map(encontradas.map((skill) => [skill.id, skill]));
+  for (const skill of extras) {
+    if (statuses && !statuses.has(skill.status)) {
+      continue;
+    }
+    if (!merged.has(skill.id)) {
+      merged.set(skill.id, skill);
+    }
+  }
+  return [...merged.values()];
+};
+
 const unirSkillsPorNotas = (
   encontradas: readonly Skill[],
   todas: readonly Skill[],
@@ -1150,9 +1191,9 @@ export class BuscarContexto {
       cobertura: "completa" | "parcial" | "desconhecida";
       termosEncontrados: string[];
     }[];
-    skillsPublicadas: readonly Skill[];
-    skillsParaTreino: readonly Skill[];
-    consultasAprendidas: readonly ConsultaAprendida[];
+    skillsPublicadas: readonly SkillResumoContexto[];
+    skillsParaTreino: readonly SkillResumoContexto[];
+    consultasAprendidas: readonly ConsultaAprendidaResumo[];
     conhecimentos: readonly HitConhecimento[];
     grafoParaTreino?: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     fluxoTreino?: FluxoTreino;
@@ -1180,14 +1221,6 @@ export class BuscarContexto {
     const sinonimos = this.aprendizado
       ? await this.aprendizado.listarSinonimos(acesso.agentId)
       : [];
-    const extras: string[] = [];
-    const lower = query.toLowerCase();
-    for (const item of sinonimos) {
-      if (lower.includes(item.termo.toLowerCase())) {
-        extras.push(item.alvoId);
-      }
-    }
-    const expanded = extras.length > 0 ? `${query} ${extras.join(" ")}` : query;
     const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.getClientTokenPolicy({
         accessToken,
@@ -1196,36 +1229,48 @@ export class BuscarContexto {
       }),
     );
     const [
-      tabelas,
-      skillsPublicadasBusca,
-      skillsParaTreinoBusca,
-      notas,
-      consultasAprendidas,
+      tabelasHits,
+      skillsPublicadasHits,
+      skillsParaTreinoHits,
+      notasHits,
+      consultasHits,
       todas,
     ] = await Promise.all([
-      this.grafo.buscar(acesso.agentId, expanded, 12),
-      this.skills.buscar(acesso.agentId, expanded, 8, "publicada"),
-      this.skills.buscar(acesso.agentId, expanded, 8, [
+      this.grafo.buscar(acesso.agentId, query, 12),
+      this.skills.buscar(acesso.agentId, query, 8, "publicada"),
+      this.skills.buscar(acesso.agentId, query, 8, [
         "rascunho",
         "validada",
         "rascunho_revalidacao",
       ]),
-      this.anotacoes.buscar(acesso.agentId, expanded, 8),
+      this.anotacoes.buscar(acesso.agentId, query, 8),
       this.aprendizado
-        ? this.aprendizado.buscarConsultas(acesso.agentId, expanded, 5)
-        : Promise.resolve([] as ConsultaAprendida[]),
+        ? this.aprendizado.buscarConsultas(acesso.agentId, query, 5)
+        : Promise.resolve([]),
       this.skills.listByAgent(acesso.agentId),
     ]);
-    const skillsPublicadas = unirSkillsPorNotas(
-      skillsPublicadasBusca,
-      todas,
-      notas,
+    const tabelas = tabelasHits.map((hit) => hit.item);
+    const notas = notasHits.map((hit) => hit.item);
+    const consultasAprendidas = consultasHits.map((hit) => hit.item);
+    const skillsPorSinonimo = resolverSkillsPorSinonimos(query, sinonimos, todas);
+    const skillsPublicadas = unirSkills(
+      unirSkillsPorNotas(
+        skillsPublicadasHits.map((hit) => hit.item),
+        todas,
+        notas,
+        new Set<StatusSkill>(["publicada"]),
+      ),
+      skillsPorSinonimo,
       new Set<StatusSkill>(["publicada"]),
     );
-    const skillsParaTreinoUnidas = unirSkillsPorNotas(
-      skillsParaTreinoBusca,
-      todas,
-      notas,
+    const skillsParaTreinoUnidas = unirSkills(
+      unirSkillsPorNotas(
+        skillsParaTreinoHits.map((hit) => hit.item),
+        todas,
+        notas,
+        STATUS_TREINO,
+      ),
+      skillsPorSinonimo,
       STATUS_TREINO,
     );
     const tokens = tokensCapacidade(query);
@@ -1270,14 +1315,51 @@ export class BuscarContexto {
     }
     const tabelasPolicy = tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy));
     const skillIdsPermitidos = new Set(skillsPublicadas.map((skill) => skill.id));
+    const skillIdsRecuperados = new Set([
+      ...skillsPublicadasHits.map((hit) => hit.item.id),
+      ...skillsParaTreinoHits.map((hit) => hit.item.id),
+      ...skillsPorSinonimo.map((skill) => skill.id),
+    ]);
+    const skillIdsCandidatos = new Set([
+      ...skillsPublicadas.map((skill) => skill.id),
+      ...skillsParaTreinoUnidas.map((skill) => skill.id),
+    ]);
+    const ranksPorId = new Map<string, number>();
+    for (const hit of [
+      ...tabelasHits,
+      ...skillsPublicadasHits,
+      ...skillsParaTreinoHits,
+      ...notasHits,
+      ...consultasHits,
+    ]) {
+      ranksPorId.set(hit.item.id, hit.rank);
+    }
+    const tabelaNomePorId = new Map(tabelas.map((tabela) => [tabela.id, tabela.nome]));
+    const notasComTabela = notas.some((nota) => Boolean(nota.tabelaId));
+    if (notasComTabela) {
+      const todasTabelas = await this.grafo.listTabelas(acesso.agentId);
+      for (const tabela of todasTabelas) {
+        tabelaNomePorId.set(tabela.id, tabela.nome);
+      }
+    }
     const tabelasPermitidas = new Set(
       consultaPermitida
         ? skillsPublicadas.flatMap((skill) =>
             skill.escopo.tabelas.map((nome) => nome.toLowerCase()),
           )
-        : tabelasPolicy.map((tabela) => tabela.nome.toLowerCase()),
+        : notasComTabela
+          ? [...tabelaNomePorId.values()]
+              .filter((nome) => allowedByPolicy(nome, policy))
+              .map((nome) => nome.toLowerCase())
+          : tabelasPolicy.map((tabela) => tabela.nome.toLowerCase()),
     );
-    const tabelaNomePorId = new Map(tabelas.map((tabela) => [tabela.id, tabela.nome]));
+    const filtroConhecimentos = {
+      consultaPermitida,
+      skillIdsPermitidos,
+      skillIdsCandidatos,
+      tabelasPermitidas,
+      tabelaNomePorId,
+    };
     const conhecimentos = montarConhecimentos({
       query,
       skills: consultaPermitida
@@ -1286,12 +1368,10 @@ export class BuscarContexto {
       anotacoes: notas,
       consultas: consultasAprendidas,
       tabelas: consultaPermitida ? tabelas : tabelasPolicy,
-      filtro: {
-        consultaPermitida,
-        skillIdsPermitidos,
-        tabelasPermitidas,
-        tabelaNomePorId,
-      },
+      filtro: filtroConhecimentos,
+      skillIdsRecuperados,
+      sinonimos,
+      ranksPorId,
     });
     const hintAprendidas = hintConsultasAprendidas(query, consultasAprendidas);
     const hintRegra = hintRegraParcial(coberturaGeral, conhecimentos);
@@ -1301,15 +1381,15 @@ export class BuscarContexto {
       consultaPermitida,
       cobertura: coberturaGeral,
       candidatos,
-      skillsPublicadas,
-      skillsParaTreino: capazesTreino,
-      consultasAprendidas,
+      skillsPublicadas: skillsPublicadas.map(resumoSkill),
+      skillsParaTreino: capazesTreino.map(resumoSkill),
+      consultasAprendidas: consultasAprendidas.map(resumoConsulta),
       conhecimentos,
       grafoParaTreino: consultaPermitida
         ? undefined
         : {
             tabelas: tabelasPolicy,
-            anotacoes: notas,
+            anotacoes: filtrarAnotacoes(notas, filtroConhecimentos),
           },
       fluxoTreino,
       blockingReason: skillNaoPublicada ? "SKILL_NOT_PUBLISHED" : undefined,

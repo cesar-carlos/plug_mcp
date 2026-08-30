@@ -10,6 +10,7 @@ import type {
 import type { Cardinalidade, PapelColuna, PerfilColuna } from "../entities/escopo.js";
 import type { ParRelacionamento } from "../entities/relacionamento.js";
 import type { SensibilidadeColuna } from "../entities/privacidade.js";
+import type { HitBusca } from "../entities/hit-busca.js";
 
 export interface MergeTabelaInput {
   readonly agentId: string;
@@ -92,5 +93,5 @@ export interface GrafoRepositoryPort {
     dicionario?: string | null;
     autorUsuarioId: string | null;
   }): Promise<void>;
-  buscar(agentId: string, query: string, limite: number): Promise<readonly TabelaGrafo[]>;
+  buscar(agentId: string, query: string, limite: number): Promise<readonly HitBusca<TabelaGrafo>[]>;
 }

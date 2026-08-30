@@ -60,7 +60,7 @@ describe("BuscarContexto", () => {
       crypto,
       aprendizado,
     );
-    return { buscar, created, skills, aprendizado, anotacoes, grafo };
+    return { buscar, created, skills, aprendizado, anotacoes, grafo, plug };
   };
 
   it("sem skill publicada devolve consultaPermitida false e SKILL_GAP", async () => {
@@ -277,6 +277,8 @@ describe("BuscarContexto", () => {
       query: "comparar faturamento no período",
     });
     expect(result.consultasAprendidas.length).toBeGreaterThan(0);
+    expect(result.consultasAprendidas[0]).not.toHaveProperty("sql");
+    expect(result.skillsPublicadas[0]).not.toHaveProperty("sqlModelo");
     expect(result.hint).toMatch(/OVER\/LAG/);
   });
 
@@ -427,5 +429,199 @@ describe("BuscarContexto", () => {
         (item) => item.tipo === "tabela" && item.titulo === "auditoria_produtos",
       ),
     ).toBe(false);
+  });
+
+  it("grafoParaTreino.anotacoes omite nota com tabelaId irresolvível", async () => {
+    const { buscar, created, anotacoes } = await setup();
+    await anotacoes.create({
+      agentId,
+      tabelaId: "99999999-9999-4999-8999-999999999999",
+      skillId: null,
+      tipo: "regra",
+      titulo: "Fantasma",
+      texto: "tokenirresolvivelxyz não deve vazar.",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "tokenirresolvivelxyz",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(
+      (result.grafoParaTreino?.anotacoes as { texto?: string }[] | undefined)?.some((nota) =>
+        nota.texto?.includes("tokenirresolvivelxyz"),
+      ),
+    ).toBe(false);
+    expect(result.conhecimentos.some((item) => item.trecho.includes("tokenirresolvivelxyz"))).toBe(
+      false,
+    );
+  });
+
+  it("grafoParaTreino.anotacoes omite nota de tabela fora da policy", async () => {
+    const { buscar, created, anotacoes, grafo, plug } = await setup();
+    plug.policy = { allTables: false, tables: ["produto"] };
+    const { tabela } = await grafo.mergeTabela({
+      agentId,
+      nome: "segredo_interno",
+      descricao: "tabela recortada",
+      origem: "inferido",
+      autorUsuarioId: created.usuarioId,
+    });
+    await anotacoes.create({
+      agentId,
+      tabelaId: tabela.id,
+      skillId: null,
+      tipo: "regra",
+      titulo: "Sigilo",
+      texto: "policydenyxyz não sai no gap.",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "policydenyxyz",
+    });
+    expect(
+      (result.grafoParaTreino?.anotacoes as { texto?: string }[] | undefined)?.some((nota) =>
+        nota.texto?.includes("policydenyxyz"),
+      ),
+    ).toBe(false);
+  });
+
+  it("sinônimo entra no haystack de evidência da skill", async () => {
+    const { buscar, created, skills, aprendizado } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "vendas",
+      nome: "Vendas",
+      descricao: "Totais do período",
+      sqlModelo: "SELECT p.valor FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await aprendizado.registrarSinonimo({
+      agentId,
+      termo: "faturamentoabc",
+      alvoTipo: "skill",
+      alvoId: published.id,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "faturamentoabc",
+    });
+    expect(
+      result.conhecimentos.some((item) => item.tipo === "skill" && item.id === published.id),
+    ).toBe(true);
+    expect(result.skillsPublicadas.some((item) => item.id === published.id)).toBe(true);
+    expect(result.consultaPermitida).toBe(true);
+  });
+
+  it("sinônimo por slug ainda resolve a skill", async () => {
+    const { buscar, created, skills, aprendizado } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "vendas",
+      nome: "Vendas",
+      descricao: "Totais do período",
+      sqlModelo: "SELECT p.valor FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await aprendizado.registrarSinonimo({
+      agentId,
+      termo: "faturamentoabc",
+      alvoTipo: "skill",
+      alvoId: "vendas",
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "faturamentoabc",
+    });
+    expect(
+      result.conhecimentos.some((item) => item.tipo === "skill" && item.id === published.id),
+    ).toBe(true);
+  });
+
+  it("hint de regra sobrevive quando o teto está cheio de tabelas", async () => {
+    const { buscar, created, skills, anotacoes, grafo } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "contas-teto",
+      nome: "Contas",
+      descricao: "Titulos",
+      sqlModelo: "SELECT 1",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    await anotacoes.create({
+      agentId,
+      tabelaId: null,
+      skillId: published.id,
+      tipo: "regra",
+      titulo: "Fórmula",
+      texto: "alphateto usa recorte próprio.",
+      autorUsuarioId: created.usuarioId,
+    });
+    for (let i = 0; i < 8; i += 1) {
+      await grafo.mergeTabela({
+        agentId,
+        nome: `alpha_teto_${i}`,
+        descricao: "alphateto volume",
+        origem: "inferido",
+        autorUsuarioId: created.usuarioId,
+      });
+    }
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "alphateto",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.conhecimentos.some((item) => item.tipo === "regra")).toBe(true);
+    expect(result.hint).toMatch(/obter_skill/);
+  });
+
+  it("consulta inativa não entra em consultasAprendidas nem conhecimentos", async () => {
+    const { buscar, created, skills, aprendizado } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "itens-inativa",
+      nome: "Itens",
+      descricao: "Cadastro de itens",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    const saved = await aprendizado.salvarConsulta({
+      agentId,
+      skillIds: [published.id],
+      pergunta: "lista de itens do catalogo inativo",
+      sql: "SELECT 1",
+      paramsContrato: [],
+      autorUsuarioId: created.usuarioId,
+    });
+    aprendizado.marcarStatusConsulta(saved.id, "inativa");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "catalogo inativo",
+    });
+    expect(result.consultasAprendidas).toHaveLength(0);
+    expect(result.conhecimentos.some((item) => item.tipo === "consulta_aprendida")).toBe(false);
+  });
+
+  it("omite nota sem tabela de skill que não está nos candidatos", async () => {
+    const { buscar, created, anotacoes } = await setup();
+    await anotacoes.create({
+      agentId,
+      tabelaId: null,
+      skillId: "99999999-9999-4999-8999-999999999999",
+      tipo: "regra",
+      titulo: "Órfã",
+      texto: "orfaoskillxyz não deve aparecer no gap.",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "orfaoskillxyz",
+    });
+    expect(result.conhecimentos.some((item) => item.trecho.includes("orfaoskillxyz"))).toBe(false);
   });
 });

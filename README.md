@@ -7,7 +7,7 @@ Não há login próprio, Authorization Server, catálogo pronto com seed, nem Cl
 ## Requisitos
 
 - Node.js 24.19.0+ (LTS Krypton; `.nvmrc`)
-- PostgreSQL (produção). Testes unitários usam repositórios in-memory.
+- PostgreSQL (produção). Testes unitários usam repositórios in-memory. `npm run db:migrate` exige privilégio `CREATE EXTENSION` para `unaccent`, `btree_gin` e `pg_trgm` (FTS).
 - Redis opcional (rate limit + cache de policy)
 
 ## Setup

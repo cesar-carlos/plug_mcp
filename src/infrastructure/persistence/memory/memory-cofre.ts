@@ -15,6 +15,7 @@ import type {
   Sinonimo,
 } from "../../../domain/entities/aprendizado.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
+import type { HitBusca } from "../../../domain/entities/hit-busca.js";
 import { escopoVazio } from "../../../domain/entities/escopo.js";
 import {
   fingerprintPares,
@@ -46,7 +47,7 @@ import type {
   SkillRepositoryPort,
 } from "../../../domain/ports/skill-repository.port.js";
 import type { AuditLogPort } from "../../../domain/ports/audit-log.port.js";
-import { rankByTerms, tokenizeQuery } from "../busca-termos.js";
+import { rankByTermsHits, tokenizeQuery } from "../busca-termos.js";
 import type { AuditLogEntry, NewAuditLog } from "../../../domain/entities/audit-log.js";
 
 const now = (): Date => new Date();
@@ -534,8 +535,12 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     }
   }
 
-  async buscar(agentId: string, query: string, limite: number): Promise<readonly TabelaGrafo[]> {
-    return rankByTerms(
+  async buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<TabelaGrafo>[]> {
+    return rankByTermsHits(
       [...this.tabelas.values()].filter((row) => row.agentId === agentId),
       tokenizeQuery(query),
       (row) => `${row.nome} ${row.descricao ?? ""}`,
@@ -637,10 +642,10 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
     query: string,
     limite: number,
     status?: StatusSkill | readonly StatusSkill[],
-  ): Promise<readonly Skill[]> {
+  ): Promise<readonly HitBusca<Skill>[]> {
     const allowed =
       status === undefined ? null : new Set(typeof status === "string" ? [status] : status);
-    return rankByTerms(
+    return rankByTermsHits(
       [...this.rows.values()].filter(
         (row) => row.agentId === agentId && (allowed === null || allowed.has(row.status)),
       ),
@@ -705,8 +710,12 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
     return this.rows.delete(anotacaoId);
   }
 
-  async buscar(agentId: string, query: string, limite: number): Promise<readonly AnotacaoGrafo[]> {
-    return rankByTerms(
+  async buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<AnotacaoGrafo>[]> {
+    return rankByTermsHits(
       [...this.rows.values()].filter((row) => row.agentId === agentId),
       tokenizeQuery(query),
       (row) => `${row.titulo} ${row.texto}`,
@@ -810,14 +819,23 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     agentId: string,
     query: string,
     limite: number,
-  ): Promise<readonly ConsultaAprendida[]> {
+  ): Promise<readonly HitBusca<ConsultaAprendida>[]> {
     const terms = tokenizeQuery(query);
-    return rankByTerms(
-      this.consultas.filter((row) => row.agentId === agentId),
+    return rankByTermsHits(
+      this.consultas.filter((row) => row.agentId === agentId && row.status === "ativa"),
       terms,
       (row) => row.pergunta,
       limite,
     );
+  }
+
+  marcarStatusConsulta(id: string, status: string): void {
+    const idx = this.consultas.findIndex((row) => row.id === id);
+    const row = this.consultas[idx];
+    if (idx < 0 || !row) {
+      return;
+    }
+    this.consultas[idx] = { ...row, status };
   }
 
   async registrarSinonimo(input: {

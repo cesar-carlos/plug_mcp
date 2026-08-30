@@ -1,8 +1,16 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
-import { rankFetched, tokenizeQuery } from "../busca-termos.js";
+import { tokenizeQuery } from "../busca-termos.js";
 import type { Db } from "./db.js";
-import { condicaoFtsOuIlike } from "./fts-busca.js";
+import {
+  condicaoFtsOuIlike,
+  existeIlikeJsonbArray,
+  exprTsRank,
+  janelaBuscaFts,
+  ordemPorTsRank,
+  toRankFts,
+} from "./fts-busca.js";
+import type { HitBusca } from "../../../domain/entities/hit-busca.js";
 import * as schema from "../schema.js";
 import type { Acesso, NovoAcesso, StatusAcesso } from "../../../domain/entities/acesso.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
@@ -753,7 +761,11 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     }
   }
 
-  async buscar(agentId: string, query: string, limite: number): Promise<readonly TabelaGrafo[]> {
+  async buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<TabelaGrafo>[]> {
     const terms = tokenizeQuery(query);
     const likes = terms.flatMap((term) => {
       const like = `%${term}%`;
@@ -768,16 +780,17 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       return [];
     }
     const rows = await this.conn()
-      .select()
+      .select({
+        item: schema.tabelaGrafo,
+        rank: exprTsRank("tabela_grafo", query),
+      })
       .from(schema.tabelaGrafo)
       .where(and(eq(schema.tabelaGrafo.agentId, agentId), busca))
-      .limit(Math.max(limite * 4, 32));
-    return rankFetched(
-      rows.map(toTabela),
-      terms.length > 0 ? terms : tokenizeQuery(query),
-      (row) => `${row.nome} ${row.descricao ?? ""}`,
-      limite,
-    );
+      .orderBy(ordemPorTsRank("tabela_grafo", query))
+      .limit(janelaBuscaFts(limite));
+    return rows
+      .map((row) => ({ item: toTabela(row.item), rank: toRankFts(row.rank) }))
+      .slice(0, limite);
   }
 }
 
@@ -889,7 +902,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
     query: string,
     limite: number,
     status?: StatusSkill | readonly StatusSkill[],
-  ): Promise<readonly Skill[]> {
+  ): Promise<readonly HitBusca<Skill>[]> {
     const terms = tokenizeQuery(query);
     const likes = terms.flatMap((term) => {
       const like = `%${term}%`;
@@ -897,7 +910,16 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
         ilike(schema.skill.nome, like),
         ilike(schema.skill.descricao, like),
         ilike(schema.skill.slug, like),
-        sql`${schema.skill.params}::text ilike ${like}`,
+        existeIlikeJsonbArray(
+          sql`coalesce(${schema.skill.params}, '[]'::jsonb)`,
+          ["nome", "descricao"],
+          like,
+        ),
+        existeIlikeJsonbArray(
+          sql`coalesce(${schema.skill.escopo}->'metricasSaida', '[]'::jsonb)`,
+          ["alias", "definicao", "grao"],
+          like,
+        ),
       ];
     });
     const busca = condicaoFtsOuIlike({
@@ -915,22 +937,17 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
           ? eq(schema.skill.status, status)
           : inArray(schema.skill.status, [...status]);
     const rows = await this.db
-      .select()
+      .select({
+        item: schema.skill,
+        rank: exprTsRank("skill", query),
+      })
       .from(schema.skill)
       .where(and(eq(schema.skill.agentId, agentId), statusFilter, busca))
-      .limit(Math.max(limite * 4, 32));
-    const rankTerms = terms.length > 0 ? terms : [query.trim().toLowerCase()].filter(Boolean);
-    return rankFetched(
-      rows.map((row) => this.toSkill(row)),
-      rankTerms,
-      (row) =>
-        `${row.nome} ${row.descricao} ${row.slug} ${row.params
-          .map((param) => `${param.nome} ${param.descricao} ${param.tipo}`)
-          .join(" ")} ${row.escopo.metricasSaida
-          .map((item) => `${item.alias} ${item.definicao ?? ""} ${item.grao ?? ""}`)
-          .join(" ")}`,
-      limite,
-    );
+      .orderBy(ordemPorTsRank("skill", query))
+      .limit(janelaBuscaFts(limite));
+    return rows
+      .map((row) => ({ item: this.toSkill(row.item), rank: toRankFts(row.rank) }))
+      .slice(0, limite);
   }
 
   private toSkill(row: typeof schema.skill.$inferSelect): Skill {
@@ -1023,7 +1040,11 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
     return rows.length > 0;
   }
 
-  async buscar(agentId: string, query: string, limite: number): Promise<readonly AnotacaoGrafo[]> {
+  async buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<AnotacaoGrafo>[]> {
     const terms = tokenizeQuery(query);
     const likes = terms.flatMap((term) => {
       const like = `%${term}%`;
@@ -1038,16 +1059,17 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
       return [];
     }
     const rows = await this.db
-      .select()
+      .select({
+        item: schema.anotacaoGrafo,
+        rank: exprTsRank("anotacao_grafo", query),
+      })
       .from(schema.anotacaoGrafo)
       .where(and(eq(schema.anotacaoGrafo.agentId, agentId), busca))
-      .limit(Math.max(limite * 4, 32));
-    return rankFetched(
-      rows.map((row) => this.toAnotacao(row)),
-      terms.length > 0 ? terms : tokenizeQuery(query),
-      (row) => `${row.titulo} ${row.texto}`,
-      limite,
-    );
+      .orderBy(ordemPorTsRank("anotacao_grafo", query))
+      .limit(janelaBuscaFts(limite));
+    return rows
+      .map((row) => ({ item: this.toAnotacao(row.item), rank: toRankFts(row.rank) }))
+      .slice(0, limite);
   }
 
   private toAnotacao(row: typeof schema.anotacaoGrafo.$inferSelect): AnotacaoGrafo {
@@ -1272,7 +1294,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     agentId: string,
     query: string,
     limite: number,
-  ): Promise<readonly ConsultaAprendida[]> {
+  ): Promise<readonly HitBusca<ConsultaAprendida>[]> {
     const terms = tokenizeQuery(query);
     const likes = terms.map((term) => ilike(schema.consultaAprendida.pergunta, `%${term}%`));
     const busca = condicaoFtsOuIlike({
@@ -1284,16 +1306,26 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       return [];
     }
     const rows = await this.db
-      .select()
+      .select({
+        item: schema.consultaAprendida,
+        rank: exprTsRank("consulta_aprendida", query),
+      })
       .from(schema.consultaAprendida)
-      .where(and(eq(schema.consultaAprendida.agentId, agentId), busca))
-      .limit(Math.max(limite * 4, 32));
-    return rankFetched(
-      await this.hydrate(rows),
-      terms.length > 0 ? terms : tokenizeQuery(query),
-      (row) => row.pergunta,
-      limite,
-    );
+      .where(
+        and(
+          eq(schema.consultaAprendida.agentId, agentId),
+          eq(schema.consultaAprendida.status, "ativa"),
+          busca,
+        ),
+      )
+      .orderBy(ordemPorTsRank("consulta_aprendida", query))
+      .limit(janelaBuscaFts(limite));
+    const hydrated = await this.hydrate(rows.map((row) => row.item));
+    const rankById = new Map(rows.map((row) => [row.item.id, toRankFts(row.rank)]));
+    return hydrated.slice(0, limite).map((item) => ({
+      item,
+      rank: rankById.get(item.id) ?? 0,
+    }));
   }
 
   async registrarSinonimo(input: {

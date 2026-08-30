@@ -202,6 +202,8 @@ export const skill = pgTable(
     uniqueIndex("skill_agent_slug_uidx").on(t.agentId, t.slug),
     index("skill_agent_idx").on(t.agentId),
     // search_tsv GENERATED ALWAYS — drizzle/0016_conhecimento_fts.sql (não mapear no insert)
+    // GIN composto (agent_id, search_tsv) — drizzle/0017_fts_hardening.sql
+    // pesos A/B/C + pg_trgm — drizzle/0018_fts_rank_trgm.sql
   ],
 );
 

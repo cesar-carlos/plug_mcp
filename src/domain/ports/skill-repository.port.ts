@@ -1,3 +1,4 @@
+import type { HitBusca } from "../entities/hit-busca.js";
 import type { AnotacaoGrafo, NovaSkill, Skill, StatusSkill } from "../entities/skill.js";
 
 export interface SkillRepositoryPort {
@@ -31,7 +32,7 @@ export interface SkillRepositoryPort {
     query: string,
     limite: number,
     status?: StatusSkill | readonly StatusSkill[],
-  ): Promise<readonly Skill[]>;
+  ): Promise<readonly HitBusca<Skill>[]>;
 }
 
 export interface AnotacaoGrafoRepositoryPort {
@@ -51,5 +52,9 @@ export interface AnotacaoGrafoRepositoryPort {
   ): Promise<readonly AnotacaoGrafo[]>;
   findById(id: string): Promise<AnotacaoGrafo | null>;
   deleteById(id: string): Promise<boolean>;
-  buscar(agentId: string, query: string, limite: number): Promise<readonly AnotacaoGrafo[]>;
+  buscar(
+    agentId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<AnotacaoGrafo>[]>;
 }

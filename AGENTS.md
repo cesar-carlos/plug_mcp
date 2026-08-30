@@ -33,7 +33,8 @@ documentação de produto e os testes correspondentes.
   rebaixa para validada sem apagar. JOIN composto substitui pares isolados;
   `remover_relacionamento` apaga um fingerprint. `inspecionar_consulta` aceita
   `validada`. Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
-  `conhecimentos[]` é evidência, não licença de consulta.
+  `conhecimentos[]` é evidência, não licença de consulta. Envelope de
+  `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — use `obter_skill`.
 
 ## Segurança e autorização
 

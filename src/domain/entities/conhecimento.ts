@@ -1,5 +1,28 @@
+import type { StatusSkill } from "./skill.js";
+
 export type TipoConhecimento =
   "skill" | "regra" | "glossario" | "metrica" | "consulta_aprendida" | "tabela" | "uso";
+
+export interface SkillResumoContexto {
+  readonly id: string;
+  readonly slug: string;
+  readonly nome: string;
+  readonly status: StatusSkill;
+}
+
+export interface ConsultaAprendidaResumo {
+  readonly id: string;
+  readonly pergunta: string;
+  readonly skillIds: readonly string[];
+  readonly execucoes: number;
+  readonly status: string;
+}
+
+export const TIPOS_NARRATIVA_COM_SKILL: ReadonlySet<TipoConhecimento> = new Set([
+  "regra",
+  "glossario",
+  "metrica",
+]);
 
 export interface HitConhecimento {
   readonly tipo: TipoConhecimento;

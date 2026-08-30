@@ -11,7 +11,7 @@ O MCP é cofre + grafo de treino + **skill como pacote de conhecimento e escopo 
 - `treinar_com_sql`: SELECT nomeado, JOIN se >1 tabela (um JOIN com várias igualdades vira um relacionamento), merge só após `sql.execute` + policy; enriquecimento opcional.
 - Skills (rascunho → validada → publicada): pacote v2 de conhecimento + allowlist de tabelas/colunas/JOINs. `sqlModelo` é consulta exemplo. SQL da IA só executa no escopo publicado. Inspeção mascarada (`inspecionar_consulta`) e descoberta estrutural (`descobrir_tabela`) só com skill publicada. Escopo vazio é persistido na primeira leitura (e via `db:backfill-escopo`).
 - Loop de aprendizado: consultas aprendidas visíveis em `buscar_contexto` / `obter_skill`, sinônimos, lacunas, promoção a `validado_execucao`. `asOf` usa o timezone do acesso.
-- `buscar_contexto` usa FTS (`portuguese` + `unaccent`) com fallback `ILIKE` no Postgres; devolve `conhecimentos[]` como evidência. Sem embedding obrigatório.
+- `buscar_contexto` usa FTS (`portuguese` + `unaccent` + pesos A/B/C + `pg_trgm`) com fallback `ILIKE` no Postgres; devolve `conhecimentos[]` como evidência e envelope sem SQL. Sem embedding obrigatório.
 - `treinar_com_sql enriquecer=completo` (opt-in): cardinalidade, tipo/formato, perfil min/max/nulos e candidatos a dicionário, com teto de 16 queries. `validar_skill` aceita o mesmo parâmetro.
 - Postgres obrigatório em produção. Redis opcional para rate limit, cache de policy e cache de resultado agregado.
 
