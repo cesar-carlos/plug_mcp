@@ -83,6 +83,60 @@ export const isSqlServerOrderByWrap = (blob: string): boolean =>
   /order by clause is invalid/i.test(blob) ||
   /cl[aá]usula order by [eé] inv[aá]lida/i.test(blob);
 
+const looksLikeEngineSql = (blob: string): boolean =>
+  /\b(sql state|odbc|invalid column|invalid object|unknown column|syntax error|conversion failed|does not exist|undefined column|42P01|42703|\b1033\b|\b207\b|\b208\b)\b/i.test(
+    blob,
+  );
+
+const isInvalidIdentificadorMotor = (blob: string): boolean =>
+  /invalid column name/i.test(blob) ||
+  /invalid object name/i.test(blob) ||
+  /unknown column/i.test(blob) ||
+  /coluna .*(inv[aá]lida|n[aã]o existe)/i.test(blob) ||
+  /objeto .*(inv[aá]lido|n[aã]o existe)/i.test(blob) ||
+  /does not exist/i.test(blob) ||
+  /undefined column/i.test(blob) ||
+  /\b42703\b/.test(blob) ||
+  /\b42P01\b/.test(blob);
+
+const sanitizeEngineMessage = (raw: string): string => {
+  let text = raw.replace(/\s+/g, " ").trim();
+  text = text.replace(/bearer\s+\S+/gi, "[redacted]");
+  text = text.replace(/client[_-]?token[=:\s]+\S+/gi, "[redacted]");
+  if (text.length > 500) {
+    return `${text.slice(0, 500)}…`;
+  }
+  return text;
+};
+
+const nextActionFromEngine = (blob: string): string => {
+  if (isInvalidIdentificadorMotor(blob)) {
+    return "mapear_tabela";
+  }
+  return "validar_consulta";
+};
+
+const engineDetails = (
+  rpc: ReturnType<typeof extractRpcError>,
+  haystack: string,
+): {
+  hintSuffix: string;
+  details: { rpcCode: number | undefined; engineMessage: string };
+} | null => {
+  const raw = rpc.technicalMessage ?? rpc.message ?? haystack;
+  if (!raw.trim()) {
+    return null;
+  }
+  const engineMessage = sanitizeEngineMessage(raw);
+  if (!engineMessage) {
+    return null;
+  }
+  return {
+    hintSuffix: ` Motor: ${engineMessage}`,
+    details: { rpcCode: rpc.code, engineMessage },
+  };
+};
+
 const rpcMap: Record<
   number,
   { code: ErrorCode; message: string; hint: string; retryable: boolean }
@@ -177,14 +231,22 @@ export const mapPlugServerFailure = (
           stage: "sql.execute",
         });
       }
+      const engine =
+        mapped.code === ERROR_CODES.INVALID_SQL ? engineDetails(rpc, rpcHaystack) : null;
       return new DomainError({
         code: mapped.code,
         message: mapped.message,
-        hint: mapped.hint,
+        hint: engine ? `${mapped.hint}${engine.hintSuffix}` : mapped.hint,
         retryable: mapped.retryable,
         retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
         source: "client_token_rpc",
         stage,
+        ...(engine && mapped.code === ERROR_CODES.INVALID_SQL
+          ? {
+              nextAction: nextActionFromEngine(rpcHaystack),
+              details: engine.details,
+            }
+          : {}),
       });
     }
   }
@@ -260,14 +322,21 @@ export const mapPlugServerFailure = (
     });
   }
 
+  const fallbackHaystack = `${raw} ${rpc.reason ?? ""} ${rpc.technicalMessage ?? ""}`;
+  const engine = looksLikeEngineSql(fallbackHaystack) ? engineDetails(rpc, fallbackHaystack) : null;
+  const hintBase =
+    "Ajuste o SQL ou verifique o status do ambiente. Se retryable não estiver indicado, não insista no mesmo comando.";
   return new DomainError({
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "Falha ao comunicar com o plug-server.",
-    hint: "Ajuste o SQL ou verifique o status do ambiente. Se retryable não estiver indicado, não insista no mesmo comando.",
+    hint: engine ? `${hintBase}${engine.hintSuffix}` : hintBase,
     retryable: failure.status >= 500,
     retryAfterMs: failure.retryAfterMs ?? null,
     source: "client_token_rpc",
     stage,
+    ...(engine
+      ? { nextAction: nextActionFromEngine(fallbackHaystack), details: engine.details }
+      : {}),
   });
 };
 

@@ -1,9 +1,15 @@
+import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { EscopoSkill } from "../../../domain/entities/escopo.js";
-import type { ConsultaSemantica } from "../../../domain/entities/consulta-semantica.js";
+import {
+  aliasesMetricas,
+  type ConsultaSemantica,
+  type FiltroSemantico,
+} from "../../../domain/entities/consulta-semantica.js";
 import { paresDoRelacionamento } from "../../../domain/entities/escopo.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import { NOMES_COLUNA_EMPRESA, NOMES_COLUNA_FILIAL } from "./escopo-filtro.js";
+import { garantirLimiteInspecao } from "./expandir-star.js";
 
 const lower = (value: string): string => value.trim().toLowerCase();
 
@@ -164,17 +170,52 @@ const caminhoJoins = (escopo: EscopoSkill, tabelas: readonly string[]): string[]
   return clauses;
 };
 
+const sqlDoFiltro = (colQ: string, filtro: FiltroSemantico): string => {
+  if (filtro.op === "is_null") {
+    return `${colQ} IS NULL`;
+  }
+  if (filtro.op === "is_not_null") {
+    return `${colQ} IS NOT NULL`;
+  }
+  if (filtro.op === "between") {
+    return `${colQ} BETWEEN :${filtro.param ?? ""} AND :${filtro.param2 ?? ""}`;
+  }
+  if (filtro.op === "like") {
+    return `${colQ} LIKE :${filtro.param ?? ""}`;
+  }
+  if (filtro.op === "in") {
+    return `${colQ} IN (:${filtro.param ?? ""})`;
+  }
+  return `${colQ} ${filtro.op} :${filtro.param ?? ""}`;
+};
+
 export const compilarConsultaSemantica = (
   consulta: ConsultaSemantica,
   escopo: EscopoSkill,
   recorte?: { empresa?: boolean; filial?: boolean },
+  opts?: { dialeto?: Dialeto; maxLimite?: number },
 ): { sql: string; elementos: string[] } => {
-  const metrica = resolverMetrica(escopo, consulta.metrica);
-  const exprCertificada = reescreverQualificadoresDaExpr(escopo, metrica.expr);
-  const elementos = [`metrica:${consulta.metrica}`];
-  const select: string[] = [`${exprCertificada} AS ${metrica.alias}`];
+  const aliases = aliasesMetricas(consulta);
+  const metricas = aliases.map((alias) => resolverMetrica(escopo, alias));
+  const primeira = metricas[0];
+  if (!primeira) {
+    throw new DomainError({
+      code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
+      message: "Consulta semântica exige ao menos uma métrica certificada.",
+      hint: "Use aliases de metricasSaida da skill publicada.",
+    });
+  }
+  const exprs = metricas.map((item) => ({
+    alias: item.alias,
+    expr: reescreverQualificadoresDaExpr(escopo, item.expr),
+  }));
+  const elementos = aliases.map((alias) => `metrica:${alias}`);
+  const select: string[] = exprs.map((item) => `${item.expr} AS ${item.alias}`);
   const group: string[] = [];
-  const dimensoesOk = new Set((metrica.dimensoesPermitidas ?? []).map(lower));
+  const restricoesDim = metricas
+    .map((item) => item.dimensoesPermitidas ?? [])
+    .filter((lista) => lista.length > 0)
+    .map((lista) => new Set(lista.map(lower)));
   for (const dim of consulta.dimensoes ?? []) {
     if (!colunaNoPacote(escopo, dim)) {
       throw new DomainError({
@@ -183,10 +224,10 @@ export const compilarConsultaSemantica = (
         hint: "Declare só colunas certificadas em graoResultado/colunasPorTabela.",
       });
     }
-    if (dimensoesOk.size > 0 && !dimensoesOk.has(lower(dim))) {
+    if (restricoesDim.length > 0 && restricoesDim.some((ok) => !ok.has(lower(dim)))) {
       throw new DomainError({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
-        message: `Dimensão ${dim} não é permitida para a métrica ${metrica.alias}.`,
+        message: `Dimensão ${dim} não é permitida para as métricas desta consulta.`,
         hint: "Use só dimensoesPermitidas do KPI no pacote.",
       });
     }
@@ -205,14 +246,11 @@ export const compilarConsultaSemantica = (
       });
     }
     const colQ = qualificarColuna(escopo, filtro.coluna);
-    where.push(
-      filtro.op === "in"
-        ? `${colQ} IN (:${filtro.param})`
-        : `${colQ} ${filtro.op} :${filtro.param}`,
-    );
+    where.push(sqlDoFiltro(colQ, filtro));
     elementos.push(`filtro:${filtro.coluna}`);
   }
-  const statusIncluidos = metrica.statusIncluidos ?? [];
+  const kpiStatus = metricas.find((item) => (item.statusIncluidos ?? []).length > 0);
+  const statusIncluidos = kpiStatus?.statusIncluidos ?? [];
   if (
     statusIncluidos.length > 0 &&
     !consulta.filtros?.some((item) => /status/i.test(item.coluna))
@@ -225,7 +263,8 @@ export const compilarConsultaSemantica = (
     where.push(`${qualificarColuna(escopo, colStatus)} IN (${lista})`);
     elementos.push(`kpi-status:${colStatus}`);
   }
-  const colunaPeriodo = consulta.periodo?.coluna ?? metrica.colunaData;
+  const colunaDataKpi = metricas.find((item) => item.colunaData)?.colunaData;
+  const colunaPeriodo = consulta.periodo?.coluna ?? colunaDataKpi;
   if (consulta.periodo) {
     if (!colunaNoPacote(escopo, consulta.periodo.coluna)) {
       throw new DomainError({
@@ -239,8 +278,8 @@ export const compilarConsultaSemantica = (
       `${colPeriodo} >= :${consulta.periodo.de} AND ${colPeriodo} < :${consulta.periodo.ate}`,
     );
     elementos.push(`periodo:${consulta.periodo.coluna}`);
-  } else if (colunaPeriodo && consulta.periodo === undefined && metrica.colunaData) {
-    elementos.push(`kpi-data:${metrica.colunaData}`);
+  } else if (colunaPeriodo && consulta.periodo === undefined && colunaDataKpi) {
+    elementos.push(`kpi-data:${colunaDataKpi}`);
   }
   if (recorte?.empresa) {
     const col = acharColuna(escopo, NOMES_COLUNA_EMPRESA);
@@ -256,16 +295,33 @@ export const compilarConsultaSemantica = (
       elementos.push("recorte:filial");
     }
   }
+  const aliasesLower = new Set(aliases.map(lower));
+  const having: string[] = [];
+  for (const item of consulta.having ?? []) {
+    const metricaHaving = exprs.find((expr) => lower(expr.alias) === lower(item.metrica));
+    if (!metricaHaving) {
+      throw new DomainError({
+        code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
+        message: `HAVING ${item.metrica} não é métrica desta consulta.`,
+        hint: "having[].metrica deve ser um alias de metricas[] / metrica desta IR.",
+      });
+    }
+    having.push(`${metricaHaving.expr} ${item.op} :${item.param}`);
+    elementos.push(`having:${item.metrica}`);
+  }
   const order: string[] = [];
   for (const item of consulta.ordenacao ?? []) {
-    if (!colunaNoPacote(escopo, item.coluna) && lower(item.coluna) !== lower(consulta.metrica)) {
+    if (!colunaNoPacote(escopo, item.coluna) && !aliasesLower.has(lower(item.coluna))) {
       throw new DomainError({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Ordenação ${item.coluna} não está no pacote.`,
         hint: "Ordene só por dimensão ou métrica certificada.",
       });
     }
-    order.push(`${qualificarColuna(escopo, item.coluna)} ${item.dir.toUpperCase()}`);
+    const colOrder = aliasesLower.has(lower(item.coluna))
+      ? item.coluna
+      : qualificarColuna(escopo, item.coluna);
+    order.push(`${colOrder} ${item.dir.toUpperCase()}`);
     elementos.push(`ordenacao:${item.coluna}`);
   }
   const tabelas: string[] = [];
@@ -274,10 +330,12 @@ export const compilarConsultaSemantica = (
       tabelas.push(nome);
     }
   };
-  for (const nome of tabelasDaExpr(escopo, exprCertificada)) {
-    addTabela(nome);
+  for (const item of exprs) {
+    for (const nome of tabelasDaExpr(escopo, item.expr)) {
+      addTabela(nome);
+    }
+    addTabela(tabelaDaColuna(escopo, item.alias));
   }
-  addTabela(tabelaDaColuna(escopo, metrica.alias));
   for (const dim of consulta.dimensoes ?? []) {
     addTabela(tabelaDaColuna(escopo, dim));
   }
@@ -292,15 +350,22 @@ export const compilarConsultaSemantica = (
     });
   }
   const joins = caminhoJoins(escopo, tabelas);
-  const sql = [
+  let sql = [
     `SELECT ${select.join(", ")}`,
     `FROM ${tabelas[0]}`,
     ...joins,
     where.length > 0 ? `WHERE ${where.join(" AND ")}` : "",
     group.length > 0 ? `GROUP BY ${group.join(", ")}` : "",
+    having.length > 0 ? `HAVING ${having.join(" AND ")}` : "",
     order.length > 0 ? `ORDER BY ${order.join(", ")}` : "",
   ]
     .filter((part) => part.length > 0)
     .join(" ");
+  if (consulta.limite != null && opts?.dialeto) {
+    const cap =
+      opts.maxLimite != null ? Math.min(consulta.limite, opts.maxLimite) : consulta.limite;
+    sql = garantirLimiteInspecao(sql, opts.dialeto, cap);
+    elementos.push(`limite:${String(cap)}`);
+  }
   return { sql, elementos };
 };

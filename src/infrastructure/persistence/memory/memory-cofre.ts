@@ -818,6 +818,10 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
       .slice(0, limite);
   }
 
+  async obterConsulta(agentId: string, id: string): Promise<ConsultaAprendida | null> {
+    return this.consultas.find((row) => row.agentId === agentId && row.id === id) ?? null;
+  }
+
   async buscarConsultas(
     agentId: string,
     query: string,

@@ -259,6 +259,30 @@ describe("manutenção de skill", () => {
     expect(afterProfile?.tipo).toBe("varchar");
   });
 
+  it("confirmar_coluna aceita colunas[] em lote no pacote", async () => {
+    const { acessos, skills, grafo, created } = await seed();
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const createdSkill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      nome: "Produtos lote",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+    });
+    const confirmar = new ConfirmarColuna(acessos, grafo, skills);
+    const result = await confirmar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      colunas: [
+        { tabela: "produto", coluna: "nome", descricao: "Nome" },
+        { tabela: "produto", coluna: "ativo", descricao: "Ativo" },
+      ],
+    });
+    expect(result.fluxoTreino.passoAtual).toBeTruthy();
+    expect(result.skill?.escopo.colunasPorTabela.produto).toEqual(
+      expect.arrayContaining(["codprod", "nome", "ativo"]),
+    );
+  });
+
   it("registrar_aprendizado tipo=metrica overlay no pacote", async () => {
     const { acessos, skills, grafo, created } = await seed();
     const criar = new CriarSkill(acessos, skills, grafo);

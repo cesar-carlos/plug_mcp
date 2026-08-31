@@ -152,16 +152,33 @@ const joinConjuntoConhecido = (
   );
 };
 
+export type ModoValidacaoEscopo = "consulta" | "inspecao";
+
+const starSimplesInspecao = (ast: SqlAstSelect, permitirStarSimples: boolean): boolean => {
+  if (!permitirStarSimples || !ast.temStar) {
+    return false;
+  }
+  const nestedStar =
+    ast.subqueries.some((sub) => sub.temStar) || ast.setBranches.some((sub) => sub.temStar);
+  const fisicas = tabelasFisicas(ast);
+  return !nestedStar && fisicas.length === 1 && ast.joins.length === 0;
+};
+
 const validarSelect = (
   ast: SqlAstSelect,
   escopo: EscopoSkill,
   cteNomes: ReadonlySet<string>,
+  permitirStarSimples = false,
 ): void => {
-  if (ast.temStar) {
+  if (ast.temStar && !starSimplesInspecao(ast, permitirStarSimples)) {
     throw new DomainError({
       code: ERROR_CODES.INVALID_SQL,
-      message: "SELECT * não é permitido.",
-      hint: "Nomeie as colunas do dataset publicado.",
+      message: permitirStarSimples
+        ? "SELECT * com JOIN, subquery ou mais de uma tabela não é permitido na inspeção."
+        : "SELECT * não é permitido.",
+      hint: permitirStarSimples
+        ? "Inspecione uma tabela por vez (SELECT * sem JOIN). JOIN só com colunas nomeadas e relacionamento no pacote."
+        : "Nomeie as colunas do dataset publicado.",
     });
   }
   if (ast.groupByCount > GROUP_BY_MAX_EXPRESSIONS) {
@@ -295,10 +312,10 @@ const validarSelect = (
   }
   const cteProximo = new Set([...cteNomes, ...ast.cteNomes.map(lower)]);
   for (const sub of ast.subqueries) {
-    validarSelect(sub, escopo, new Set([...cteProximo, ...sub.cteNomes.map(lower)]));
+    validarSelect(sub, escopo, new Set([...cteProximo, ...sub.cteNomes.map(lower)]), false);
   }
   for (const branch of ast.setBranches) {
-    validarSelect(branch, escopo, new Set([...cteProximo, ...branch.cteNomes.map(lower)]));
+    validarSelect(branch, escopo, new Set([...cteProximo, ...branch.cteNomes.map(lower)]), false);
   }
 };
 
@@ -348,12 +365,15 @@ export const validarSqlNoEscopo = (
   sql: string,
   dialeto: Dialeto,
   escopo: EscopoSkill,
-  options?: { page?: number; pageSize?: number },
+  options?: { page?: number; pageSize?: number; modo?: ModoValidacaoEscopo },
 ): SqlAstSelect => {
+  const modo = options?.modo ?? "consulta";
   const ast = parseSelect(sql, dialeto);
   const cteNomes = new Set(ast.cteNomes.map(lower));
-  validarSelect(ast, escopo, cteNomes);
-  assertRecorte(ast);
+  validarSelect(ast, escopo, cteNomes, modo === "inspecao");
+  if (modo !== "inspecao") {
+    assertRecorte(ast);
+  }
   exigirPaginacaoEstavel(sql, ast, options);
   return ast;
 };

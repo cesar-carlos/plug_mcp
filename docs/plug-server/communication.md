@@ -95,7 +95,7 @@ Códigos RPC que o MCP mapeia:
 | `-32002`                                                   | classificação SQL           | `INVALID_SQL`                           |
 | `-32002`                                                   | política / token            | `ACCESS_REVOKED`                        |
 | `-32008`                                                   | timeout no agente           | `QUERY_TIMEOUT`                         |
-| `-32009`                                                   | SQL inválido no dialeto     | `INVALID_SQL`                           |
+| `-32009`                                                   | SQL inválido no dialeto     | `INVALID_SQL` + `details.engineMessage` |
 | 1033 / `ORDER BY` em derived table (mssql, wrap `managed`) | Paginação gerenciada        | `INVALID_SQL` (não `PLUG_SERVER_ERROR`) |
 | `-32013`                                                   | rate limit no agente        | `RATE_LIMITED`                          |
 | `-32000`                                                   | agente offline / não pronto | `AGENT_UNAVAILABLE`                     |

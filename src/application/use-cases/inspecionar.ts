@@ -10,8 +10,9 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
-import { uniaoEscopos } from "../../domain/entities/escopo.js";
+import { uniaoEscopos, type EscopoSkill } from "../../domain/entities/escopo.js";
 import { fingerprintPares } from "../../domain/entities/relacionamento.js";
+import type { Skill, StatusSkill } from "../../domain/entities/skill.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
 import {
@@ -24,10 +25,8 @@ import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { validarSqlNoEscopo, coletarAvisosValidacao } from "./shared/validar-escopo.js";
 import { tryParseSelect, type SqlAstSelect } from "./shared/sql-ast.js";
-import { exigirFiltroEscopoPadrao, mesclarParamsEscopo } from "./shared/escopo-filtro.js";
-import { expandirStarDoEscopo } from "./shared/expandir-star.js";
-import { mascararLinhas, lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
-import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
+import { mesclarParamsEscopo } from "./shared/escopo-filtro.js";
+import { garantirLimiteInspecao, sqlStarDescoberta } from "./shared/expandir-star.js";
 import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
 import { aplicarDerivaEsquema, assinaturaTabela } from "./shared/schema-drift.js";
 import { isIdentificadorSql } from "./shared/schema-introspection.js";
@@ -48,8 +47,70 @@ export const FINALIDADES_INSPECAO = [
 ] as const;
 export type FinalidadeInspecao = (typeof FINALIDADES_INSPECAO)[number];
 
+const STATUS_INSPECAO: ReadonlySet<StatusSkill> = new Set([
+  "publicada",
+  "validada",
+  "rascunho_revalidacao",
+]);
+
 const isFinalidade = (value: string): value is FinalidadeInspecao =>
   (FINALIDADES_INSPECAO as readonly string[]).includes(value);
+
+const escopoDaSkill = (skill: Skill): EscopoSkill =>
+  skill.escopo.tabelas.length > 0
+    ? skill.escopo
+    : escopoFromSqlModelo(parseSqlModelo(skill.sqlModelo));
+
+const persistirColunasInspecao = async (input: {
+  grafo: GrafoRepositoryPort;
+  agentId: string;
+  autorUsuarioId: string;
+  ast: SqlAstSelect | null;
+  columns: readonly string[];
+  metadata: readonly ColumnMetadataItem[] | undefined;
+}): Promise<string[]> => {
+  const fisicas = (input.ast?.tabelas ?? []).filter(
+    (tabela) => !tabela.isCte && !tabela.isSubquery,
+  );
+  const unica = fisicas[0];
+  if (fisicas.length !== 1 || !unica) {
+    return [];
+  }
+  const byMeta = new Map(
+    (input.metadata ?? []).map((item) => [item.name.trim().toLowerCase(), item]),
+  );
+  const novas: string[] = [];
+  await input.grafo.withAgentLock(input.agentId, async () => {
+    const merged = await input.grafo.mergeTabela({
+      agentId: input.agentId,
+      nome: unica.nome,
+      origem: "inferido",
+      autorUsuarioId: input.autorUsuarioId,
+    });
+    const jaNoGrafo = await input.grafo.listColunas(merged.tabela.id);
+    const conhecidas = new Set(jaNoGrafo.map((coluna) => coluna.nome.trim().toLowerCase()));
+    for (const nome of input.columns) {
+      const trimmed = nome.trim();
+      if (!isIdentificadorSql(trimmed)) {
+        continue;
+      }
+      const meta = byMeta.get(trimmed.toLowerCase());
+      await input.grafo.mergeColuna({
+        tabelaId: merged.tabela.id,
+        nome: trimmed,
+        tipo: meta?.type ?? null,
+        nullable: meta?.nullable ?? null,
+        origem: "inferido",
+        autorUsuarioId: input.autorUsuarioId,
+      });
+      if (!conhecidas.has(trimmed.toLowerCase())) {
+        novas.push(trimmed);
+        conhecidas.add(trimmed.toLowerCase());
+      }
+    }
+  });
+  return novas;
+};
 
 export class InspecionarConsulta {
   constructor(
@@ -69,6 +130,7 @@ export class InspecionarConsulta {
       skillId?: string;
       skillIds?: string[];
       sql?: string;
+      tabela?: string;
       finalidade?: string;
       params?: Record<string, unknown>;
       options?: { timeout_ms?: number };
@@ -82,9 +144,11 @@ export class InspecionarConsulta {
     maxRowsApplied: number;
     truncated: boolean;
     colunasMascaradas: readonly string[];
+    colunasNovasNoGrafo: readonly string[];
     columnsMetadata?: readonly ColumnMetadataItem[];
     sqlExecutado: string;
     avisos: { code: string; message: string }[];
+    hint?: string;
   }> {
     const started = Date.now();
     const uid = requireUsuario(usuarioId);
@@ -110,14 +174,7 @@ export class InspecionarConsulta {
           .filter((id) => id.length > 0),
       ),
     ];
-    if (ids.length === 0) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "skillId é obrigatório.",
-        hint: "Inspeção no escopo de skill validada, rascunho_revalidacao ou publicada.",
-      });
-    }
-    const skillsInspecao = [];
+    const skillsPassadas: Skill[] = [];
     for (const id of ids) {
       const found = await this.skills.findById(id);
       if (found?.agentId !== acesso.agentId) {
@@ -134,30 +191,29 @@ export class InspecionarConsulta {
           hint: "Chame validar_skill (envelope vazio) antes. Inspeção aceita validada, rascunho_revalidacao ou publicada.",
         });
       }
-      if (
-        found.status !== "publicada" &&
-        found.status !== "validada" &&
-        found.status !== "rascunho_revalidacao"
-      ) {
+      if (!STATUS_INSPECAO.has(found.status)) {
         throw new DomainError({
           code: ERROR_CODES.SKILL_NOT_PUBLISHED,
           message: "Só skill validada, em revalidação ou publicada pode inspecionar o ERP.",
           hint: "Valide a skill antes. Inspeção não lê rascunho sem envelope.",
         });
       }
-      skillsInspecao.push(await persistirEscopoSeVazio(this.skills, found));
+      skillsPassadas.push(await persistirEscopoSeVazio(this.skills, found));
     }
-    const skill = skillsInspecao[0]!;
-    const escopo = uniaoEscopos(
-      skillsInspecao.map((item) =>
-        item.escopo.tabelas.length > 0
-          ? item.escopo
-          : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
-      ),
+    const elegiveis = (await this.skills.listByAgent(acesso.agentId)).filter((item) =>
+      STATUS_INSPECAO.has(item.status),
     );
+    if (elegiveis.length === 0) {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+        message: "Não há skill validada, em revalidação ou publicada para inspecionar.",
+        hint: "Valide ou publique uma skill, ou passe skillId de uma skill já validada.",
+      });
+    }
+    const escopo = uniaoEscopos(elegiveis.map(escopoDaSkill));
     const sqlInformado = input.sql?.trim() ?? "";
-    const sqlLivre = sqlInformado.length > 0;
-    let sql = (sqlLivre ? sqlInformado : skill.sqlModelo).trim();
+    const tabelaInformada = input.tabela?.trim() ?? "";
+    const sqlLivre = sqlInformado.length > 0 || tabelaInformada.length > 0;
     if (acesso.dialeto === "firebird" && sqlLivre) {
       throw new DomainError({
         code: ERROR_CODES.DIALECT_UNSUPPORTED,
@@ -165,20 +221,33 @@ export class InspecionarConsulta {
         hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql).",
       });
     }
-    if (acesso.dialeto !== "firebird") {
-      sql = expandirStarDoEscopo(sql, acesso.dialeto, escopo);
+    let sql: string;
+    if (sqlInformado) {
+      sql = sqlInformado;
+    } else if (tabelaInformada) {
+      sql = sqlStarDescoberta(acesso.dialeto, tabelaInformada, INSPECAO_MAX_ROWS);
+    } else {
+      const ancora = skillsPassadas[0];
+      if (!ancora) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Informe tabela, sql ou skillId.",
+          hint: "Descoberta: tabela ou SELECT * cortado. Sem sql, passe skillId para a consulta exemplo.",
+        });
+      }
+      sql = ancora.sqlModelo.trim();
     }
     let ast: SqlAstSelect | null = null;
     if (acesso.dialeto === "firebird") {
       ast = tryParseSelect(sql);
     } else {
-      ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo);
+      sql = garantirLimiteInspecao(sql, acesso.dialeto, INSPECAO_MAX_ROWS);
+      ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo, { modo: "inspecao" });
       sql = ast.sql;
     }
     const tabelasSql = ast
       ? ast.tabelas.map((tabela) => tabela.nome)
       : parseSqlModelo(sql).tabelas.map((tabela) => tabela.nome);
-    const colunasDasTabelas: Record<string, string[]> = {};
     const columnHints = new Map<string, ColumnMetadataHint>();
     for (const tabelaNome of tabelasSql) {
       const found = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
@@ -186,29 +255,21 @@ export class InspecionarConsulta {
         continue;
       }
       const cols = await this.grafo.listColunas(found.id);
-      colunasDasTabelas[tabelaNome] = cols.map((coluna) => coluna.nome);
       mergeColumnHints(columnHints, cols);
     }
     if (ast) {
       applySelectAliasHints(columnHints, ast.colunas);
     }
-    exigirFiltroEscopoPadrao({
-      sql,
-      colunasDasTabelas,
-      escopoPadrao: acesso.escopoPadrao,
-      dialeto: acesso.dialeto,
-    });
-    const contrato = skillsInspecao.flatMap((item) => item.params);
+    const contrato = (skillsPassadas.length > 0 ? skillsPassadas : elegiveis).flatMap(
+      (item) => item.params,
+    );
     const params = coerceBoundParams(
       bindNamedParams(sql, mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao), contrato),
       contrato,
     );
     const timeoutMs = Math.min(input.options?.timeout_ms ?? 15_000, 15_000);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
-    const lookup = await lookupSensibilidadeGrafo(this.grafo, acesso.agentId, tabelasSql);
-    if (ast) {
-      assertPrivacidadeAntesDoHub({ ast, lookup, negar: ["segredo"] });
-    }
+    const skillAudit = skillsPassadas[0] ?? elegiveis[0]!;
     try {
       const result = await withHubAuth(this.sessions, uid, (accessToken) =>
         this.plug.executeSql({
@@ -224,48 +285,67 @@ export class InspecionarConsulta {
         result.columns.length > 0
           ? result.columns
           : (result.columnsMetadata?.map((item) => item.name) ?? []);
-      const masked = mascararLinhas({
+      const rows = result.rows.slice(0, INSPECAO_MAX_ROWS);
+      const columnsMetadata = normalizeColumnsMetadata(
         columns,
-        rows: result.rows.slice(0, INSPECAO_MAX_ROWS),
+        result.columnsMetadata,
+        columnHints,
+      );
+      const colunasNovasNoGrafo = await persistirColunasInspecao({
+        grafo: this.grafo,
+        agentId: acesso.agentId,
+        autorUsuarioId: uid,
         ast,
-        sessaoId: uid,
-        lookup,
+        columns,
+        metadata: columnsMetadata,
       });
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "inspecionar_consulta",
-        sqlEnviado: `skill:${skill.id};finalidade:${finalidade};cols:${String(columns.length)}`,
+        sqlEnviado: `skill:${skillAudit.id};finalidade:${finalidade};cols:${String(columns.length)}`,
         sucesso: true,
         codigoErro: null,
-        linhasRetornadas: masked.rows.length,
+        linhasRetornadas: rows.length,
         duracaoMs: Date.now() - started,
       });
       return {
         success: true,
         finalidade,
         columns,
-        rows: masked.rows,
-        rowCount: masked.rows.length,
+        rows,
+        rowCount: rows.length,
         maxRowsApplied: INSPECAO_MAX_ROWS,
         truncated: result.rows.length >= INSPECAO_MAX_ROWS || result.truncated === true,
-        colunasMascaradas: masked.colunasMascaradas,
-        columnsMetadata: normalizeColumnsMetadata(columns, result.columnsMetadata, columnHints),
+        colunasMascaradas: [],
+        colunasNovasNoGrafo,
+        columnsMetadata,
         sqlExecutado: sqlParaOdbc(sql),
         avisos: [
           ...(ast ? coletarAvisosValidacao(ast) : []),
           {
             code: "INSPECAO",
-            message: "Amostra mascarada, sem cache e sem aprendizado. Não use para KPI.",
+            message:
+              "Amostra crua, sem cache e sem consulta_aprendida. Não use para KPI. Origem inferido não licencia SQL de negócio.",
           },
         ],
+        hint:
+          colunasNovasNoGrafo.length === 0
+            ? undefined
+            : (
+                  skillsPassadas[0] ??
+                  elegiveis.find((item) => item.status === "publicada") ??
+                  skillAudit
+                ).status === "publicada"
+              ? "Colunas novas no grafo (inferido). Para consultar_dados, confirmar_coluna com skillId (skill publicada já consulta)."
+              : "Colunas novas no grafo (inferido). Para consultar_dados, confirmar_coluna com skillId e republicar.",
       };
     } catch (error) {
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "inspecionar_consulta",
-        sqlEnviado: `skill:${skill.id};finalidade:${finalidade}`,
+        sqlEnviado: `skill:${skillAudit.id};finalidade:${finalidade}`,
         sucesso: false,
         codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
         linhasRetornadas: null,

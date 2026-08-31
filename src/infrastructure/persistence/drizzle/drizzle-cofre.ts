@@ -1303,6 +1303,21 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     return this.hydrate(rows);
   }
 
+  async obterConsulta(agentId: string, id: string): Promise<ConsultaAprendida | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.consultaAprendida)
+      .where(
+        and(eq(schema.consultaAprendida.agentId, agentId), eq(schema.consultaAprendida.id, id)),
+      )
+      .limit(1);
+    if (!row) {
+      return null;
+    }
+    const [hydrated] = await this.hydrate([row]);
+    return hydrated ?? null;
+  }
+
   async buscarConsultas(
     agentId: string,
     query: string,

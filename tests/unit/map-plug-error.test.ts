@@ -105,6 +105,10 @@ describe("mapPlugServerFailure", () => {
     expect(err.code).toBe("PLUG_SERVER_ERROR");
     expect(err.message).toBe("Falha ao comunicar com o plug-server.");
     expect(err.message).not.toContain("ClienteSecreto");
+    expect(err.hint).toMatch(/syntax error/i);
+    expect(err.details).toEqual(
+      expect.objectContaining({ engineMessage: expect.stringMatching(/ClienteSecreto/) }),
+    );
   });
 
   it("mapeia SQL Server 1033 do wrap gerenciado para INVALID_SQL, não PLUG_SERVER_ERROR", () => {
@@ -159,6 +163,33 @@ describe("mapPlugServerFailure", () => {
     expect(err.code).toBe("INVALID_SQL");
     expect(err.hint).toMatch(/Não repita options\.page/);
     expect(err.hint).not.toMatch(/sqlModelo de obter_skill/);
+  });
+
+  it("mapeia -32009 com Invalid column name para hint/details do motor", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32009,
+              message: "Invalid column name 'foo'.",
+              data: { technical_message: "Invalid column name 'foo'." },
+            },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.message).toBe("O SQL enviado foi recusado pelo agente.");
+    expect(err.hint).toMatch(/Invalid column name/);
+    expect(err.nextAction).toBe("mapear_tabela");
+    expect(err.details).toEqual(
+      expect.objectContaining({
+        rpcCode: -32009,
+        engineMessage: expect.stringMatching(/Invalid column name/),
+      }),
+    );
   });
   it("maps HTTP 403 pending Client to CLIENT_NOT_ACTIVE", () => {
     const err = mapPlugServerFailure({

@@ -30,6 +30,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - `listar_lacunas` default só `status=aberta`. `buscar_contexto` faz upsert da `skill_gap` e arquiva quando a pergunta passa a `SKILL_NOT_PUBLISHED` ou consulta permitida.
 - Após `initialize` autenticado, se SHA/versão mudou, o servidor envia `notifications/tools/list_changed`.
 - `mapear_tabela` / deriva: assinatura no recorte do pacote (`validada`/`publicada`/`rascunho_revalidacao`). Remap de tipo compatível com o papel (ex. uuid→date) **não** rebaixa a skill.
+- `inspecionar_consulta`: `SELECT *` cru de **uma** tabela do allowlist (`validada`/`publicada`/`rascunho_revalidacao` do agente), sem WHERE; o servidor injeta TOP/LIMIT (teto 100, sem `options.page` e sem máscara). Colunas novas entram no grafo como `inferido` (`colunasNovasNoGrafo[]`) — `confirmar_coluna` (lote `colunas[]`); skill **publicada** já consulta, senão republicar. JOIN inventado continua recusado. Treino e `consultar_dados` seguem nomeados + recorte.
+- `INVALID_SQL` (`-32009`): `hint` e `details.engineMessage` trazem a mensagem do motor (coluna/objeto inválido → `nextAction: mapear_tabela`).
+- `consultar_dados`: `skillIds` opcional (omitido = união das skills **publicadas** do `agentId`; se vierem, recortam). Sem SQL/IR/id, `sqlModelo` só com uma skill âncora. `consultaAprendidaId` reexecuta o SELECT gravado (exclusivo com `sql` e IR). Envelope `skillIds` = skills cujas tabelas estão no SQL.
+- `consultaSemantica` v1: `metricas[]`, filtros `like`/`is_null`/`between`, `having[]`, `limite` (TOP/LIMIT, sem `options.page`).
+- `confirmar_coluna` aceita `colunas[]` em lote e devolve `fluxoTreino`. Skill **publicada** consulta a coluna na hora (hint de inspeção não pede republicar).
 
 ### Fixed
 

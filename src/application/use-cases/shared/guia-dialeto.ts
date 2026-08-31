@@ -16,7 +16,8 @@ const GUIAS: Record<Exclude<Dialeto, "firebird">, Omit<GuiaDialeto, "dialeto">> 
     data: "YEAR(col), MONTH(col), DATEADD, DATEDIFF, CONVERT(date, col), GETDATE()",
     concatenacao: "col1 + col2 ou CONCAT(col1, col2)",
     cast: "CAST(x AS DECIMAL(18,2)), CONVERT(varchar, x)",
-    limite: "TOP n no SELECT; evite SELECT sem WHERE nem agregação",
+    limite:
+      "TOP n no SELECT; em consultar_dados evite SELECT sem WHERE nem agregação. Inspeção: SELECT TOP n * FROM tabela",
   },
   sybase: {
     paginacao:
@@ -24,7 +25,8 @@ const GUIAS: Record<Exclude<Dialeto, "firebird">, Omit<GuiaDialeto, "dialeto">> 
     data: "YEAR(col), MONTH(col), DATEADD, DATEDIFF, CAST(col AS DATE), CURRENT DATE, GETDATE()",
     concatenacao: "col1 || col2 ou STRING(col1, col2)",
     cast: "CAST(x AS DECIMAL(18,2)), CONVERT(varchar, x)",
-    limite: "TOP n; evite SELECT sem WHERE nem agregação",
+    limite:
+      "TOP n; em consultar_dados evite SELECT sem WHERE nem agregação. Inspeção: SELECT TOP n * FROM tabela",
   },
   postgres: {
     paginacao:
@@ -32,7 +34,8 @@ const GUIAS: Record<Exclude<Dialeto, "firebird">, Omit<GuiaDialeto, "dialeto">> 
     data: "date_trunc('month', col), EXTRACT(YEAR FROM col), col::date, NOW(), CURRENT_DATE",
     concatenacao: "col1 || col2 ou CONCAT(col1, col2)",
     cast: "x::numeric(18,2), CAST(x AS text)",
-    limite: "LIMIT n; evite SELECT sem WHERE nem agregação",
+    limite:
+      "LIMIT n; em consultar_dados evite SELECT sem WHERE nem agregação. Inspeção: SELECT * FROM tabela LIMIT n",
   },
 };
 

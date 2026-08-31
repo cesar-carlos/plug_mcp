@@ -23,6 +23,7 @@ export interface AprendizadoRepositoryPort {
     skillId: string,
     limite: number,
   ): Promise<readonly ConsultaAprendida[]>;
+  obterConsulta(agentId: string, id: string): Promise<ConsultaAprendida | null>;
   buscarConsultas(
     agentId: string,
     query: string,

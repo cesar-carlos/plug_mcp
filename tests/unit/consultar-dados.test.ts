@@ -8,6 +8,7 @@ import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.j
 import {
   InMemoryAcessoRepository,
   InMemoryAnotacaoGrafoRepository,
+  InMemoryAprendizadoRepository,
   InMemoryAuditLog,
   InMemoryGrafoRepository,
   InMemorySkillRepository,
@@ -50,8 +51,11 @@ const setupAcesso = async () => {
     invalidate: () => undefined,
     remember: () => undefined,
   };
-  const consultar = new ConsultarDados(acessos, skills, plug, sessions, crypto, audit, 500, 5000);
-  return { plug, skills, consultar, created, acessos };
+  const aprendizado = new InMemoryAprendizadoRepository();
+  const consultar = new ConsultarDados(acessos, skills, plug, sessions, crypto, audit, 500, 5000, {
+    aprendizado,
+  });
+  return { plug, skills, consultar, created, acessos, aprendizado };
 };
 
 describe("ConsultarDados", () => {
@@ -76,14 +80,14 @@ describe("ConsultarDados", () => {
     ).rejects.toMatchObject({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO });
   });
 
-  it("exige skillId", async () => {
+  it("sem skill publicada e sem skillId é SKILL_GAP", async () => {
     const { consultar, created } = await setupAcesso();
     await expect(
       consultar.execute(created.usuarioId, {
         acessoId: created.acessoId,
         pergunta: "consulta de teste",
       }),
-    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+    ).rejects.toMatchObject({ code: ERROR_CODES.SKILL_GAP });
   });
 
   it("recusa skill não publicada", async () => {
@@ -675,5 +679,115 @@ describe("ConsultarDados avisos de anotação", () => {
     expect(regras.some((aviso) => /ContaReceber|cruzamento|treinamento/i.test(aviso.message))).toBe(
       false,
     );
+  });
+
+  it("omite skillIds e consulta tabela de outra skill publicada", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => ({ columns: ["valor"], rows: [{ valor: 10 }] });
+    const produtos = await skills.create({
+      agentId,
+      slug: "produtos-a",
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    const fatura = await skills.create({
+      agentId,
+      slug: "faturamento-a",
+      nome: "Faturamento",
+      descricao: "Soma",
+      sqlModelo: "SELECT SUM(f.valor) AS total FROM faturamento f WHERE f.ano > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(produtos.id, "publicada");
+    await skills.setStatus(fatura.id, "publicada");
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "faturamento do ano",
+      sql: "SELECT f.valor FROM faturamento f WHERE f.ano = 2026",
+    });
+    expect(result.skillIds).toEqual([fatura.id]);
+    expect(result.sqlExecutado).toMatch(/faturamento/i);
+  });
+
+  it("recusa JOIN inventado mesmo com allowlist amplo", async () => {
+    const { consultar, created, skills } = await setupAcesso();
+    const skill = await skills.create({
+      agentId,
+      slug: "produtos-join",
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "cruza alien",
+        sql: "SELECT p.codprod FROM produto p INNER JOIN alien x ON x.id = p.codprod WHERE p.codprod > 0",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO });
+  });
+
+  it("sqlModelo sem âncora com várias publicadas recusa", async () => {
+    const { consultar, created, skills } = await setupAcesso();
+    const a = await skills.create({
+      agentId,
+      slug: "a-modelo",
+      nome: "A",
+      descricao: "A",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    const b = await skills.create({
+      agentId,
+      slug: "b-modelo",
+      nome: "B",
+      descricao: "B",
+      sqlModelo: "SELECT f.valor FROM faturamento f WHERE f.ano > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(a.id, "publicada");
+    await skills.setStatus(b.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "consulta exemplo",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+  });
+
+  it("consultaAprendidaId reexecuta o SQL com outros params", async () => {
+    const { consultar, created, skills, aprendizado, plug } = await setupAcesso();
+    plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 2 }] });
+    const skill = await skills.create({
+      agentId,
+      slug: "aprendida",
+      nome: "Produto",
+      descricao: "Busca",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      params: [{ nome: "codigo", descricao: "código", obrigatorio: true, tipo: "integer" }],
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const gravada = await aprendizado.salvarConsulta({
+      agentId,
+      skillIds: [skill.id],
+      pergunta: "produto 1",
+      sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      paramsContrato: [{ nome: "codigo", descricao: "código", obrigatorio: true, tipo: "integer" }],
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "agora o produto 2",
+      consultaAprendidaId: gravada.id,
+      params: { codigo: 2 },
+    });
+    expect(result.skillIds).toEqual([skill.id]);
+    expect(plug.lastParams).toEqual({ codigo: 2 });
+    expect(result.sqlExecutado).toMatch(/codprod = /i);
   });
 });

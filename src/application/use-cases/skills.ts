@@ -973,6 +973,14 @@ export class ObterSkill {
   }
 }
 
+interface ItemConfirmarColuna {
+  tabela: string;
+  coluna: string;
+  descricao?: string;
+  dicionario?: string;
+  sensibilidade?: SensibilidadeColuna;
+}
+
 export class ConfirmarColuna {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -990,21 +998,52 @@ export class ConfirmarColuna {
       descricao?: string;
       dicionario?: string;
       sensibilidade?: SensibilidadeColuna;
+      colunas?: readonly {
+        tabela?: string;
+        coluna?: string;
+        descricao?: string;
+        dicionario?: string;
+        sensibilidade?: SensibilidadeColuna;
+      }[];
       confirmadoPeloUsuario?: boolean;
     },
-  ): Promise<{ success: true; conflito: boolean; skill?: Skill }> {
+  ): Promise<{ success: true; conflito: boolean; skill?: Skill; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const doLote = (input.colunas ?? [])
+      .map((item): ItemConfirmarColuna => ({
+        tabela: item.tabela?.trim() ?? "",
+        coluna: item.coluna?.trim() ?? "",
+        descricao: item.descricao,
+        dicionario: item.dicionario,
+        sensibilidade: item.sensibilidade,
+      }))
+      .filter((item) => item.tabela.length > 0 && item.coluna.length > 0);
     const tabelaNome = input.tabela?.trim() ?? "";
     const colunaNome = input.coluna?.trim() ?? "";
-    if (!tabelaNome || !colunaNome) {
+    const items: ItemConfirmarColuna[] =
+      doLote.length > 0
+        ? doLote
+        : tabelaNome && colunaNome
+          ? [
+              {
+                tabela: tabelaNome,
+                coluna: colunaNome,
+                descricao: input.descricao,
+                dicionario: input.dicionario,
+                sensibilidade: input.sensibilidade,
+              },
+            ]
+          : [];
+    if (items.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "tabela e coluna são obrigatórios.",
-        hint: "Use buscar_contexto / mapear_tabela para obter os nomes.",
+        hint: "Use colunas[] ou tabela+coluna. buscar_contexto / mapear_tabela / inspecionar_consulta.colunasNovasNoGrafo.",
       });
     }
-    if (input.sensibilidade !== undefined && input.confirmadoPeloUsuario !== true) {
+    const temSensibilidade = items.some((item) => item.sensibilidade !== undefined);
+    if (temSensibilidade && input.confirmadoPeloUsuario !== true) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "Gravar sensibilidade exige confirmação do usuário.",
@@ -1021,33 +1060,53 @@ export class ConfirmarColuna {
       });
     }
     const conflito = await this.grafo.withAgentLock(acesso.agentId, async () => {
-      const tabela = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
-      if (!tabela) {
-        throw new DomainError({
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: "Tabela ainda não está no grafo.",
-          hint: "Chame treinar_com_sql ou mapear_tabela antes de confirmar a coluna.",
+      let algum = false;
+      for (const item of items) {
+        const tabela = await this.grafo.findTabelaByNome(acesso.agentId, item.tabela);
+        if (!tabela) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "Tabela ainda não está no grafo.",
+            hint: "Chame treinar_com_sql, mapear_tabela ou inspecionar_consulta antes de confirmar a coluna.",
+          });
+        }
+        const result = await this.grafo.mergeColuna({
+          tabelaId: tabela.id,
+          nome: item.coluna,
+          descricao: item.descricao ?? null,
+          dicionario: item.dicionario ?? null,
+          ...(item.sensibilidade !== undefined && input.confirmadoPeloUsuario === true
+            ? { sensibilidade: parseSensibilidadeColuna(item.sensibilidade) }
+            : {}),
+          origem: "confirmado_usuario",
+          autorUsuarioId: uid,
         });
+        algum = algum || result.conflito;
       }
-      const result = await this.grafo.mergeColuna({
-        tabelaId: tabela.id,
-        nome: colunaNome,
-        descricao: input.descricao ?? null,
-        dicionario: input.dicionario ?? null,
-        ...(input.sensibilidade !== undefined && input.confirmadoPeloUsuario === true
-          ? { sensibilidade: parseSensibilidadeColuna(input.sensibilidade) }
-          : {}),
-        origem: "confirmado_usuario",
-        autorUsuarioId: uid,
-      });
-      return result.conflito;
+      return algum;
     });
     if (!skill) {
-      return { success: true, conflito };
+      return {
+        success: true,
+        conflito,
+        fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
+      };
+    }
+    const colunasPorTabela: Record<string, string[]> = {};
+    const tabelas: string[] = [];
+    for (const item of items) {
+      if (!tabelas.some((nome) => nome.toLowerCase() === item.tabela.toLowerCase())) {
+        tabelas.push(item.tabela);
+      }
+      const lista = colunasPorTabela[item.tabela] ?? [];
+      if (!lista.some((nome) => nome.toLowerCase() === item.coluna.toLowerCase())) {
+        lista.push(item.coluna);
+      }
+      colunasPorTabela[item.tabela] = lista;
     }
     const extraEscopo: EscopoSkill = {
-      tabelas: [tabelaNome],
-      colunasPorTabela: { [tabelaNome]: [colunaNome] },
+      tabelas,
+      colunasPorTabela,
       relacionamentos: [],
       graoPorTabela: {},
       graoResultado: [],
@@ -1063,7 +1122,13 @@ export class ConfirmarColuna {
       acesso.agentId,
       { skillId: updated.id },
     );
-    return { success: true, conflito, skill: sincronizada ?? updated };
+    const finalSkill = sincronizada ?? updated;
+    return {
+      success: true,
+      conflito,
+      skill: finalSkill,
+      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, finalSkill),
+    };
   }
 }
 

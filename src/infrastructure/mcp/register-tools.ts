@@ -159,13 +159,36 @@ const metricaSaidaShape = z.object({
 
 const consultaSemanticaShape = z.object({
   versao: z.literal(1).optional(),
-  metrica: z.string(),
+  metrica: z.string().optional(),
+  metricas: z.array(z.string()).optional(),
   dimensoes: z.array(z.string()).optional(),
   filtros: z
     .array(
       z.object({
         coluna: z.string(),
-        op: z.enum(["=", "!=", ">", ">=", "<", "<=", "in"]),
+        op: z.enum([
+          "=",
+          "!=",
+          ">",
+          ">=",
+          "<",
+          "<=",
+          "in",
+          "like",
+          "is_null",
+          "is_not_null",
+          "between",
+        ]),
+        param: z.string().optional(),
+        param2: z.string().optional(),
+      }),
+    )
+    .optional(),
+  having: z
+    .array(
+      z.object({
+        metrica: z.string(),
+        op: z.enum(["=", "!=", ">", ">=", "<", "<="]),
         param: z.string(),
       }),
     )
@@ -180,6 +203,7 @@ const consultaSemanticaShape = z.object({
   ordenacao: z
     .array(z.object({ coluna: z.string(), dir: z.enum(["asc", "desc"]).optional() }))
     .optional(),
+  limite: z.number().int().positive().optional(),
 });
 
 const politicaConsultaShape = z.object({
@@ -371,38 +395,14 @@ export const registerTools = (
     "consultar_dados",
     {
       description:
-        "Consulta o ERP no escopo publicado. Sempre envie pergunta. Params :nome no SQL + objeto params. Sem sql, executa a consulta exemplo. Com sql, SELECT no escopo. Página: ORDER BY + options.page e page_size juntos, sem TOP/LIMIT. truncated = teto max_rows; paginacao.hasNextPage = há próxima página. avisos REGRA/METRICA só da skill da chamada ou da tabela do SQL (teto curto; globais de processo em obter_skill). Regras novas: aprendizado[] ou registrar_aprendizado.",
+        "Consulta o ERP no escopo publicado. pergunta obrigatória. skillIds opcional (omitido = união das publicadas do agentId; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist, consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT.",
       inputSchema: {
         acessoId: z.string().optional(),
         skillId: z.string().optional(),
         skillIds: z.array(z.string()).optional(),
         sql: z.string().optional(),
-        consultaSemantica: z
-          .object({
-            versao: z.literal(1).optional(),
-            metrica: z.string(),
-            dimensoes: z.array(z.string()).optional(),
-            filtros: z
-              .array(
-                z.object({
-                  coluna: z.string(),
-                  op: z.enum(["=", "!=", ">", ">=", "<", "<=", "in"]),
-                  param: z.string(),
-                }),
-              )
-              .optional(),
-            periodo: z
-              .object({
-                coluna: z.string(),
-                de: z.string(),
-                ate: z.string(),
-              })
-              .optional(),
-            ordenacao: z
-              .array(z.object({ coluna: z.string(), dir: z.enum(["asc", "desc"]).optional() }))
-              .optional(),
-          })
-          .optional(),
+        consultaSemantica: consultaSemanticaShape.optional(),
+        consultaAprendidaId: z.string().optional(),
         pergunta: z.string(),
         aprendizado: z
           .array(
@@ -675,7 +675,7 @@ export const registerTools = (
 
   server.tool(
     "validar_consulta",
-    "Dry-run: valida o SQL da IA contra o escopo publicado e executa envelope vazio no ERP (sem ler dado). Placeholders ausentes ligam-se a null.",
+    "Dry-run: valida o SQL contra o escopo publicado (skillIds opcional = união das publicadas) e executa envelope vazio no ERP (sem ler dado). Placeholders ausentes ligam-se a null.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -690,7 +690,7 @@ export const registerTools = (
 
   server.tool(
     "confirmar_coluna",
-    "Confirma significado/dicionário de uma coluna no grafo (origem confirmado_usuario). Com skillId, entra no pacote (colunasPorTabela) e sincroniza com o grafo. sensibilidade (livre|pessoal|sensivel|segredo) só com confirmadoPeloUsuario: true.",
+    "Confirma significado/dicionário de coluna(s) no grafo (origem confirmado_usuario). colunas[] ou tabela+coluna. Com skillId, entra no pacote. sensibilidade só com confirmadoPeloUsuario: true.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -699,6 +699,17 @@ export const registerTools = (
       descricao: z.string().optional(),
       dicionario: z.string().optional(),
       sensibilidade: z.enum(["livre", "pessoal", "sensivel", "segredo"]).optional(),
+      colunas: z
+        .array(
+          z.object({
+            tabela: z.string(),
+            coluna: z.string(),
+            descricao: z.string().optional(),
+            dicionario: z.string().optional(),
+            sensibilidade: z.enum(["livre", "pessoal", "sensivel", "segredo"]).optional(),
+          }),
+        )
+        .optional(),
       confirmadoPeloUsuario: z.boolean().optional(),
     },
     writeLocal,
@@ -866,12 +877,13 @@ export const registerTools = (
   if (config.MCP_INSPECTION_ENABLED) {
     server.tool(
       "inspecionar_consulta",
-      "Amostra estrutural (máx. 100 linhas) de skill validada, rascunho_revalidacao ou publicada. Exige finalidade (validar_tipo|avaliar_nulos|verificar_join|amostra_estrutura). Devolve columnsMetadata (tipos/nulidade). Mascara PII/segredos nas rows. Sem cache, aprendizado ou paginação. SELECT * é expandido para colunas conhecidas. Recusa rascunho sem validação.",
+      "Amostra estrutural (máx. 100 linhas) de skill validada, rascunho_revalidacao ou publicada. SELECT * cru de uma tabela do allowlist do agente (sem WHERE; servidor injeta TOP/LIMIT). Sem máscara. Colunas novas vão ao grafo como inferido — confirmar_coluna para consultar_dados. JOIN inventado recusado. Firebird: só consulta exemplo. Sem cache, paginação gerenciada ou consulta_aprendida.",
       {
         acessoId: z.string().optional(),
         skillId: z.string().optional(),
         skillIds: z.array(z.string()).optional(),
         sql: z.string().optional(),
+        tabela: z.string().optional(),
         finalidade: z.enum([
           "validar_tipo",
           "avaliar_nulos",

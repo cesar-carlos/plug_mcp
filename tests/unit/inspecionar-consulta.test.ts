@@ -25,7 +25,7 @@ const crypto = new NodeCryptoAdapter(
 const agentId = "11111111-1111-4111-8111-111111111111";
 
 describe("inspecionar_consulta", () => {
-  it("teto 100, mascara PII e recusa sem finalidade", async () => {
+  it("teto 100, amostra crua e recusa sem finalidade", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
     const usuarios = new InMemoryUsuarioRepository();
@@ -66,14 +66,16 @@ describe("inspecionar_consulta", () => {
     });
     await skills.setStatus(skill.id, "publicada");
     plug.sqlImpl = async () => ({
-      columns: ["codcli", "nome"],
+      columns: ["codcli", "nome", "senha"],
       columnsMetadata: [
         { name: "codcli", type: "int", nullable: false },
         { name: "nome", type: "varchar", nullable: true },
+        { name: "senha", type: "varchar", nullable: true },
       ],
       rows: Array.from({ length: 120 }, (_, i) => ({
         codcli: i + 1,
         nome: "Pessoa",
+        senha: "segredo-raw",
       })),
     });
     const inspecionar = new InspecionarConsulta(
@@ -93,14 +95,26 @@ describe("inspecionar_consulta", () => {
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
 
-    await expect(
-      inspecionar.execute(created.usuarioId, {
-        acessoId: created.acessoId,
-        skillId: skill.id,
-        sql: "SELECT c.codcli, c.senha FROM cliente c WHERE c.codcli > 0",
-        finalidade: "amostra_estrutura",
-      }),
-    ).rejects.toMatchObject({ code: ERROR_CODES.PRIVACIDADE_NEGADA });
+    const comSegredo = await inspecionar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      sql: "SELECT c.codcli, c.senha FROM cliente c WHERE c.codcli > 0",
+      finalidade: "amostra_estrutura",
+    });
+    expect(comSegredo.rows[0]?.senha).toBe("segredo-raw");
+    expect(comSegredo.colunasMascaradas).toEqual([]);
+
+    plug.sqlImpl = async () => ({
+      columns: ["codcli", "nome"],
+      columnsMetadata: [
+        { name: "codcli", type: "int", nullable: false },
+        { name: "nome", type: "varchar", nullable: true },
+      ],
+      rows: Array.from({ length: 120 }, (_, i) => ({
+        codcli: i + 1,
+        nome: "Pessoa",
+      })),
+    });
 
     const result = await inspecionar.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -110,8 +124,8 @@ describe("inspecionar_consulta", () => {
     });
     expect(result.maxRowsApplied).toBe(INSPECAO_MAX_ROWS);
     expect(result.rowCount).toBeLessThanOrEqual(INSPECAO_MAX_ROWS);
-    expect(String(result.rows[0]?.nome)).toMatch(/^p_/);
-    expect(result.rows.some((row) => Object.values(row).includes("Pessoa"))).toBe(false);
+    expect(result.rows[0]?.nome).toBe("Pessoa");
+    expect(result.colunasMascaradas).toEqual([]);
     expect(audit.entries.every((entry) => !String(entry.sqlEnviado).includes("Pessoa"))).toBe(true);
     expect(result.columnsMetadata).toEqual([
       { name: "codcli", type: "int", nullable: false },
@@ -189,7 +203,7 @@ describe("inspecionar_consulta", () => {
     });
     expect(result.maxRowsApplied).toBe(INSPECAO_MAX_ROWS);
     expect(result.rowCount).toBe(1);
-    expect(String(result.rows[0]?.nome)).toMatch(/^p_/);
+    expect(result.rows[0]?.nome).toBe("Pessoa");
     expect(plug.lastSql).toMatch(/cliente/i);
   });
 
@@ -265,6 +279,219 @@ describe("inspecionar_consulta", () => {
       finalidade: "amostra_estrutura",
     });
     expect(result.rowCount).toBe(1);
+  });
+
+  it("aceita SELECT * sem WHERE, injeta TOP e grava colunas novas no grafo", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const skills = new InMemorySkillRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const sqlModelo = "SELECT c.codcli FROM cliente c WHERE c.codcli > 0";
+    const skill = await skills.create({
+      agentId,
+      slug: "clientes-star",
+      nome: "Clientes star",
+      descricao: "cadastro",
+      sqlModelo,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sqlModelo)),
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    plug.sqlImpl = async () => ({
+      columns: ["codcli", "nome", "ativo"],
+      columnsMetadata: [
+        { name: "codcli", type: "int", nullable: false },
+        { name: "nome", type: "varchar", nullable: true },
+        { name: "ativo", type: "bit", nullable: false },
+      ],
+      rows: [{ codcli: 1, nome: "Pessoa", ativo: true }],
+    });
+    const inspecionar = new InspecionarConsulta(
+      acessos,
+      skills,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+    );
+    const result = await inspecionar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      sql: "SELECT * FROM cliente",
+      finalidade: "amostra_estrutura",
+    });
+    expect(plug.lastSql).toMatch(/TOP\s+100/i);
+    expect(result.rows[0]?.nome).toBe("Pessoa");
+    expect(result.colunasNovasNoGrafo).toEqual(expect.arrayContaining(["codcli", "nome", "ativo"]));
+    expect(result.hint).toMatch(/confirmar_coluna/);
+    expect(result.hint).not.toMatch(/republicar/);
+    const tabela = await grafo.findTabelaByNome(agentId, "cliente");
+    expect(tabela).not.toBeNull();
+    const cols = await grafo.listColunas(tabela!.id);
+    expect(cols.map((coluna) => coluna.nome)).toEqual(
+      expect.arrayContaining(["codcli", "nome", "ativo"]),
+    );
+  });
+
+  it("param tabela gera SELECT * cortado; tabela de outra skill publicada entra", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const skills = new InMemorySkillRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const skillCliente = await skills.create({
+      agentId,
+      slug: "clientes-nav",
+      nome: "Clientes",
+      descricao: "cadastro",
+      sqlModelo: "SELECT c.codcli FROM cliente c WHERE c.codcli > 0",
+      escopo: escopoFromSqlModelo(
+        parseSqlModelo("SELECT c.codcli FROM cliente c WHERE c.codcli > 0"),
+      ),
+      autorUsuarioId: created.usuarioId,
+    });
+    const skillProduto = await skills.create({
+      agentId,
+      slug: "produtos-nav",
+      nome: "Produtos",
+      descricao: "cadastro",
+      sqlModelo: "SELECT p.codprod FROM produto p WHERE p.codprod > 0",
+      escopo: escopoFromSqlModelo(
+        parseSqlModelo("SELECT p.codprod FROM produto p WHERE p.codprod > 0"),
+      ),
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skillCliente.id, "publicada");
+    await skills.setStatus(skillProduto.id, "publicada");
+    plug.sqlImpl = async () => ({
+      columns: ["codprod"],
+      rows: [{ codprod: 9 }],
+    });
+    const inspecionar = new InspecionarConsulta(
+      acessos,
+      skills,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+    );
+    const result = await inspecionar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skillCliente.id,
+      tabela: "produto",
+      finalidade: "validar_tipo",
+    });
+    expect(plug.lastSql).toMatch(/FROM\s+produto/i);
+    expect(plug.lastSql).toMatch(/TOP\s+100/i);
+    expect(result.rowCount).toBe(1);
+  });
+
+  it("recusa SELECT * com JOIN inventado", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const skills = new InMemorySkillRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const sqlModelo = "SELECT c.codcli FROM cliente c WHERE c.codcli > 0";
+    const skill = await skills.create({
+      agentId,
+      slug: "clientes-join",
+      nome: "Clientes",
+      descricao: "cadastro",
+      sqlModelo,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sqlModelo)),
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const inspecionar = new InspecionarConsulta(
+      acessos,
+      skills,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+    );
+    await expect(
+      inspecionar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: skill.id,
+        sql: "SELECT * FROM cliente c INNER JOIN alien x ON x.id = c.codcli",
+        finalidade: "verificar_join",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.INVALID_SQL });
   });
 });
 

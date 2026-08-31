@@ -1,44 +1,40 @@
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
-import type { EscopoSkill } from "../../../domain/entities/escopo.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
-import { tryParseSelect } from "./sql-ast.js";
+import { parseIdentificadorTabela } from "./schema-introspection.js";
+import { sqlDeclaraLimiteExterno } from "./sql-scan.js";
 
-const looksLikeStar = (sql: string): boolean =>
-  /\bselect\s+(?:top\s+\d+\s+)?(?:distinct\s+)?\*\s+from\b/i.test(sql.trim());
-
-export const expandirStarDoEscopo = (
-  sql: string,
-  dialeto: Dialeto,
-  escopo: EscopoSkill,
-): string => {
-  if (!looksLikeStar(sql)) {
-    return sql;
-  }
-  const ast = tryParseSelect(sql, dialeto);
-  const fisicas = ast?.tabelas.filter((tabela) => !tabela.isCte && !tabela.isSubquery) ?? [];
-  if (fisicas.length !== 1 || !ast?.temStar) {
+/** SELECT * cortado no dialeto (inspeção). Firebird não tem SQL livre. */
+export const sqlStarDescoberta = (dialeto: Dialeto, tabela: string, maxRows: number): string => {
+  if (dialeto === "firebird") {
     throw new DomainError({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "SELECT * não é expandido quando há mais de uma tabela.",
-      hint: "Nomeie as colunas do pacote publicado.",
+      code: ERROR_CODES.DIALECT_UNSUPPORTED,
+      message: "Inspeção com SQL livre não é suportada neste dialeto.",
+      hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql).",
     });
   }
-  const tabela = fisicas[0]!;
-  const entry = Object.entries(escopo.colunasPorTabela).find(
-    ([nome]) => nome.toLowerCase() === tabela.nome.toLowerCase(),
-  );
-  const colunas = entry?.[1] ?? [];
-  if (colunas.length === 0) {
-    throw new DomainError({
-      code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
-      message: `Não há colunas conhecidas para expandir SELECT * de ${tabela.nome}.`,
-      hint: "Use obter_skill / descobrir_tabela e nomeie as colunas.",
-    });
+  const ident = parseIdentificadorTabela(tabela);
+  const from = ident.schema ? `${ident.schema}.${ident.tabela}` : ident.tabela;
+  if (dialeto === "postgres") {
+    return `SELECT * FROM ${from} LIMIT ${String(maxRows)}`;
   }
-  const alias = tabela.alias ?? tabela.nome;
-  const selectList = colunas.map((coluna) => `${alias}.${coluna}`).join(", ");
-  return sql.replace(/\bselect\s+(?:top\s+\d+\s+)?(?:distinct\s+)?\*\s+from\b/i, (match) =>
-    match.replace("*", selectList),
+  return `SELECT TOP ${String(maxRows)} * FROM ${from}`;
+};
+
+/** Injeta TOP/LIMIT/FIRST se a inspeção não declarou corte. Não usa options.page. */
+export const garantirLimiteInspecao = (sql: string, dialeto: Dialeto, maxRows: number): string => {
+  const trimmed = sql.trim().replace(/;+\s*$/u, "");
+  if (sqlDeclaraLimiteExterno(trimmed)) {
+    return trimmed;
+  }
+  if (dialeto === "postgres") {
+    return `${trimmed} LIMIT ${String(maxRows)}`;
+  }
+  if (dialeto === "firebird") {
+    return trimmed.replace(/^\s*select\s+/i, `SELECT FIRST ${String(maxRows)} `);
+  }
+  return trimmed.replace(
+    /^\s*select(\s+distinct)?\s+/i,
+    (_match, distinct: string | undefined) => `SELECT${distinct ?? ""} TOP ${String(maxRows)} `,
   );
 };

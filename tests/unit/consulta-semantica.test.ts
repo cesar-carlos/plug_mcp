@@ -95,6 +95,50 @@ describe("consulta semântica", () => {
     expect(compiled.sql).toMatch(/empresa IN \(:empresas\)/i);
   });
 
+  it("compila duas métricas, like, is_null, between e HAVING", () => {
+    const rico = parseEscopoSkill({
+      tabelas: ["receber"],
+      colunasPorTabela: { receber: ["valor", "empresa", "nome", "vencimento"] },
+      graoResultado: ["empresa"],
+      metricasSaida: [
+        { alias: "total", expr: "SUM(receber.valor)" },
+        { alias: "qtde", expr: "COUNT(*)" },
+      ],
+      relacionamentos: [],
+    });
+    const compiled = compilarConsultaSemantica(
+      {
+        versao: 1,
+        metrica: "total",
+        metricas: ["total", "qtde"],
+        dimensoes: ["empresa"],
+        filtros: [
+          { coluna: "nome", op: "like", param: "trecho" },
+          { coluna: "nome", op: "is_null" },
+          { coluna: "valor", op: "between", param: "minVal", param2: "maxVal" },
+        ],
+        having: [{ metrica: "total", op: ">", param: "piso" }],
+      },
+      rico,
+    );
+    expect(compiled.sql).toMatch(/SUM\(receber\.valor\) AS total/i);
+    expect(compiled.sql).toMatch(/COUNT\(\*\) AS qtde/i);
+    expect(compiled.sql).toMatch(/nome LIKE :trecho/i);
+    expect(compiled.sql).toMatch(/nome IS NULL/i);
+    expect(compiled.sql).toMatch(/valor BETWEEN :minVal AND :maxVal/i);
+    expect(compiled.sql).toMatch(/HAVING SUM\(receber\.valor\) > :piso/i);
+  });
+
+  it("injeta LIMIT e recusa uso conceitual com page no caller", () => {
+    const compiled = compilarConsultaSemantica(
+      { versao: 1, metrica: "total", limite: 20 },
+      escopo,
+      undefined,
+      { dialeto: "postgres" },
+    );
+    expect(compiled.sql).toMatch(/LIMIT 20/i);
+  });
+
   it("qualifica colunas quando o pacote tem mais de uma tabela", () => {
     const multi = parseEscopoSkill({
       tabelas: ["receber", "cliente"],

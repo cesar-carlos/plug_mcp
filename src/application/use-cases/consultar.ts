@@ -28,7 +28,10 @@ import { TIPOS_NARRATIVA_COM_SKILL } from "../../domain/entities/conhecimento.js
 import type { TabelaGrafo } from "../../domain/entities/grafo.js";
 import type { Skill, StatusSkill } from "../../domain/entities/skill.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
-import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
+import {
+  parseConsultaSemantica,
+  aliasesMetricas,
+} from "../../domain/entities/consulta-semantica.js";
 import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
 import { assertFanoutSeguro } from "./shared/assert-fanout.js";
 import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
@@ -37,7 +40,6 @@ import { avisosKpiDesalinhado } from "./shared/avisos-kpi.js";
 import { lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
 import { aplicarDerivaTabelaNoGrafo } from "./shared/schema-drift.js";
 import { sincronizarEscopoComGrafo } from "./shared/sincronizar-escopo.js";
-import { uniaoEscopos } from "../../domain/entities/escopo.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
 import {
@@ -48,10 +50,9 @@ import {
   sqlValidacaoVazia,
   bindParamsForValidation,
   sqlParaOdbc,
+  type SqlModelo,
 } from "./shared/sql-modelo.js";
 import { tryParseSelect } from "./shared/sql-ast.js";
-import { hintComProximos } from "./shared/sugestoes.js";
-import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import {
   validarSqlNoEscopo,
   coletarAvisosValidacao,
@@ -64,7 +65,16 @@ import {
   avisosPlaceholderEscopo,
 } from "./shared/escopo-filtro.js";
 import { queryCacheKey, policyFingerprint } from "./shared/query-cache-key.js";
-import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
+import {
+  ancoraConsultaSemantica,
+  ancoraSqlModelo,
+  atribuirSkillsPorSql,
+  idsSkillDaChamada,
+  politicaMaisRestrita,
+  resolverSkillsConsulta,
+  uniaoEscoposPublicados,
+  escopoDaSkillPublicada,
+} from "./shared/resolver-skills-consulta.js";
 import { formatAsOf } from "./shared/format-as-of.js";
 import {
   hintSqlNaoClassificavel,
@@ -348,6 +358,7 @@ export class ConsultarDados {
       skillIds?: string[];
       sql?: string;
       consultaSemantica?: unknown;
+      consultaAprendidaId?: string;
       pergunta?: string;
       aprendizado?: readonly ItemAprendizadoInput[];
       params?: Record<string, unknown>;
@@ -387,56 +398,45 @@ export class ConsultarDados {
       await requireAcesso(this.acessos, input.acessoId, uid),
       uid,
     );
-    const ids = [
-      ...new Set(
-        [...(input.skillIds ?? []), input.skillId ?? ""]
-          .map((id) => id.trim())
-          .filter((id) => id.length > 0),
-      ),
-    ];
-    if (ids.length === 0) {
+    const ids = idsSkillDaChamada(input);
+    const consultaAprendidaId = input.consultaAprendidaId?.trim() ?? "";
+    const sqlInformado = input.sql?.trim() ?? "";
+    const consultaSemantica = parseConsultaSemantica(input.consultaSemantica);
+    const fontes = [
+      sqlInformado.length > 0,
+      Boolean(consultaSemantica),
+      consultaAprendidaId.length > 0,
+    ].filter(Boolean).length;
+    if (fontes > 1) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: "skillId é obrigatório.",
-        hint: "Use buscar_contexto / listar_skills / obter_skill. SQL só no escopo de skill publicada.",
+        message: "Use só uma fonte de SQL: sql, consultaSemantica ou consultaAprendidaId.",
+        hint: "consultaAprendidaId reusa o SELECT gravado. Não misture com sql nem IR.",
       });
     }
-    const skillsPublicadas: Skill[] = [];
-    for (const id of ids) {
-      const found = await this.skills.findById(id);
-      if (found?.agentId !== acesso.agentId) {
-        const conhecidas = await this.skills.listByAgent(acesso.agentId);
+    const allowlist = await resolverSkillsConsulta(this.skills, acesso.agentId, ids);
+    let aprendida: ConsultaAprendida | null = null;
+    if (consultaAprendidaId) {
+      if (!this.extras.aprendizado) {
         throw new DomainError({
-          code: ERROR_CODES.SKILL_NOT_FOUND,
-          message: "Skill não encontrada neste agentId.",
-          hint: hintComProximos(
-            "Confira skillId com listar_skills no mesmo acesso.",
-            id,
-            conhecidas.flatMap((item) => [item.slug, item.id]),
-          ),
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Consulta aprendida indisponível neste servidor.",
+          hint: "Passe sql ou consultaSemantica. Em Postgres o cofre precisa estar ligado.",
         });
       }
-      if (found.status !== "publicada") {
+      aprendida = await this.extras.aprendizado.obterConsulta(acesso.agentId, consultaAprendidaId);
+      if (aprendida?.status !== "ativa") {
         throw new DomainError({
-          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
-          message: "Só skill publicada pode consultar o ERP.",
-          hint:
-            found.status === "validada"
-              ? "Chame publicar_skill antes de consultar_dados."
-              : "Valide e publique a skill (validar_skill → publicar_skill).",
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Consulta aprendida não encontrada ou inativa.",
+          hint: "Reuse o id de buscar_contexto em obter_skill.consultasExemplo e consulte de novo.",
         });
       }
-      skillsPublicadas.push(found);
     }
-    const skillsComEscopo: Skill[] = [];
-    for (const published of skillsPublicadas) {
-      skillsComEscopo.push(await persistirEscopoSeVazio(this.skills, published));
-    }
-    const skill = skillsComEscopo[0]!;
-    const sqlLivre = input.sql?.trim() ?? "";
+    const sqlLivre = aprendida ? aprendida.sql.trim() : sqlInformado;
     let sqlSemantico: string | null = null;
     let avisoSemantico: { code: string; message: string } | null = null;
-    const consultaSemantica = parseConsultaSemantica(input.consultaSemantica);
+    let ancoraSemantica: Skill | null = null;
     if (consultaSemantica) {
       if (this.extras.semanticQueryEnabled === false) {
         throw new DomainError({
@@ -445,22 +445,22 @@ export class ConsultarDados {
           hint: "Use SQL livre validado ou ligue MCP_SEMANTIC_QUERY_ENABLED.",
         });
       }
-      if (skillsComEscopo.length !== 1) {
+      if (consultaSemantica.limite != null && input.options?.page != null) {
         throw new DomainError({
           code: ERROR_CODES.VALIDATION_ERROR,
-          message: "Consulta semântica vale para uma skill.",
-          hint: "Cruze skills com SQL livre no escopo unido.",
+          message: "consultaSemantica.limite não combina com options.page.",
+          hint: "Use limite (TOP/LIMIT) sem página, ou pagine com ORDER BY + page e page_size sem limite no IR.",
         });
       }
+      ancoraSemantica = ancoraConsultaSemantica(allowlist, aliasesMetricas(consultaSemantica), ids);
       const compiled = compilarConsultaSemantica(
         consultaSemantica,
-        skillsComEscopo[0]!.escopo.tabelas.length > 0
-          ? skillsComEscopo[0]!.escopo
-          : escopoFromSqlModelo(parseSqlModelo(skillsComEscopo[0]!.sqlModelo)),
+        escopoDaSkillPublicada(ancoraSemantica),
         {
           empresa: Boolean(acesso.escopoPadrao?.empresa),
           filial: Boolean(acesso.escopoPadrao?.filial),
         },
+        { dialeto: acesso.dialeto, maxLimite: this.absoluteMaxRows },
       );
       sqlSemantico = compiled.sql;
       avisoSemantico = {
@@ -476,14 +476,6 @@ export class ConsultarDados {
         hint: "Envie a pergunta do usuário em consultar_dados. O servidor grava o SQL que funcionou.",
       });
     }
-    if (skillsComEscopo.length > 1 && !sqlLivre) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Cruzar skills exige SQL customizado.",
-        hint: "Passe skillIds de todos os domínios e o SELECT no escopo unido. Sem sql só a consulta exemplo da primeira skill rodaria.",
-      });
-    }
-    const contratoParams = unirContratosParams(skillsComEscopo);
     const avisos: { code: string; message: string }[] = [];
     if (avisoSemantico) {
       avisos.push(avisoSemantico);
@@ -495,16 +487,11 @@ export class ConsultarDados {
           "Sem empresa/filial default no acesso; o número é consolidado de todas as empresas visíveis.",
       });
     }
-    let sqlExecutar = skill.sqlModelo;
-    let modelo = parseSqlModelo(sqlExecutar);
+    let sqlExecutar: string;
+    let modelo: SqlModelo;
     const sqlParaValidar = sqlLivre.length > 0 ? sqlLivre : (sqlSemantico ?? "");
-    const escopoConsulta = uniaoEscopos(
-      skillsComEscopo.map((item) =>
-        item.escopo.tabelas.length > 0
-          ? item.escopo
-          : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
-      ),
-    );
+    const escopoConsulta = uniaoEscoposPublicados(allowlist);
+    let atribuidas: Skill[];
     if (sqlParaValidar) {
       const ast = validarSqlNoEscopo(sqlParaValidar, acesso.dialeto, escopoConsulta, {
         page: input.options?.page,
@@ -515,12 +502,33 @@ export class ConsultarDados {
       modelo = parseSqlModelo(sqlParaValidar);
       assertFanoutSeguro(ast, escopoConsulta);
       avisos.push(...avisosKpiDesalinhado(ast, escopoConsulta));
+      atribuidas = ancoraSemantica
+        ? [ancoraSemantica]
+        : atribuirSkillsPorSql(allowlist, sqlExecutar, acesso.dialeto, aprendida?.skillIds ?? []);
     } else {
+      const ancora = ancoraSqlModelo(allowlist, ids);
+      sqlExecutar = ancora.sqlModelo;
+      modelo = parseSqlModelo(sqlExecutar);
+      atribuidas = [ancora];
       const astModelo = tryParseSelect(sqlExecutar, acesso.dialeto);
       if (astModelo) {
         assertFanoutSeguro(astModelo, escopoConsulta);
       }
     }
+    const skill = atribuidas[0]!;
+    const contratoBase = unirContratosParams(atribuidas);
+    const contratoParams =
+      aprendida?.paramsContrato && aprendida.paramsContrato.length > 0
+        ? (() => {
+            const map = new Map(contratoBase.map((param) => [param.nome, param]));
+            for (const param of aprendida.paramsContrato) {
+              if (!map.has(param.nome)) {
+                map.set(param.nome, param);
+              }
+            }
+            return [...map.values()];
+          })()
+        : contratoBase;
     const colunasDasTabelas: Record<string, string[]> = {};
     const columnHints = new Map<string, ColumnMetadataHint>();
     if (this.extras.grafo) {
@@ -564,7 +572,7 @@ export class ConsultarDados {
         ...modelo.tabelas.flatMap((tabela) => (tabela.alias ? [tabela.alias] : [])),
         ...modelo.colunas.map((coluna) => coluna.alias),
       ];
-      const skillIds = new Set(skillsComEscopo.map((item) => item.id));
+      const skillIds = new Set(atribuidas.map((item) => item.id));
       const tabelaNomePorId = new Map<string, string>();
       if (this.extras.grafo && notas.some((nota) => Boolean(nota.tabelaId))) {
         const todasTabelas = await this.extras.grafo.listTabelas(acesso.agentId);
@@ -592,7 +600,7 @@ export class ConsultarDados {
     const requested = input.options?.max_rows ?? this.defaultMaxRows;
     const orcamento = assertOrcamentoConsulta({
       ast: tryParseSelect(sqlExecutar, acesso.dialeto),
-      politica: skillsComEscopo[0]?.politicaConsulta ?? null,
+      politica: politicaMaisRestrita(atribuidas),
       maxRows: Math.min(Math.max(1, requested), this.absoluteMaxRows),
       timeoutMs: input.options?.timeout_ms,
     });
@@ -658,8 +666,8 @@ export class ConsultarDados {
       acessoId: acesso.id,
       clientTokenHash: acesso.clientTokenHash,
       agentId: acesso.agentId,
-      skillIds: skillsComEscopo.map((item) => item.id),
-      skillVersoes: skillsComEscopo.map((item) => item.versao),
+      skillIds: atribuidas.map((item) => item.id),
+      skillVersoes: atribuidas.map((item) => item.versao),
       sql: sqlNoFio,
       params,
       maxRows,
@@ -677,7 +685,7 @@ export class ConsultarDados {
             const loop = await gravarAprendizadoDaConsulta({
               extras: { ...this.extras, skills: this.skills },
               agentId: acesso.agentId,
-              skillIds: skillsComEscopo.map((item) => item.id),
+              skillIds: atribuidas.map((item) => item.id),
               pergunta: perguntaUsada,
               sql: sqlNoFio,
               paramsContrato: contratoParams,
@@ -687,7 +695,7 @@ export class ConsultarDados {
             return {
               success: true,
               skillId: skill.id,
-              skillIds: skillsComEscopo.map((item) => item.id),
+              skillIds: atribuidas.map((item) => item.id),
               columns: parsed.columns,
               rows: parsed.rows,
               rowCount: parsed.rows.length,
@@ -804,7 +812,7 @@ export class ConsultarDados {
       const loop = await gravarAprendizadoDaConsulta({
         extras: { ...this.extras, skills: this.skills },
         agentId: acesso.agentId,
-        skillIds: skillsComEscopo.map((item) => item.id),
+        skillIds: atribuidas.map((item) => item.id),
         pergunta: perguntaUsada,
         sql: sqlNoFio,
         paramsContrato: contratoParams,
@@ -814,7 +822,7 @@ export class ConsultarDados {
       return {
         success: true,
         skillId: skill.id,
-        skillIds: skillsComEscopo.map((item) => item.id),
+        skillIds: atribuidas.map((item) => item.id),
         columns,
         rows,
         rowCount: rows.length,
@@ -899,44 +907,17 @@ export class ValidarConsulta {
       await requireAcesso(this.acessos, input.acessoId, uid),
       uid,
     );
-    const ids = [
-      ...new Set(
-        [...(input.skillIds ?? []), input.skillId ?? ""]
-          .map((id) => id.trim())
-          .filter((id) => id.length > 0),
-      ),
-    ];
+    const ids = idsSkillDaChamada(input);
     const sql = input.sql?.trim() ?? "";
-    if (ids.length === 0 || !sql) {
+    if (!sql) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: "skillId e sql são obrigatórios.",
-        hint: "Passe as skills publicadas e o SELECT a validar.",
+        message: "sql é obrigatório.",
+        hint: "Passe o SELECT a validar. skillId é opcional: omitido usa todas as publicadas do agentId.",
       });
     }
-    const skillsPublicadas: Skill[] = [];
-    for (const id of ids) {
-      const found = await this.skills.findById(id);
-      if (found?.agentId !== acesso.agentId || found.status !== "publicada") {
-        throw new DomainError({
-          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
-          message: "Só skill publicada entra no escopo da validação.",
-          hint: "Confira listar_skills.",
-        });
-      }
-      skillsPublicadas.push(found);
-    }
-    const skillsComEscopo: Skill[] = [];
-    for (const published of skillsPublicadas) {
-      skillsComEscopo.push(await persistirEscopoSeVazio(this.skills, published));
-    }
-    const escopo = uniaoEscopos(
-      skillsComEscopo.map((item) =>
-        item.escopo.tabelas.length > 0
-          ? item.escopo
-          : escopoFromSqlModelo(parseSqlModelo(item.sqlModelo)),
-      ),
-    );
+    const allowlist = await resolverSkillsConsulta(this.skills, acesso.agentId, ids);
+    const escopo = uniaoEscoposPublicados(allowlist);
     const ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo);
     await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.executeSql({

@@ -168,4 +168,29 @@ describe("validarSqlNoEscopo", () => {
       ),
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.VALIDATION_ERROR }));
   });
+
+  it("modo inspecao aceita SELECT * de uma tabela sem recorte", () => {
+    const ast = validarSqlNoEscopo("SELECT * FROM produto", "mssql", escopo, { modo: "inspecao" });
+    expect(ast.temStar).toBe(true);
+  });
+
+  it("modo inspecao recusa SELECT * com JOIN", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT * FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
+        "mssql",
+        escopo,
+        { modo: "inspecao" },
+      ),
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.INVALID_SQL }));
+  });
+
+  it("consulta continua recusando SELECT * e sem recorte", () => {
+    expect(() => validarSqlNoEscopo("SELECT * FROM produto", "mssql", escopo)).toThrow(
+      expect.objectContaining({ code: ERROR_CODES.INVALID_SQL }),
+    );
+    expect(() => validarSqlNoEscopo("SELECT p.codprod FROM produto p", "mssql", escopo)).toThrow(
+      expect.objectContaining({ code: ERROR_CODES.CONSULTA_SEM_RECORTE }),
+    );
+  });
 });

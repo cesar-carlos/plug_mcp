@@ -25,6 +25,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toContain("LITERAL_TEXTO");
     expect(PRE_TREINO_SESSAO).toMatch(/inspecionar_consulta sem sql/i);
     expect(PRE_TREINO_SESSAO).toMatch(/Aceita skill validada/i);
+    expect(PRE_TREINO_SESSAO).toMatch(/SELECT \*/);
+    expect(PRE_TREINO_SESSAO).toContain("details.engineMessage");
     expect(PRE_TREINO_SESSAO).toContain("listar_conflitos");
     expect(PRE_TREINO_SESSAO).toContain("conhecimentos[]");
     expect(PRE_TREINO_SESSAO).toMatch(/FTS\/ILIKE/);
@@ -43,6 +45,10 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/INVALID_SQL\/1033/);
     expect(PRE_TREINO_SESSAO).toContain("skill://");
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
+    expect(PRE_TREINO_SESSAO).toContain("consultaAprendidaId");
+    expect(PRE_TREINO_SESSAO).toContain("colunas[]");
+    expect(PRE_TREINO_SESSAO).toMatch(/skillIds opcional/);
+    expect(PRE_TREINO_SESSAO).toMatch(/metricas\[\]/);
   });
 
   it("entra em MCP_SERVER_INSTRUCTIONS junto com a operação", () => {
