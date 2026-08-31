@@ -302,9 +302,15 @@ export const lacunaConsulta = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     agentId: uuid("agent_id").notNull(),
     pergunta: text("pergunta").notNull(),
+    perguntaChave: text("pergunta_chave").notNull(),
     tipo: text("tipo").notNull().default("skill_gap"),
+    status: text("status").notNull().default("aberta"),
     contrato: jsonb("contrato").$type<Record<string, unknown> | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("lacuna_consulta_agent_idx").on(t.agentId)],
+  (t) => [
+    index("lacuna_consulta_agent_idx").on(t.agentId),
+    uniqueIndex("lacuna_consulta_agent_tipo_chave_uidx").on(t.agentId, t.tipo, t.perguntaChave),
+  ],
 );

@@ -1,5 +1,6 @@
 import { DomainError, isDomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
+import { absoluteErrorMappingUrl } from "../../domain/errors/error-next-action.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AppConfig } from "../../config/env.js";
 import type { RateLimitStore } from "../http/rate-limit.js";
@@ -58,7 +59,13 @@ export const errorResult = (
           retryable: true,
         });
       })();
-  const payload = domain.toJson();
+  const json = domain.toJson();
+  const documentationUrl = json.error.documentationUrl
+    ? absoluteErrorMappingUrl(config.PUBLIC_BASE_URL, json.error.documentationUrl)
+    : undefined;
+  const payload = documentationUrl
+    ? { success: false as const, error: { ...json.error, documentationUrl } }
+    : json;
   const meta: Record<string, unknown> = {};
   if (domain.code === ERROR_CODES.UNAUTHENTICATED) {
     meta["mcp/www_authenticate"] = [

@@ -1,9 +1,11 @@
 import type { HitBusca } from "../../domain/entities/hit-busca.js";
 import { rankFromTermScore } from "../../domain/entities/hit-busca.js";
 import { STOPWORDS_BUSCA } from "../../domain/entities/stopwords-busca.js";
-
-const stripAccents = (value: string): string =>
-  value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+import {
+  scoreStemOverlap,
+  stemPortugues,
+  stripAccents,
+} from "../../domain/entities/stem-portugues.js";
 
 export const tokenizeQuery = (query: string): readonly string[] => {
   const normalized = stripAccents(query);
@@ -18,12 +20,12 @@ export const tokenizeQuery = (query: string): readonly string[] => {
   return unique;
 };
 
+/** In-memory: overlap de stems. Produção Postgres usa `ts_rank`. */
 export const scoreByTerms = (haystack: string, terms: readonly string[]): number => {
-  if (terms.length === 0) {
-    return 0;
-  }
-  const hay = stripAccents(haystack);
-  return terms.reduce((score, term) => score + (hay.includes(term) ? 1 : 0), 0);
+  const stemmed = [
+    ...new Set(terms.map((term) => stemPortugues(term)).filter((stem) => stem.length >= 2)),
+  ];
+  return scoreStemOverlap(haystack, stemmed, STOPWORDS_BUSCA);
 };
 
 export const rankByTermsHits = <T>(

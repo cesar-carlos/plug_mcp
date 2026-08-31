@@ -11,6 +11,28 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Added
+
+- `GET /docs/mcp/error-mapping.md` serve a matriz de erros (mesmo path de `documentationUrl`). Sem HTML extra.
+- `faltas[]` de medida (`kind: kpi`, `nextAction: atualizar_skill`) quando o SELECT tem agregação/`SUM` sem `definicao` — **não** bloqueia `podeLiberar` nem o pacote mínimo. CAST de data/`Situacao` não conta como KPI.
+- `publicar_skill` sem `politicaConsulta` devolve o default (`maxRows: 500`, `timeoutMs: 30000`) no `resumoPublicacao`; na confirmação o servidor grava esse default. Sem recorte empresa/filial nem `exigirRecorteTemporal`.
+- Envelope de `TABELA_FORA_DO_ESCOPO` / `COLUNA_FORA_DO_ESCOPO` / `JOIN_DESCONHECIDO` com `category`, `nextAction` e `documentationUrl`. `inspecionar_consulta` devolve `columnsMetadata`.
+- Resources: `initialize` declara `capabilities.resources`; instructions citam `guia://paginacao`, `guia://dialeto/{dialeto}` e `skill://` (só publicada).
+
+### Changed
+
+- `fluxoTreino.pacoteMinimo` ignora aliases que não são medida (agregação). JOIN isolado coberto por composto vira `nextAction: remover_relacionamento` em vez de `confirmar_relacionamento`.
+- FTS: stopwords `tente`/`fazer`/`erro`/`servidor`; `consultasAprendidas` genéricas (“tente fazer a consulta agora”) não entram no envelope. Continua **não** RAG.
+- Cobertura certificada de `buscar_contexto` usa conjunto de stems portugueses (inflexão `titulo`/`titulos` pode autorizar `completa`); tokens extra na pergunta continuam a impedir. `candidatos[].termosAusentes` e hint de parcial citam até 3 stems. `params.tipo` sai do haystack JS (alinhado ao FTS). Telemetria `busca.skillNotPublished`. `skill_gap` continua sem insert quando já há skill publicada.
+- `listar_lacunas` default só `status=aberta`. `buscar_contexto` faz upsert da `skill_gap` e arquiva quando a pergunta passa a `SKILL_NOT_PUBLISHED` ou consulta permitida.
+- Após `initialize` autenticado, se SHA/versão mudou, o servidor envia `notifications/tools/list_changed`.
+- `mapear_tabela` / deriva: assinatura no recorte do pacote (`validada`/`publicada`/`rascunho_revalidacao`). Remap de tipo compatível com o papel (ex. uuid→date) **não** rebaixa a skill.
+
+### Fixed
+
+- `TABELA_FORA_DO_ESCOPO` em `descobrir_tabela` aponta `explorar_tabelas`; no validador SQL aponta `obter_skill`.
+- `documentationUrl` do envelope deixa de apontar para 404: a matriz é pública no mesmo origin do `/health`.
+
 ## [0.2.0] - 2026-08-30
 
 ### Added

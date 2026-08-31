@@ -1,6 +1,6 @@
 import type { ConsultaSemantica } from "../../../domain/entities/consulta-semantica.js";
 import type { Skill } from "../../../domain/entities/skill.js";
-import { tokensCapacidade } from "./cobertura-skill.js";
+import { overlapCapacidade } from "./cobertura-skill.js";
 
 export interface ConsultaSemanticaSugerida {
   readonly versao: 1;
@@ -8,18 +8,6 @@ export interface ConsultaSemanticaSugerida {
   readonly dimensoes?: readonly string[];
   readonly colunaData?: string;
 }
-
-const stripAccents = (value: string): string =>
-  value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-
-const overlapTokens = (query: string, haystack: string): number => {
-  const tokens = tokensCapacidade(query);
-  if (tokens.length === 0) {
-    return 0;
-  }
-  const text = stripAccents(haystack);
-  return tokens.filter((token) => text.includes(token)).length;
-};
 
 const haystackKpi = (alias: string, definicao?: string, grao?: string): string =>
   `${alias} ${definicao ?? ""} ${grao ?? ""}`;
@@ -66,7 +54,7 @@ export const esqueletoConsultaSemantica = (
       (item) => item.alias.toLowerCase() === ir.metrica.toLowerCase(),
     );
     candidatos.push({
-      score: overlapTokens(query, haystackKpi(ir.metrica, metrica?.definicao, metrica?.grao)),
+      score: overlapCapacidade(query, haystackKpi(ir.metrica, metrica?.definicao, metrica?.grao)),
       fromIr: true,
       order: 0,
       esqueleto: deIr(ir),
@@ -74,7 +62,7 @@ export const esqueletoConsultaSemantica = (
   }
   skill.escopo.metricasSaida.forEach((item, index) => {
     candidatos.push({
-      score: overlapTokens(query, haystackKpi(item.alias, item.definicao, item.grao)),
+      score: overlapCapacidade(query, haystackKpi(item.alias, item.definicao, item.grao)),
       fromIr: false,
       order: index + 1,
       esqueleto: {
@@ -107,7 +95,7 @@ export const esqueletoDaPrimeiraSkillComKpi = (
       (item) => item.alias.toLowerCase() === esqueleto.metrica.toLowerCase(),
     );
     candidatos.push({
-      score: overlapTokens(
+      score: overlapCapacidade(
         query,
         haystackKpi(esqueleto.metrica, metrica?.definicao, metrica?.grao),
       ),

@@ -80,6 +80,7 @@ describe("métricas e lacunas de ferramenta", () => {
       total: 0,
       consultaPermitida: 0,
       skillGap: 0,
+      skillNotPublished: 0,
       slotNarrativa: 0,
     });
   });
@@ -101,7 +102,24 @@ describe("métricas e lacunas de ferramenta", () => {
     });
     expect(lista.lacunas[0]?.id).toBe(createdLacuna.lacunaId);
     expect(lista.lacunas[0]?.tipo).toBe("ferramenta");
+    expect(lista.lacunas[0]?.status).toBe("aberta");
     expect(lista.lacunas[0]?.contrato).toMatchObject({ entradas: "skillId" });
+  });
+
+  it("mesmo objetivo de ferramenta não cria linha nova", async () => {
+    const { acessos, aprendizado, created } = await setup();
+    const registrar = new RegistrarLacunaFerramenta(acessos, aprendizado);
+    const input = {
+      acessoId: created.acessoId,
+      objetivo: "listar gráficos certificados da skill",
+    };
+    const first = await registrar.execute(created.usuarioId, input);
+    const second = await registrar.execute(created.usuarioId, input);
+    expect(second.lacunaId).toBe(first.lacunaId);
+    const lista = await new ListarLacunas(acessos, aprendizado).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+    });
+    expect(lista.lacunas).toHaveLength(1);
   });
 
   it("listar_auditoria expõe telemetria só em buscar_contexto", async () => {
@@ -154,6 +172,7 @@ describe("métricas e lacunas de ferramenta", () => {
       total: 1,
       consultaPermitida: 1,
       skillGap: 0,
+      skillNotPublished: 0,
       slotNarrativa: 1,
     });
   });

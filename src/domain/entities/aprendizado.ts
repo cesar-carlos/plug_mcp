@@ -21,11 +21,18 @@ export interface Sinonimo {
   readonly alvoId: string;
 }
 
+export type TipoLacuna = "skill_gap" | "ferramenta";
+export type StatusLacuna = "aberta" | "arquivada";
+
+export const chavePerguntaLacuna = (pergunta: string): string =>
+  pergunta.trim().toLowerCase().replace(/\s+/g, " ");
+
 export interface LacunaConsulta {
   readonly id: string;
   readonly agentId: string;
   readonly pergunta: string;
-  readonly tipo: "skill_gap" | "ferramenta";
+  readonly tipo: TipoLacuna;
+  readonly status: StatusLacuna;
   readonly contrato: Record<string, unknown> | null;
   readonly createdAt: Date;
 }

@@ -9,14 +9,30 @@ import {
 import { clampRankFts } from "../../../domain/entities/hit-busca.js";
 import type { TabelaGrafo } from "../../../domain/entities/grafo.js";
 import type { AnotacaoGrafo, Skill } from "../../../domain/entities/skill.js";
+import { STOPWORDS_CONSULTA_APRENDIDA } from "../../../domain/entities/consulta-aprendida-generica.js";
+import { STOPWORDS_BUSCA } from "../../../domain/entities/stopwords-busca.js";
+import { scoreStemOverlap } from "../../../domain/entities/stem-portugues.js";
 import { haystackCertificado, tokensCapacidade } from "./cobertura-skill.js";
 
-const scoreHaystack = (haystack: string, terms: readonly string[]): number => {
-  if (terms.length === 0) {
-    return 0;
+const tokensConteudoConsulta = (query: string): readonly string[] =>
+  tokensCapacidade(query, STOPWORDS_CONSULTA_APRENDIDA);
+
+export const consultaAprendidaRelevante = (query: string, pergunta: string): boolean =>
+  scoreHaystack(pergunta, tokensConteudoConsulta(query)) > 0;
+
+const scoreHaystack = (haystack: string, stemmedTerms: readonly string[]): number =>
+  scoreStemOverlap(haystack, stemmedTerms, STOPWORDS_BUSCA);
+
+const scoreComPiso = (
+  haystack: string,
+  stemmedTerms: readonly string[],
+  recuperada: boolean,
+): number | undefined => {
+  const overlap = scoreHaystack(haystack, stemmedTerms);
+  if (!recuperada && overlap <= 0) {
+    return undefined;
   }
-  const hay = haystack.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  return terms.reduce((score, term) => score + (hay.includes(term) ? 1 : 0), 0);
+  return recuperada ? Math.max(overlap, 1) : overlap;
 };
 
 const scoreComRank = (base: number, id: string, ranksPorId: ReadonlyMap<string, number>): number =>
@@ -88,24 +104,30 @@ export const montarConhecimentos = (input: {
   readonly tabelas: readonly TabelaGrafo[];
   readonly filtro: FiltroConhecimentos;
   readonly skillIdsRecuperados: ReadonlySet<string>;
+  readonly anotacaoIdsRecuperados?: ReadonlySet<string>;
+  readonly tabelaIdsRecuperados?: ReadonlySet<string>;
   readonly sinonimos?: readonly Sinonimo[];
   readonly ranksPorId?: ReadonlyMap<string, number>;
 }): HitConhecimento[] => {
   const terms = tokensCapacidade(input.query);
   const sinonimos = input.sinonimos ?? [];
   const ranksPorId = input.ranksPorId ?? new Map<string, number>();
+  const anotacaoIdsRecuperados = input.anotacaoIdsRecuperados ?? new Set<string>();
+  const tabelaIdsRecuperados = input.tabelaIdsRecuperados ?? new Set<string>();
   const hits: HitConhecimento[] = [];
 
   for (const skill of input.skills) {
     if (input.filtro.consultaPermitida && !input.filtro.skillIdsPermitidos.has(skill.id)) {
       continue;
     }
-    const substring = scoreHaystack(haystackCertificado(skill, sinonimos), terms);
-    const recuperada = input.skillIdsRecuperados.has(skill.id);
-    if (!recuperada && substring <= 0) {
+    const base = scoreComPiso(
+      haystackCertificado(skill, sinonimos),
+      terms,
+      input.skillIdsRecuperados.has(skill.id),
+    );
+    if (base === undefined) {
       continue;
     }
-    const base = recuperada ? Math.max(substring, 1) : substring;
     hits.push({
       tipo: "skill",
       id: skill.id,
@@ -122,6 +144,14 @@ export const montarConhecimentos = (input: {
     if (!anotacaoPermitida(nota, input.filtro)) {
       continue;
     }
+    const base = scoreComPiso(
+      `${nota.titulo} ${nota.texto}`,
+      terms,
+      anotacaoIdsRecuperados.has(nota.id),
+    );
+    if (base === undefined) {
+      continue;
+    }
     hits.push({
       tipo: tipoConhecimentoDeAnotacao(nota.tipo),
       id: nota.id,
@@ -130,17 +160,18 @@ export const montarConhecimentos = (input: {
       fonte: "anotacao_grafo",
       skillId: nota.skillId,
       tabelaId: nota.tabelaId,
-      score: scoreComRank(
-        Math.max(scoreHaystack(`${nota.titulo} ${nota.texto}`, terms), 1),
-        nota.id,
-        ranksPorId,
-      ),
+      score: scoreComRank(base, nota.id, ranksPorId),
     });
   }
 
+  const termsConsulta = tokensConteudoConsulta(input.query);
   for (const consulta of input.consultas) {
     const linked = consulta.skillIds.some((id) => input.filtro.skillIdsPermitidos.has(id));
     if (input.filtro.consultaPermitida && !linked) {
+      continue;
+    }
+    const score = scoreHaystack(consulta.pergunta, termsConsulta);
+    if (score <= 0) {
       continue;
     }
     hits.push({
@@ -151,17 +182,21 @@ export const montarConhecimentos = (input: {
       fonte: "consulta_aprendida.pergunta",
       skillId: consulta.skillIds[0] ?? null,
       tabelaId: null,
-      score: scoreComRank(
-        Math.max(scoreHaystack(consulta.pergunta, terms), 1),
-        consulta.id,
-        ranksPorId,
-      ),
+      score: scoreComRank(score, consulta.id, ranksPorId),
     });
   }
 
   for (const tabela of input.tabelas) {
     const nome = tabela.nome.toLowerCase();
     if (input.filtro.consultaPermitida && !input.filtro.tabelasPermitidas.has(nome)) {
+      continue;
+    }
+    const base = scoreComPiso(
+      `${tabela.nome} ${tabela.descricao ?? ""}`,
+      terms,
+      tabelaIdsRecuperados.has(tabela.id),
+    );
+    if (base === undefined) {
       continue;
     }
     hits.push({
@@ -172,11 +207,7 @@ export const montarConhecimentos = (input: {
       fonte: "tabela_grafo",
       skillId: null,
       tabelaId: tabela.id,
-      score: scoreComRank(
-        Math.max(scoreHaystack(`${tabela.nome} ${tabela.descricao ?? ""}`, terms), 1),
-        tabela.id,
-        ranksPorId,
-      ),
+      score: scoreComRank(base, tabela.id, ranksPorId),
     });
   }
 
@@ -187,6 +218,7 @@ export const hintRegraParcial = (
   cobertura: "completa" | "parcial" | "desconhecida",
   conhecimentos: readonly HitConhecimento[],
   temCandidatos = false,
+  termosAusentes: readonly string[] = [],
 ): string | undefined => {
   if (!temCandidatos || cobertura === "completa") {
     return undefined;
@@ -198,5 +230,9 @@ export const hintRegraParcial = (
   const prefixo = narrativa
     ? "Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta."
     : "Cobertura parcial. Leia obter_skill e validar_consulta.";
-  return `${prefixo} Match textual isolado não autoriza consultar_dados — registre sinônimo (registrar_aprendizado tipo=sinonimo) se o usuário confirmar o termo.`;
+  const ausentes =
+    cobertura === "parcial" && termosAusentes.length > 0
+      ? ` Termos ausentes no pacote: ${termosAusentes.slice(0, 3).join(", ")}.`
+      : "";
+  return `${prefixo}${ausentes} Match textual isolado não autoriza consultar_dados — registre sinônimo (registrar_aprendizado tipo=sinonimo) se o usuário confirmar o termo.`;
 };

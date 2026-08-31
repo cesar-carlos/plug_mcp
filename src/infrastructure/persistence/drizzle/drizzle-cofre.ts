@@ -63,7 +63,10 @@ import type {
   ConsultaAprendida,
   LacunaConsulta,
   Sinonimo,
+  StatusLacuna,
+  TipoLacuna,
 } from "../../../domain/entities/aprendizado.js";
+import { chavePerguntaLacuna } from "../../../domain/entities/aprendizado.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
 import type { ParametroSkill } from "../../../domain/entities/skill.js";
 
@@ -1165,6 +1168,16 @@ const toConsultaAprendida = (
   autorUsuarioId: row.autorUsuarioId,
 });
 
+const toLacuna = (row: typeof schema.lacunaConsulta.$inferSelect): LacunaConsulta => ({
+  id: row.id,
+  agentId: row.agentId,
+  pergunta: row.pergunta,
+  tipo: row.tipo === "ferramenta" ? "ferramenta" : "skill_gap",
+  status: row.status === "arquivada" ? "arquivada" : "aberta",
+  contrato: row.contrato ?? null,
+  createdAt: row.createdAt,
+});
+
 export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   constructor(private readonly db: Db) {}
 
@@ -1382,37 +1395,71 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   async registrarLacuna(
     agentId: string,
     pergunta: string,
-    tipo: "skill_gap" | "ferramenta" = "skill_gap",
+    tipo: TipoLacuna = "skill_gap",
     contrato: Record<string, unknown> | null = null,
   ): Promise<LacunaConsulta> {
+    const perguntaChave = chavePerguntaLacuna(pergunta);
     const [row] = await this.db
       .insert(schema.lacunaConsulta)
-      .values({ agentId, pergunta, tipo, contrato })
+      .values({
+        agentId,
+        pergunta,
+        perguntaChave,
+        tipo,
+        status: "aberta",
+        contrato,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.lacunaConsulta.agentId,
+          schema.lacunaConsulta.tipo,
+          schema.lacunaConsulta.perguntaChave,
+        ],
+        set: {
+          pergunta,
+          contrato,
+          status: "aberta",
+          updatedAt: new Date(),
+        },
+      })
       .returning();
-    return {
-      id: row!.id,
-      agentId: row!.agentId,
-      pergunta: row!.pergunta,
-      tipo: row!.tipo === "ferramenta" ? "ferramenta" : "skill_gap",
-      contrato: row!.contrato ?? null,
-      createdAt: row!.createdAt,
-    };
+    return toLacuna(row!);
   }
 
-  async listarLacunas(agentId: string, limite: number): Promise<readonly LacunaConsulta[]> {
+  async arquivarLacunaSkillGap(agentId: string, pergunta: string): Promise<number> {
+    const perguntaChave = chavePerguntaLacuna(pergunta);
+    if (!perguntaChave) {
+      return 0;
+    }
+    const rows = await this.db
+      .update(schema.lacunaConsulta)
+      .set({ status: "arquivada", updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.lacunaConsulta.agentId, agentId),
+          eq(schema.lacunaConsulta.tipo, "skill_gap"),
+          eq(schema.lacunaConsulta.perguntaChave, perguntaChave),
+          eq(schema.lacunaConsulta.status, "aberta"),
+        ),
+      )
+      .returning({ id: schema.lacunaConsulta.id });
+    return rows.length;
+  }
+
+  async listarLacunas(
+    agentId: string,
+    limite: number,
+    status: StatusLacuna = "aberta",
+  ): Promise<readonly LacunaConsulta[]> {
     const rows = await this.db
       .select()
       .from(schema.lacunaConsulta)
-      .where(eq(schema.lacunaConsulta.agentId, agentId))
+      .where(
+        and(eq(schema.lacunaConsulta.agentId, agentId), eq(schema.lacunaConsulta.status, status)),
+      )
       .orderBy(desc(schema.lacunaConsulta.createdAt))
       .limit(limite);
-    return rows.map((row) => ({
-      id: row.id,
-      agentId: row.agentId,
-      pergunta: row.pergunta,
-      tipo: row.tipo === "ferramenta" ? "ferramenta" : "skill_gap",
-      contrato: row.contrato ?? null,
-      createdAt: row.createdAt,
-    }));
+    return rows.map(toLacuna);
   }
 }

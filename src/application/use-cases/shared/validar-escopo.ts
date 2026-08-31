@@ -184,6 +184,8 @@ const validarSelect = (
           tabela.nome,
           escopo.tabelas,
         ),
+        source: "sql",
+        stage: "validar_escopo",
       });
     }
   }

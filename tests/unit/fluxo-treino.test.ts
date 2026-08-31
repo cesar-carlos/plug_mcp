@@ -409,4 +409,69 @@ describe("fluxo guiado de treino", () => {
     expect(fluxo.pacoteMinimo).toBe(true);
     expect(fluxo.passos.find((passo) => passo.id === "criar_skill")?.hint).toMatch(/Pacote mínimo/);
   });
+
+  it("CAST de data não desliga pacoteMinimo; SUM sem definição não bloqueia podeLiberar", () => {
+    const castOnly = {
+      id: "1",
+      agentId,
+      slug: "a",
+      nome: "A",
+      descricao: "d",
+      sqlModelo: "SELECT CAST(p.dt AS date) AS dataref FROM produto p WHERE p.codprod > 0",
+      params: [],
+      versao: 1,
+      pacoteVersao: 2,
+      motivoRevalidacao: null,
+      consultaSemantica: null,
+      politicaConsulta: null,
+      autorUsuarioId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: "validada" as const,
+      escopo: {
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["dt"] },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [{ alias: "dataref", expr: "CAST(p.dt AS date)" }],
+        pacoteVersao: 2,
+      },
+    };
+    expect(
+      buildFluxoTreino({
+        treinado: true,
+        skill: castOnly,
+        conflitosPendentes: 0,
+        perfilCompleto: true,
+      }).pacoteMinimo,
+    ).toBe(true);
+
+    const withSum = {
+      ...castOnly,
+      sqlModelo: "SELECT SUM(p.valor) AS SaldoReceber FROM produto p WHERE p.codprod > 0",
+      escopo: {
+        ...castOnly.escopo,
+        colunasPorTabela: { produto: ["valor"] },
+        metricasSaida: [{ alias: "SaldoReceber", expr: "SUM(p.valor)" }],
+      },
+    };
+    const fluxo = buildFluxoTreino({
+      treinado: true,
+      skill: withSum,
+      conflitosPendentes: 0,
+      perfilCompleto: true,
+      faltas: [
+        {
+          kind: "kpi" as const,
+          alvo: "SaldoReceber",
+          message: "Medida SaldoReceber sem definição.",
+          nextAction: "atualizar_skill" as const,
+        },
+      ],
+    });
+    expect(fluxo.pacoteMinimo).toBe(false);
+    expect(fluxo.podeLiberar).toBe(true);
+    expect(fluxo.proximoPasso).toBe("publicar_skill");
+  });
 });

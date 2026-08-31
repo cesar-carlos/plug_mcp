@@ -38,16 +38,23 @@ describe("telemetria de buscar_contexto", () => {
       gap: "none",
       slotNarrativa: false,
     });
+    const naoPublicada = formatarTagsTelemetriaBusca({
+      ...sample,
+      gap: "SKILL_NOT_PUBLISHED",
+      listarSkills: false,
+    });
     const agregado = agregarTelemetriaBusca([
       { tool: "consultar_dados", sqlEnviado: "SELECT 1" },
       { tool: "buscar_contexto", sqlEnviado: tags },
       { tool: "buscar_contexto", sqlEnviado: permitido },
+      { tool: "buscar_contexto", sqlEnviado: naoPublicada },
     ]);
     expect(agregado).toEqual({
-      total: 2,
+      total: 3,
       consultaPermitida: 1,
       skillGap: 1,
-      slotNarrativa: 1,
+      skillNotPublished: 1,
+      slotNarrativa: 2,
     });
   });
 });

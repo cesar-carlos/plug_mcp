@@ -1,11 +1,21 @@
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
-import { paresDoRelacionamento, type EscopoSkill } from "../../../domain/entities/escopo.js";
+import {
+  chaveRelacionamentoEscopo,
+  paresDoRelacionamento,
+  type EscopoSkill,
+} from "../../../domain/entities/escopo.js";
 import { tipoCompativelComPapel } from "../../../domain/entities/merge-fato.js";
+import {
+  colunaPapelMedida,
+  escopoTemMedida,
+  metricasMedidaSemDefinicao,
+} from "../../../domain/entities/metrica-medida.js";
 import {
   fingerprintPares,
   fingerprintParesInvertidos,
   labelPares,
+  relacoesSemSubconjuntos,
 } from "../../../domain/entities/relacionamento.js";
 import type { OrigemFato } from "../../../domain/entities/grafo.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
@@ -17,16 +27,21 @@ const ORIGENS_OK = new Set<OrigemFato>(["validado_execucao", "confirmado_usuario
 export type FaltaNextAction =
   | "treinar_sql"
   | "confirmar_relacionamento"
+  | "remover_relacionamento"
   | "mapear_tabela"
   | "confirmar_coluna"
-  | "listar_conflitos";
+  | "listar_conflitos"
+  | "atualizar_skill";
 
 export interface FatoIncompleto {
-  readonly kind: "tabela" | "coluna" | "join" | "perfil" | "conflito";
+  readonly kind: "tabela" | "coluna" | "join" | "perfil" | "conflito" | "kpi";
   readonly message: string;
   readonly alvo: string;
   readonly nextAction: FaltaNextAction;
 }
+
+export const faltaOrientaSemBloquear = (falta: FatoIncompleto): boolean =>
+  falta.kind === "kpi" || falta.nextAction === "remover_relacionamento";
 
 const lower = (value: string): string => value.trim().toLowerCase();
 
@@ -103,11 +118,29 @@ export const listarFatosIncompletos = async (
     }
   }
   const rels = await grafo.listRelacionamentos(agentId);
-  for (const rel of escopo.relacionamentos) {
+  const relsComPares = escopo.relacionamentos.map((rel) => ({
+    ...rel,
+    pares: paresDoRelacionamento(rel),
+  }));
+  const semSubset = relacoesSemSubconjuntos(relsComPares);
+  const keepKeys = new Set(semSubset.map((rel) => chaveRelacionamentoEscopo(rel)));
+  for (const rel of relsComPares) {
+    const pares = rel.pares;
+    const label = labelPares(rel.tabelaOrigem, rel.tabelaDestino, pares);
+    const chave = chaveRelacionamentoEscopo(rel);
+    if (!keepKeys.has(chave)) {
+      out.push(
+        falta(
+          "join",
+          label,
+          `JOIN isolado ${label} está coberto por um composto. Chame remover_relacionamento (fingerprint / pares[]).`,
+          "remover_relacionamento",
+        ),
+      );
+      continue;
+    }
     const origemTabela = await grafo.findTabelaByNome(agentId, rel.tabelaOrigem);
     const destinoTabela = await grafo.findTabelaByNome(agentId, rel.tabelaDestino);
-    const pares = paresDoRelacionamento(rel);
-    const label = labelPares(rel.tabelaOrigem, rel.tabelaDestino, pares);
     if (!origemTabela || !destinoTabela) {
       out.push(
         falta("join", label, `JOIN ${label} não confirmado no grafo.`, "confirmar_relacionamento"),
@@ -152,6 +185,56 @@ export const listarFatosIncompletos = async (
       );
     }
   }
+  for (const metrica of metricasMedidaSemDefinicao(escopo)) {
+    out.push(
+      falta(
+        "kpi",
+        metrica.alias,
+        `Medida ${metrica.alias} sem definição. Overlay em atualizar_skill.metricasSaida ou registrar_aprendizado tipo=metrica (só alias já no SELECT). Não invente a definição.`,
+        "atualizar_skill",
+      ),
+    );
+  }
+  for (const nome of escopo.tabelas) {
+    const tabela = await grafo.findTabelaByNome(agentId, nome);
+    if (!tabela) {
+      continue;
+    }
+    const cols = await grafo.listColunas(tabela.id);
+    const wanted = escopo.colunasPorTabela[nome] ?? [];
+    for (const colunaNome of wanted) {
+      const coluna = cols.find((item) => lower(item.nome) === lower(colunaNome));
+      if (!coluna || !colunaPapelMedida(coluna.papel)) {
+        continue;
+      }
+      const coberta = escopo.metricasSaida.some(
+        (item) =>
+          item.alias.toLowerCase() === colunaNome.toLowerCase() && Boolean(item.definicao?.trim()),
+      );
+      const temAlias = escopo.metricasSaida.some(
+        (item) => item.alias.toLowerCase() === colunaNome.toLowerCase(),
+      );
+      if (!coberta && !temAlias) {
+        continue;
+      }
+      if (!coberta) {
+        const alvo = `${nome}.${colunaNome}`;
+        const jaTem = out.some(
+          (item) => item.kind === "kpi" && item.alvo.toLowerCase() === colunaNome.toLowerCase(),
+        );
+        if (!jaTem) {
+          out.push(
+            falta(
+              "kpi",
+              colunaNome,
+              `Medida ${alvo} sem definição em metricasSaida. Overlay via atualizar_skill.metricasSaida.`,
+              "atualizar_skill",
+            ),
+          );
+        }
+      }
+    }
+  }
   return out;
 };
 
@@ -164,7 +247,9 @@ export const exigirEscopoNoGrafo = async (
     exigirCardinalidade: false,
     exigirTipoColuna: false,
   });
-  const bloqueantes = faltas.filter((item) => item.kind !== "perfil");
+  const bloqueantes = faltas.filter(
+    (item) => item.kind !== "perfil" && !faltaOrientaSemBloquear(item),
+  );
   if (bloqueantes.length === 0) {
     return;
   }
@@ -184,10 +269,11 @@ export const exigirPacotePublicavel = async (
 ): Promise<void> => {
   const faltas = await listarFatosIncompletos(grafo, agentId, escopo, {
     exigirCardinalidade: escopo.relacionamentos.length > 0,
-    exigirTipoColuna: escopo.metricasSaida.length > 0,
+    exigirTipoColuna: escopoTemMedida(escopo),
   });
-  if (faltas.length > 0) {
-    const perfil = faltas.filter((item) => item.kind === "perfil");
+  const bloqueantes = faltas.filter((item) => !faltaOrientaSemBloquear(item));
+  if (bloqueantes.length > 0) {
+    const perfil = bloqueantes.filter((item) => item.kind === "perfil");
     throw new DomainError({
       code: perfil.length > 0 ? ERROR_CODES.PERFIL_AUSENTE : ERROR_CODES.PACOTE_INCOMPLETO,
       message:

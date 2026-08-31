@@ -1,4 +1,8 @@
 import {
+  escopoTemMedida,
+  metricasMedidaSemDefinicao,
+} from "../../../domain/entities/metrica-medida.js";
+import {
   parseParametroSkillList,
   type ParametroSkill,
   type Skill,
@@ -6,6 +10,7 @@ import {
 } from "../../../domain/entities/skill.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import {
+  faltaOrientaSemBloquear,
   listarFatosIncompletos,
   type FaltaNextAction,
   type FatoIncompleto,
@@ -168,7 +173,8 @@ export const buildFluxoTreino = (input: {
   const conflitosOk = input.conflitosPendentes === 0;
   const perfilOk = input.perfilCompleto !== false;
   const faltas = input.faltas ?? [];
-  const primeiraFalta = faltas[0];
+  const primeiraFaltaBloqueante = faltas.find((item) => !faltaOrientaSemBloquear(item));
+  const primeiraFalta = primeiraFaltaBloqueante ?? faltas[0];
 
   const treinar = input.treinado
     ? passo("treinar_sql", "feito", "SQL treinado no grafo.")
@@ -284,16 +290,16 @@ export const buildFluxoTreino = (input: {
   } else if (skill?.status === "publicada") {
     passoAtual = "publicar_skill";
     proximoPasso = null;
-  } else if (skill?.status === "validada" && primeiraFalta) {
+  } else if (skill?.status === "validada" && primeiraFaltaBloqueante) {
     passoAtual = "publicar_skill";
-    proximoPasso = primeiraFalta.nextAction;
+    proximoPasso = primeiraFaltaBloqueante.nextAction;
   } else {
     passoAtual = skill ? "publicar_skill" : "treinar_sql";
     proximoPasso = null;
   }
 
   const pacoteMinimo = skill
-    ? skill.escopo.relacionamentos.length === 0 && skill.escopo.metricasSaida.length === 0
+    ? skill.escopo.relacionamentos.length === 0 && !escopoTemMedida(skill.escopo)
     : true;
 
   return {
@@ -329,8 +335,24 @@ const fluxoComConflitos = async (
   if (skill && skill.escopo.tabelas.length > 0) {
     faltas = await listarFatosIncompletos(grafo, agentId, skill.escopo, {
       exigirCardinalidade: skill.escopo.relacionamentos.length > 0,
-      exigirTipoColuna: skill.escopo.metricasSaida.length > 0,
+      exigirTipoColuna: escopoTemMedida(skill.escopo),
     });
+    if (
+      metricasMedidaSemDefinicao(skill.escopo).length === 0 &&
+      escopoTemMedida(skill.escopo) &&
+      !skill.consultaSemantica
+    ) {
+      faltas = [
+        ...faltas,
+        {
+          kind: "kpi",
+          alvo: "consultaSemantica",
+          message:
+            "KPI certificado sem consultaSemantica. Persista o IR em atualizar_skill.consultaSemantica (métrica + colunaData).",
+          nextAction: "atualizar_skill",
+        },
+      ];
+    }
     perfilCompleto = faltas.filter((item) => item.kind === "perfil").length === 0;
   }
   return {

@@ -46,4 +46,9 @@ export const STOPWORDS_BUSCA: ReadonlySet<string> = new Set([
   "diaria",
   "hoje",
   "agora",
+  "tente",
+  "fazer",
+  "erro",
+  "erros",
+  "servidor",
 ]);

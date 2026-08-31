@@ -9,9 +9,17 @@ export interface ErrorGuidance {
   readonly documentationUrl: string;
 }
 
-const DOC = "https://mcp.se7esistemassinop.com.br/docs/mcp/error-mapping.md";
+export const ERROR_MAPPING_DOC_PATH = "/docs/mcp/error-mapping.md";
 
-const doc = (anchor: string): string => `${DOC}#${anchor}`;
+const doc = (anchor: string): string => `${ERROR_MAPPING_DOC_PATH}#${anchor}`;
+
+export const absoluteErrorMappingUrl = (publicBaseUrl: string, pathOrUrl: string): string => {
+  if (/^https?:\/\//i.test(pathOrUrl)) {
+    return pathOrUrl;
+  }
+  const origin = publicBaseUrl.replace(/\/$/, "");
+  return pathOrUrl.startsWith("/") ? `${origin}${pathOrUrl}` : `${origin}/${pathOrUrl}`;
+};
 
 const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
   [ERROR_CODES.UNAUTHENTICATED]: {
@@ -23,6 +31,21 @@ const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
     category: "scope",
     nextAction: "listar_skills",
     documentationUrl: doc("skill_gap"),
+  },
+  [ERROR_CODES.TABELA_FORA_DO_ESCOPO]: {
+    category: "scope",
+    nextAction: "explorar_tabelas",
+    documentationUrl: doc("tabela_fora_do_escopo"),
+  },
+  [ERROR_CODES.COLUNA_FORA_DO_ESCOPO]: {
+    category: "scope",
+    nextAction: "obter_skill",
+    documentationUrl: doc("coluna_fora_do_escopo"),
+  },
+  [ERROR_CODES.JOIN_DESCONHECIDO]: {
+    category: "scope",
+    nextAction: "confirmar_relacionamento",
+    documentationUrl: doc("join_desconhecido"),
   },
   [ERROR_CODES.SKILL_NOT_PUBLISHED]: {
     category: "scope",
@@ -103,6 +126,9 @@ export const guidanceFor = (code: ErrorCode, source?: string): ErrorGuidance | u
   }
   if (code === ERROR_CODES.ACCESS_REVOKED && source === "client_token_rpc") {
     return { ...base, nextAction: "atualizar_credencial_plug" };
+  }
+  if (code === ERROR_CODES.TABELA_FORA_DO_ESCOPO && source === "sql") {
+    return { ...base, nextAction: "obter_skill" };
   }
   return base;
 };

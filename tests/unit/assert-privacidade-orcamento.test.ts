@@ -87,6 +87,31 @@ describe("pré-check de privacidade e orçamento", () => {
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.CONSULTA_ORCAMENTO }));
   });
 
+  it("CONSULTA_ORCAMENTO quando maxTabelas estoura", () => {
+    const ast = tryParseSelect(
+      "SELECT p.codprod FROM produto p INNER JOIN filial f ON f.id = p.filial WHERE p.codprod > 0",
+      "mssql",
+    );
+    expect(() =>
+      assertOrcamentoConsulta({
+        ast,
+        politica: { maxTabelas: 1 },
+        maxRows: 50,
+      }),
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.CONSULTA_ORCAMENTO }));
+  });
+
+  it("política null não estoura orçamento", () => {
+    const ast = tryParseSelect("SELECT p.codprod FROM produto p WHERE p.codprod > 0", "mssql");
+    expect(
+      assertOrcamentoConsulta({
+        ast,
+        politica: null,
+        maxRows: 200,
+      }).maxRows,
+    ).toBe(200);
+  });
+
   it("KPI_DESALINHADO se o SQL omite status declarado", () => {
     const ast = tryParseSelect(
       "SELECT SUM(r.valor) AS total FROM receber r WHERE r.empresa = :empresa",

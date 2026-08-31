@@ -92,4 +92,38 @@ describe("resolverSkillsPorSinonimos", () => {
     );
     expect(found).toHaveLength(0);
   });
+
+  it("casa acento via stripAccents + stem", () => {
+    const found = resolverSkillsPorSinonimos(
+      "títulos em aberto",
+      [
+        {
+          id: "syn",
+          agentId: "agent",
+          termo: "titulo",
+          alvoTipo: "skill",
+          alvoId: skill.id,
+        },
+      ],
+      [skill],
+    );
+    expect(found.map((item) => item.id)).toEqual([skill.id]);
+  });
+
+  it("termo curto não casa no meio de outra palavra", () => {
+    const found = resolverSkillsPorSinonimos(
+      "titulo comercial",
+      [
+        {
+          id: "syn",
+          agentId: "agent",
+          termo: "tit",
+          alvoTipo: "skill",
+          alvoId: skill.id,
+        },
+      ],
+      [skill],
+    );
+    expect(found).toHaveLength(0);
+  });
 });

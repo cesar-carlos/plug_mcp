@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
+import {
+  ERROR_MAPPING_DOC_PATH,
+  absoluteErrorMappingUrl,
+} from "../../src/domain/errors/error-next-action.js";
 import { requireAcessoAprovado } from "../../src/application/use-cases/shared/guards.js";
 import { mapPlugServerFailure } from "../../src/infrastructure/plug-server/map-plug-error.js";
 import { errorResult } from "../../src/infrastructure/mcp/tool-result.js";
@@ -31,7 +35,10 @@ describe("envelope de erro", () => {
     }).toJson();
     expect(json.error.category).toBe("scope");
     expect(json.error.nextAction).toBe("listar_skills");
-    expect(json.error.documentationUrl).toMatch(/error-mapping\.md#skill_gap/);
+    expect(json.error.documentationUrl).toBe(`${ERROR_MAPPING_DOC_PATH}#skill_gap`);
+    expect(absoluteErrorMappingUrl("https://mcp.example", json.error.documentationUrl ?? "")).toBe(
+      "https://mcp.example/docs/mcp/error-mapping.md#skill_gap",
+    );
   });
 
   it("ACCESS_REVOKED do cofre aponta verificar_acesso", () => {
@@ -76,9 +83,35 @@ describe("envelope de erro", () => {
       testConfig(),
     );
     const payload = JSON.parse(result.content[0]!.text) as {
-      error: { nextAction: string; category: string };
+      error: { nextAction: string; category: string; documentationUrl: string };
     };
     expect(payload.error.nextAction).toBe("inspecionar_consulta");
     expect(payload.error.category).toBe("privacy");
+    expect(payload.error.documentationUrl).toBe(
+      `${testConfig().PUBLIC_BASE_URL}${ERROR_MAPPING_DOC_PATH}#privacidade_negada`,
+    );
+  });
+
+  it("TABELA_FORA_DO_ESCOPO do treino aponta explorar_tabelas", () => {
+    const json = new DomainError({
+      code: ERROR_CODES.TABELA_FORA_DO_ESCOPO,
+      message: "fora",
+      hint: "explorar",
+      source: "mcp",
+      stage: "descobrir_tabela",
+    }).toJson();
+    expect(json.error.category).toBe("scope");
+    expect(json.error.nextAction).toBe("explorar_tabelas");
+    expect(json.error.documentationUrl).toMatch(/#tabela_fora_do_escopo/);
+  });
+
+  it("TABELA_FORA_DO_ESCOPO do SQL aponta obter_skill", () => {
+    const json = new DomainError({
+      code: ERROR_CODES.TABELA_FORA_DO_ESCOPO,
+      message: "fora",
+      hint: "pacote",
+      source: "sql",
+    }).toJson();
+    expect(json.error.nextAction).toBe("obter_skill");
   });
 });

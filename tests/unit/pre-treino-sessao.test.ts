@@ -27,6 +27,9 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/Aceita skill validada/i);
     expect(PRE_TREINO_SESSAO).toContain("listar_conflitos");
     expect(PRE_TREINO_SESSAO).toContain("conhecimentos[]");
+    expect(PRE_TREINO_SESSAO).toMatch(/FTS\/ILIKE/);
+    expect(PRE_TREINO_SESSAO).toMatch(/não embeddings\/RAG/);
+    expect(PRE_TREINO_SESSAO).toMatch(/stem une inflexão/);
     expect(PRE_TREINO_SESSAO).toContain("consultasExemplo");
     expect(PRE_TREINO_SESSAO).toContain("consultasAprendidas[].id");
     expect(PRE_TREINO_SESSAO).toContain("consultaSemanticaSugerida");
@@ -34,7 +37,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toContain("pacoteMinimo");
     expect(PRE_TREINO_SESSAO).toMatch(/tipo=sinonimo/);
     expect(PRE_TREINO_SESSAO).toMatch(/consultaPermitida/);
-    expect(PRE_TREINO_SESSAO).toContain("faltas");
+    expect(PRE_TREINO_SESSAO).toContain("guia://paginacao");
+    expect(PRE_TREINO_SESSAO).toContain("skill://");
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
   });
 

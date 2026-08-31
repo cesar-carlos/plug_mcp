@@ -345,6 +345,7 @@ export class ListarMetricasAgente {
       total: number;
       consultaPermitida: number;
       skillGap: number;
+      skillNotPublished: number;
       slotNarrativa: number;
     };
   }> {
@@ -423,12 +424,13 @@ export class ListarLacunas {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; limite?: number },
+    input: { acessoId?: string; limite?: number; status?: "aberta" | "arquivada" },
   ): Promise<{
     success: true;
     lacunas: {
       id: string;
       tipo: string;
+      status: string;
       pergunta: string;
       contrato: Record<string, unknown> | null;
       createdAt: string;
@@ -437,12 +439,14 @@ export class ListarLacunas {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const limite = Math.min(Math.max(1, input.limite ?? 20), 100);
-    const rows = await this.aprendizado.listarLacunas(acesso.agentId, limite);
+    const status = input.status ?? "aberta";
+    const rows = await this.aprendizado.listarLacunas(acesso.agentId, limite, status);
     return {
       success: true,
       lacunas: rows.map((row) => ({
         id: row.id,
         tipo: row.tipo,
+        status: row.status,
         pergunta: row.pergunta,
         contrato: row.contrato,
         createdAt: row.createdAt.toISOString(),

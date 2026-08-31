@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   aplicarDerivaEsquema,
+  aplicarDerivaTabelaNoGrafo,
   assinaturaTabela,
+  derivaQuebraPacote,
 } from "../../src/application/use-cases/shared/schema-drift.js";
 import {
   InMemoryGrafoRepository,
@@ -84,5 +86,98 @@ describe("deriva de esquema", () => {
     expect((await skills.findById(outra.id))?.status).toBe("publicada");
     expect(await cache.get(`mcp:query:${agentId}:abc`)).toBeNull();
     expect(await cache.get("mcp:query:other-agent:xyz")).not.toBeNull();
+  });
+
+  it("tipo uuid→date com papel data não quebra o pacote; remoção sim", () => {
+    const anterior = assinaturaTabela({
+      colunas: [
+        { nome: "DataLancamento", tipo: "uniqueidentifier", nullable: true },
+        { nome: "lixo", tipo: "varchar", nullable: true },
+      ],
+      relacionamentos: [],
+    });
+    const atual = assinaturaTabela({
+      colunas: [{ nome: "DataLancamento", tipo: "date", nullable: true }],
+      relacionamentos: [],
+    });
+    expect(
+      derivaQuebraPacote({
+        anterior,
+        atual,
+        colunasPacote: [{ nome: "DataLancamento", tipo: "date", papel: "data" }],
+      }),
+    ).toBe(false);
+    const semColuna = assinaturaTabela({
+      colunas: [{ nome: "outra", tipo: "int", nullable: false }],
+      relacionamentos: [],
+    });
+    expect(
+      derivaQuebraPacote({
+        anterior,
+        atual: semColuna,
+        colunasPacote: [{ nome: "DataLancamento", tipo: "date", papel: "data" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("remap de tipo de data no grafo não rebaixa skill validada", async () => {
+    const grafo = new InMemoryGrafoRepository();
+    const skills = new InMemorySkillRepository();
+    const { tabela } = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaReceber",
+      origem: "validado_execucao",
+      autorUsuarioId: null,
+    });
+    await grafo.mergeColuna({
+      tabelaId: tabela.id,
+      nome: "DataLancamento",
+      tipo: "uniqueidentifier",
+      papel: "data",
+      origem: "validado_execucao",
+      autorUsuarioId: null,
+    });
+    await grafo.mergeColuna({
+      tabelaId: tabela.id,
+      nome: "CatalogoLargo",
+      tipo: "varchar",
+      origem: "validado_execucao",
+      autorUsuarioId: null,
+    });
+    const skill = await skills.create({
+      agentId,
+      slug: "receber",
+      nome: "Receber",
+      descricao: "t",
+      sqlModelo: "SELECT r.DataLancamento FROM ContaReceber r WHERE r.DataLancamento IS NOT NULL",
+      escopo: {
+        tabelas: ["ContaReceber"],
+        colunasPorTabela: { ContaReceber: ["DataLancamento"] },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: ["DataLancamento"],
+        metricasSaida: [],
+        pacoteVersao: 2,
+      },
+      autorUsuarioId: null,
+    });
+    await skills.setStatus(skill.id, "validada");
+    await aplicarDerivaTabelaNoGrafo({ grafo, skills, agentId, tabelaNome: "ContaReceber" });
+    await grafo.mergeColuna({
+      tabelaId: tabela.id,
+      nome: "DataLancamento",
+      tipo: "date",
+      papel: "data",
+      origem: "validado_execucao",
+      autorUsuarioId: null,
+    });
+    const result = await aplicarDerivaTabelaNoGrafo({
+      grafo,
+      skills,
+      agentId,
+      tabelaNome: "ContaReceber",
+    });
+    expect(result.drifted).toBe(false);
+    expect((await skills.findById(skill.id))?.status).toBe("validada");
   });
 });

@@ -2,7 +2,7 @@
 
 O cliente MCP usa `Authorization: Bearer <token_mcp>`. Este servidor não publica metadados de Authorization Server.
 
-No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (consultor de gestão; SQL no **escopo da skill publicada** — treino grava o grafo; consulta usa o pacote). O protocolo só reenvia isso no `initialize`. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos) se o host não reinsere `instructions`. Após deploy, reconecte o cliente: o catálogo `tools/list` pode estar cacheado.
+No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (consultor de gestão; SQL no **escopo da skill publicada** — treino grava o grafo; consulta usa o pacote). O protocolo só reenvia isso no `initialize`. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos) se o host não reinsere `instructions`. Após deploy, reconecte o cliente: o catálogo `tools/list` pode estar cacheado. O servidor envia `notifications/tools/list_changed` no `initialize` autenticado se SHA/versão do processo mudou. Resources: `guia://paginacao`, `guia://dialeto/{dialeto}`, `skill://{agentId}/{slug}` (só publicada).
 
 ## Fluxo
 

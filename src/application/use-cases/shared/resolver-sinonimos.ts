@@ -1,9 +1,14 @@
 import type { Sinonimo } from "../../../domain/entities/aprendizado.js";
 import type { Skill } from "../../../domain/entities/skill.js";
+import { tokensCapacidade } from "./cobertura-skill.js";
 
 export const termoSinonimoNaQuery = (query: string, termo: string): boolean => {
-  const t = termo.trim().toLowerCase();
-  return t.length > 0 && query.toLowerCase().includes(t);
+  const stemsTermo = tokensCapacidade(termo);
+  if (stemsTermo.length === 0) {
+    return false;
+  }
+  const stemsQuery = new Set(tokensCapacidade(query));
+  return stemsTermo.every((stem) => stemsQuery.has(stem));
 };
 
 export const resolverSkillsPorSinonimos = (

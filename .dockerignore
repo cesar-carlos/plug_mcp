@@ -7,5 +7,4 @@ coverage
 .cursor
 .vscode
 tests
-docs
 drizzle/meta

@@ -160,6 +160,11 @@ export const registerPreTreinoPrompt = (server: McpServer): void => {
   );
 };
 
+export const GUIA_PAGINACAO_URI = "guia://paginacao";
+
+export const urisGuiaDialeto = (): readonly string[] =>
+  DIALETOS.map((dialeto) => `guia://dialeto/${dialeto}`);
+
 export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts): void => {
   server.registerResource(
     "skill",
@@ -237,7 +242,7 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
 
   server.registerResource(
     "guia-paginacao",
-    "guia://paginacao",
+    GUIA_PAGINACAO_URI,
     {
       description: "Regras de paginação MCP: consulta única limitada vs options.page + page_size.",
       mimeType: "text/plain",

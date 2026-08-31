@@ -15,6 +15,12 @@ describe("health versionado", () => {
       expect(typeof res.body.version).toBe("string");
       expect(typeof res.body.sha).toBe("string");
       expect(typeof res.body.uptimeSec).toBe("number");
+      const docs = await request(app).get("/docs/mcp/error-mapping.md");
+      expect(docs.status).toBe(200);
+      expect(String(docs.headers["content-type"])).toMatch(/markdown/);
+      expect(docs.text).toContain("# Mapeamento de erros");
+      expect(docs.text).toContain("TABELA_FORA_DO_ESCOPO");
+      expect(docs.text).toContain("SKILL_GAP");
       const ready = await request(app).get("/ready");
       expect(ready.status).toBe(200);
       expect(ready.body.status).toBe("ready");

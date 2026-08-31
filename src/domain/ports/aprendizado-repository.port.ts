@@ -1,4 +1,10 @@
-import type { ConsultaAprendida, LacunaConsulta, Sinonimo } from "../entities/aprendizado.js";
+import type {
+  ConsultaAprendida,
+  LacunaConsulta,
+  Sinonimo,
+  StatusLacuna,
+  TipoLacuna,
+} from "../entities/aprendizado.js";
 import type { HitBusca } from "../entities/hit-busca.js";
 import type { ParametroSkill } from "../entities/skill.js";
 
@@ -36,8 +42,13 @@ export interface AprendizadoRepositoryPort {
   registrarLacuna(
     agentId: string,
     pergunta: string,
-    tipo?: "skill_gap" | "ferramenta",
+    tipo?: TipoLacuna,
     contrato?: Record<string, unknown> | null,
   ): Promise<LacunaConsulta>;
-  listarLacunas(agentId: string, limite: number): Promise<readonly LacunaConsulta[]>;
+  arquivarLacunaSkillGap(agentId: string, pergunta: string): Promise<number>;
+  listarLacunas(
+    agentId: string,
+    limite: number,
+    status?: StatusLacuna,
+  ): Promise<readonly LacunaConsulta[]>;
 }

@@ -67,6 +67,7 @@ export interface AgregadoBusca {
   readonly total: number;
   readonly consultaPermitida: number;
   readonly skillGap: number;
+  readonly skillNotPublished: number;
   readonly slotNarrativa: number;
 }
 
@@ -76,6 +77,7 @@ export const agregarTelemetriaBusca = (
   let total = 0;
   let consultaPermitida = 0;
   let skillGap = 0;
+  let skillNotPublished = 0;
   let slotNarrativa = 0;
   for (const row of rows) {
     if (row.tool !== "buscar_contexto") {
@@ -92,9 +94,12 @@ export const agregarTelemetriaBusca = (
     if (parsed.gap === "SKILL_GAP") {
       skillGap += 1;
     }
+    if (parsed.gap === "SKILL_NOT_PUBLISHED") {
+      skillNotPublished += 1;
+    }
     if (parsed.slotNarrativa) {
       slotNarrativa += 1;
     }
   }
-  return { total, consultaPermitida, skillGap, slotNarrativa };
+  return { total, consultaPermitida, skillGap, skillNotPublished, slotNarrativa };
 };

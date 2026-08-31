@@ -66,6 +66,10 @@ describe("inspecionar_consulta", () => {
     await skills.setStatus(skill.id, "publicada");
     plug.sqlImpl = async () => ({
       columns: ["codcli", "nome"],
+      columnsMetadata: [
+        { name: "codcli", type: "int", nullable: false },
+        { name: "nome", type: "varchar", nullable: true },
+      ],
       rows: Array.from({ length: 120 }, (_, i) => ({
         codcli: i + 1,
         nome: "Pessoa",
@@ -108,6 +112,10 @@ describe("inspecionar_consulta", () => {
     expect(String(result.rows[0]?.nome)).toMatch(/^p_/);
     expect(result.rows.some((row) => Object.values(row).includes("Pessoa"))).toBe(false);
     expect(audit.entries.every((entry) => !String(entry.sqlEnviado).includes("Pessoa"))).toBe(true);
+    expect(result.columnsMetadata).toEqual([
+      { name: "codcli", type: "int", nullable: false },
+      { name: "nome", type: "varchar", nullable: true },
+    ]);
   });
 
   it("Firebird inspeciona só a consulta exemplo, sem SQL livre", async () => {

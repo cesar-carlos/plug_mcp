@@ -22,6 +22,8 @@ Envelope das tools:
 
 Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 
+`documentationUrl` aponta para `GET {PUBLIC_BASE_URL}/docs/mcp/error-mapping.md` (esta matriz, mesma origem do `/health`) mais a âncora do código. Sem HTML extra.
+
 ## Hub / RPC
 
 | Origem                        | `code`                                      | hint típico                                                                                                                                                                  |
@@ -85,7 +87,27 @@ Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 
 Avisos (não são throw): `LITERAL_TEXTO` (literal em WHERE/HAVING — prefira `:param`), `PLACEHOLDER_ESCOPO` (grafo tem coluna empresa/filial e o SQL não usa `:empresa`/`:filial`), `ESCOPO_CONSOLIDADO` (acesso sem empresa/filial default — o resultado junta todos os recortes), `TIMEZONE_INVALIDO` (`timezone` do acesso não é IANA; `asOf` cai em UTC), `PERFIL_QUERY_FALHOU` / `PERFIL_TETO` no treino/validação completo, `CATALOGO_TIPOS_AMBIGUOS` em `mapear_tabela`, `PERFIL_AUSENTE` em `obter_skill`/`skill://`, `CACHE` (dataDoResultado vs servidoEm), `INSPECAO` (amostra mascarada; não use para KPI), `CONSULTA_SEMANTICA` (SQL compilado dos elementos certificados), `KPI_DESALINHADO` (SQL livre omite status/data do KPI; código também existe em `ERROR_CODES`, mas o caminho de consulta emite **aviso**, não throw), `SCHEMA_DRIFT` (payload de treino/mapeamento; não throw).
 
-Campos opcionais do envelope (`source`, `stage`, `category`, `nextAction`, `documentationUrl`, `details`) vêm do throw ou do mapa em `error-next-action.ts`. Rate limit da tool MCP preenche `source: mcp` / `stage: rate_limit`. `ACCESS_REVOKED` com `source: client_agent_access` → `verificar_acesso`; com `source: client_token_rpc` → `atualizar_credencial_plug`. `retryable` só em pending/timeout/429/503.
+Campos opcionais do envelope (`source`, `stage`, `category`, `nextAction`, `documentationUrl`, `details`) vêm do throw ou do mapa em `error-next-action.ts`. Rate limit da tool MCP preenche `source: mcp` / `stage: rate_limit`. `ACCESS_REVOKED` com `source: client_agent_access` → `verificar_acesso`; com `source: client_token_rpc` → `atualizar_credencial_plug`. `TABELA_FORA_DO_ESCOPO` no treino (`descobrir_tabela`) → `explorar_tabelas`; no validador SQL → `obter_skill`. `retryable` só em pending/timeout/429/503.
+
+<a id="consulta_orcamento"></a>
+<a id="tabela_fora_do_escopo"></a>
+<a id="coluna_fora_do_escopo"></a>
+<a id="join_desconhecido"></a>
+<a id="skill_gap"></a>
+<a id="skill_not_published"></a>
+<a id="permission_denied"></a>
+<a id="access_revoked"></a>
+<a id="unauthenticated"></a>
+<a id="missing_client_token"></a>
+<a id="invalid_sql"></a>
+<a id="consulta_sem_recorte"></a>
+<a id="perfil_ausente"></a>
+<a id="pacote_incompleto"></a>
+<a id="fanout_nao_declarado"></a>
+<a id="privacidade_negada"></a>
+<a id="rate_limited"></a>
+<a id="agent_unavailable"></a>
+<a id="agent_access_pending"></a>
 
 `PERFIL_TETO` inclui `details` com a fase em que o orçamento parou,
 `queriesUsadas`, `queriesLimite`, `retomavel: true` e as colunas/JOINs ainda sem perfil completo.

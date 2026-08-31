@@ -19,6 +19,11 @@ import {
   type MetricaSaidaPatch,
 } from "../../domain/entities/escopo.js";
 import {
+  POLITICA_CONSULTA_DEFAULT,
+  parsePoliticaConsulta,
+  type PoliticaConsulta,
+} from "../../domain/entities/politica-consulta.js";
+import {
   fingerprintPares,
   fingerprintParesInvertidos,
   paresDeInput,
@@ -75,7 +80,6 @@ import {
 import { withHubAuth } from "./shared/hub-auth.js";
 import { guiaDialeto } from "./shared/guia-dialeto.js";
 import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
-import { parsePoliticaConsulta } from "../../domain/entities/politica-consulta.js";
 import {
   parseSensibilidadeColuna,
   type SensibilidadeColuna,
@@ -152,6 +156,9 @@ export interface ResumoPublicacao {
     readonly tipo: string;
   }[];
   readonly podeLiberar: boolean;
+  readonly politicaConsulta: PoliticaConsulta | null;
+  readonly politicaConsultaDefault: PoliticaConsulta;
+  readonly hintPolitica?: string;
 }
 
 const montarResumoPublicacao = (skill: Skill, podeLiberar: boolean): ResumoPublicacao => ({
@@ -175,6 +182,14 @@ const montarResumoPublicacao = (skill: Skill, podeLiberar: boolean): ResumoPubli
     tipo: param.tipo,
   })),
   podeLiberar,
+  politicaConsulta: skill.politicaConsulta,
+  politicaConsultaDefault: POLITICA_CONSULTA_DEFAULT,
+  ...(skill.politicaConsulta
+    ? {}
+    : {
+        hintPolitica:
+          "Skill sem politicaConsulta. Na publicação confirmada o servidor grava o default (maxRows/timeoutMs). Ajuste com atualizar_skill.politicaConsulta. O default não inventa recorte empresa/filial nem exige período.",
+      }),
 });
 
 export class CriarSkill {
@@ -578,7 +593,10 @@ export class PublicarSkill {
       });
     }
     await exigirPacotePublicavel(this.grafo, acesso.agentId, skill.escopo, skill.sqlModelo);
-    const updated = await this.skills.setStatus(skill.id, "publicada", skill.versao);
+    const comPolitica = skill.politicaConsulta
+      ? skill
+      : await this.skills.update(skill.id, { politicaConsulta: POLITICA_CONSULTA_DEFAULT });
+    const updated = await this.skills.setStatus(comPolitica.id, "publicada", comPolitica.versao);
     const after = await fluxoEFaltasForAgentSkill(this.grafo, acesso.agentId, updated);
     return {
       success: true,

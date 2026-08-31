@@ -74,6 +74,7 @@ export class InspecionarConsulta {
     maxRowsApplied: number;
     truncated: boolean;
     colunasMascaradas: readonly string[];
+    columnsMetadata?: readonly { name: string; type?: string; nullable?: boolean }[];
     sqlExecutado: string;
     avisos: { code: string; message: string }[];
   }> {
@@ -236,6 +237,7 @@ export class InspecionarConsulta {
         maxRowsApplied: INSPECAO_MAX_ROWS,
         truncated: result.rows.length >= INSPECAO_MAX_ROWS || result.truncated === true,
         colunasMascaradas: masked.colunasMascaradas,
+        columnsMetadata: result.columnsMetadata,
         sqlExecutado: sqlParaOdbc(sql),
         avisos: [
           ...(ast ? coletarAvisosValidacao(ast) : []),
@@ -318,6 +320,8 @@ export class DescobrirTabela {
         code: ERROR_CODES.TABELA_FORA_DO_ESCOPO,
         message: "Tabela fora das skills publicadas.",
         hint: "No treino use explorar_tabelas/mapear_tabela. Na consulta, só o pacote publicado.",
+        source: "mcp",
+        stage: "descobrir_tabela",
       });
     }
     const policy = await withHubAuth(this.sessions, uid, (accessToken) =>

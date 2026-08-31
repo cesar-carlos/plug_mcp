@@ -118,6 +118,7 @@ describe("montarConhecimentos", () => {
       tabelas: [],
       filtro: filtroGap({ skillIdsCandidatos: new Set(["s-regra"]) }),
       skillIdsRecuperados: new Set(skills.map((item) => item.id)),
+      anotacaoIdsRecuperados: new Set(["z-regra"]),
     });
     expect(hits).toHaveLength(CONHECIMENTOS_TETO);
     expect(hits.some((item) => item.tipo === "regra" && item.id === "z-regra")).toBe(true);
@@ -193,6 +194,7 @@ describe("montarConhecimentos", () => {
       tabelas: [],
       filtro: filtroGap({ skillIdsCandidatos: new Set(["s-kpi"]) }),
       skillIdsRecuperados: new Set(skills.map((item) => item.id)),
+      anotacaoIdsRecuperados: new Set(["z-metrica"]),
     });
     expect(hits).toHaveLength(CONHECIMENTOS_TETO);
     expect(hits.some((item) => item.tipo === "metrica" && item.id === "z-metrica")).toBe(true);
@@ -228,13 +230,27 @@ describe("montarConhecimentos", () => {
     expect(hits[0]?.id).toBe("s-high");
     expect(hits[0]?.score).toBeGreaterThan(hits[1]?.score ?? 0);
   });
+
+  it("omite nota sem recover FTS nem overlap de stem", () => {
+    const hits = montarConhecimentos({
+      query: "alpha",
+      skills: [],
+      anotacoes: [notaOf("n-ruido", "formula sem o termo da pergunta")],
+      consultas: [],
+      tabelas: [],
+      filtro: filtroGap({ skillIdsCandidatos: new Set(["skill-regra"]) }),
+      skillIdsRecuperados: new Set(),
+    });
+    expect(hits.some((item) => item.id === "n-ruido")).toBe(false);
+  });
 });
 
 describe("hintRegraParcial", () => {
   it("cobertura parcial sem anotação ainda pede sinônimo e obter_skill", () => {
-    const hint = hintRegraParcial("parcial", [], true);
+    const hint = hintRegraParcial("parcial", [], true, ["faturamentoabcxyz"]);
     expect(hint).toMatch(/obter_skill/);
     expect(hint).toMatch(/sinonimo/);
+    expect(hint).toMatch(/faturamentoabcxyz/);
     expect(hintRegraParcial("parcial", [], false)).toBeUndefined();
     expect(hintRegraParcial("completa", [], true)).toBeUndefined();
     expect(hintRegraParcial("desconhecida", [], true)).toBeUndefined();
@@ -259,5 +275,31 @@ describe("hintRegraParcial", () => {
     );
     expect(hint).toMatch(/obter_skill/);
     expect(hint).toMatch(/sinonimo/);
+  });
+
+  it("não ranqueia consulta aprendida genérica numa pergunta de cruzamento", () => {
+    const hits = montarConhecimentos({
+      query: "Posso cruzar clientes e fornecedores em uma única consulta?",
+      skills: [],
+      anotacoes: [],
+      consultas: [
+        {
+          id: "c-ruido",
+          agentId: "agent",
+          skillIds: ["s1"],
+          pergunta: "tente fazer a consulta agora, para eu ver se existe erro no servidor",
+          sql: "SELECT 1",
+          paramsContrato: [],
+          execucoes: 1,
+          ultimaExecucao: agora,
+          status: "ativa",
+          autorUsuarioId: null,
+        },
+      ],
+      tabelas: [],
+      filtro: filtroGap(),
+      skillIdsRecuperados: new Set(),
+    });
+    expect(hits.some((item) => item.tipo === "consulta_aprendida")).toBe(false);
   });
 });

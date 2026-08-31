@@ -263,5 +263,17 @@ describe("ciclo de treino e publicação", () => {
     });
     expect(preview.publicado).toBe(false);
     expect(preview.resumoPublicacao.nome).toBe("Produtos");
+    expect(preview.resumoPublicacao.hintPolitica).toMatch(/atualizar_skill\.politicaConsulta/);
+    expect(preview.resumoPublicacao.politicaConsultaDefault.maxRows).toBe(500);
+    const published = await new PublicarSkill(acessos, skills, grafo).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      confirmadoPeloUsuario: true,
+    });
+    expect(published.publicado).toBe(true);
+    expect(published.skill.politicaConsulta).toMatchObject({
+      maxRows: 500,
+      timeoutMs: 30_000,
+    });
   });
 });

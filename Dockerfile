@@ -55,6 +55,7 @@ RUN apk add --no-cache libstdc++ ca-certificates \
 COPY --from=node-base /usr/local/bin/node /usr/local/bin/node
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY docs/mcp/error-mapping.md ./docs/mcp/error-mapping.md
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh && chown -R mcp:mcp /app
 USER mcp

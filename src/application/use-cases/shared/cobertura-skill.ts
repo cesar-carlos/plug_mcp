@@ -1,20 +1,12 @@
 import type { Skill } from "../../../domain/entities/skill.js";
 import type { Sinonimo } from "../../../domain/entities/aprendizado.js";
 import { STOPWORDS_BUSCA } from "../../../domain/entities/stopwords-busca.js";
+import { scoreStemOverlap, stemsDeTexto } from "../../../domain/entities/stem-portugues.js";
 
-const stripAccents = (value: string): string =>
-  value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-
-export const tokensCapacidade = (query: string): readonly string[] => {
-  const unique = [
-    ...new Set(
-      stripAccents(query)
-        .split(/[^a-z0-9]+/)
-        .filter((term) => term.length >= 3 && !STOPWORDS_BUSCA.has(term)),
-    ),
-  ];
-  return unique;
-};
+export const tokensCapacidade = (
+  query: string,
+  extraStop: ReadonlySet<string> = new Set(),
+): readonly string[] => stemsDeTexto(query, new Set([...STOPWORDS_BUSCA, ...extraStop]));
 
 export const haystackCertificado = (skill: Skill, sinonimos: readonly Sinonimo[] = []): string => {
   const synTermos = sinonimos
@@ -27,33 +19,38 @@ export const haystackCertificado = (skill: Skill, sinonimos: readonly Sinonimo[]
       );
     })
     .map((item) => item.termo);
-  const params = skill.params.map((param) => `${param.nome} ${param.descricao} ${param.tipo}`);
+  const params = skill.params.map((param) => `${param.nome} ${param.descricao}`);
   const metricas = skill.escopo.metricasSaida.map(
     (item) => `${item.alias} ${item.definicao ?? ""} ${item.grao ?? ""}`,
   );
-  return stripAccents(
-    `${skill.nome} ${skill.descricao} ${skill.slug} ${params.join(" ")} ${metricas.join(" ")} ${synTermos.join(" ")}`,
-  );
+  return `${skill.nome} ${skill.descricao} ${skill.slug} ${params.join(" ")} ${metricas.join(" ")} ${synTermos.join(" ")}`;
 };
+
+export interface CoberturaSkill {
+  readonly cobertura: "completa" | "parcial" | "desconhecida";
+  readonly termosEncontrados: string[];
+  readonly termosAusentes: string[];
+}
 
 export const coberturaDeSkill = (
   skill: Skill,
   query: string,
   sinonimos: readonly Sinonimo[] = [],
-): {
-  cobertura: "completa" | "parcial" | "desconhecida";
-  termosEncontrados: string[];
-} => {
+): CoberturaSkill => {
   const tokens = tokensCapacidade(query);
-  const text = haystackCertificado(skill, sinonimos);
-  const termosEncontrados = tokens.filter((token) => text.includes(token));
-  const cobertura: "completa" | "parcial" | "desconhecida" =
+  const hay = new Set(stemsDeTexto(haystackCertificado(skill, sinonimos), STOPWORDS_BUSCA));
+  const termosEncontrados = tokens.filter((token) => hay.has(token));
+  const termosAusentes = tokens.filter((token) => !hay.has(token));
+  const cobertura: CoberturaSkill["cobertura"] =
     tokens.length === 0
       ? "desconhecida"
-      : termosEncontrados.length === tokens.length
+      : termosAusentes.length === 0
         ? "completa"
         : termosEncontrados.length > 0
           ? "parcial"
           : "desconhecida";
-  return { cobertura, termosEncontrados };
+  return { cobertura, termosEncontrados, termosAusentes };
 };
+
+export const overlapCapacidade = (query: string, haystack: string): number =>
+  scoreStemOverlap(haystack, tokensCapacidade(query), STOPWORDS_BUSCA);

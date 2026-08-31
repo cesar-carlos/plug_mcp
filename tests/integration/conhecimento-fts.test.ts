@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { escopoVazio } from "../../src/domain/entities/escopo.js";
+import { stemPortugues } from "../../src/domain/entities/stem-portugues.js";
 import { createDb } from "../../src/infrastructure/persistence/drizzle/db.js";
 import {
   DrizzleAnotacaoGrafoRepository,
@@ -10,6 +11,10 @@ import {
 } from "../../src/infrastructure/persistence/drizzle/drizzle-cofre.js";
 
 const dbUrl = process.env.DATABASE_URL;
+
+if ((process.env.CI === "true" || process.env.CI === "1") && !dbUrl) {
+  throw new Error("CI=true exige DATABASE_URL para o teste FTS (conhecimento-fts).");
+}
 
 const limparAgent = async (pool: Pool, agentId: string): Promise<void> => {
   await pool.query("DELETE FROM consulta_aprendida WHERE agent_id = $1", [agentId]);
@@ -115,6 +120,24 @@ describe.skipIf(!dbUrl)("FTS conhecimento (Postgres)", () => {
       expect(notas.some((hit) => hit.item.skillId === skill.id)).toBe(true);
     } finally {
       await limparAgent(pool, agentId);
+      await pool.end();
+    }
+  });
+
+  it("lexema JS alinha com to_tsvector portuguese em titulo/titulos", async () => {
+    const { pool } = createDb(dbUrl!);
+    try {
+      const js = stemPortugues("titulo");
+      expect(js).toBe(stemPortugues("titulos"));
+      const titulo = await pool.query<{ lex: string }>(
+        `select unnest(tsvector_to_array(to_tsvector('portuguese', 'titulo'))) as lex`,
+      );
+      const titulos = await pool.query<{ lex: string }>(
+        `select unnest(tsvector_to_array(to_tsvector('portuguese', 'titulos'))) as lex`,
+      );
+      expect(titulo.rows.map((row) => row.lex)).toEqual(titulos.rows.map((row) => row.lex));
+      expect(titulo.rows.some((row) => row.lex === js)).toBe(true);
+    } finally {
       await pool.end();
     }
   });

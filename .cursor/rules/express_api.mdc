@@ -7,6 +7,7 @@ alwaysApply: false
 # HTTP
 
 - `GET /health` público. Não fala com o plug-server.
+- `GET /docs/mcp/error-mapping.md` público: matriz de erros do envelope (`documentationUrl`). Markdown, sem HTML extra.
 - `GET /setup/:code` público, HTML one-shot do token MCP.
 - `GET /.well-known/oauth-protected-resource` público: metadata do recurso **sem** Authorization Server (só `bearer_methods_supported: header`).
 - `POST|GET|DELETE /mcp` Streamable HTTP. CORS expõe `Mcp-Session-Id` e `mcp-protocol-version`. Origin inválido → 403.

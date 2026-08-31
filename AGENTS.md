@@ -34,11 +34,13 @@ documentação de produto e os testes correspondentes.
   rebaixa para validada sem apagar. JOIN composto substitui pares isolados;
   `remover_relacionamento` apaga um fingerprint. `inspecionar_consulta` aceita
   `validada`. Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
-  `conhecimentos[]` é evidência, não licença de consulta. Envelope de
+  `conhecimentos[]` é evidência FTS/`ILIKE` (não RAG), não licença de consulta.
+  Stem léxico une inflexão na cobertura. Envelope de
   `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — reuse
   `consultasAprendidas[].id` em `obter_skill`. `consultaSemanticaSugerida` só
   com `consultaPermitida` e KPI (maior overlap da pergunta). `fluxoTreino.pacoteMinimo` oriente (uma
-  tabela) sem afrouxar gates.
+  tabela; CAST não é medida) sem afrouxar gates. `faltas[]` de KPI e JOIN isolado
+  coberto por composto não bloqueiam publicação.
 
 ## Segurança e autorização
 

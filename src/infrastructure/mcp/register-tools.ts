@@ -335,7 +335,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência ranqueada (não autoriza SQL). Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida e houver KPI, consultaSemanticaSugerida (sem SQL). Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. grafoParaTreino só no fluxo de gap.",
+    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida e houver KPI, consultaSemanticaSugerida (sem SQL). Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -819,7 +819,7 @@ export const registerTools = (
 
   server.tool(
     "listar_metricas_agente",
-    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, slot narrativo). Sem SQL, params ou linhas de ERP.",
+    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, SKILL_NOT_PUBLISHED, slot narrativo). Sem SQL, params ou linhas de ERP.",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>
@@ -849,8 +849,12 @@ export const registerTools = (
 
   server.tool(
     "listar_lacunas",
-    "Lista lacunas de skill (SKILL_GAP) e de ferramenta deste agentId.",
-    { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
+    "Lista lacunas abertas de skill (SKILL_GAP) e de ferramenta deste agentId. status=arquivada lista o que o treino já cobriu. SKILL_GAP da busca não grava lacuna se já houver skill publicada.",
+    {
+      acessoId: z.string().optional(),
+      limite: z.number().int().positive().optional(),
+      status: z.enum(["aberta", "arquivada"]).optional(),
+    },
     readList,
     async (args) =>
       run("listar_lacunas", () => useCases.listarLacunas.execute(currentAccountId(), args)),
@@ -869,7 +873,7 @@ export const registerTools = (
   if (config.MCP_INSPECTION_ENABLED) {
     server.tool(
       "inspecionar_consulta",
-      "Amostra estrutural (máx. 100 linhas) de skill validada, rascunho_revalidacao ou publicada. Exige finalidade (validar_tipo|avaliar_nulos|verificar_join|amostra_estrutura). Mascara PII/segredos. Sem cache, aprendizado ou paginação. SELECT * é expandido para colunas conhecidas. Recusa rascunho sem validação.",
+      "Amostra estrutural (máx. 100 linhas) de skill validada, rascunho_revalidacao ou publicada. Exige finalidade (validar_tipo|avaliar_nulos|verificar_join|amostra_estrutura). Devolve columnsMetadata (tipos/nulidade). Mascara PII/segredos nas rows. Sem cache, aprendizado ou paginação. SELECT * é expandido para colunas conhecidas. Recusa rascunho sem validação.",
       {
         acessoId: z.string().optional(),
         skillId: z.string().optional(),

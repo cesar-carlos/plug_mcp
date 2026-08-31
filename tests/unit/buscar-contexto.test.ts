@@ -756,5 +756,79 @@ describe("BuscarContexto", () => {
     expect(result.consultaSemanticaSugerida).toBeUndefined();
     expect(result.hint).toMatch(/sinonimo/);
     expect(result.hint).toMatch(/obter_skill/);
+    expect(result.candidatos[0]?.termosAusentes.length).toBeGreaterThan(0);
+    expect(result.hint).toMatch(/Termos ausentes/);
+  });
+
+  it("segunda SKILL_GAP da mesma pergunta não duplica lacuna", async () => {
+    const { buscar, created, aprendizado } = await setup();
+    const query = "Qual meu faturamento mensal?";
+    await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
+    await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
+    const abertas = await aprendizado.listarLacunas(agentId, 20, "aberta");
+    expect(abertas).toHaveLength(1);
+    expect(abertas[0]?.tipo).toBe("skill_gap");
+    expect(abertas[0]?.pergunta).toBe(query);
+  });
+
+  it("SKILL_NOT_PUBLISHED arquiva skill_gap da mesma pergunta", async () => {
+    const { buscar, created, skills, aprendizado } = await setup();
+    const query = "quanto tenho para receber agora";
+    await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
+    expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(1);
+    await skills.create({
+      agentId,
+      slug: "titulos-a-receber",
+      nome: "Títulos a receber",
+      descricao: "quanto tenho para receber agora",
+      sqlModelo: "SELECT r.valor FROM receber r",
+      autorUsuarioId: created.usuarioId,
+    });
+    const result = await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
+    expect(result.blockingReason).toBe("SKILL_NOT_PUBLISHED");
+    expect(result.gap).toBeUndefined();
+    expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(0);
+    const arquivadas = await aprendizado.listarLacunas(agentId, 20, "arquivada");
+    expect(arquivadas).toHaveLength(1);
+    expect(arquivadas[0]?.pergunta).toBe(query);
+  });
+
+  it("skill publicada irrelevante devolve SKILL_GAP sem gravar lacuna", async () => {
+    const { buscar, created, skills, aprendizado } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "itens",
+      nome: "Itens",
+      descricao: "Cadastro de itens",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "Qual meu faturamento mensal?",
+    });
+    expect(result.gap?.code).toBe("SKILL_GAP");
+    expect(result.consultaPermitida).toBe(false);
+    expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(0);
+  });
+
+  it("inflexão titulos casa cobertura completa no pacote com titulo", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "titulos-abertos",
+      nome: "Títulos",
+      descricao: "Saldo de titulo comercial",
+      sqlModelo: "SELECT t.valor FROM titulo t",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "titulos",
+    });
+    expect(result.cobertura).toBe("completa");
+    expect(result.consultaPermitida).toBe(true);
   });
 });

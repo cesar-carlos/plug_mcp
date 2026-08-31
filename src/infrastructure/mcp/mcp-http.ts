@@ -21,6 +21,7 @@ interface Session {
   bootstrap: boolean;
   usuarioId: string | null;
   skillTools: Map<string, { remove: () => void }>;
+  advertisedBuild: string | null;
 }
 
 const MAX_SWEEP_INTERVAL_MS = 5 * 60_000;
@@ -101,7 +102,11 @@ export const createMcpHttpHandler = (input: {
     const server = new McpServer(
       { name: "se7e-mcp-server", version: buildInfo().version },
       {
-        capabilities: { tools: { listChanged: true }, prompts: {} },
+        capabilities: {
+          tools: { listChanged: true },
+          resources: { listChanged: true },
+          prompts: {},
+        },
         instructions: MCP_SERVER_INSTRUCTIONS,
       },
     );
@@ -112,6 +117,7 @@ export const createMcpHttpHandler = (input: {
       bootstrap,
       usuarioId,
       skillTools: new Map(),
+      advertisedBuild: null,
     };
     registerTools(server, input.config, input.useCases, input.logger, {
       bootstrapOnly: bootstrap,
@@ -173,6 +179,9 @@ export const createMcpHttpHandler = (input: {
         method === "tools/list" ||
         method === "prompts/list" ||
         method === "prompts/get" ||
+        method === "resources/list" ||
+        method === "resources/templates/list" ||
+        method === "resources/read" ||
         (method === "tools/call" && tool === "registrar_acesso");
       if (!allowed) {
         res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));
@@ -197,6 +206,11 @@ export const createMcpHttpHandler = (input: {
       );
       if (usuarioId && !session.bootstrap && isInitializeRequest(req.body)) {
         await refreshSkillTools(session, usuarioId);
+        const buildKey = `${buildInfo().version}:${buildInfo().sha}`;
+        if (session.advertisedBuild !== buildKey) {
+          session.server.sendToolListChanged();
+          session.advertisedBuild = buildKey;
+        }
       }
     };
 

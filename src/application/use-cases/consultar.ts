@@ -83,6 +83,7 @@ import {
 import { coberturaDeSkill, tokensCapacidade } from "./shared/cobertura-skill.js";
 import { resolverSkillsPorSinonimos } from "./shared/resolver-sinonimos.js";
 import {
+  consultaAprendidaRelevante,
   filtrarAnotacoes,
   hintRegraParcial,
   montarConhecimentos,
@@ -1210,6 +1211,7 @@ export class BuscarContexto {
       nome: string;
       cobertura: "completa" | "parcial" | "desconhecida";
       termosEncontrados: string[];
+      termosAusentes: string[];
     }[];
     skillsPublicadas: readonly SkillResumoContexto[];
     skillsParaTreino: readonly SkillResumoContexto[];
@@ -1273,7 +1275,9 @@ export class BuscarContexto {
     ]);
     const tabelas = tabelasHits.map((hit) => hit.item);
     const notas = notasHits.map((hit) => hit.item);
-    const consultasAprendidas = consultasHits.map((hit) => hit.item);
+    const consultasAprendidas = consultasHits
+      .map((hit) => hit.item)
+      .filter((item) => consultaAprendidaRelevante(query, item.pergunta));
     const skillsPorSinonimo = resolverSkillsPorSinonimos(query, sinonimos, todas);
     const skillsPublicadas = unirSkills(
       unirSkillsPorNotas(
@@ -1297,13 +1301,18 @@ export class BuscarContexto {
     );
     const tokens = tokensCapacidade(query);
     const candidatos = skillsPublicadas.map((skill) => {
-      const { cobertura, termosEncontrados } = coberturaDeSkill(skill, query, sinonimos);
+      const { cobertura, termosEncontrados, termosAusentes } = coberturaDeSkill(
+        skill,
+        query,
+        sinonimos,
+      );
       return {
         skillId: skill.id,
         slug: skill.slug,
         nome: skill.nome,
         cobertura,
         termosEncontrados,
+        termosAusentes,
       };
     });
     const coberturaGeral = candidatos.some((item) => item.cobertura === "completa")
@@ -1326,14 +1335,12 @@ export class BuscarContexto {
         : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
     const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 1;
     const skillNaoPublicada = !consultaPermitida && capazesTreino.length > 0;
-    if (
-      !consultaPermitida &&
-      !precisaListar &&
-      !skillNaoPublicada &&
-      lacunaElegivel &&
-      this.aprendizado
-    ) {
-      await this.aprendizado.registrarLacuna(acesso.agentId, query);
+    if (this.aprendizado) {
+      if (consultaPermitida || skillNaoPublicada) {
+        await this.aprendizado.arquivarLacunaSkillGap(acesso.agentId, query);
+      } else if (!precisaListar && lacunaElegivel) {
+        await this.aprendizado.registrarLacuna(acesso.agentId, query);
+      }
     }
     const tabelasPolicy = tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy));
     const skillIdsPermitidos = new Set(skillsPublicadas.map((skill) => skill.id));
@@ -1342,6 +1349,8 @@ export class BuscarContexto {
       ...skillsParaTreinoHits.map((hit) => hit.item.id),
       ...skillsPorSinonimo.map((skill) => skill.id),
     ]);
+    const anotacaoIdsRecuperados = new Set(notasHits.map((hit) => hit.item.id));
+    const tabelaIdsRecuperados = new Set(tabelasHits.map((hit) => hit.item.id));
     const skillIdsCandidatos = new Set([
       ...skillsPublicadas.map((skill) => skill.id),
       ...skillsParaTreinoUnidas.map((skill) => skill.id),
@@ -1392,11 +1401,25 @@ export class BuscarContexto {
       tabelas: consultaPermitida ? tabelas : tabelasPolicy,
       filtro: filtroConhecimentos,
       skillIdsRecuperados,
+      anotacaoIdsRecuperados,
+      tabelaIdsRecuperados,
       sinonimos,
       ranksPorId,
     });
     const hintAprendidas = hintConsultasAprendidas(query, consultasAprendidas);
-    const hintRegra = hintRegraParcial(coberturaGeral, conhecimentos, candidatos.length > 0);
+    const termosAusentesHint = [
+      ...new Set(
+        candidatos
+          .filter((item) => item.cobertura === "parcial")
+          .flatMap((item) => item.termosAusentes),
+      ),
+    ].slice(0, 3);
+    const hintRegra = hintRegraParcial(
+      coberturaGeral,
+      conhecimentos,
+      candidatos.length > 0,
+      termosAusentesHint,
+    );
     const skillsCompletas = skillsPublicadas.filter(
       (skill) => coberturaDeSkill(skill, query, sinonimos).cobertura === "completa",
     );

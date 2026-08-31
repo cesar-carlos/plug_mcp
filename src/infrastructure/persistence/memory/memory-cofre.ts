@@ -13,7 +13,10 @@ import type {
   ConsultaAprendida,
   LacunaConsulta,
   Sinonimo,
+  StatusLacuna,
+  TipoLacuna,
 } from "../../../domain/entities/aprendizado.js";
+import { chavePerguntaLacuna } from "../../../domain/entities/aprendizado.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
 import type { HitBusca } from "../../../domain/entities/hit-busca.js";
 import { escopoVazio } from "../../../domain/entities/escopo.js";
@@ -652,7 +655,7 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
       tokenizeQuery(query),
       (row) =>
         `${row.nome} ${row.descricao} ${row.slug} ${row.params
-          .map((param) => `${param.nome} ${param.descricao} ${param.tipo}`)
+          .map((param) => `${param.nome} ${param.descricao}`)
           .join(" ")} ${row.escopo.metricasSaida
           .map((item) => `${item.alias} ${item.definicao ?? ""} ${item.grao ?? ""}`)
           .join(" ")}`,
@@ -880,14 +883,33 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   async registrarLacuna(
     agentId: string,
     pergunta: string,
-    tipo: "skill_gap" | "ferramenta" = "skill_gap",
+    tipo: TipoLacuna = "skill_gap",
     contrato: Record<string, unknown> | null = null,
   ): Promise<LacunaConsulta> {
+    const perguntaChave = chavePerguntaLacuna(pergunta);
+    const existing = this.lacunas.find(
+      (row) =>
+        row.agentId === agentId &&
+        row.tipo === tipo &&
+        chavePerguntaLacuna(row.pergunta) === perguntaChave,
+    );
+    if (existing) {
+      const next: LacunaConsulta = {
+        ...existing,
+        pergunta,
+        contrato,
+        status: "aberta",
+      };
+      const idx = this.lacunas.indexOf(existing);
+      this.lacunas[idx] = next;
+      return next;
+    }
     const row: LacunaConsulta = {
       id: id(),
       agentId,
       pergunta,
       tipo,
+      status: "aberta",
       contrato,
       createdAt: now(),
     };
@@ -895,9 +917,34 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     return row;
   }
 
-  async listarLacunas(agentId: string, limite: number): Promise<readonly LacunaConsulta[]> {
+  async arquivarLacunaSkillGap(agentId: string, pergunta: string): Promise<number> {
+    const perguntaChave = chavePerguntaLacuna(pergunta);
+    if (!perguntaChave) {
+      return 0;
+    }
+    let n = 0;
+    for (let i = 0; i < this.lacunas.length; i += 1) {
+      const row = this.lacunas[i];
+      if (
+        row?.agentId === agentId &&
+        row.tipo === "skill_gap" &&
+        row.status === "aberta" &&
+        chavePerguntaLacuna(row.pergunta) === perguntaChave
+      ) {
+        this.lacunas[i] = { ...row, status: "arquivada" };
+        n += 1;
+      }
+    }
+    return n;
+  }
+
+  async listarLacunas(
+    agentId: string,
+    limite: number,
+    status: StatusLacuna = "aberta",
+  ): Promise<readonly LacunaConsulta[]> {
     return this.lacunas
-      .filter((row) => row.agentId === agentId)
+      .filter((row) => row.agentId === agentId && row.status === status)
       .slice(-limite)
       .reverse();
   }

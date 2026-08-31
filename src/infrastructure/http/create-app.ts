@@ -14,7 +14,9 @@ import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import { createMcpHttpHandler } from "../mcp/mcp-http.js";
 import type { ToolUseCases } from "../mcp/register-tools.js";
 import { isMcpTokenExpired } from "../mcp/mcp-auth.js";
+import { ERROR_MAPPING_DOC_PATH } from "../../domain/errors/error-next-action.js";
 import { createRateLimiter, mcpRateLimitKey, type RateLimitStore } from "./rate-limit.js";
+import { readErrorMappingMarkdown } from "./error-mapping-doc.js";
 import type { SetupCodeStore } from "./setup-code-store.js";
 
 export const createExpressApp = (input: {
@@ -115,6 +117,15 @@ export const createExpressApp = (input: {
       buildTime: info.buildTime,
       uptimeSec: info.uptimeSec,
     });
+  });
+
+  app.get(ERROR_MAPPING_DOC_PATH, (_req, res) => {
+    const markdown = readErrorMappingMarkdown();
+    if (markdown === null) {
+      res.status(404).type("text/plain; charset=utf-8").send("error-mapping.md not packaged");
+      return;
+    }
+    res.type("text/markdown; charset=utf-8").send(markdown);
   });
 
   app.get("/ready", (_req, res) => {
