@@ -17,6 +17,7 @@ RPCs: `sql.execute`; `client_token.getPolicy`. Contrato vivo: `plug_server/docs`
 - Sem paginação: enviar `execution_mode: preserve` (não deixar o hub reescrever `SUM`/`COUNT`).
 - Com `page`+`page_size`: **omitir** `execution_mode` (hub usa `managed`). Sem metadata `pagination` do agente → `METADATA_CONTRATO`.
 - SQL que o agente não classifica (`-32002` + classification) → `INVALID_SQL`, não `ACCESS_REVOKED`. Hint cita tabelas e dialeto.
+- SQL Server 1033 (ORDER BY em derived table do wrap `managed`) → `INVALID_SQL`, não `PLUG_SERVER_ERROR`. Hint: sem `options.page`, `TOP n` + `guia://dialeto/mssql`. Não acrescente `OFFSET`/`FETCH` com `page`. O rewrite é do `plug_agente`.
 
 `UsuarioTokenManager`: JWT por `usuarioId`, refresh ~60s antes do `exp`, `inflight` por usuário. HTTP 401: invalida JWT, reloga com senha do cofre e **repete uma vez**. Senha recusada → `CREDENTIAL_STALE`.
 

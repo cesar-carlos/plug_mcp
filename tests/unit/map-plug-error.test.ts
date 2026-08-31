@@ -106,6 +106,60 @@ describe("mapPlugServerFailure", () => {
     expect(err.message).toBe("Falha ao comunicar com o plug-server.");
     expect(err.message).not.toContain("ClienteSecreto");
   });
+
+  it("mapeia SQL Server 1033 do wrap gerenciado para INVALID_SQL, não PLUG_SERVER_ERROR", () => {
+    const err = mapPlugServerFailure(
+      {
+        status: 200,
+        body: {
+          response: {
+            item: {
+              error: {
+                message: "ODBC error",
+                data: {
+                  technical_message:
+                    "[SQL Server] The ORDER BY clause is invalid in views, inline functions, derived tables, subqueries, and common table expressions, unless TOP, OFFSET or FOR XML is also specified. (1033) FROM ContaReceber",
+                },
+              },
+            },
+          },
+        },
+      },
+      undefined,
+      "sql.execute",
+    );
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.retryable).toBe(false);
+    expect(err.source).toBe("client_token_rpc");
+    expect(err.stage).toBe("sql.execute");
+    expect(err.nextAction).toBe("consultar_dados");
+    expect(err.message).toMatch(/paginação gerenciada/i);
+    expect(err.message).not.toContain("ContaReceber");
+    expect(err.hint).toMatch(/1033/);
+    expect(err.hint).toMatch(/options\.page/);
+    expect(err.hint).toMatch(/OFFSET\/FETCH/);
+    expect(err.hint).toMatch(/guia:\/\/dialeto\/mssql/);
+    expect(err.hint).not.toContain("ContaReceber");
+  });
+
+  it("mapeia -32009 com 1033 para o hint de paginação, não o genérico de dialeto", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32009,
+              message: "The ORDER BY clause is invalid in derived tables (1033)",
+            },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.hint).toMatch(/Não repita options\.page/);
+    expect(err.hint).not.toMatch(/sqlModelo de obter_skill/);
+  });
   it("maps HTTP 403 pending Client to CLIENT_NOT_ACTIVE", () => {
     const err = mapPlugServerFailure({
       status: 403,

@@ -74,6 +74,15 @@ export const isUnclassifiableSqlDenial = (
   technicalMessage: string | undefined,
 ): boolean => rpcCode === -32002 && /classification/i.test(technicalMessage ?? "");
 
+/** SQL Server 1033: ORDER BY em derived table do wrap gerenciado (page+page_size). */
+export const HINT_SQLSERVER_PAGINACAO_1033 =
+  "O wrap gerenciado do hub colocou ORDER BY numa derived table (SQL Server 1033). Não repita options.page neste SQL. Sem página: TOP n + ORDER BY (guia://dialeto/mssql). Não acrescente OFFSET/FETCH com page — o validador recusa. validar_consulta já passa neste caso. O rewrite OFFSET/FETCH é do plug_agente.";
+
+export const isSqlServerOrderByWrap = (blob: string): boolean =>
+  /\b1033\b/.test(blob) ||
+  /order by clause is invalid/i.test(blob) ||
+  /cl[aá]usula order by [eé] inv[aá]lida/i.test(blob);
+
 const rpcMap: Record<
   number,
   { code: ErrorCode; message: string; hint: string; retryable: boolean }
@@ -136,6 +145,22 @@ export const mapPlugServerFailure = (
   stage = "rpc",
 ): DomainError => {
   const rpc = extractRpcError(failure.body);
+  const rpcHaystack = [rpc.message, rpc.reason, rpc.technicalMessage]
+    .filter((item): item is string => Boolean(item))
+    .join(" ");
+  if (isSqlServerOrderByWrap(rpcHaystack)) {
+    logPlugDetail(logger, failure, rpc);
+    return new DomainError({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "O SQL Server recusou ORDER BY no wrap de paginação gerenciada.",
+      hint: HINT_SQLSERVER_PAGINACAO_1033,
+      retryable: false,
+      retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
+      source: "client_token_rpc",
+      stage,
+      nextAction: "consultar_dados",
+    });
+  }
   if (typeof rpc.code === "number") {
     const mapped = rpcMap[rpc.code];
     if (mapped) {

@@ -40,6 +40,7 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/CAST\/data n[aã]o entram/);
     expect(PRE_TREINO_SESSAO).toMatch(/consultaPermitida/);
     expect(PRE_TREINO_SESSAO).toContain("guia://paginacao");
+    expect(PRE_TREINO_SESSAO).toMatch(/INVALID_SQL\/1033/);
     expect(PRE_TREINO_SESSAO).toContain("skill://");
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
   });

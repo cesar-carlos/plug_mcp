@@ -89,15 +89,16 @@ Dois envelopes possíveis no mesmo POST:
 
 Códigos RPC que o MCP mapeia:
 
-| RPC      | Situação típica             | `code` MCP             |
-| -------- | --------------------------- | ---------------------- |
-| `-32001` | `client_token` ausente      | `MISSING_CLIENT_TOKEN` |
-| `-32002` | classificação SQL           | `INVALID_SQL`          |
-| `-32002` | política / token            | `ACCESS_REVOKED`       |
-| `-32008` | timeout no agente           | `QUERY_TIMEOUT`        |
-| `-32009` | SQL inválido no dialeto     | `INVALID_SQL`          |
-| `-32013` | rate limit no agente        | `RATE_LIMITED`         |
-| `-32000` | agente offline / não pronto | `AGENT_UNAVAILABLE`    |
+| RPC                                                        | Situação típica             | `code` MCP                              |
+| ---------------------------------------------------------- | --------------------------- | --------------------------------------- |
+| `-32001`                                                   | `client_token` ausente      | `MISSING_CLIENT_TOKEN`                  |
+| `-32002`                                                   | classificação SQL           | `INVALID_SQL`                           |
+| `-32002`                                                   | política / token            | `ACCESS_REVOKED`                        |
+| `-32008`                                                   | timeout no agente           | `QUERY_TIMEOUT`                         |
+| `-32009`                                                   | SQL inválido no dialeto     | `INVALID_SQL`                           |
+| 1033 / `ORDER BY` em derived table (mssql, wrap `managed`) | Paginação gerenciada        | `INVALID_SQL` (não `PLUG_SERVER_ERROR`) |
+| `-32013`                                                   | rate limit no agente        | `RATE_LIMITED`                          |
+| `-32000`                                                   | agente offline / não pronto | `AGENT_UNAVAILABLE`                     |
 
 Tabela completa e hints: [`../mcp/error-mapping.md`](../mcp/error-mapping.md).
 
