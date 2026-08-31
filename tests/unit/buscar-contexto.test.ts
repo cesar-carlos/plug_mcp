@@ -80,6 +80,8 @@ describe("BuscarContexto", () => {
     expect(result.gap?.code).toBe("SKILL_GAP");
     expect(result.skillsPublicadas).toHaveLength(0);
     expect(result.grafoParaTreino).toBeDefined();
+    expect(result.fluxoTreino).toBeUndefined();
+    expect(result.hint ?? "").not.toMatch(/sinonimo/);
   });
 
   it("com rascunho oriente a continuar o fluxo em vez de recomeçar", async () => {
@@ -648,7 +650,13 @@ describe("BuscarContexto", () => {
   });
 
   it("com KPI e cobertura completa devolve consultaSemanticaSugerida", async () => {
-    const { buscar, created, skills } = await setup();
+    const { buscar, created, skills, grafo } = await setup();
+    await grafo.mergeTabela({
+      agentId,
+      nome: "produto",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
     const published = await skills.create({
       agentId,
       slug: "produtos",
@@ -685,6 +693,11 @@ describe("BuscarContexto", () => {
     });
     expect(result.hint).toMatch(/consultaSemantica/);
     expect(result.skillsPublicadas[0]).not.toHaveProperty("sqlModelo");
+    expect(result.fluxoTreino?.passoAtual).toBe("publicar_skill");
+    expect(result.fluxoTreino?.proximoPasso).toBeNull();
+    expect(result.fluxoTreino?.passos.find((item) => item.id === "criar_skill")?.status).toBe(
+      "feito",
+    );
   });
 
   it("com duas skills capazes escolhe o KPI cujo haystack overlap mais a pergunta", async () => {
@@ -810,6 +823,11 @@ describe("BuscarContexto", () => {
     });
     expect(result.gap?.code).toBe("SKILL_GAP");
     expect(result.consultaPermitida).toBe(false);
+    expect(result.fluxoTreino).toBeUndefined();
+    expect(result.gap?.hint).toMatch(/listar_skills/);
+    expect(result.gap?.hint).toMatch(/Não cruze skills/);
+    expect(result.gap?.hint).not.toMatch(/sinonimo/);
+    expect(result.hint ?? "").not.toMatch(/sinonimo/);
     expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(0);
   });
 
@@ -830,5 +848,63 @@ describe("BuscarContexto", () => {
     });
     expect(result.cobertura).toBe("completa");
     expect(result.consultaPermitida).toBe(true);
+  });
+
+  it("SKILL_GAP de cruzamento não pede sinônimo nem criar_skill", async () => {
+    const { buscar, created, skills } = await setup();
+    const receber = await skills.create({
+      agentId,
+      slug: "titulos-a-receber",
+      nome: "Títulos a receber",
+      descricao: "Saldo em aberto",
+      sqlModelo: "SELECT r.valor FROM receber r WHERE r.valor > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    const pagar = await skills.create({
+      agentId,
+      slug: "titulos-a-pagar",
+      nome: "Títulos a pagar",
+      descricao: "Saldo em aberto",
+      sqlModelo: "SELECT p.valor FROM pagar p WHERE p.valor > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(receber.id, "publicada");
+    await skills.setStatus(pagar.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "Posso cruzar clientes e fornecedores em uma única consulta?",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.gap?.code).toBe("SKILL_GAP");
+    expect(result.fluxoTreino).toBeUndefined();
+    expect(result.gap?.hint).toMatch(/Não cruze skills/);
+    expect(`${result.hint ?? ""} ${result.gap?.hint ?? ""}`).not.toMatch(/sinonimo/);
+  });
+
+  it("CAST de data no pacote não vira consultaSemanticaSugerida em pergunta de saldo", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "titulos-a-receber",
+      nome: "Títulos a receber",
+      descricao: "Quanto tenho para receber",
+      sqlModelo:
+        "SELECT CAST(r.DataLancamento AS date) AS DataLancamento FROM ContaReceber r WHERE r.SaldoReceber > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(published.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["ContaReceber"],
+        colunasPorTabela: { ContaReceber: ["DataLancamento", "SaldoReceber"] },
+        metricasSaida: [{ alias: "DataLancamento", expr: "CAST(r.DataLancamento AS date)" }],
+      }),
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "Quanto tenho para receber?",
+    });
+    expect(result.consultaPermitida).toBe(true);
+    expect(result.consultaSemanticaSugerida).toBeUndefined();
   });
 });

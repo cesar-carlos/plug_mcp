@@ -7,7 +7,7 @@ import {
 } from "../../../domain/entities/escopo.js";
 import { tipoCompativelComPapel } from "../../../domain/entities/merge-fato.js";
 import {
-  colunaPapelMedida,
+  colunaPedeOverlayKpi,
   escopoTemMedida,
   metricasMedidaSemDefinicao,
 } from "../../../domain/entities/metrica-medida.js";
@@ -118,7 +118,7 @@ export const listarFatosIncompletos = async (
       const temOverlay = escopo.metricasSaida.some(
         (item) => item.alias.toLowerCase() === colunaNome.toLowerCase(),
       );
-      if (colunaPapelMedida(coluna.papel) && !temOverlay) {
+      if (colunaPedeOverlayKpi(coluna.papel, colunaNome) && !temOverlay) {
         const jaTem = out.some(
           (item) => item.kind === "kpi" && item.alvo.toLowerCase() === alvo.toLowerCase(),
         );

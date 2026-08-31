@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agruparColunasCatalogo,
+  isIdentificadorSql,
   sqlDescreverTabela,
 } from "../../src/application/use-cases/shared/schema-introspection.js";
 
@@ -25,6 +26,22 @@ describe("agruparColunasCatalogo", () => {
     ]);
     expect(ambiguas).toBe(false);
     expect(colunas).toEqual([{ nome: "CodConta", tipo: "int", nullable: "NO" }]);
+  });
+
+  it("ignora nome que não é identificador SQL", () => {
+    const { colunas } = agruparColunasCatalogo([
+      { column_name: "ValorPago", data_type: "numeric", is_nullable: "NO" },
+      { column_name: "Status / Situacao pagar", data_type: "", is_nullable: "YES" },
+    ]);
+    expect(colunas.map((coluna) => coluna.nome)).toEqual(["ValorPago"]);
+  });
+});
+
+describe("isIdentificadorSql", () => {
+  it("aceita identificador físico e recusa título de anotação", () => {
+    expect(isIdentificadorSql("DataPagamento")).toBe(true);
+    expect(isIdentificadorSql("ValorPago")).toBe(true);
+    expect(isIdentificadorSql("Status / Situacao pagar")).toBe(false);
   });
 });
 

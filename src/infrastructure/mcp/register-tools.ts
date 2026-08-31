@@ -336,7 +336,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida e houver KPI, consultaSemanticaSugerida (sem SQL). Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. grafoParaTreino só no fluxo de gap.",
+    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida e houver KPI de agregação (não CAST), consultaSemanticaSugerida (sem SQL). Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. SKILL_GAP: não registre sinônimo; não cruze sem JOIN publicado; fluxoTreino só com skill em andamento. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -371,7 +371,7 @@ export const registerTools = (
     "consultar_dados",
     {
       description:
-        "Consulta o ERP no escopo publicado. Sempre envie pergunta. Params :nome no SQL + objeto params. Sem sql, executa a consulta exemplo. Com sql, SELECT no escopo. Página: ORDER BY + options.page e page_size juntos, sem TOP/LIMIT. truncated = teto max_rows; paginacao.hasNextPage = há próxima página. Regras: aprendizado[] ou registrar_aprendizado.",
+        "Consulta o ERP no escopo publicado. Sempre envie pergunta. Params :nome no SQL + objeto params. Sem sql, executa a consulta exemplo. Com sql, SELECT no escopo. Página: ORDER BY + options.page e page_size juntos, sem TOP/LIMIT. truncated = teto max_rows; paginacao.hasNextPage = há próxima página. avisos REGRA/METRICA só da skill da chamada ou da tabela do SQL (teto curto; globais de processo em obter_skill). Regras novas: aprendizado[] ou registrar_aprendizado.",
       inputSchema: {
         acessoId: z.string().optional(),
         skillId: z.string().optional(),
@@ -893,7 +893,7 @@ export const registerTools = (
   if (config.MCP_DISCOVERY_QUERY_ENABLED) {
     server.tool(
       "descobrir_tabela",
-      "Estrutura (colunas, tipos, chaves, sensibilidade, relacionamentos) só de tabelas em skills publicadas. Sem linhas, contagens, DDL ou valores.",
+      "Estrutura (colunas físicas, tipos, chaves, sensibilidade, relacionamentos) só de tabelas em skills publicadas. Sem linhas, contagens, DDL, valores nem título de anotação como coluna.",
       { acessoId: z.string().optional(), tabela: z.string().optional() },
       readList,
       async (args) =>

@@ -214,6 +214,9 @@ export const montarConhecimentos = (input: {
   return reservarSlotNarrativa(hits);
 };
 
+export const HINT_SKILL_GAP_CRUZAMENTO =
+  "Não cruze skills sem relacionamento publicado no pacote. confirmar_relacionamento só se o usuário pedir. Não registre sinônimo por este gap.";
+
 export const hintRegraParcial = (
   cobertura: "completa" | "parcial" | "desconhecida",
   conhecimentos: readonly HitConhecimento[],
@@ -224,15 +227,18 @@ export const hintRegraParcial = (
     return undefined;
   }
   const narrativa = conhecimentos.find(isNarrativaComSkill);
-  if (cobertura !== "parcial" && !narrativa) {
+  if (cobertura === "parcial") {
+    const prefixo = narrativa
+      ? "Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta."
+      : "Cobertura parcial. Leia obter_skill e validar_consulta.";
+    const ausentes =
+      termosAusentes.length > 0
+        ? ` Termos ausentes no pacote: ${termosAusentes.slice(0, 3).join(", ")}.`
+        : "";
+    return `${prefixo}${ausentes} Match textual isolado não autoriza consultar_dados — registre sinônimo (registrar_aprendizado tipo=sinonimo) se o usuário confirmar o termo.`;
+  }
+  if (!narrativa) {
     return undefined;
   }
-  const prefixo = narrativa
-    ? "Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta."
-    : "Cobertura parcial. Leia obter_skill e validar_consulta.";
-  const ausentes =
-    cobertura === "parcial" && termosAusentes.length > 0
-      ? ` Termos ausentes no pacote: ${termosAusentes.slice(0, 3).join(", ")}.`
-      : "";
-  return `${prefixo}${ausentes} Match textual isolado não autoriza consultar_dados — registre sinônimo (registrar_aprendizado tipo=sinonimo) se o usuário confirmar o termo.`;
+  return `Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta. ${HINT_SKILL_GAP_CRUZAMENTO}`;
 };

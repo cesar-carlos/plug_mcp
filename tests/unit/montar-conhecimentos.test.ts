@@ -274,7 +274,8 @@ describe("hintRegraParcial", () => {
       true,
     );
     expect(hint).toMatch(/obter_skill/);
-    expect(hint).toMatch(/sinonimo/);
+    expect(hint).not.toMatch(/sinonimo/);
+    expect(hint).toMatch(/Não cruze skills/);
   });
 
   it("não ranqueia consulta aprendida genérica numa pergunta de cruzamento", () => {

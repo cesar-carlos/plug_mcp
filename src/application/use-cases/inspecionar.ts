@@ -30,6 +30,7 @@ import { mascararLinhas, lookupSensibilidadeGrafo } from "./shared/mascarar-linh
 import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
 import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
 import { aplicarDerivaEsquema, assinaturaTabela } from "./shared/schema-drift.js";
+import { isIdentificadorSql } from "./shared/schema-introspection.js";
 import {
   applySelectAliasHints,
   mergeColumnHints,
@@ -368,14 +369,16 @@ export class DescobrirTabela {
     return {
       success: true,
       tabela: tabela.nome,
-      colunas: colunas.map((coluna) => ({
-        nome: coluna.nome,
-        tipo: coluna.tipo,
-        nullable: coluna.nullable,
-        papel: coluna.papel,
-        sensibilidade: coluna.sensibilidade,
-        chave: coluna.papel === "chave",
-      })),
+      colunas: colunas
+        .filter((coluna) => isIdentificadorSql(coluna.nome))
+        .map((coluna) => ({
+          nome: coluna.nome,
+          tipo: coluna.tipo,
+          nullable: coluna.nullable,
+          papel: coluna.papel,
+          sensibilidade: coluna.sensibilidade,
+          chave: coluna.papel === "chave",
+        })),
       relacionamentos: rels
         .filter((rel) => rel.tabelaOrigemId === tabela.id || rel.tabelaDestinoId === tabela.id)
         .map((rel) => ({

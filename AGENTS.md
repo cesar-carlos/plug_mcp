@@ -38,9 +38,9 @@ documentação de produto e os testes correspondentes.
   Stem léxico une inflexão na cobertura. Envelope de
   `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — reuse
   `consultasAprendidas[].id` em `obter_skill`. `consultaSemanticaSugerida` só
-  com `consultaPermitida` e KPI (maior overlap da pergunta). `fluxoTreino.pacoteMinimo` oriente (uma
-  tabela; CAST não é medida) sem afrouxar gates. `faltas[]` de KPI e JOIN isolado
-  coberto por composto não bloqueiam publicação.
+  com `consultaPermitida` e KPI de agregação (CAST não entra; maior overlap da pergunta). `fluxoTreino.pacoteMinimo` oriente (uma
+  tabela; CAST não é medida) sem afrouxar gates. `faltas[]` de KPI (não quantidade/parcelas) e JOIN isolado
+  coberto por composto não bloqueiam publicação. `SKILL_GAP` omite `fluxoTreino` salvo skill em andamento e não pede sinônimo.
 
 ## Segurança e autorização
 

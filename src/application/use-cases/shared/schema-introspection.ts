@@ -7,6 +7,8 @@ export const DESCREVER_TABELA_MAX_ROWS = 300;
 
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 
+export const isIdentificadorSql = (nome: string): boolean => IDENT_RE.test(nome.trim());
+
 export interface TabelaIdentificada {
   readonly schema: string | null;
   readonly tabela: string;
@@ -99,7 +101,7 @@ export const agruparColunasCatalogo = (
   const order: string[] = [];
   for (const row of rows) {
     const nome = cell(row, "column_name");
-    if (!nome) {
+    if (!nome || !isIdentificadorSql(nome)) {
       continue;
     }
     const tipo = cell(row, "data_type");
@@ -120,7 +122,7 @@ export const agruparColunasCatalogo = (
   }
   const colunas: ColunaCatalogo[] = order.flatMap((key) => {
     const item = byName.get(key);
-    if (!item) {
+    if (!item || !isIdentificadorSql(item.nome)) {
       return [];
     }
     const tipoUnico = item.tipos.size === 1 ? [...item.tipos][0] : undefined;

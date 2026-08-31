@@ -85,6 +85,7 @@ import { resolverSkillsPorSinonimos } from "./shared/resolver-sinonimos.js";
 import {
   consultaAprendidaRelevante,
   filtrarAnotacoes,
+  HINT_SKILL_GAP_CRUZAMENTO,
   hintRegraParcial,
   montarConhecimentos,
 } from "./shared/montar-conhecimentos.js";
@@ -108,6 +109,7 @@ import {
   sqlDescreverTabela,
   sqlExplorarTabelas,
 } from "./shared/schema-introspection.js";
+import { coletarAvisosAnotacaoConsulta } from "./shared/avisos-anotacao-consulta.js";
 import { inferirFormatoColuna, inferirPapelColuna } from "./shared/inferir-papel.js";
 import { inferirSensibilidadeColuna } from "../../domain/entities/privacidade.js";
 import {
@@ -556,14 +558,23 @@ export class ConsultarDados {
     );
     if (this.extras.anotacoes) {
       const notas = await this.extras.anotacoes.list(acesso.agentId);
-      for (const nota of notas) {
-        if (
-          (nota.tipo === "regra" || nota.tipo === "metrica") &&
-          (!nota.skillId || skillsComEscopo.some((item) => item.id === nota.skillId))
-        ) {
-          avisos.push({ code: nota.tipo.toUpperCase(), message: `${nota.titulo}: ${nota.texto}` });
+      const tabelasSql = new Set(modelo.tabelas.map((tabela) => tabela.nome.toLowerCase()));
+      const skillIds = new Set(skillsComEscopo.map((item) => item.id));
+      const tabelaNomePorId = new Map<string, string>();
+      if (this.extras.grafo && notas.some((nota) => Boolean(nota.tabelaId))) {
+        const todasTabelas = await this.extras.grafo.listTabelas(acesso.agentId);
+        for (const tabela of todasTabelas) {
+          tabelaNomePorId.set(tabela.id, tabela.nome);
         }
       }
+      avisos.push(
+        ...coletarAvisosAnotacaoConsulta({
+          notas,
+          skillIds,
+          tabelasSql,
+          tabelaNomePorId,
+        }),
+      );
     }
     const mergedParams = mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao);
     const expandido = expandirInListas(sqlExecutar, mergedParams);
@@ -1346,13 +1357,19 @@ export class BuscarContexto {
     const capazesTreino = skillsParaTreinoUnidas.filter(
       (item) => coberturaDeSkill(item, query, sinonimos).cobertura === "completa",
     );
+    const skillsCompletas = skillsPublicadas.filter(
+      (skill) => coberturaDeSkill(skill, query, sinonimos).cobertura === "completa",
+    );
     const emAndamento = pickSkillInProgress(capazesTreino);
-    const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
+    const skillFluxo = consultaPermitida ? (skillsCompletas[0] ?? null) : emAndamento;
+    const fluxoTreino = skillFluxo
+      ? await fluxoForAgentSkill(this.grafo, acesso.agentId, skillFluxo)
+      : undefined;
     const precisaListar = !consultaPermitida && publicadasNoAgent.length > 0;
     const gapHint = emAndamento
-      ? `Há skill em andamento "${emAndamento.nome}" (${emAndamento.status}). Continue o fluxo: ${fluxoTreino.proximoPasso ?? "validar_skill"}. Não chame consultar_dados.`
+      ? `Há skill em andamento "${emAndamento.nome}" (${emAndamento.status}). Continue o fluxo: ${fluxoTreino?.proximoPasso ?? "validar_skill"}. Não chame consultar_dados.`
       : precisaListar
-        ? "A busca por termos não prova ausência. Chame listar_skills antes de desistir. Não invente tabela, coluna nem JOIN."
+        ? `A busca por termos não prova ausência. Chame listar_skills antes de desistir. ${HINT_SKILL_GAP_CRUZAMENTO} Não invente tabela, coluna nem JOIN.`
         : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
     const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 1;
     const skillNaoPublicada = !consultaPermitida && capazesTreino.length > 0;
@@ -1441,9 +1458,6 @@ export class BuscarContexto {
       candidatos.length > 0,
       termosAusentesHint,
     );
-    const skillsCompletas = skillsPublicadas.filter(
-      (skill) => coberturaDeSkill(skill, query, sinonimos).cobertura === "completa",
-    );
     const consultaSemanticaSugerida = consultaPermitida
       ? esqueletoDaPrimeiraSkillComKpi(skillsCompletas, query)
       : undefined;
@@ -1499,7 +1513,7 @@ export class BuscarContexto {
           },
       fluxoTreino,
       blockingReason: skillNaoPublicada ? "SKILL_NOT_PUBLISHED" : undefined,
-      nextAction: skillNaoPublicada ? (fluxoTreino.proximoPasso ?? "publicar_skill") : undefined,
+      nextAction: skillNaoPublicada ? (fluxoTreino?.proximoPasso ?? "publicar_skill") : undefined,
       gap:
         consultaPermitida || skillNaoPublicada
           ? undefined

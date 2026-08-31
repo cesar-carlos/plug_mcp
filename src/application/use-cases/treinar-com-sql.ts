@@ -19,6 +19,7 @@ import {
   sqlParaOdbc,
 } from "./shared/sql-modelo.js";
 import { inferirPapelColuna } from "./shared/inferir-papel.js";
+import { isIdentificadorSql } from "./shared/schema-introspection.js";
 import {
   enriquecerPerfilCompleto,
   PERFIL_MAX_QUERIES,
@@ -162,6 +163,9 @@ export class TreinarComSql {
           continue;
         }
         for (const colunaNome of colunas) {
+          if (!isIdentificadorSql(colunaNome)) {
+            continue;
+          }
           const result = await this.grafo.mergeColuna({
             tabelaId,
             nome: colunaNome,

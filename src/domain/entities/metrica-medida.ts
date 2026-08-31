@@ -15,3 +15,12 @@ export const metricasMedidaSemDefinicao = (escopo: EscopoSkill): MetricaSaida[] 
 
 export const colunaPapelMedida = (papel: PapelColuna | null | undefined): boolean =>
   papel === "medida";
+
+const NOME_QUANTIDADE = /quantidade|parcelas|\bqtd\b|^qtd/i;
+
+export const colunaNomeQuantidade = (nome: string): boolean => NOME_QUANTIDADE.test(nome.trim());
+
+export const colunaPedeOverlayKpi = (
+  papel: PapelColuna | null | undefined,
+  nome: string,
+): boolean => colunaPapelMedida(papel) && !colunaNomeQuantidade(nome);

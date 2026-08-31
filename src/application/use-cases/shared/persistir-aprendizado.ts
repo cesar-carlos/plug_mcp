@@ -9,6 +9,7 @@ import type {
   SkillRepositoryPort,
 } from "../../../domain/ports/skill-repository.port.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
+import { isIdentificadorSql } from "./schema-introspection.js";
 
 export const TIPOS_APRENDIZADO = new Set([
   "regra",
@@ -112,13 +113,21 @@ export const persistirItensAprendizado = async (input: {
         });
         continue;
       }
-      await input.grafo.mergeColuna({
-        tabelaId,
-        nome: colunaNome,
-        dicionario: texto,
-        origem: "confirmado_usuario",
-        autorUsuarioId: input.autorUsuarioId,
-      });
+      if (!isIdentificadorSql(colunaNome)) {
+        avisos.push({
+          code: "APRENDIZADO_IGNORADO",
+          message:
+            "Título de dicionário não é coluna física; anotação permanece, coluna do grafo não é criada.",
+        });
+      } else {
+        await input.grafo.mergeColuna({
+          tabelaId,
+          nome: colunaNome,
+          dicionario: texto,
+          origem: "confirmado_usuario",
+          autorUsuarioId: input.autorUsuarioId,
+        });
+      }
     }
     if (tipo === "metrica" && skillId && input.skills) {
       const skill = await input.skills.findById(skillId);

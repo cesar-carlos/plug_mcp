@@ -51,7 +51,7 @@ describe("esqueletoConsultaSemantica", () => {
     });
   });
 
-  it("cai no primeiro alias de metricasSaida", () => {
+  it("cai no primeiro alias de medida", () => {
     const skill = skillOf(
       parseEscopoSkill({
         metricasSaida: [
@@ -129,5 +129,36 @@ describe("esqueletoConsultaSemantica", () => {
     expect(
       esqueletoDaPrimeiraSkillComKpi([estoque, faturamento], "faturamento do mes"),
     ).toMatchObject({ metrica: "receita" });
+  });
+
+  it("omite CAST de data em pergunta de saldo e não cai no primeiro alias", () => {
+    const skill = skillOf(
+      parseEscopoSkill({
+        metricasSaida: [
+          { alias: "DataLancamento", expr: "CAST(cr.DataLancamento AS date)" },
+          { alias: "Situacao", expr: "CAST(cr.Situacao AS varchar)" },
+        ],
+      }),
+    );
+    expect(esqueletoConsultaSemantica(skill, "Quanto tenho para receber?")).toBeUndefined();
+    expect(esqueletoDaPrimeiraSkillComKpi([skill], "Quanto tenho para receber?")).toBeUndefined();
+  });
+
+  it("prefere SUM com definição a CAST na mesma skill", () => {
+    const skill = skillOf(
+      parseEscopoSkill({
+        metricasSaida: [
+          { alias: "DataLancamento", expr: "CAST(cr.DataLancamento AS date)" },
+          {
+            alias: "SaldoReceber",
+            expr: "SUM(cr.SaldoReceber)",
+            definicao: "saldo a receber",
+          },
+        ],
+      }),
+    );
+    expect(esqueletoConsultaSemantica(skill, "Quanto tenho para receber?")).toMatchObject({
+      metrica: "SaldoReceber",
+    });
   });
 });

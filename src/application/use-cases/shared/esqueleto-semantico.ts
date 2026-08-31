@@ -1,4 +1,5 @@
 import type { ConsultaSemantica } from "../../../domain/entities/consulta-semantica.js";
+import { metricaEhMedida } from "../../../domain/entities/metrica-medida.js";
 import type { Skill } from "../../../domain/entities/skill.js";
 import { overlapCapacidade } from "./cobertura-skill.js";
 
@@ -53,14 +54,19 @@ export const esqueletoConsultaSemantica = (
     const metrica = skill.escopo.metricasSaida.find(
       (item) => item.alias.toLowerCase() === ir.metrica.toLowerCase(),
     );
-    candidatos.push({
-      score: overlapCapacidade(query, haystackKpi(ir.metrica, metrica?.definicao, metrica?.grao)),
-      fromIr: true,
-      order: 0,
-      esqueleto: deIr(ir),
-    });
+    if (!metrica || metricaEhMedida(metrica)) {
+      candidatos.push({
+        score: overlapCapacidade(query, haystackKpi(ir.metrica, metrica?.definicao, metrica?.grao)),
+        fromIr: true,
+        order: 0,
+        esqueleto: deIr(ir),
+      });
+    }
   }
   skill.escopo.metricasSaida.forEach((item, index) => {
+    if (!metricaEhMedida(item)) {
+      return;
+    }
     candidatos.push({
       score: overlapCapacidade(query, haystackKpi(item.alias, item.definicao, item.grao)),
       fromIr: false,

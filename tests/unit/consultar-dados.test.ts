@@ -7,6 +7,7 @@ import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.a
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
 import {
   InMemoryAcessoRepository,
+  InMemoryAnotacaoGrafoRepository,
   InMemoryAuditLog,
   InMemoryGrafoRepository,
   InMemorySkillRepository,
@@ -569,5 +570,110 @@ describe("ConsultarDados", () => {
         skillIds: [a.id, b.id],
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+  });
+});
+
+describe("ConsultarDados avisos de anotação", () => {
+  it("não mistura REGRA de outra skill nem globais de processo", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const anotacoes = new InMemoryAnotacaoGrafoRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "avisos@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    const pagar = await skills.create({
+      agentId,
+      slug: "titulos-a-pagar",
+      nome: "Títulos a pagar",
+      descricao: "pagar",
+      sqlModelo: "SELECT p.ValorPago AS valor FROM ContaPagar p WHERE p.ValorPago > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    const receber = await skills.create({
+      agentId,
+      slug: "titulos-a-receber",
+      nome: "Títulos a receber",
+      descricao: "receber",
+      sqlModelo: "SELECT r.SaldoReceber AS saldo FROM ContaReceber r WHERE r.SaldoReceber > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(pagar.id, "publicada");
+    await skills.setStatus(receber.id, "publicada");
+    await anotacoes.create({
+      agentId,
+      tabelaId: null,
+      skillId: receber.id,
+      tipo: "regra",
+      titulo: "PK ContaReceber",
+      texto: "CodEmpresa+CodFilial+CodContaReceber",
+      autorUsuarioId: created.usuarioId,
+    });
+    await anotacoes.create({
+      agentId,
+      tabelaId: null,
+      skillId: pagar.id,
+      tipo: "regra",
+      titulo: "PK ContaPagar",
+      texto: "CodEmpresa+CodFilial+CodContaPagar",
+      autorUsuarioId: created.usuarioId,
+    });
+    await anotacoes.create({
+      agentId,
+      tabelaId: null,
+      skillId: null,
+      tipo: "regra",
+      titulo: "Conhecimento incremental e cruzamento",
+      texto: "Amostra limitada para treinamento",
+      autorUsuarioId: created.usuarioId,
+    });
+    plug.sqlImpl = async () => ({
+      columns: ["valor"],
+      rows: [{ valor: 10 }],
+    });
+    const consultar = new ConsultarDados(
+      acessos,
+      skills,
+      plug,
+      {
+        getAccessToken: async () => "access-test",
+        invalidate: () => undefined,
+        remember: () => undefined,
+      },
+      crypto,
+      audit,
+      500,
+      5000,
+      { grafo, anotacoes },
+    );
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "quanto tenho a pagar",
+      skillId: pagar.id,
+    });
+    const regras = result.avisos.filter((aviso) => aviso.code === "REGRA");
+    expect(regras.map((aviso) => aviso.message)).toEqual([
+      "PK ContaPagar: CodEmpresa+CodFilial+CodContaPagar",
+    ]);
+    expect(regras.some((aviso) => /ContaReceber|cruzamento|treinamento/i.test(aviso.message))).toBe(
+      false,
+    );
   });
 });

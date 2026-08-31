@@ -187,6 +187,27 @@ describe("aprendizado e escala", () => {
     expect(rels.some((rel) => rel.pares.length > 1)).toBe(true);
   });
 
+  it("dicionário com título de anotação não cria coluna física", async () => {
+    const { acessos, grafo, anotacoes, aprendizado, created } = await setup();
+    const tabela = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaPagar",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    const registrar = new RegistrarAprendizado(acessos, grafo, anotacoes, aprendizado);
+    const result = await registrar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      tipo: "dicionario",
+      titulo: "Status / Situacao pagar",
+      texto: "Aberto, liquidado, cancelado",
+      tabela: "ContaPagar",
+    });
+    expect(result.anotacao?.titulo).toBe("Status / Situacao pagar");
+    const cols = await grafo.listColunas(tabela.tabela.id);
+    expect(cols.some((coluna) => coluna.nome.includes("/"))).toBe(false);
+  });
+
   it("escopo empresa/filial recusa SQL sem o predicado quando a coluna existe", () => {
     expect(() =>
       exigirFiltroEscopoPadrao({

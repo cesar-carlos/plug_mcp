@@ -240,4 +240,59 @@ describe("gates JOIN isolado e KPI", () => {
       "ContaReceber.SaldoReceber",
     ]);
   });
+
+  it("QuantidadeParcelas não pede overlay de KPI financeiro", async () => {
+    const grafo = new InMemoryGrafoRepository();
+    const receber = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaReceber",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "SaldoReceber",
+      tipo: "numeric",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "Valor",
+      tipo: "numeric",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "QuantidadeParcelas",
+      tipo: "int",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    const faltas = await listarFatosIncompletos(
+      grafo,
+      agentId,
+      {
+        tabelas: ["ContaReceber"],
+        colunasPorTabela: {
+          ContaReceber: ["SaldoReceber", "Valor", "QuantidadeParcelas"],
+        },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [],
+        pacoteVersao: PACOTE_VERSAO_ATUAL,
+      },
+      { exigirCardinalidade: false, exigirTipoColuna: false },
+    );
+    const kpis = faltas.filter((item) => item.kind === "kpi");
+    expect(kpis.map((item) => item.alvo).sort()).toEqual([
+      "ContaReceber.SaldoReceber",
+      "ContaReceber.Valor",
+    ]);
+  });
 });
