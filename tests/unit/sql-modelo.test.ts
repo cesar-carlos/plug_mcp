@@ -12,6 +12,7 @@ import {
   rewriteAtParamsToColon,
   sqlDeclaraLimiteDeLinhas,
   sqlParaOdbc,
+  sqlValidacaoVazia,
 } from "../../src/application/use-cases/shared/sql-modelo.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
@@ -213,6 +214,25 @@ describe("sqlParaOdbc / limites", () => {
     expect(
       sqlDeclaraLimiteDeLinhas("SELECT p.id FROM p WHERE p.id IN (SELECT TOP 1 x.id FROM x)"),
     ).toBe(false);
+  });
+
+  it("sqlValidacaoVazia tira ORDER BY externo e preserva ORDER BY de janela", () => {
+    const grouped =
+      "SELECT cr.CodEmpresa, SUM(cr.SaldoReceber) AS s FROM ContaReceber cr GROUP BY cr.CodEmpresa ORDER BY cr.CodEmpresa";
+    const wrapped = sqlValidacaoVazia("mssql", grouped);
+    expect(wrapped).toMatch(/AS _validacao/i);
+    expect(wrapped).not.toMatch(/_validacao[\s\S]*ORDER\s+BY/i);
+    const innerMatch = /\(([\s\S]*)\)\s+AS\s+_validacao/i.exec(wrapped);
+    const inner = innerMatch?.[1] ?? "";
+    expect(inner).not.toMatch(/\bORDER\s+BY\b/i);
+    expect(inner).toMatch(/GROUP BY cr\.CodEmpresa/i);
+
+    const janela = sqlValidacaoVazia(
+      "mssql",
+      "SELECT SUM(x) OVER (PARTITION BY a ORDER BY b) AS s FROM t",
+    );
+    expect(janela).toMatch(/OVER \(PARTITION BY a ORDER BY b\)/i);
+    expect(janela).toMatch(/WHERE 1 = 0/i);
   });
 
   it("não trata ::cast, @@var nem comentário como param", () => {

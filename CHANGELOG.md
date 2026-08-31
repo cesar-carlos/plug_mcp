@@ -31,6 +31,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- `consultaSemantica` reescreve alias do `sqlModelo` (`cr` / `[cr]`) na `expr` certificada para o nome físico da tabela no pacote. Não inventa JOIN.
+- `validar_consulta` / `validar_skill`: o wrap `_validacao` tira o `ORDER BY` externo (SQL Server 1033). `ORDER BY` em `OVER (...)` permanece.
 - `TABELA_FORA_DO_ESCOPO` em `descobrir_tabela` aponta `explorar_tabelas`; no validador SQL aponta `obter_skill`.
 - `documentationUrl` do envelope deixa de apontar para 404: a matriz é pública no mesmo origin do `/health`.
 - `consultar_dados` aceita `columnsMetadata` só com `name` (`type`/`nullable` opcionais no `outputSchema`). O MCP preenche as chaves (`null` ou tipo/`nullable` do grafo, também no alias de `column_ref`). `type` vazio do hub cai no grafo; CAST/agregação não copiam tipo.

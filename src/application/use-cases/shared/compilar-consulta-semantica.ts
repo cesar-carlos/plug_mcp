@@ -20,24 +20,61 @@ const colunaNoPacote = (escopo: EscopoSkill, coluna: string): boolean => {
   return false;
 };
 
-const tabelaDaColuna = (escopo: EscopoSkill, coluna: string): string | null => {
-  const wanted = lower(coluna);
+const unquoteIdent = (ident: string): string => ident.replace(/[[\]"`']/g, "").trim();
+
+const tabelaDaColunaNoPacote = (escopo: EscopoSkill, coluna: string): string | null => {
+  const wanted = lower(unquoteIdent(coluna));
   for (const [tabela, cols] of Object.entries(escopo.colunasPorTabela)) {
     if (cols.some((item) => item.toLowerCase() === wanted)) {
       return tabela;
     }
   }
-  return escopo.tabelas[0] ?? null;
+  return null;
 };
+
+const tabelaDaColuna = (escopo: EscopoSkill, coluna: string): string | null =>
+  tabelaDaColunaNoPacote(escopo, coluna) ?? escopo.tabelas[0] ?? null;
+
+const QUALIFICADOR_COLUNA =
+  /(?:\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_$#]*))\s*\.\s*(?:\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_$#]*))/g;
+
+/** Alias do sqlModelo (`cr`, `[cr]`) vira o nome físico da coluna no pacote. Não inventa JOIN. */
+const reescreverQualificadoresDaExpr = (escopo: EscopoSkill, expr: string): string =>
+  expr.replace(
+    QUALIFICADOR_COLUNA,
+    (
+      full,
+      brTable: string | undefined,
+      bareTable: string | undefined,
+      brCol: string | undefined,
+      bareCol: string | undefined,
+    ) => {
+      const qual = unquoteIdent(brTable ?? bareTable ?? "");
+      const col = unquoteIdent(brCol ?? bareCol ?? "");
+      if (!qual || !col) {
+        return full;
+      }
+      const tabelaNoPacote = escopo.tabelas.find((nome) => lower(nome) === lower(qual));
+      if (tabelaNoPacote) {
+        return `${tabelaNoPacote}.${col}`;
+      }
+      const fisica = tabelaDaColunaNoPacote(escopo, col);
+      return fisica ? `${fisica}.${col}` : full;
+    },
+  );
 
 const tabelasDaExpr = (escopo: EscopoSkill, expr: string): string[] => {
   const found = new Set<string>();
-  const re = /([A-Za-z_][A-Za-z0-9_$#]*)\.([A-Za-z_][A-Za-z0-9_$#]*)/g;
+  QUALIFICADOR_COLUNA.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(expr)) !== null) {
-    const tabela = match[1] ?? "";
-    if (escopo.tabelas.some((nome) => lower(nome) === lower(tabela))) {
-      found.add(escopo.tabelas.find((nome) => lower(nome) === lower(tabela)) ?? tabela);
+  while ((match = QUALIFICADOR_COLUNA.exec(expr)) !== null) {
+    const tabela = unquoteIdent(match[1] ?? match[2] ?? "");
+    if (!tabela) {
+      continue;
+    }
+    const noPacote = escopo.tabelas.find((nome) => lower(nome) === lower(tabela));
+    if (noPacote) {
+      found.add(noPacote);
     }
   }
   return [...found];
@@ -133,8 +170,9 @@ export const compilarConsultaSemantica = (
   recorte?: { empresa?: boolean; filial?: boolean },
 ): { sql: string; elementos: string[] } => {
   const metrica = resolverMetrica(escopo, consulta.metrica);
+  const exprCertificada = reescreverQualificadoresDaExpr(escopo, metrica.expr);
   const elementos = [`metrica:${consulta.metrica}`];
-  const select: string[] = [`${metrica.expr} AS ${metrica.alias}`];
+  const select: string[] = [`${exprCertificada} AS ${metrica.alias}`];
   const group: string[] = [];
   const dimensoesOk = new Set((metrica.dimensoesPermitidas ?? []).map(lower));
   for (const dim of consulta.dimensoes ?? []) {
@@ -236,7 +274,7 @@ export const compilarConsultaSemantica = (
       tabelas.push(nome);
     }
   };
-  for (const nome of tabelasDaExpr(escopo, metrica.expr)) {
+  for (const nome of tabelasDaExpr(escopo, exprCertificada)) {
     addTabela(nome);
   }
   addTabela(tabelaDaColuna(escopo, metrica.alias));

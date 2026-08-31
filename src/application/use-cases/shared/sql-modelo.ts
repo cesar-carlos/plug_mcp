@@ -8,6 +8,7 @@ import {
   rewriteAtParamsToColon,
   sqlDeclaraLimiteExterno,
   sqlTemOrderByExterno,
+  stripOrderByExterno,
 } from "./sql-scan.js";
 
 export {
@@ -462,7 +463,7 @@ export const coerceBoundParams = (
 };
 
 export const sqlValidacaoVazia = (dialeto: Dialeto, sql: string): string => {
-  const inner = sql.trim().replace(/;+\s*$/, "");
+  const inner = stripOrderByExterno(sql.trim().replace(/;+\s*$/, ""));
   const wrapped = `SELECT * FROM (${inner}) AS _validacao`;
   switch (dialeto) {
     case "mssql":

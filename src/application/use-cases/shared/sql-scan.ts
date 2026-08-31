@@ -160,6 +160,15 @@ export const maskSqlTopLevel = (sql: string): string => {
 export const sqlTemOrderByExterno = (sql: string): boolean =>
   /\bORDER\s+BY\b/i.test(maskSqlTopLevel(sql));
 
+/** Remove `ORDER BY` do SELECT externo (não toca `OVER (... ORDER BY ...)`). */
+export const stripOrderByExterno = (sql: string): string => {
+  const match = /\bORDER\s+BY\b/i.exec(maskSqlTopLevel(sql));
+  if (match?.index === undefined) {
+    return sql.trim();
+  }
+  return sql.slice(0, match.index).trim();
+};
+
 export const sqlDeclaraLimiteExterno = (sql: string): boolean => {
   const masked = maskSqlTopLevel(sql);
   return (

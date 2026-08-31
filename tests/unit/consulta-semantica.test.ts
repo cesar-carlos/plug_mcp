@@ -128,4 +128,18 @@ describe("consulta semântica", () => {
     expect(compiled.sql).toMatch(/receber\.empresa IN \(:empresas\)/i);
     expect(compiled.sql).toMatch(/GROUP BY cliente\.nome/i);
   });
+
+  it("reescreve alias do sqlModelo na expr certificada para o nome físico da tabela", () => {
+    const receber = parseEscopoSkill({
+      tabelas: ["ContaReceber"],
+      colunasPorTabela: { ContaReceber: ["DataVencimento", "CodEmpresa"] },
+      graoResultado: [],
+      metricasSaida: [{ alias: "DataVencimento", expr: "CAST([cr].[DataVencimento] AS DATE)" }],
+      relacionamentos: [],
+    });
+    const compiled = compilarConsultaSemantica({ versao: 1, metrica: "DataVencimento" }, receber);
+    expect(compiled.sql).not.toMatch(/\bcr\b/i);
+    expect(compiled.sql).toMatch(/CAST\(ContaReceber\.DataVencimento AS DATE\) AS DataVencimento/i);
+    expect(compiled.sql).toMatch(/FROM ContaReceber\b/i);
+  });
 });
