@@ -93,6 +93,67 @@ describe("coletarAvisosAnotacaoConsulta", () => {
     ).toBe(true);
   });
 
+  it("recusa regra da skill com tabelaId de outra tabela", () => {
+    expect(
+      anotacaoEntraNoEnvelopeConsulta({
+        nota: nota({
+          id: "x",
+          tipo: "regra",
+          titulo: "PK ContaReceber",
+          texto: "CodContaReceber",
+          skillId: pagar,
+          tabelaId: tabelaReceber,
+        }),
+        skillIds: new Set([pagar]),
+        tabelasSql: new Set(["contapagar"]),
+        tabelaNomePorId: new Map([[tabelaReceber, "ContaReceber"]]),
+      }),
+    ).toBe(false);
+  });
+
+  it("no teto de REGRA prefere as que citam a tabela do SQL", () => {
+    const avisos = coletarAvisosAnotacaoConsulta({
+      notas: [
+        nota({
+          id: "r0",
+          tipo: "regra",
+          titulo: "PK ContaReceber",
+          texto: "CodEmpresa+CodFilial+CodContaReceber",
+          skillId: pagar,
+        }),
+        nota({
+          id: "r1",
+          tipo: "regra",
+          titulo: "PK ContaPagar",
+          texto: "CodEmpresa+CodFilial+CodContaPagar",
+          skillId: pagar,
+        }),
+        nota({
+          id: "r2",
+          tipo: "regra",
+          titulo: "Join ContaPagar",
+          texto: "ContaPagar com TipoTitulo",
+          skillId: pagar,
+        }),
+        nota({
+          id: "r3",
+          tipo: "regra",
+          titulo: "Filtro ContaPagar",
+          texto: "Situacao da ContaPagar",
+          skillId: pagar,
+        }),
+      ],
+      skillIds: new Set([pagar]),
+      tabelasSql: new Set(["contapagar"]),
+      tabelaNomePorId: new Map([[tabelaReceber, "ContaReceber"]]),
+      aliasesSql: ["valor"],
+    });
+    const titulos = avisos.filter((item) => item.code === "REGRA").map((item) => item.message);
+    expect(titulos).toHaveLength(AVISOS_REGRA_TETO);
+    expect(titulos.every((item) => /ContaPagar/i.test(item))).toBe(true);
+    expect(titulos.some((item) => /ContaReceber/i.test(item))).toBe(false);
+  });
+
   it("capara REGRA e preserva METRICA", () => {
     const regras = Array.from({ length: AVISOS_REGRA_TETO + 2 }, (_, i) =>
       nota({

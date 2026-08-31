@@ -36,13 +36,35 @@ const skillOf = (
 });
 
 describe("esqueletoConsultaSemantica", () => {
-  it("prefere IR persistido", () => {
+  it("omite IR órfão sem alias de medida no pacote", () => {
     const skill = skillOf(escopoVazio(), {
       versao: 1,
       metrica: "receita",
       dimensoes: ["empresa"],
       periodo: { coluna: "emissao", de: ":de", ate: ":ate" },
     });
+    expect(esqueletoConsultaSemantica(skill)).toBeUndefined();
+  });
+
+  it("prefere IR persistido quando o alias é medida no pacote", () => {
+    const skill = skillOf(
+      parseEscopoSkill({
+        metricasSaida: [
+          {
+            alias: "receita",
+            expr: "SUM(v.valor)",
+            dimensoesPermitidas: ["empresa"],
+            colunaData: "emissao",
+          },
+        ],
+      }),
+      {
+        versao: 1,
+        metrica: "receita",
+        dimensoes: ["empresa"],
+        periodo: { coluna: "emissao", de: ":de", ate: ":ate" },
+      },
+    );
     expect(esqueletoConsultaSemantica(skill)).toEqual({
       versao: 1,
       metrica: "receita",
@@ -51,7 +73,7 @@ describe("esqueletoConsultaSemantica", () => {
     });
   });
 
-  it("cai no primeiro alias de medida", () => {
+  it("omite o primeiro alias de medida sem overlap nem IR", () => {
     const skill = skillOf(
       parseEscopoSkill({
         metricasSaida: [
@@ -64,12 +86,7 @@ describe("esqueletoConsultaSemantica", () => {
         ],
       }),
     );
-    expect(esqueletoConsultaSemantica(skill)).toEqual({
-      versao: 1,
-      metrica: "total",
-      dimensoes: ["filial"],
-      colunaData: "data",
-    });
+    expect(esqueletoConsultaSemantica(skill)).toBeUndefined();
   });
 
   it("esquece skill sem KPI", () => {
@@ -160,5 +177,17 @@ describe("esqueletoConsultaSemantica", () => {
     expect(esqueletoConsultaSemantica(skill, "Quanto tenho para receber?")).toMatchObject({
       metrica: "SaldoReceber",
     });
+  });
+
+  it("omite COUNT de quantidade na pergunta de saldo sem overlap de volume", () => {
+    const skill = skillOf(
+      parseEscopoSkill({
+        metricasSaida: [
+          { alias: "quantidade", expr: "COUNT(*)" },
+          { alias: "saldo", expr: "SUM(cr.SaldoReceber)" },
+        ],
+      }),
+    );
+    expect(esqueletoConsultaSemantica(skill, "quanto receber")).toBeUndefined();
   });
 });

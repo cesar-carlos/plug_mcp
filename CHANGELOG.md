@@ -21,7 +21,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Changed
 
-- Falta `kind: kpi` também quando a coluna no pacote tem `papel=medida` e não há overlay em `metricasSaida` (hint via `atualizar_skill` / `registrar_aprendizado tipo=metrica`). `alvo` é `tabela.coluna`; duas tabelas com a mesma medida geram duas faltas. Overlay com o alias (mesmo sem `definicao`) continua só a falta de agregação. Não bloqueia `podeLiberar`. CAST, papel não-medida e quantidade/parcelas não entram.
+- Falta `kind: kpi` também quando a coluna no pacote tem `papel=medida` e não há overlay em `metricasSaida` (hint via `atualizar_skill` / `registrar_aprendizado tipo=metrica`). `alvo` é `tabela.coluna`; duas tabelas com a mesma medida geram duas faltas. Overlay com o alias (mesmo sem `definicao`) continua só a falta de agregação. Não bloqueia `podeLiberar`. CAST, papel não-medida e quantidade/parcelas/`NroParc`/`NumParc`/`Qtde` não entram.
+- Hint de cruzamento em `SKILL_GAP` (`Não cruze skills`) só quando a pergunta parece cruzamento (`cruzar`/`juntas`/`única consulta`). Skill publicada irrelevante (ex. faturamento) pede `listar_skills` sem esse sufixo.
+- `consultaSemanticaSugerida`: IR só se o alias for medida no pacote; alias de quantidade fora salvo a pergunta falar de volume; score 0 sem IR certificado omite o esqueleto (não cai no primeiro `SUM`). Empate: IR, depois `definicao`, depois ordem.
 - `fluxoTreino.pacoteMinimo` ignora aliases que não são medida (agregação). JOIN isolado coberto por composto vira `nextAction: remover_relacionamento` em vez de `confirmar_relacionamento`.
 - FTS: stopwords `tente`/`fazer`/`erro`/`servidor`; `consultasAprendidas` genéricas (“tente fazer a consulta agora”) não entram no envelope. Continua **não** RAG.
 - Cobertura certificada de `buscar_contexto` usa conjunto de stems portugueses (inflexão `titulo`/`titulos` pode autorizar `completa`); tokens extra na pergunta continuam a impedir. `candidatos[].termosAusentes` e hint de parcial citam até 3 stems. `params.tipo` sai do haystack JS (alinhado ao FTS). Telemetria `busca.skillNotPublished`. `skill_gap` continua sem insert quando já há skill publicada.
@@ -36,10 +38,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - `TABELA_FORA_DO_ESCOPO` em `descobrir_tabela` aponta `explorar_tabelas`; no validador SQL aponta `obter_skill`.
 - `documentationUrl` do envelope deixa de apontar para 404: a matriz é pública no mesmo origin do `/health`.
 - `consultar_dados` aceita `columnsMetadata` só com `name` (`type`/`nullable` opcionais no `outputSchema`). O MCP preenche as chaves (`null` ou tipo/`nullable` do grafo, também no alias de `column_ref`). `type` vazio do hub cai no grafo; CAST/agregação não copiam tipo.
-- `consultar_dados.avisos` de `REGRA`/`METRICA` só da skill da chamada ou da tabela citada no SQL (teto de 3 `REGRA`). Globais de processo e regras de outro domínio não entram no envelope.
+- `consultar_dados.avisos` de `REGRA`/`METRICA`: com `tabelaId`, a tabela tem de estar no SQL mesmo se o `skillId` bater; teto de 3 `REGRA` ranqueia por overlap com tabelas/aliases do SELECT. Globais de processo e regras de outro domínio não entram.
 - `descobrir_tabela` omite nome que não é identificador SQL (título de anotação não vira coluna). `registrar_aprendizado` tipo=dicionário com título inválido grava a nota e não cria coluna no grafo.
-- `buscar_contexto` com cobertura completa devolve `fluxoTreino` da skill publicada (`publicar_skill` feito). `SKILL_GAP` sem skill em andamento que cubra a pergunta omite o checklist (não finge `criar_skill` pendente) e o hint não pede sinônimo nem cruzamento sem JOIN publicado.
-- `consultaSemanticaSugerida` ignora CAST/data em `metricasSaida`; só agregação. Sem medida certificada o esqueleto é omitido.
+- `buscar_contexto` com cobertura completa devolve `fluxoTreino` da skill publicada (`publicar_skill` feito). `SKILL_GAP` sem skill em andamento que cubra a pergunta omite o checklist (não finge `criar_skill` pendente) e o hint não pede sinônimo. Hint de cruzamento só na pergunta de cruzamento.
+- `consultaSemanticaSugerida` ignora CAST/data em `metricasSaida`; só agregação. Sem medida certificada, sem overlap e sem IR no pacote, o esqueleto é omitido.
 
 ## [0.2.0] - 2026-08-30
 

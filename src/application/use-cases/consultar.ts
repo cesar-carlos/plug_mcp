@@ -88,6 +88,7 @@ import {
   HINT_SKILL_GAP_CRUZAMENTO,
   hintRegraParcial,
   montarConhecimentos,
+  perguntaPareceCruzamento,
 } from "./shared/montar-conhecimentos.js";
 import {
   esqueletoDaPrimeiraSkillComKpi,
@@ -559,6 +560,10 @@ export class ConsultarDados {
     if (this.extras.anotacoes) {
       const notas = await this.extras.anotacoes.list(acesso.agentId);
       const tabelasSql = new Set(modelo.tabelas.map((tabela) => tabela.nome.toLowerCase()));
+      const aliasesSql = [
+        ...modelo.tabelas.flatMap((tabela) => (tabela.alias ? [tabela.alias] : [])),
+        ...modelo.colunas.map((coluna) => coluna.alias),
+      ];
       const skillIds = new Set(skillsComEscopo.map((item) => item.id));
       const tabelaNomePorId = new Map<string, string>();
       if (this.extras.grafo && notas.some((nota) => Boolean(nota.tabelaId))) {
@@ -573,6 +578,7 @@ export class ConsultarDados {
           skillIds,
           tabelasSql,
           tabelaNomePorId,
+          aliasesSql,
         }),
       );
     }
@@ -1357,19 +1363,21 @@ export class BuscarContexto {
     const capazesTreino = skillsParaTreinoUnidas.filter(
       (item) => coberturaDeSkill(item, query, sinonimos).cobertura === "completa",
     );
-    const skillsCompletas = skillsPublicadas.filter(
-      (skill) => coberturaDeSkill(skill, query, sinonimos).cobertura === "completa",
+    const idsCompletas = new Set(
+      candidatos.filter((item) => item.cobertura === "completa").map((item) => item.skillId),
     );
+    const skillsCompletas = skillsPublicadas.filter((skill) => idsCompletas.has(skill.id));
     const emAndamento = pickSkillInProgress(capazesTreino);
     const skillFluxo = consultaPermitida ? (skillsCompletas[0] ?? null) : emAndamento;
     const fluxoTreino = skillFluxo
       ? await fluxoForAgentSkill(this.grafo, acesso.agentId, skillFluxo)
       : undefined;
     const precisaListar = !consultaPermitida && publicadasNoAgent.length > 0;
+    const hintCruzamento = perguntaPareceCruzamento(query) ? ` ${HINT_SKILL_GAP_CRUZAMENTO}` : "";
     const gapHint = emAndamento
       ? `Há skill em andamento "${emAndamento.nome}" (${emAndamento.status}). Continue o fluxo: ${fluxoTreino?.proximoPasso ?? "validar_skill"}. Não chame consultar_dados.`
       : precisaListar
-        ? `A busca por termos não prova ausência. Chame listar_skills antes de desistir. ${HINT_SKILL_GAP_CRUZAMENTO} Não invente tabela, coluna nem JOIN.`
+        ? `A busca por termos não prova ausência. Chame listar_skills antes de desistir.${hintCruzamento} Não invente tabela, coluna nem JOIN.`
         : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
     const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 1;
     const skillNaoPublicada = !consultaPermitida && capazesTreino.length > 0;
@@ -1457,6 +1465,7 @@ export class BuscarContexto {
       conhecimentos,
       candidatos.length > 0,
       termosAusentesHint,
+      query,
     );
     const consultaSemanticaSugerida = consultaPermitida
       ? esqueletoDaPrimeiraSkillComKpi(skillsCompletas, query)

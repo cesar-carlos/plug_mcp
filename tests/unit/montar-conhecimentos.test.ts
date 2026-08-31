@@ -6,6 +6,7 @@ import { CONHECIMENTOS_TETO } from "../../src/domain/entities/conhecimento.js";
 import {
   hintRegraParcial,
   montarConhecimentos,
+  perguntaPareceCruzamento,
   type FiltroConhecimentos,
 } from "../../src/application/use-cases/shared/montar-conhecimentos.js";
 
@@ -256,26 +257,40 @@ describe("hintRegraParcial", () => {
     expect(hintRegraParcial("desconhecida", [], true)).toBeUndefined();
   });
 
-  it("desconhecida com regra skill-scoped ainda pede obter_skill", () => {
-    const hint = hintRegraParcial(
-      "desconhecida",
-      [
-        {
-          tipo: "regra",
-          id: "n1",
-          titulo: "Fórmula",
-          trecho: "cashbackxyz",
-          fonte: "anotacao",
-          skillId: "s1",
-          tabelaId: null,
-          score: 1,
-        },
-      ],
-      true,
-    );
+  it("desconhecida com regra skill-scoped pede obter_skill sem sinônimo", () => {
+    const conhecimentos = [
+      {
+        tipo: "regra" as const,
+        id: "n1",
+        titulo: "Fórmula",
+        trecho: "cashbackxyz",
+        fonte: "anotacao" as const,
+        skillId: "s1",
+        tabelaId: null,
+        score: 1,
+      },
+    ];
+    const hint = hintRegraParcial("desconhecida", conhecimentos, true);
     expect(hint).toMatch(/obter_skill/);
     expect(hint).not.toMatch(/sinonimo/);
-    expect(hint).toMatch(/Não cruze skills/);
+    expect(hint).not.toMatch(/Não cruze skills/);
+    expect(
+      hintRegraParcial(
+        "desconhecida",
+        conhecimentos,
+        true,
+        [],
+        "Posso cruzar clientes e fornecedores em uma única consulta?",
+      ),
+    ).toMatch(/Não cruze skills/);
+  });
+
+  it("perguntaPareceCruzamento distingue faturamento de cruzamento", () => {
+    expect(perguntaPareceCruzamento("Qual meu faturamento mensal?")).toBe(false);
+    expect(
+      perguntaPareceCruzamento("Posso cruzar clientes e fornecedores em uma única consulta?"),
+    ).toBe(true);
+    expect(perguntaPareceCruzamento("juntas numa unica consulta")).toBe(true);
   });
 
   it("não ranqueia consulta aprendida genérica numa pergunta de cruzamento", () => {

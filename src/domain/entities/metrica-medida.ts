@@ -16,7 +16,7 @@ export const metricasMedidaSemDefinicao = (escopo: EscopoSkill): MetricaSaida[] 
 export const colunaPapelMedida = (papel: PapelColuna | null | undefined): boolean =>
   papel === "medida";
 
-const NOME_QUANTIDADE = /quantidade|parcelas|\bqtd\b|^qtd/i;
+const NOME_QUANTIDADE = /quantidade|parcelas|\bqtd\b|^qtd|qtde|nroparc|numparc|\bnparc\b/i;
 
 export const colunaNomeQuantidade = (nome: string): boolean => NOME_QUANTIDADE.test(nome.trim());
 

@@ -241,7 +241,7 @@ describe("gates JOIN isolado e KPI", () => {
     ]);
   });
 
-  it("QuantidadeParcelas não pede overlay de KPI financeiro", async () => {
+  it("QuantidadeParcelas, NroParc e NumParc não pedem overlay de KPI financeiro", async () => {
     const grafo = new InMemoryGrafoRepository();
     const receber = await grafo.mergeTabela({
       agentId,
@@ -273,13 +273,29 @@ describe("gates JOIN isolado e KPI", () => {
       origem: "validado_execucao",
       autorUsuarioId: usuarioId,
     });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "NroParc",
+      tipo: "int",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "NumParc",
+      tipo: "int",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
     const faltas = await listarFatosIncompletos(
       grafo,
       agentId,
       {
         tabelas: ["ContaReceber"],
         colunasPorTabela: {
-          ContaReceber: ["SaldoReceber", "Valor", "QuantidadeParcelas"],
+          ContaReceber: ["SaldoReceber", "Valor", "QuantidadeParcelas", "NroParc", "NumParc"],
         },
         relacionamentos: [],
         graoPorTabela: {},

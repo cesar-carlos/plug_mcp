@@ -1,5 +1,5 @@
 import type { ConsultaSemantica } from "../../../domain/entities/consulta-semantica.js";
-import { metricaEhMedida } from "../../../domain/entities/metrica-medida.js";
+import { colunaNomeQuantidade, metricaEhMedida } from "../../../domain/entities/metrica-medida.js";
 import type { Skill } from "../../../domain/entities/skill.js";
 import { overlapCapacidade } from "./cobertura-skill.js";
 
@@ -10,8 +10,16 @@ export interface ConsultaSemanticaSugerida {
   readonly colunaData?: string;
 }
 
+const HAYSTACK_QUANTIDADE = "quantidade volume qtd qtde parcelas";
+
 const haystackKpi = (alias: string, definicao?: string, grao?: string): string =>
   `${alias} ${definicao ?? ""} ${grao ?? ""}`;
+
+const perguntaFalaQuantidade = (query: string): boolean =>
+  overlapCapacidade(query, HAYSTACK_QUANTIDADE) > 0;
+
+const omitirAliasQuantidade = (alias: string, query: string): boolean =>
+  colunaNomeQuantidade(alias) && !perguntaFalaQuantidade(query);
 
 const deIr = (ir: ConsultaSemantica): ConsultaSemanticaSugerida => ({
   versao: 1,
@@ -23,6 +31,7 @@ const deIr = (ir: ConsultaSemantica): ConsultaSemanticaSugerida => ({
 interface CandidatoEsqueleto {
   readonly score: number;
   readonly fromIr: boolean;
+  readonly hasDefinicao: boolean;
   readonly order: number;
   readonly esqueleto: ConsultaSemanticaSugerida;
 }
@@ -40,8 +49,24 @@ const melhorCandidato = (
     if (a.fromIr !== b.fromIr) {
       return a.fromIr ? -1 : 1;
     }
+    if (a.hasDefinicao !== b.hasDefinicao) {
+      return a.hasDefinicao ? -1 : 1;
+    }
     return a.order - b.order;
   })[0];
+};
+
+const escolherEsqueleto = (
+  candidatos: readonly CandidatoEsqueleto[],
+): ConsultaSemanticaSugerida | undefined => {
+  const vencedor = melhorCandidato(candidatos);
+  if (!vencedor) {
+    return undefined;
+  }
+  if (vencedor.score === 0 && !vencedor.fromIr) {
+    return undefined;
+  }
+  return vencedor.esqueleto;
 };
 
 export const esqueletoConsultaSemantica = (
@@ -54,22 +79,24 @@ export const esqueletoConsultaSemantica = (
     const metrica = skill.escopo.metricasSaida.find(
       (item) => item.alias.toLowerCase() === ir.metrica.toLowerCase(),
     );
-    if (!metrica || metricaEhMedida(metrica)) {
+    if (metrica && metricaEhMedida(metrica) && !omitirAliasQuantidade(ir.metrica, query)) {
       candidatos.push({
-        score: overlapCapacidade(query, haystackKpi(ir.metrica, metrica?.definicao, metrica?.grao)),
+        score: overlapCapacidade(query, haystackKpi(ir.metrica, metrica.definicao, metrica.grao)),
         fromIr: true,
+        hasDefinicao: Boolean(metrica.definicao?.trim()),
         order: 0,
         esqueleto: deIr(ir),
       });
     }
   }
   skill.escopo.metricasSaida.forEach((item, index) => {
-    if (!metricaEhMedida(item)) {
+    if (!metricaEhMedida(item) || omitirAliasQuantidade(item.alias, query)) {
       return;
     }
     candidatos.push({
       score: overlapCapacidade(query, haystackKpi(item.alias, item.definicao, item.grao)),
       fromIr: false,
+      hasDefinicao: Boolean(item.definicao?.trim()),
       order: index + 1,
       esqueleto: {
         versao: 1,
@@ -81,7 +108,7 @@ export const esqueletoConsultaSemantica = (
       },
     });
   });
-  return melhorCandidato(candidatos)?.esqueleto;
+  return escolherEsqueleto(candidatos);
 };
 
 export const esqueletoDaPrimeiraSkillComKpi = (
@@ -106,9 +133,10 @@ export const esqueletoDaPrimeiraSkillComKpi = (
         haystackKpi(esqueleto.metrica, metrica?.definicao, metrica?.grao),
       ),
       fromIr,
+      hasDefinicao: Boolean(metrica?.definicao?.trim()),
       order: skillIndex,
       esqueleto,
     });
   });
-  return melhorCandidato(candidatos)?.esqueleto;
+  return escolherEsqueleto(candidatos);
 };

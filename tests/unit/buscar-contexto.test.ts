@@ -673,6 +673,7 @@ describe("BuscarContexto", () => {
           {
             alias: "total",
             expr: "SUM(p.valor)",
+            definicao: "total de produtos",
             dimensoesPermitidas: ["empresa"],
             colunaData: "data",
           },
@@ -825,7 +826,7 @@ describe("BuscarContexto", () => {
     expect(result.consultaPermitida).toBe(false);
     expect(result.fluxoTreino).toBeUndefined();
     expect(result.gap?.hint).toMatch(/listar_skills/);
-    expect(result.gap?.hint).toMatch(/Não cruze skills/);
+    expect(result.gap?.hint).not.toMatch(/Não cruze skills/);
     expect(result.gap?.hint).not.toMatch(/sinonimo/);
     expect(result.hint ?? "").not.toMatch(/sinonimo/);
     expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(0);

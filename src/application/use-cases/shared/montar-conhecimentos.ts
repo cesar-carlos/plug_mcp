@@ -217,11 +217,16 @@ export const montarConhecimentos = (input: {
 export const HINT_SKILL_GAP_CRUZAMENTO =
   "Não cruze skills sem relacionamento publicado no pacote. confirmar_relacionamento só se o usuário pedir. Não registre sinônimo por este gap.";
 
+const CRUZAMENTO_RE = /\bcruzar\b|\bcruzamento\b|\bjuntas\b|única consulta|unica consulta/i;
+
+export const perguntaPareceCruzamento = (query: string): boolean => CRUZAMENTO_RE.test(query);
+
 export const hintRegraParcial = (
   cobertura: "completa" | "parcial" | "desconhecida",
   conhecimentos: readonly HitConhecimento[],
   temCandidatos = false,
   termosAusentes: readonly string[] = [],
+  query = "",
 ): string | undefined => {
   if (!temCandidatos || cobertura === "completa") {
     return undefined;
@@ -240,5 +245,6 @@ export const hintRegraParcial = (
   if (!narrativa) {
     return undefined;
   }
-  return `Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta. ${HINT_SKILL_GAP_CRUZAMENTO}`;
+  const cruzamento = perguntaPareceCruzamento(query) ? ` ${HINT_SKILL_GAP_CRUZAMENTO}` : "";
+  return `Há regra na skill ligada a esta pergunta. Leia obter_skill e validar_consulta.${cruzamento}`;
 };
