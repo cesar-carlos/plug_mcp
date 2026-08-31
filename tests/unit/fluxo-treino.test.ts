@@ -474,4 +474,50 @@ describe("fluxo guiado de treino", () => {
     expect(fluxo.podeLiberar).toBe(true);
     expect(fluxo.proximoPasso).toBe("publicar_skill");
   });
+
+  it("medida no SELECT detalhe sem overlay não bloqueia podeLiberar", () => {
+    const detalhe = {
+      id: "1",
+      agentId,
+      slug: "receber",
+      nome: "Receber",
+      descricao: "d",
+      sqlModelo: "SELECT r.SaldoReceber FROM receber r WHERE r.cod > 0",
+      params: [],
+      versao: 1,
+      pacoteVersao: 2,
+      motivoRevalidacao: null,
+      consultaSemantica: null,
+      politicaConsulta: null,
+      autorUsuarioId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: "validada" as const,
+      escopo: {
+        tabelas: ["receber"],
+        colunasPorTabela: { receber: ["SaldoReceber"] },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [],
+        pacoteVersao: 2,
+      },
+    };
+    const fluxo = buildFluxoTreino({
+      treinado: true,
+      skill: detalhe,
+      conflitosPendentes: 0,
+      perfilCompleto: true,
+      faltas: [
+        {
+          kind: "kpi" as const,
+          alvo: "SaldoReceber",
+          message: "Medida receber.SaldoReceber sem definição em metricasSaida.",
+          nextAction: "atualizar_skill" as const,
+        },
+      ],
+    });
+    expect(fluxo.pacoteMinimo).toBe(true);
+    expect(fluxo.podeLiberar).toBe(true);
+  });
 });

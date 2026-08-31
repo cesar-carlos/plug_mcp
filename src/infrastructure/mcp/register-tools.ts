@@ -433,8 +433,8 @@ export const registerTools = (
           .array(
             z.object({
               name: z.string(),
-              type: z.string().nullable(),
-              nullable: z.boolean().nullable(),
+              type: z.string().optional().nullable(),
+              nullable: z.boolean().optional().nullable(),
             }),
           )
           .optional(),

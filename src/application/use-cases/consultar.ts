@@ -110,6 +110,11 @@ import {
 } from "./shared/schema-introspection.js";
 import { inferirFormatoColuna, inferirPapelColuna } from "./shared/inferir-papel.js";
 import { inferirSensibilidadeColuna } from "../../domain/entities/privacidade.js";
+import {
+  mergeColumnHints,
+  normalizeColumnsMetadata,
+  type ColumnMetadataHint,
+} from "./shared/columns-metadata.js";
 
 const QUERY_CELL_MAX_CHARS = 2_048;
 
@@ -152,7 +157,11 @@ interface CachedQueryPayload {
   readonly asOf: string;
   readonly servidoEm: string;
   readonly truncated: boolean;
-  readonly columnsMetadata?: readonly { name: string; type?: string; nullable?: boolean }[];
+  readonly columnsMetadata?: readonly {
+    name: string;
+    type?: string | null;
+    nullable?: boolean | null;
+  }[];
 }
 
 const parseCachedQuery = (raw: string): CachedQueryPayload | null => {
@@ -176,7 +185,7 @@ const parseCachedQuery = (raw: string): CachedQueryPayload | null => {
       ...(Array.isArray(rec.columnsMetadata)
         ? {
             columnsMetadata: rec.columnsMetadata.filter(
-              (item): item is { name: string; type?: string; nullable?: boolean } =>
+              (item): item is { name: string; type?: string | null; nullable?: boolean | null } =>
                 Boolean(item) &&
                 typeof item === "object" &&
                 typeof (item as { name?: unknown }).name === "string",
@@ -352,7 +361,7 @@ export class ConsultarDados {
     paramsUsados: Record<string, unknown>;
     asOf: string;
     recorte: { tipoJoin: string; tabela: string; on: string | null; opcional?: boolean }[];
-    columnsMetadata?: readonly { name: string; type?: string; nullable?: boolean }[];
+    columnsMetadata?: readonly { name: string; type?: string | null; nullable?: boolean | null }[];
     escopoAplicado: { empresa?: string; filial?: string; consolidado: boolean };
     avisos: { code: string; message: string }[];
     aprendizadoGravado?: AprendizadoGravado;
@@ -508,6 +517,7 @@ export class ConsultarDados {
       }
     }
     const colunasDasTabelas: Record<string, string[]> = {};
+    const columnHints = new Map<string, ColumnMetadataHint>();
     if (this.extras.grafo) {
       for (const tabela of modelo.tabelas) {
         const found = await this.extras.grafo.findTabelaByNome(acesso.agentId, tabela.nome);
@@ -516,6 +526,7 @@ export class ConsultarDados {
         }
         const cols = await this.extras.grafo.listColunas(found.id);
         colunasDasTabelas[tabela.nome] = cols.map((coluna) => coluna.nome);
+        mergeColumnHints(columnHints, cols);
       }
       const astPriv = tryParseSelect(sqlExecutar, acesso.dialeto);
       if (astPriv) {
@@ -666,7 +677,11 @@ export class ConsultarDados {
               paramsUsados: params,
               asOf: parsed.asOf,
               recorte,
-              columnsMetadata: parsed.columnsMetadata,
+              columnsMetadata: normalizeColumnsMetadata(
+                parsed.columns,
+                parsed.columnsMetadata,
+                columnHints,
+              ),
               escopoAplicado: {
                 empresa: acesso.escopoPadrao?.empresa,
                 filial: acesso.escopoPadrao?.filial,
@@ -743,19 +758,25 @@ export class ConsultarDados {
       if (consultaSemantica && !skill.consultaSemantica) {
         await this.skills.update(skill.id, { consultaSemantica });
       }
+      const columns =
+        result.columns.length > 0
+          ? result.columns
+          : (result.columnsMetadata?.map((item) => item.name) ?? []);
+      const columnsMetadata = normalizeColumnsMetadata(
+        columns,
+        result.columnsMetadata,
+        columnHints,
+      );
       if (cacheable && this.extras.cache) {
         await this.extras.cache.set(
           cacheKey,
           JSON.stringify({
-            columns:
-              result.columns.length > 0
-                ? result.columns
-                : (result.columnsMetadata?.map((item) => item.name) ?? []),
+            columns,
             rows,
             asOf,
             servidoEm: asOf,
             truncated,
-            columnsMetadata: result.columnsMetadata,
+            columnsMetadata,
           }),
           this.extras.cacheTtlMs ?? 60_000,
         );
@@ -774,10 +795,7 @@ export class ConsultarDados {
         success: true,
         skillId: skill.id,
         skillIds: skillsComEscopo.map((item) => item.id),
-        columns:
-          result.columns.length > 0
-            ? result.columns
-            : (result.columnsMetadata?.map((item) => item.name) ?? []),
+        columns,
         rows,
         rowCount: rows.length,
         maxRowsApplied: maxRows,
@@ -786,7 +804,7 @@ export class ConsultarDados {
         paramsUsados: params,
         asOf,
         recorte,
-        columnsMetadata: result.columnsMetadata,
+        columnsMetadata,
         escopoAplicado: {
           empresa: acesso.escopoPadrao?.empresa,
           filial: acesso.escopoPadrao?.filial,

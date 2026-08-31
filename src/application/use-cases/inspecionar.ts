@@ -30,6 +30,11 @@ import { mascararLinhas, lookupSensibilidadeGrafo } from "./shared/mascarar-linh
 import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
 import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
 import { aplicarDerivaEsquema, assinaturaTabela } from "./shared/schema-drift.js";
+import {
+  mergeColumnHints,
+  normalizeColumnsMetadata,
+  type ColumnMetadataHint,
+} from "./shared/columns-metadata.js";
 
 export const INSPECAO_MAX_ROWS = 100;
 export const FINALIDADES_INSPECAO = [
@@ -74,7 +79,7 @@ export class InspecionarConsulta {
     maxRowsApplied: number;
     truncated: boolean;
     colunasMascaradas: readonly string[];
-    columnsMetadata?: readonly { name: string; type?: string; nullable?: boolean }[];
+    columnsMetadata?: readonly { name: string; type?: string | null; nullable?: boolean | null }[];
     sqlExecutado: string;
     avisos: { code: string; message: string }[];
   }> {
@@ -171,6 +176,7 @@ export class InspecionarConsulta {
       ? ast.tabelas.map((tabela) => tabela.nome)
       : parseSqlModelo(sql).tabelas.map((tabela) => tabela.nome);
     const colunasDasTabelas: Record<string, string[]> = {};
+    const columnHints = new Map<string, ColumnMetadataHint>();
     for (const tabelaNome of tabelasSql) {
       const found = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
       if (!found) {
@@ -178,6 +184,7 @@ export class InspecionarConsulta {
       }
       const cols = await this.grafo.listColunas(found.id);
       colunasDasTabelas[tabelaNome] = cols.map((coluna) => coluna.nome);
+      mergeColumnHints(columnHints, cols);
     }
     exigirFiltroEscopoPadrao({
       sql,
@@ -237,7 +244,7 @@ export class InspecionarConsulta {
         maxRowsApplied: INSPECAO_MAX_ROWS,
         truncated: result.rows.length >= INSPECAO_MAX_ROWS || result.truncated === true,
         colunasMascaradas: masked.colunasMascaradas,
-        columnsMetadata: result.columnsMetadata,
+        columnsMetadata: normalizeColumnsMetadata(columns, result.columnsMetadata, columnHints),
         sqlExecutado: sqlParaOdbc(sql),
         avisos: [
           ...(ast ? coletarAvisosValidacao(ast) : []),

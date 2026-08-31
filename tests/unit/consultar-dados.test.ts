@@ -135,6 +135,32 @@ describe("ConsultarDados", () => {
     expect(plug.lastParams).toEqual({ codigo: 99 });
   });
 
+  it("columnsMetadata preenche type/nullable quando o hub só manda name", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => ({
+      columns: ["codigo"],
+      columnsMetadata: [{ name: "codigo" }],
+      rows: [{ codigo: 1 }],
+    });
+    const skill = await skills.create({
+      agentId,
+      slug: "meta-name-only",
+      nome: "Produto",
+      descricao: "Busca produto",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "consulta de teste",
+      skillId: skill.id,
+      params: { codigo: 1 },
+    });
+    expect(result.sqlExecutado).toContain("produto");
+    expect(result.columnsMetadata).toEqual([{ name: "codigo", type: null, nullable: null }]);
+  });
+
   it("asOf usa o timezone do acesso", async () => {
     const { consultar, created, skills, acessos } = await setupAcesso();
     await acessos.updateEscopoPadrao(created.acessoId, null, "America/Cuiaba");

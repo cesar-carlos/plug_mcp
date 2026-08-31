@@ -130,4 +130,60 @@ describe("gates JOIN isolado e KPI", () => {
     expect(faltas.filter((item) => item.nextAction === "remover_relacionamento").length).toBe(2);
     expect(faltas.some((item) => item.kind === "kpi" && item.alvo === "SaldoReceber")).toBe(true);
   });
+
+  it("coluna papel=medida no pacote sem metricasSaida vira falta kpi sem bloquear CAST", async () => {
+    const grafo = new InMemoryGrafoRepository();
+    const receber = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaReceber",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "SaldoReceber",
+      tipo: "numeric",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "Situacao",
+      tipo: "char",
+      papel: "codigo",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "DataEmissao",
+      tipo: "datetime",
+      papel: "data",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    const faltas = await listarFatosIncompletos(
+      grafo,
+      agentId,
+      {
+        tabelas: ["ContaReceber"],
+        colunasPorTabela: {
+          ContaReceber: ["SaldoReceber", "Situacao", "DataEmissao"],
+        },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [],
+        pacoteVersao: PACOTE_VERSAO_ATUAL,
+      },
+      { exigirCardinalidade: false, exigirTipoColuna: false },
+    );
+    const kpis = faltas.filter((item) => item.kind === "kpi");
+    expect(kpis).toHaveLength(1);
+    expect(kpis[0]?.alvo).toBe("SaldoReceber");
+    expect(kpis[0]?.nextAction).toBe("atualizar_skill");
+    expect(kpis[0]?.message).toMatch(/registrar_aprendizado tipo=metrica/);
+    expect(faltas.some((item) => item.alvo.toLowerCase().includes("situacao"))).toBe(false);
+  });
 });

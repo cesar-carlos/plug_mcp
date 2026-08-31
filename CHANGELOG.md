@@ -14,13 +14,14 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 ### Added
 
 - `GET /docs/mcp/error-mapping.md` serve a matriz de erros (mesmo path de `documentationUrl`). Sem HTML extra.
-- `faltas[]` de medida (`kind: kpi`, `nextAction: atualizar_skill`) quando o SELECT tem agregação/`SUM` sem `definicao` — **não** bloqueia `podeLiberar` nem o pacote mínimo. CAST de data/`Situacao` não conta como KPI.
+- `faltas[]` de medida (`kind: kpi`, `nextAction: atualizar_skill`) quando há agregação/`SUM` sem `definicao` — **não** bloqueia `podeLiberar` nem o pacote mínimo. CAST de data/`Situacao` não conta como KPI.
 - `publicar_skill` sem `politicaConsulta` devolve o default (`maxRows: 500`, `timeoutMs: 30000`) no `resumoPublicacao`; na confirmação o servidor grava esse default. Sem recorte empresa/filial nem `exigirRecorteTemporal`.
 - Envelope de `TABELA_FORA_DO_ESCOPO` / `COLUNA_FORA_DO_ESCOPO` / `JOIN_DESCONHECIDO` com `category`, `nextAction` e `documentationUrl`. `inspecionar_consulta` devolve `columnsMetadata`.
 - Resources: `initialize` declara `capabilities.resources`; instructions citam `guia://paginacao`, `guia://dialeto/{dialeto}` e `skill://` (só publicada).
 
 ### Changed
 
+- Falta `kind: kpi` também quando a coluna no pacote tem `papel=medida` e não há `definicao` em `metricasSaida` (hint overlay via `atualizar_skill` / `registrar_aprendizado tipo=metrica`). Continua sem bloquear `podeLiberar`. CAST e papel não-medida não entram.
 - `fluxoTreino.pacoteMinimo` ignora aliases que não são medida (agregação). JOIN isolado coberto por composto vira `nextAction: remover_relacionamento` em vez de `confirmar_relacionamento`.
 - FTS: stopwords `tente`/`fazer`/`erro`/`servidor`; `consultasAprendidas` genéricas (“tente fazer a consulta agora”) não entram no envelope. Continua **não** RAG.
 - Cobertura certificada de `buscar_contexto` usa conjunto de stems portugueses (inflexão `titulo`/`titulos` pode autorizar `completa`); tokens extra na pergunta continuam a impedir. `candidatos[].termosAusentes` e hint de parcial citam até 3 stems. `params.tipo` sai do haystack JS (alinhado ao FTS). Telemetria `busca.skillNotPublished`. `skill_gap` continua sem insert quando já há skill publicada.
@@ -32,6 +33,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 - `TABELA_FORA_DO_ESCOPO` em `descobrir_tabela` aponta `explorar_tabelas`; no validador SQL aponta `obter_skill`.
 - `documentationUrl` do envelope deixa de apontar para 404: a matriz é pública no mesmo origin do `/health`.
+- `consultar_dados` aceita `columnsMetadata` só com `name` (`type`/`nullable` opcionais no `outputSchema`). O MCP preenche as chaves (`null` ou tipo/`nullable` do grafo) para o cliente MCP não recusar o envelope.
 
 ## [0.2.0] - 2026-08-30
 

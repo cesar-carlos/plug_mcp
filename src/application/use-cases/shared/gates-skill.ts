@@ -211,27 +211,22 @@ export const listarFatosIncompletos = async (
         (item) =>
           item.alias.toLowerCase() === colunaNome.toLowerCase() && Boolean(item.definicao?.trim()),
       );
-      const temAlias = escopo.metricasSaida.some(
-        (item) => item.alias.toLowerCase() === colunaNome.toLowerCase(),
-      );
-      if (!coberta && !temAlias) {
+      if (coberta) {
         continue;
       }
-      if (!coberta) {
-        const alvo = `${nome}.${colunaNome}`;
-        const jaTem = out.some(
-          (item) => item.kind === "kpi" && item.alvo.toLowerCase() === colunaNome.toLowerCase(),
+      const alvo = `${nome}.${colunaNome}`;
+      const jaTem = out.some(
+        (item) => item.kind === "kpi" && item.alvo.toLowerCase() === colunaNome.toLowerCase(),
+      );
+      if (!jaTem) {
+        out.push(
+          falta(
+            "kpi",
+            colunaNome,
+            `Medida ${alvo} sem definição em metricasSaida. Overlay via atualizar_skill.metricasSaida ou registrar_aprendizado tipo=metrica. Não invente a definição.`,
+            "atualizar_skill",
+          ),
         );
-        if (!jaTem) {
-          out.push(
-            falta(
-              "kpi",
-              colunaNome,
-              `Medida ${alvo} sem definição em metricasSaida. Overlay via atualizar_skill.metricasSaida.`,
-              "atualizar_skill",
-            ),
-          );
-        }
       }
     }
   }

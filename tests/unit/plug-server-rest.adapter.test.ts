@@ -119,4 +119,19 @@ describe("normalizeSqlResult", () => {
     expect(empty.columns).toEqual(["id"]);
     expect(empty.columnsMetadata).toEqual([{ name: "id", type: "int", nullable: false }]);
   });
+
+  it("mantém column_metadata só com name", () => {
+    const named = normalizeSqlResult({
+      response: {
+        item: {
+          result: {
+            columns: ["SaldoReceber"],
+            rows: [{ SaldoReceber: 1 }],
+            column_metadata: [{ name: "SaldoReceber" }],
+          },
+        },
+      },
+    });
+    expect(named.columnsMetadata).toEqual([{ name: "SaldoReceber" }]);
+  });
 });
