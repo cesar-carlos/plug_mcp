@@ -181,9 +181,63 @@ describe("gates JOIN isolado e KPI", () => {
     );
     const kpis = faltas.filter((item) => item.kind === "kpi");
     expect(kpis).toHaveLength(1);
-    expect(kpis[0]?.alvo).toBe("SaldoReceber");
+    expect(kpis[0]?.alvo).toBe("ContaReceber.SaldoReceber");
     expect(kpis[0]?.nextAction).toBe("atualizar_skill");
     expect(kpis[0]?.message).toMatch(/registrar_aprendizado tipo=metrica/);
     expect(faltas.some((item) => item.alvo.toLowerCase().includes("situacao"))).toBe(false);
+  });
+
+  it("duas tabelas com a mesma medida e overlay vazio geram duas faltas kpi", async () => {
+    const grafo = new InMemoryGrafoRepository();
+    const receber = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaReceber",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    const pagar = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaPagar",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: receber.tabela.id,
+      nome: "SaldoReceber",
+      tipo: "numeric",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: pagar.tabela.id,
+      nome: "SaldoReceber",
+      tipo: "numeric",
+      papel: "medida",
+      origem: "validado_execucao",
+      autorUsuarioId: usuarioId,
+    });
+    const faltas = await listarFatosIncompletos(
+      grafo,
+      agentId,
+      {
+        tabelas: ["ContaReceber", "ContaPagar"],
+        colunasPorTabela: {
+          ContaReceber: ["SaldoReceber"],
+          ContaPagar: ["SaldoReceber"],
+        },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: [],
+        metricasSaida: [],
+        pacoteVersao: PACOTE_VERSAO_ATUAL,
+      },
+      { exigirCardinalidade: false, exigirTipoColuna: false },
+    );
+    const kpis = faltas.filter((item) => item.kind === "kpi");
+    expect(kpis.map((item) => item.alvo).sort()).toEqual([
+      "ContaPagar.SaldoReceber",
+      "ContaReceber.SaldoReceber",
+    ]);
   });
 });

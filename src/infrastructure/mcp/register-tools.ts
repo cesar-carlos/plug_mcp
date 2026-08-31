@@ -6,6 +6,7 @@ import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import { currentAccountId } from "./account-context.js";
 import { createToolRunner } from "./tool-result.js";
+import { columnMetadataItemSchema } from "../../application/use-cases/shared/columns-metadata.js";
 import type {
   AdicionarAcesso,
   AtualizarCredencialPlug,
@@ -429,15 +430,7 @@ export const registerTools = (
         skillId: z.string(),
         skillIds: z.array(z.string()),
         columns: z.array(z.string()),
-        columnsMetadata: z
-          .array(
-            z.object({
-              name: z.string(),
-              type: z.string().optional().nullable(),
-              nullable: z.boolean().optional().nullable(),
-            }),
-          )
-          .optional(),
+        columnsMetadata: z.array(columnMetadataItemSchema).optional(),
         rows: z.array(z.record(z.string(), z.unknown())),
         rowCount: z.number(),
         maxRowsApplied: z.number(),

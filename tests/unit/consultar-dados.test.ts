@@ -8,6 +8,7 @@ import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.j
 import {
   InMemoryAcessoRepository,
   InMemoryAuditLog,
+  InMemoryGrafoRepository,
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
@@ -159,6 +160,82 @@ describe("ConsultarDados", () => {
     });
     expect(result.sqlExecutado).toContain("produto");
     expect(result.columnsMetadata).toEqual([{ name: "codigo", type: null, nullable: null }]);
+  });
+
+  it("columnsMetadata usa tipo do grafo no alias de column_ref quando o hub omite", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const audit = new InMemoryAuditLog();
+    const registrar = new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    );
+    const created = await registrar.execute({
+      email: "alias@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    const produto = await grafo.mergeTabela({
+      agentId,
+      nome: "produto",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: produto.tabela.id,
+      nome: "codprod",
+      tipo: "int",
+      nullable: false,
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    plug.sqlImpl = async () => ({
+      columns: ["codigo"],
+      columnsMetadata: [{ name: "codigo" }],
+      rows: [{ codigo: 1 }],
+    });
+    const consultar = new ConsultarDados(
+      acessos,
+      skills,
+      plug,
+      {
+        getAccessToken: async () => "access-test",
+        invalidate: () => undefined,
+        remember: () => undefined,
+      },
+      crypto,
+      audit,
+      500,
+      5000,
+      { grafo },
+    );
+    const skill = await skills.create({
+      agentId,
+      slug: "meta-alias",
+      nome: "Produto",
+      descricao: "Busca produto",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const result = await consultar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      pergunta: "consulta de teste",
+      skillId: skill.id,
+      params: { codigo: 1 },
+    });
+    expect(result.columnsMetadata).toEqual([{ name: "codigo", type: "int", nullable: false }]);
   });
 
   it("asOf usa o timezone do acesso", async () => {

@@ -115,6 +115,24 @@ export const listarFatosIncompletos = async (
           ),
         );
       }
+      const temOverlay = escopo.metricasSaida.some(
+        (item) => item.alias.toLowerCase() === colunaNome.toLowerCase(),
+      );
+      if (colunaPapelMedida(coluna.papel) && !temOverlay) {
+        const jaTem = out.some(
+          (item) => item.kind === "kpi" && item.alvo.toLowerCase() === alvo.toLowerCase(),
+        );
+        if (!jaTem) {
+          out.push(
+            falta(
+              "kpi",
+              alvo,
+              `Medida ${alvo} sem definição em metricasSaida. Overlay via atualizar_skill.metricasSaida ou registrar_aprendizado tipo=metrica. Não invente a definição.`,
+              "atualizar_skill",
+            ),
+          );
+        }
+      }
     }
   }
   const rels = await grafo.listRelacionamentos(agentId);
@@ -186,6 +204,12 @@ export const listarFatosIncompletos = async (
     }
   }
   for (const metrica of metricasMedidaSemDefinicao(escopo)) {
+    const jaTem = out.some(
+      (item) => item.kind === "kpi" && item.alvo.toLowerCase() === metrica.alias.toLowerCase(),
+    );
+    if (jaTem) {
+      continue;
+    }
     out.push(
       falta(
         "kpi",
@@ -194,41 +218,6 @@ export const listarFatosIncompletos = async (
         "atualizar_skill",
       ),
     );
-  }
-  for (const nome of escopo.tabelas) {
-    const tabela = await grafo.findTabelaByNome(agentId, nome);
-    if (!tabela) {
-      continue;
-    }
-    const cols = await grafo.listColunas(tabela.id);
-    const wanted = escopo.colunasPorTabela[nome] ?? [];
-    for (const colunaNome of wanted) {
-      const coluna = cols.find((item) => lower(item.nome) === lower(colunaNome));
-      if (!coluna || !colunaPapelMedida(coluna.papel)) {
-        continue;
-      }
-      const coberta = escopo.metricasSaida.some(
-        (item) =>
-          item.alias.toLowerCase() === colunaNome.toLowerCase() && Boolean(item.definicao?.trim()),
-      );
-      if (coberta) {
-        continue;
-      }
-      const alvo = `${nome}.${colunaNome}`;
-      const jaTem = out.some(
-        (item) => item.kind === "kpi" && item.alvo.toLowerCase() === colunaNome.toLowerCase(),
-      );
-      if (!jaTem) {
-        out.push(
-          falta(
-            "kpi",
-            colunaNome,
-            `Medida ${alvo} sem definição em metricasSaida. Overlay via atualizar_skill.metricasSaida ou registrar_aprendizado tipo=metrica. Não invente a definição.`,
-            "atualizar_skill",
-          ),
-        );
-      }
-    }
   }
   return out;
 };

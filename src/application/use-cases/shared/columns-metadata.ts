@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export interface ColumnMetadataItem {
   readonly name: string;
   readonly type: string | null;
@@ -8,6 +10,19 @@ export interface ColumnMetadataHint {
   readonly type?: string | null;
   readonly nullable?: boolean | null;
 }
+
+export interface SelectColumnAliasHint {
+  readonly alias: string;
+  readonly column: string | null;
+  readonly isExpression: boolean;
+  readonly isStar: boolean;
+}
+
+export const columnMetadataItemSchema = z.object({
+  name: z.string(),
+  type: z.string().optional().nullable(),
+  nullable: z.boolean().optional().nullable(),
+});
 
 export const hintsFromGrafoColunas = (
   colunas: readonly { nome: string; tipo: string | null; nullable: boolean | null }[],
@@ -31,6 +46,27 @@ export const mergeColumnHints = (
   }
 };
 
+/** Copia hint da coluna física para o alias de `column_ref`. CAST/agregação não entram. */
+export const applySelectAliasHints = (
+  into: Map<string, ColumnMetadataHint>,
+  selectCols: readonly SelectColumnAliasHint[],
+): void => {
+  for (const col of selectCols) {
+    if (col.isExpression || col.isStar || !col.column) {
+      continue;
+    }
+    const aliasKey = col.alias.trim().toLowerCase();
+    const physKey = col.column.trim().toLowerCase();
+    if (!aliasKey || aliasKey === physKey || into.has(aliasKey)) {
+      continue;
+    }
+    const hint = into.get(physKey);
+    if (hint) {
+      into.set(aliasKey, hint);
+    }
+  }
+};
+
 /** Hub primeiro; grafo/pacote depois; senão `null` nas chaves (cliente MCP exige o shape). */
 export const normalizeColumnsMetadata = (
   columns: readonly string[],
@@ -49,9 +85,11 @@ export const normalizeColumnsMetadata = (
     const key = name.toLowerCase();
     const hit = byHub.get(key);
     const hint = hints.get(key);
+    const trimmed = hit?.type?.trim();
+    const hubType = trimmed === "" ? undefined : trimmed;
     return {
       name: hit?.name ?? name,
-      type: typeof hit?.type === "string" ? hit.type : (hint?.type ?? null),
+      type: hubType ?? hint?.type ?? null,
       nullable: typeof hit?.nullable === "boolean" ? hit.nullable : (hint?.nullable ?? null),
     };
   });

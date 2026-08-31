@@ -31,9 +31,11 @@ import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
 import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
 import { aplicarDerivaEsquema, assinaturaTabela } from "./shared/schema-drift.js";
 import {
+  applySelectAliasHints,
   mergeColumnHints,
   normalizeColumnsMetadata,
   type ColumnMetadataHint,
+  type ColumnMetadataItem,
 } from "./shared/columns-metadata.js";
 
 export const INSPECAO_MAX_ROWS = 100;
@@ -79,7 +81,7 @@ export class InspecionarConsulta {
     maxRowsApplied: number;
     truncated: boolean;
     colunasMascaradas: readonly string[];
-    columnsMetadata?: readonly { name: string; type?: string | null; nullable?: boolean | null }[];
+    columnsMetadata?: readonly ColumnMetadataItem[];
     sqlExecutado: string;
     avisos: { code: string; message: string }[];
   }> {
@@ -185,6 +187,9 @@ export class InspecionarConsulta {
       const cols = await this.grafo.listColunas(found.id);
       colunasDasTabelas[tabelaNome] = cols.map((coluna) => coluna.nome);
       mergeColumnHints(columnHints, cols);
+    }
+    if (ast) {
+      applySelectAliasHints(columnHints, ast.colunas);
     }
     exigirFiltroEscopoPadrao({
       sql,

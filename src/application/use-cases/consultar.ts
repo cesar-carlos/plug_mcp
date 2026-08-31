@@ -111,9 +111,11 @@ import {
 import { inferirFormatoColuna, inferirPapelColuna } from "./shared/inferir-papel.js";
 import { inferirSensibilidadeColuna } from "../../domain/entities/privacidade.js";
 import {
+  applySelectAliasHints,
   mergeColumnHints,
   normalizeColumnsMetadata,
   type ColumnMetadataHint,
+  type ColumnMetadataItem,
 } from "./shared/columns-metadata.js";
 
 const QUERY_CELL_MAX_CHARS = 2_048;
@@ -361,7 +363,7 @@ export class ConsultarDados {
     paramsUsados: Record<string, unknown>;
     asOf: string;
     recorte: { tipoJoin: string; tabela: string; on: string | null; opcional?: boolean }[];
-    columnsMetadata?: readonly { name: string; type?: string | null; nullable?: boolean | null }[];
+    columnsMetadata?: readonly ColumnMetadataItem[];
     escopoAplicado: { empresa?: string; filial?: string; consolidado: boolean };
     avisos: { code: string; message: string }[];
     aprendizadoGravado?: AprendizadoGravado;
@@ -530,6 +532,7 @@ export class ConsultarDados {
       }
       const astPriv = tryParseSelect(sqlExecutar, acesso.dialeto);
       if (astPriv) {
+        applySelectAliasHints(columnHints, astPriv.colunas);
         const lookup = await lookupSensibilidadeGrafo(
           this.extras.grafo,
           acesso.agentId,
