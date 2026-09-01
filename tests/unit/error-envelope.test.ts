@@ -8,6 +8,7 @@ import {
 import { requireAcessoAprovado } from "../../src/application/use-cases/shared/guards.js";
 import { mapPlugServerFailure } from "../../src/infrastructure/plug-server/map-plug-error.js";
 import { errorResult } from "../../src/infrastructure/mcp/tool-result.js";
+import { textoDoContent } from "../helpers/tool-content.js";
 import { testConfig } from "../../src/config/env.js";
 import type { Acesso } from "../../src/domain/entities/acesso.js";
 
@@ -123,7 +124,7 @@ describe("envelope de erro", () => {
       }),
       testConfig(),
     );
-    const payload = JSON.parse(result.content[0]!.text) as {
+    const payload = JSON.parse(textoDoContent(result.content[0])) as {
       error: { nextAction: string; category: string; documentationUrl: string };
     };
     expect(payload.error.nextAction).toBe("consultar_dados");
@@ -190,7 +191,7 @@ describe("envelope de erro", () => {
       }),
       testConfig(),
     );
-    const payload = JSON.parse(result.content[0]!.text) as {
+    const payload = JSON.parse(textoDoContent(result.content[0])) as {
       error: { code: string; source?: string };
     };
     expect(payload.error.code).toBe(ERROR_CODES.INVALID_SQL);

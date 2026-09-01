@@ -50,6 +50,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- `npm run build`: `ToolContent` de resource exige `blob` ou `text` (união, como o SDK MCP). PDF de `exportar_anexo` já enviava `blob`.
 - `expandir_escopo` em skill publicada não copia JOIN só `inferido` (`herdar_catalogo`) para o pacote: mesma origem mínima de `criar_skill`/`validar_skill` (`confirmado_usuario` / `validado_execucao`). O validador só autoriza o JOIN depois de `confirmar_relacionamento`.
 - `descobrir_tabela` recorta colunas e arestas ao pacote publicado (fingerprints como `obter_skill`), sem vizinhança extra do grafo.
 - Merge de relacionamento: origem mais fraca não sobrescreve `tipoJoin` (LEFT confirmado não vira `inner` de template).

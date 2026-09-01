@@ -3,6 +3,7 @@ import { testConfig } from "../../src/config/env.js";
 import type { LoggerPort } from "../../src/domain/ports/logger.port.js";
 import { MemoryRateLimitStore } from "../../src/infrastructure/http/rate-limit.js";
 import { createToolRunner, jsonResult } from "../../src/infrastructure/mcp/tool-result.js";
+import { textoDoContent } from "../helpers/tool-content.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 
 const logger: LoggerPort = {
@@ -29,7 +30,7 @@ describe("rate limit por tool", () => {
     expect(first.isError).toBeUndefined();
     const second = await run("consultar_dados", async () => ({ ok: true }));
     expect(second.isError).toBe(true);
-    const payload = JSON.parse(second.content[0]!.text) as {
+    const payload = JSON.parse(textoDoContent(second.content[0])) as {
       error: { code: string; source?: string; stage?: string };
     };
     expect(payload.error.code).toBe(ERROR_CODES.RATE_LIMITED);

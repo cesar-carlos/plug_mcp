@@ -7,6 +7,7 @@ import {
   errorResult,
   jsonResult,
 } from "../../src/infrastructure/mcp/tool-result.js";
+import { textoDoContent } from "../helpers/tool-content.js";
 import {
   isAbortError,
   mapPlugServerAbort,
@@ -15,7 +16,7 @@ import {
 describe("tool-result", () => {
   it("jsonResult serializa sem indentação", () => {
     const result = jsonResult({ success: true, n: 1 });
-    expect(result.content[0]?.text).toBe('{"success":true,"n":1}');
+    expect(textoDoContent(result.content[0])).toBe('{"success":true,"n":1}');
   });
 
   it("INTERNAL_ERROR usa mensagem genérica e registra o erro real", async () => {
@@ -25,7 +26,7 @@ describe("tool-result", () => {
       throw new Error("invalid encrypted payload");
     });
     expect(result.isError).toBe(true);
-    const payload = JSON.parse(result.content[0]!.text) as {
+    const payload = JSON.parse(textoDoContent(result.content[0])) as {
       error: { code: string; message: string };
     };
     expect(payload.error.code).toBe(ERROR_CODES.INTERNAL_ERROR);
@@ -47,7 +48,7 @@ describe("tool-result", () => {
       "consultar_dados",
     );
     expect(logger.error).not.toHaveBeenCalled();
-    const payload = JSON.parse(result.content[0]!.text) as { error: { code: string } };
+    const payload = JSON.parse(textoDoContent(result.content[0])) as { error: { code: string } };
     expect(payload.error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
   });
 });

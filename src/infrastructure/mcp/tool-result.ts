@@ -13,7 +13,9 @@ export type ToolContent =
   | { type: "image"; data: string; mimeType: string }
   | {
       type: "resource";
-      resource: { uri: string; mimeType: string; blob?: string; text?: string };
+      resource:
+        | { uri: string; mimeType: string; blob: string }
+        | { uri: string; mimeType: string; text: string };
     };
 
 export interface ToolResult {
