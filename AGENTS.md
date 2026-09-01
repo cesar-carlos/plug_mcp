@@ -2,7 +2,8 @@
 
 ## Fontes e precedência
 
-1. `.cursor/rules/product_objective.mdc` — invariantes de produto (pacote publicado = autoridade).
+1. `.cursor/rules/product_objective.mdc` — invariantes de produto (base comum SQL+resources;
+   pacote publicado = autoridade).
 2. `.cursor/rules/security.mdc` — cofre, segredos, portões e isolamento de cache.
 3. `src/infrastructure/mcp/server-instructions.ts` — instruções runtime enviadas
    a IAs consumidoras no `initialize`.
@@ -19,11 +20,32 @@ documentação de produto e os testes correspondentes.
 ## Invariantes do produto
 
 - O MCP é cofre + grafo de treinamento + skills; não é um proxy SQL genérico.
+  A **base comum** de todo consumidor: SQL no plug_server, dialeto do `agentId`,
+  resources (`guia://paginacao`, `guia://dialeto/{mssql|sybase|postgres|firebird}`,
+  `skill://` = pacote publicado, `persona://{acessoId}` = tom/uso do acesso), estrutura pelas skills publicadas e consultas
+  dinâmicas só no pacote (fail-closed). Sem embeddings. Guias já no bootstrap
+  (sem Bearer); `skill://` e `persona://` exigem Bearer. Não assuma mssql — leia o guia do
+  acesso. O **papel** combina a persona do acesso (tom, `atualizar_persona`)
+  com as skills publicadas daquele `agentId` (pacote). SQL comum primeiro;
+  persona depois; em conflito vale o pacote fail-closed. Persona não recorta
+  skills nem licencia consulta. **Várias personas = vários acessos**
+  (`adicionar_acesso`); um acesso = um chapéu — não concatenar. Sessão que
+  começa com 1 acesso e ganha o 2º (`adicionar_acesso`) mantém o chapéu 1 em
+  `initialize.instructions` até reconectar; `pre_treino` relê o banco. O mesmo
+  `agentId` entre usuários MCP diferentes pode ter textos diferentes; o trio
+  usuário+agentId+token tem uma persona.
 - Só o **pacote** de skill publicada autoriza `consultar_dados`. Grafo não
   licencia tabela nem JOIN. `obter_skill` / `skill://` não despejam o grafo.
 - A IA executa SQL customizado somente no escopo publicado (validador
   fail-closed). Sem SQL, executa `sqlModelo`.
 - Nunca inventar tabela, coluna, JOIN, métrica ou regra de negócio.
+- Erro de consulta: a IA lê `code`/`message`/`hint`/`source` (`sql` = validador
+  do pacote, `sql_engine` = motor, policy/`client_token_rpc`, HTTP/`plug_server_http`).
+  `sql`/`sql_engine` → corrige o SQL no pacote e não repete o padrão recusado.
+  `plug_server_http` + `invalid_payload` / `PLUG_SERVER_ERROR` de transporte →
+  **não** reescreva o SQL. 429/503 ≠ policy. SQL falho não persiste;
+  aprendizado continua sendo sucesso com `pergunta`, `registrar_aprendizado`,
+  `salvar_consulta` e `SKILL_GAP` → `lacuna_consulta`.
 - Agregações, filtros e paginação devem acontecer no banco.
 - Treinamento segue `treinar_com_sql` → `criar_skill` → params →
   `validar_skill` → confirmação → `publicar_skill`. Rascunho, validada ou
@@ -32,9 +54,14 @@ documentação de produto e os testes correspondentes.
   pacote fica em `obter_skill`. Skill `validada` com perfil incompleto:
   `proximoPasso` é a tool da primeira falta (nunca `null`). `despublicar_skill`
   rebaixa para validada sem apagar. JOIN composto substitui pares isolados;
-  `remover_relacionamento` apaga um fingerprint. `inspecionar_consulta` aceita
+  `confirmar_relacionamento` pede cardinalidade e tipo de JOIN (`tipoJoin`;
+  omitir preserva LEFT do SQL, não grava inner). `remover_relacionamento` apaga
+  um fingerprint. `inspecionar_consulta` aceita
   `validada` e permite `SELECT *` cortado de uma tabela do allowlist (sem máscara;
-  colunas novas no grafo `inferido`). `consultar_dados` aceita `skillIds` omitido
+  colunas novas no grafo `inferido`). Célula binária vira stub `kind: anexo`
+  **sem handle** na inspeção (não invente bytes; não use inspeção
+  como segunda via de foto pessoal). Foto livre: `consultar_dados` +
+  `exportar_anexo`. `consultar_dados` aceita `skillIds` omitido
   (união das publicadas) e `consultaAprendidaId`. `confirmar_coluna` aceita `colunas[]`.
   Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
   `conhecimentos[]` é evidência FTS/`ILIKE` (não RAG), não licença de consulta.
@@ -48,10 +75,11 @@ documentação de produto e os testes correspondentes.
 
 ## Segurança e autorização
 
-Não exponha senha, `client_token`, JWT do hub ou token MCP. A execução depende
+Não exponha senha, `client_token`, JWT do hub ou token MCP. `atualizar_persona` recusa texto que pareça segredo e não persiste. A execução depende
 de três portões: JWT Client, `ClientAgentAccess` e policy do `client_token` no
 `plug_agente`. Cache de query isola usuário/token/policy/versão no prefixo
-`mcp:query:{agentId}:`. Preserve a origem de cada falha e não faça retry cego.
+`mcp:query:{agentId}:` (resultado com anexo **não** é cacheado; handle HMAC+TTL
+só em memória). Preserve a origem de cada falha e não faça retry cego.
 
 ## Referências rápidas
 

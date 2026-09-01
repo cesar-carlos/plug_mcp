@@ -1,7 +1,7 @@
 import { ERROR_CODES, type ErrorCode } from "./error-codes.js";
 
 export type ErrorCategory =
-  "auth" | "access" | "scope" | "sql" | "privacy" | "profile" | "budget" | "infra";
+  "auth" | "access" | "scope" | "sql" | "privacy" | "profile" | "budget" | "infra" | "validation";
 
 export interface ErrorGuidance {
   readonly category: ErrorCategory;
@@ -44,7 +44,7 @@ const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
   },
   [ERROR_CODES.JOIN_DESCONHECIDO]: {
     category: "scope",
-    nextAction: "confirmar_relacionamento",
+    nextAction: "obter_skill",
     documentationUrl: doc("join_desconhecido"),
   },
   [ERROR_CODES.SKILL_NOT_PUBLISHED]: {
@@ -77,6 +77,16 @@ const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
     nextAction: "agregar_ou_filtrar",
     documentationUrl: doc("consulta_sem_recorte"),
   },
+  [ERROR_CODES.MULTI_SKILL_PARAMS]: {
+    category: "sql",
+    nextAction: "recorte_skillIds",
+    documentationUrl: doc("multi_skill_params"),
+  },
+  [ERROR_CODES.DIALECT_UNSUPPORTED]: {
+    category: "sql",
+    nextAction: "inspecionar_consulta",
+    documentationUrl: doc("dialect_unsupported"),
+  },
   [ERROR_CODES.PERFIL_AUSENTE]: {
     category: "profile",
     nextAction: "validar_skill",
@@ -94,13 +104,28 @@ const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
   },
   [ERROR_CODES.PRIVACIDADE_NEGADA]: {
     category: "privacy",
-    nextAction: "inspecionar_consulta",
+    nextAction: "consultar_dados",
     documentationUrl: doc("privacidade_negada"),
   },
   [ERROR_CODES.CONSULTA_ORCAMENTO]: {
     category: "budget",
     nextAction: "agregar_ou_reduzir",
     documentationUrl: doc("consulta_orcamento"),
+  },
+  [ERROR_CODES.MIDIA_TIPO_RECUSADO]: {
+    category: "validation",
+    nextAction: "consultar_dados",
+    documentationUrl: doc("midia_tipo_recusado"),
+  },
+  [ERROR_CODES.MIDIA_TETO]: {
+    category: "budget",
+    nextAction: "agregar_ou_reduzir",
+    documentationUrl: doc("midia_teto"),
+  },
+  [ERROR_CODES.MIDIA_ORIGEM_INVALIDA]: {
+    category: "scope",
+    nextAction: "consultar_dados",
+    documentationUrl: doc("midia_origem_invalida"),
   },
   [ERROR_CODES.RATE_LIMITED]: {
     category: "infra",
@@ -117,9 +142,48 @@ const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
     nextAction: "verificar_acesso",
     documentationUrl: doc("agent_access_pending"),
   },
+  [ERROR_CODES.CLIENT_NOT_ACTIVE]: {
+    category: "access",
+    nextAction: "verificar_acesso",
+    documentationUrl: doc("client_not_active"),
+  },
+  [ERROR_CODES.AGENT_ACCESS_DENIED]: {
+    category: "access",
+    nextAction: "verificar_acesso",
+    documentationUrl: doc("agent_access_denied"),
+  },
+  [ERROR_CODES.USER_AUTH_EXPIRED]: {
+    category: "auth",
+    nextAction: "atualizar_credencial_plug",
+    documentationUrl: doc("user_auth_expired"),
+  },
+  [ERROR_CODES.CREDENTIAL_STALE]: {
+    category: "auth",
+    nextAction: "atualizar_credencial_plug",
+    documentationUrl: doc("credential_stale"),
+  },
+  [ERROR_CODES.QUERY_TIMEOUT]: {
+    category: "sql",
+    nextAction: "agregar_ou_reduzir",
+    documentationUrl: doc("query_timeout"),
+  },
+  [ERROR_CODES.PLUG_SERVER_TIMEOUT]: {
+    category: "infra",
+    nextAction: "aguardar_retry_after",
+    documentationUrl: doc("plug_server_timeout"),
+  },
+  [ERROR_CODES.PLUG_SERVER_ERROR]: {
+    category: "infra",
+    nextAction: "verificar_acesso",
+    documentationUrl: doc("plug_server_error"),
+  },
 };
 
-export const guidanceFor = (code: ErrorCode, source?: string): ErrorGuidance | undefined => {
+export const guidanceFor = (
+  code: ErrorCode,
+  source?: string,
+  stage?: string,
+): ErrorGuidance | undefined => {
   const base = MAP[code];
   if (!base) {
     return undefined;
@@ -129,6 +193,9 @@ export const guidanceFor = (code: ErrorCode, source?: string): ErrorGuidance | u
   }
   if (code === ERROR_CODES.TABELA_FORA_DO_ESCOPO && source === "sql") {
     return { ...base, nextAction: "obter_skill" };
+  }
+  if (code === ERROR_CODES.CONSULTA_ORCAMENTO && (stage === "anexo" || source === "mcp")) {
+    return { ...base, nextAction: "omitir_coluna_ou_reduzir" };
   }
   return base;
 };

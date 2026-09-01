@@ -24,6 +24,9 @@ import { tryParseSelect } from "./sql-ast.js";
 
 const ORIGENS_OK = new Set<OrigemFato>(["validado_execucao", "confirmado_usuario"]);
 
+/** Só estas origens entram no pacote / validador. Grafo `inferido` (ex. herdar_catalogo) não licencia JOIN. */
+export const origemLicenciaPacote = (origem: OrigemFato): boolean => ORIGENS_OK.has(origem);
+
 export type FaltaNextAction =
   | "treinar_sql"
   | "confirmar_relacionamento"
@@ -68,7 +71,7 @@ export const listarFatosIncompletos = async (
     if (tabela.status === "conflito") {
       out.push(falta("conflito", nome, `Tabela ${nome} em conflito.`, "listar_conflitos"));
     }
-    if (!ORIGENS_OK.has(tabela.origem)) {
+    if (!origemLicenciaPacote(tabela.origem)) {
       out.push(
         falta(
           "tabela",
@@ -90,7 +93,7 @@ export const listarFatosIncompletos = async (
       if (coluna.status === "conflito") {
         out.push(falta("conflito", alvo, `Coluna ${alvo} em conflito.`, "listar_conflitos"));
       }
-      if (!ORIGENS_OK.has(coluna.origem)) {
+      if (!origemLicenciaPacote(coluna.origem)) {
         out.push(
           falta("coluna", alvo, `Coluna ${alvo} ainda é ${coluna.origem}.`, "confirmar_coluna"),
         );
@@ -187,7 +190,7 @@ export const listarFatosIncompletos = async (
     if (match.status === "conflito") {
       out.push(falta("conflito", label, `JOIN ${label} em conflito.`, "listar_conflitos"));
     }
-    if (!ORIGENS_OK.has(match.origem)) {
+    if (!origemLicenciaPacote(match.origem)) {
       out.push(
         falta("join", label, `JOIN ${label} ainda é ${match.origem}.`, "confirmar_relacionamento"),
       );
@@ -237,7 +240,7 @@ export const exigirEscopoNoGrafo = async (
   if (bloqueantes.length === 0) {
     return;
   }
-  throw new DomainError({
+  throw DomainError.pacote({
     code: ERROR_CODES.PACOTE_INCOMPLETO,
     message: "O SQL da skill ainda não está confirmado no grafo.",
     hint: `${bloqueantes.map((item) => item.message).join(" ")} Chame treinar_com_sql e confirme relacionamentos no escopo da skill.`,
@@ -258,7 +261,7 @@ export const exigirPacotePublicavel = async (
   const bloqueantes = faltas.filter((item) => !faltaOrientaSemBloquear(item));
   if (bloqueantes.length > 0) {
     const perfil = bloqueantes.filter((item) => item.kind === "perfil");
-    throw new DomainError({
+    throw DomainError.pacote({
       code: perfil.length > 0 ? ERROR_CODES.PERFIL_AUSENTE : ERROR_CODES.PACOTE_INCOMPLETO,
       message:
         perfil.length > 0
@@ -271,7 +274,7 @@ export const exigirPacotePublicavel = async (
   const ast = tryParseSelect(sqlModelo);
   const modelo = parseSqlModelo(sqlModelo);
   if (!ast?.temWhere && !ast?.temAgregacaoLocal) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_SEM_RECORTE,
       message: "Consulta exemplo sem WHERE nem agregação.",
       hint: "A skill publicada precisa recortar ou agregar. Ajuste o sqlModelo.",

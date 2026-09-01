@@ -13,6 +13,10 @@ import {
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
+import {
+  PERFIL_MAX_QUERIES,
+  PERFIL_SQL_CONCURRENCY,
+} from "../../src/application/use-cases/shared/enriquecer-perfil.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -62,8 +66,7 @@ describe("treinar_com_sql enriquecer=completo", () => {
 
   it("grava cardinalidade e perfil sem desfazer o merge", async () => {
     const { plug, grafo, treinar, created } = await setup();
-    plug.sqlImpl = async () => {
-      const sql = plug.lastSql ?? "";
+    plug.sqlImpl = async (sql: string) => {
       if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
         return {
           columns: ["column_name", "data_type", "is_nullable"],
@@ -107,8 +110,7 @@ describe("treinar_com_sql enriquecer=completo", () => {
 
   it("falha de query de perfil vira aviso e mantém o grafo", async () => {
     const { plug, grafo, treinar, created } = await setup();
-    plug.sqlImpl = async () => {
-      const sql = plug.lastSql ?? "";
+    plug.sqlImpl = async (sql: string) => {
       if (/MIN\(/i.test(sql) || /COUNT\s*\(\s*DISTINCT/i.test(sql)) {
         throw new DomainError({
           code: ERROR_CODES.PLUG_SERVER_ERROR,
@@ -153,8 +155,7 @@ describe("treinar_com_sql enriquecer=completo", () => {
   it("retoma sem reconsultar JOIN já com cardinalidade", async () => {
     const { plug, treinar, created } = await setup();
     let countDistinct = 0;
-    plug.sqlImpl = async () => {
-      const sql = plug.lastSql ?? "";
+    plug.sqlImpl = async (sql: string) => {
       if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
         return {
           columns: ["column_name", "data_type", "is_nullable"],
@@ -195,5 +196,107 @@ describe("treinar_com_sql enriquecer=completo", () => {
       enriquecer: "completo",
     });
     expect(countDistinct).toBe(primeiro);
+  });
+
+  it("paraleliza sql.execute sem passar de PERFIL_SQL_CONCURRENCY nem do teto 16", async () => {
+    const { plug, treinar, created } = await setup();
+    let inflight = 0;
+    let maxInflight = 0;
+    let perfilCalls = 0;
+    const perfilSql = (sql: string): boolean =>
+      /column_name/i.test(sql) ||
+      /syscolumns/i.test(sql) ||
+      (/COUNT\s*\(\s*DISTINCT/i.test(sql) && !/MIN\(/i.test(sql)) ||
+      /MIN\(/i.test(sql) ||
+      /SELECT DISTINCT/i.test(sql);
+    plug.sqlImpl = async (sql: string) => {
+      if (perfilSql(sql)) {
+        perfilCalls += 1;
+        inflight += 1;
+        maxInflight = Math.max(maxInflight, inflight);
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+        inflight -= 1;
+      }
+      if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
+        return {
+          columns: ["column_name", "data_type", "is_nullable"],
+          rows: [
+            { column_name: "codprod", data_type: "int" },
+            { column_name: "codcli", data_type: "int" },
+            { column_name: "nome", data_type: "varchar" },
+          ],
+        };
+      }
+      if (/COUNT\s*\(\s*DISTINCT/i.test(sql) && !/MIN\(/i.test(sql)) {
+        return { columns: ["total", "distintos"], rows: [{ total: 10, distintos: 10 }] };
+      }
+      if (/MIN\(/i.test(sql)) {
+        return {
+          columns: ["min_v", "max_v", "nulos", "total", "distintos"],
+          rows: [{ min_v: 1, max_v: 9, nulos: 0, total: 10, distintos: 3 }],
+        };
+      }
+      if (/SELECT DISTINCT/i.test(sql)) {
+        return { columns: ["valor"], rows: [{ valor: "A" }, { valor: "B" }] };
+      }
+      return { columns: ["ok"], rows: [{ ok: 1 }] };
+    };
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT p.codprod AS codigo, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
+      enriquecer: "completo",
+    });
+    expect(maxInflight).toBeGreaterThan(1);
+    expect(maxInflight).toBeLessThanOrEqual(PERFIL_SQL_CONCURRENCY);
+    expect(perfilCalls).toBeGreaterThan(0);
+    expect(perfilCalls).toBeLessThanOrEqual(PERFIL_MAX_QUERIES);
+  });
+
+  it("falha isolada de uma coluna não impede o perfil das outras", async () => {
+    const { plug, grafo, treinar, created } = await setup();
+    plug.sqlImpl = async (sql: string) => {
+      if (/MIN\(nome\)/i.test(sql)) {
+        throw new DomainError({
+          code: ERROR_CODES.PLUG_SERVER_ERROR,
+          message: "hub",
+          hint: "retry",
+        });
+      }
+      if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
+        return {
+          columns: ["column_name", "data_type", "is_nullable"],
+          rows: [
+            { column_name: "codprod", data_type: "int" },
+            { column_name: "codcli", data_type: "int" },
+            { column_name: "nome", data_type: "varchar" },
+          ],
+        };
+      }
+      if (/COUNT\s*\(\s*DISTINCT/i.test(sql) && !/MIN\(/i.test(sql)) {
+        return { columns: ["total", "distintos"], rows: [{ total: 10, distintos: 10 }] };
+      }
+      if (/MIN\(/i.test(sql)) {
+        return {
+          columns: ["min_v", "max_v", "nulos", "total", "distintos"],
+          rows: [{ min_v: 1, max_v: 9, nulos: 0, total: 10, distintos: 3 }],
+        };
+      }
+      if (/SELECT DISTINCT/i.test(sql)) {
+        return { columns: ["valor"], rows: [{ valor: "A" }, { valor: "B" }] };
+      }
+      return { columns: ["ok"], rows: [{ ok: 1 }] };
+    };
+    const result = await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT p.codprod AS codigo, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
+      enriquecer: "completo",
+    });
+    expect(result.avisos.some((aviso) => aviso.code === "PERFIL_QUERY_FALHOU")).toBe(true);
+    const produto = await grafo.findTabelaByNome(agentId, "produto");
+    const cols = produto ? await grafo.listColunas(produto.id) : [];
+    const codigo = cols.find((coluna) => coluna.nome.toLowerCase() === "codprod");
+    expect(codigo?.perfil?.min).toBe(1);
   });
 });

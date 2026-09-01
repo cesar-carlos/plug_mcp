@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+/** Piso de login/refresh/`getPolicy`. Não corta `sql.execute`. */
+export const PLUG_SERVER_HTTP_TIMEOUT_MS_DEFAULT = 35_000;
+/** Teto do piso de login — evita hang se o env for 300s+. Não aplica a `sql.execute`. */
+export const PLUG_SERVER_HTTP_TIMEOUT_MS_MAX = 60_000;
+
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3333),
   HOST: z.string().min(1).default("0.0.0.0"),
@@ -9,7 +14,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   MCP_ENCRYPTION_KEY: z.string().min(32),
   PLUG_SERVER_BASE_URL: z.string().url(),
-  PLUG_SERVER_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(35_000),
+  PLUG_SERVER_HTTP_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(PLUG_SERVER_HTTP_TIMEOUT_MS_MAX)
+    .default(PLUG_SERVER_HTTP_TIMEOUT_MS_DEFAULT),
   QUERY_DEFAULT_MAX_ROWS: z.coerce.number().int().positive().default(500),
   QUERY_ABSOLUTE_MAX_ROWS: z.coerce.number().int().positive().default(5_000),
   MCP_SESSION_IDLE_TIMEOUT_MS: z.coerce

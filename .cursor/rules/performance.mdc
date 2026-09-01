@@ -6,11 +6,13 @@ alwaysApply: false
 
 # Performance
 
-- `consultar_dados`: `QUERY_DEFAULT_MAX_ROWS` / `QUERY_ABSOLUTE_MAX_ROWS`. Resposta inteira em memória. `truncated` = teto `max_rows` (caminho sem página). `paginacao.hasNextPage` = próxima página.
-- Cache de resultado agregado: `QUERY_CACHE_TTL_MS` (Redis se `REDIS_URL`). Chave `mcp:query:{agentId}:{hash}` isola `usuarioId`, acesso, token, fingerprint da policy e versões da skill. Não reaproveite cache entre tokens/policies. Deriva invalida só o prefixo do agente.
-- `treinar_com_sql` amostra pequena (TOP/LIMIT/ROWS conforme dialeto). `enriquecer=completo`: teto de 16 queries de perfil; falha vira aviso e não desfaz o merge. `GROUP BY` acima de 16 expressões → `VALIDATION_ERROR`.
+- `consultar_dados`: `QUERY_DEFAULT_MAX_ROWS` / `QUERY_ABSOLUTE_MAX_ROWS`. Resposta inteira em memória. `truncated` = teto `max_rows` (caminho sem página). `paginacao.hasNextPage` = próxima página. Resource `guia://paginacao` explica a distinção.
+- Cache de resultado agregado: `QUERY_CACHE_TTL_MS` (Redis se `REDIS_URL`). Chave `mcp:query:{agentId}:{hash}` isola `usuarioId`, acesso, token, fingerprint da policy e versões da skill. Não reaproveite cache entre tokens/policies. Deriva invalida só o prefixo do agente. Resultado com anexo (stub `kind: anexo`) **não** é gravado no cache — o blob fica só no handle em memória.
+- `exportar_anexo`: decode ≤4 MiB por célula (cap da string encoded antes de `Buffer.from`), soma ≤8 MiB, até 8 células, conversão ≤12 s, resize lado ≤1280. 1 anexo por call. Handle HMAC+TTL (~15 min), máx. **64 por `usuarioId`** (FIFO; inspeção não consome o cap), **não** Redis.
+- `treinar_com_sql` amostra pequena (TOP/LIMIT/ROWS conforme dialeto). `enriquecer=completo`: teto de 16 queries de perfil; `sql.execute` em paralelo com `PERFIL_SQL_CONCURRENCY` (4), sem fundir `getPolicy` + SQL e sem retry; falha isolada vira aviso e não desfaz o merge. `GROUP BY` acima de 16 expressões → `VALIDATION_ERROR`.
 - Cache de `getClientTokenPolicy` (memória + Redis). Não chamar policy em todo `buscar_contexto` se o cache bater.
 - `UsuarioTokenManager`: refresh 60s antes do `exp`; `inflight` por usuário.
+- Cliente REST do hub: dois `http(s).Agent` — auth (login/refresh/`getPolicy`, até 4) e `sql.execute` (até 16). Probe TCP keepalive 30s (`keepAliveMsecs`, `node:https`); idle até o peer fechar (Nginx `keepalive_timeout`). `PLUG_SERVER_HTTP_TIMEOUT_MS` é piso de login/policy (teto 60s). `sql.execute` aborta o HTTP no wait do bridge (`timeout_ms` + 5s, teto 360s) + download — não em 35s fixos. Sem retry de SQL. Borda Nginx do hub (`proxy_read_timeout`, ex. 180s) ainda corta skills ~≥175s.
 - Sessões MCP in-process; sticky `mcp-session-id`. Redis não replica sessão MCP.
 - `JSON.stringify` de tool sem pretty-print.
 - Sweep de sessões idle: `MCP_SESSION_IDLE_TIMEOUT_MS`.

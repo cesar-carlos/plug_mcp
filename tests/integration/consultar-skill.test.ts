@@ -91,9 +91,11 @@ describe("consultar_dados só com skill", () => {
           "listar_conflitos",
           "remover_relacionamento",
           "inspecionar_consulta",
+          "exportar_anexo",
           "descobrir_tabela",
           "detectar_deriva_esquema",
           "cancelar_operacao",
+          "atualizar_persona",
         ]),
       );
       const confirmar = tools.tools?.find((tool) => tool.name === "confirmar_relacionamento");
@@ -113,6 +115,48 @@ describe("consultar_dados só com skill", () => {
       );
       const prompts = promptList.payload.result as { prompts?: { name: string }[] };
       expect(prompts.prompts?.some((prompt) => prompt.name === "pre_treino")).toBe(true);
+      expect(prompts.prompts?.some((prompt) => prompt.name === "consultar_com_skill")).toBe(true);
+      expect(prompts.prompts?.some((prompt) => prompt.name === "cadastrar_skill")).toBe(true);
+
+      const resourcesList = await mcpRpc(
+        app,
+        token!,
+        { jsonrpc: "2.0", id: 22, method: "resources/list", params: {} },
+        authed.sessionId,
+      );
+      const resources = resourcesList.payload.result as {
+        resources?: { uri?: string }[];
+      };
+      const uris = resources.resources?.map((item) => item.uri) ?? [];
+      expect(uris).toEqual(
+        expect.arrayContaining([
+          "guia://paginacao",
+          "guia://dialeto/mssql",
+          "guia://dialeto/sybase",
+          "guia://dialeto/postgres",
+          "guia://dialeto/firebird",
+        ]),
+      );
+      expect(uris.some((uri) => uri?.startsWith("persona://"))).toBe(true);
+
+      const firebirdRead = await mcpRpc(
+        app,
+        token!,
+        {
+          jsonrpc: "2.0",
+          id: 23,
+          method: "resources/read",
+          params: { uri: "guia://dialeto/firebird" },
+        },
+        authed.sessionId,
+      );
+      const firebirdContents = firebirdRead.payload.result as {
+        contents?: { text?: string }[];
+      };
+      const firebirdGuia = JSON.parse(firebirdContents.contents?.[0]?.text ?? "{}") as {
+        dialeto?: string;
+      };
+      expect(firebirdGuia.dialeto).toBe("firebird");
 
       const missing = await mcpRpc(
         app,
@@ -181,6 +225,58 @@ describe("consultar_dados só com skill", () => {
       expect(plug.lastSql).toContain("produto");
       expect(plug.lastSql).not.toMatch(/select \*/i);
       expect(plug.lastParams).toEqual({ codigo: 10 });
+
+      const skillRead = await mcpRpc(
+        app,
+        token!,
+        {
+          jsonrpc: "2.0",
+          id: 24,
+          method: "resources/read",
+          params: { uri: `skill://${agentId}/produtos` },
+        },
+        authed.sessionId,
+      );
+      const skillContents = skillRead.payload.result as {
+        contents?: { text?: string }[];
+      };
+      const skillBody = JSON.parse(skillContents.contents?.[0]?.text ?? "{}") as {
+        guiaDialeto?: { dialeto?: string };
+        avisos?: { code?: string }[];
+      };
+      expect(skillBody.guiaDialeto?.dialeto).toBe("sybase");
+      expect(skillBody.avisos?.map((aviso) => aviso.code)).not.toContain("DIALETO_AUSENTE");
+
+      const bootLeak = await initialize(app);
+      const skillLeak = await request(app)
+        .post("/mcp")
+        .set("Accept", "application/json, text/event-stream")
+        .set("Content-Type", "application/json")
+        .set("mcp-session-id", bootLeak.sessionId ?? "")
+        .send({
+          jsonrpc: "2.0",
+          id: 25,
+          method: "resources/read",
+          params: { uri: `skill://${agentId}/produtos` },
+        });
+      expect(skillLeak.status).toBeLessThan(500);
+      const skillLeakPayload = parseMcpPayload(skillLeak);
+      const skillLeakContents =
+        (skillLeakPayload.result as { contents?: { text?: string }[] } | undefined)?.contents ?? [];
+      expect(skillLeakPayload.error != null || skillLeakContents.length === 0).toBe(true);
+      expect(JSON.stringify(skillLeakPayload)).not.toMatch(/sqlModelo/);
+      const bootList = await request(app)
+        .post("/mcp")
+        .set("Accept", "application/json, text/event-stream")
+        .set("Content-Type", "application/json")
+        .set("mcp-session-id", bootLeak.sessionId ?? "")
+        .send({ jsonrpc: "2.0", id: 26, method: "resources/list", params: {} });
+      const bootUris =
+        (
+          parseMcpPayload(bootList).result as { resources?: { uri?: string }[] } | undefined
+        )?.resources?.map((item) => item.uri) ?? [];
+      expect(bootUris.some((uri) => uri?.startsWith("skill://"))).toBe(false);
+      expect(bootUris.some((uri) => uri?.startsWith("persona://"))).toBe(false);
     } finally {
       await close();
     }

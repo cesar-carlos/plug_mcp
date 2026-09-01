@@ -5,6 +5,7 @@ import {
   tryParseSelect,
 } from "../../src/application/use-cases/shared/sql-ast.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
+import { DomainError } from "../../src/domain/errors/domain-error.js";
 
 describe("sql-ast", () => {
   it("mapeia mssql e sybase para transactsql", () => {
@@ -15,8 +16,20 @@ describe("sql-ast", () => {
 
   it("recusa firebird no caminho de SQL livre", () => {
     expect(() => parserDatabaseForDialeto("firebird")).toThrow(
-      expect.objectContaining({ code: ERROR_CODES.DIALECT_UNSUPPORTED }),
+      expect.objectContaining({
+        code: ERROR_CODES.DIALECT_UNSUPPORTED,
+        source: "sql",
+        hint: expect.stringMatching(/n[aã]o reenvie SQL livre/i),
+      }),
     );
+    try {
+      parserDatabaseForDialeto("firebird");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      const json = (error as DomainError).toJson();
+      expect(json.error.nextAction).toBe("inspecionar_consulta");
+      expect(json.error.nextAction).not.toBe("consultar_dados");
+    }
   });
 
   it("detecta agregação, where, join e estrela em subquery", () => {
@@ -72,5 +85,14 @@ describe("sql-ast", () => {
     expect(
       having.subqueries.some((sub) => sub.tabelas.some((t) => t.nome.toLowerCase() === "fatura")),
     ).toBe(true);
+  });
+
+  it("recusa INSERT com INVALID_SQL e source sql", () => {
+    expect(() => parseSelect("INSERT INTO produto (codprod) VALUES (1)", "mssql")).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.INVALID_SQL,
+        source: "sql",
+      }),
+    );
   });
 });

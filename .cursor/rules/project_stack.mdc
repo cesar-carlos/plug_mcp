@@ -8,11 +8,11 @@ alwaysApply: false
 
 Node.js 24 LTS (Krypton, `.nvmrc` = 24.19.0), TypeScript ESM (`NodeNext`, imports com `.js`).
 
-Produção: `@modelcontextprotocol/sdk`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`, `node-sql-parser`.
+Produção: `@modelcontextprotocol/sdk`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`, `node-sql-parser`, `sharp`, `file-type`, `pdfkit`.
 
-Não usar: `jose`, `bcryptjs`, `cookie-parser`, `jsonwebtoken`, `dotenv`, `uuid`, `moment`. Sem embedding obrigatório.
+Não usar: `jose`, `bcryptjs`, `cookie-parser`, `jsonwebtoken`, `dotenv`, `uuid`, `moment`, `jimp`, `pdf-lib`, `puppeteer`. Sem embeddings (busca é FTS léxica). Sem conversor Office/HEIC.
 
-Env só em `src/config/env.ts`. `.env` via `--env-file-if-exists`.
+Env só em `src/config/env.ts`. `.env` via `--env-file-if-exists`. `PLUG_SERVER_HTTP_TIMEOUT_MS` (default 35s, máx. 60s) é piso de login/policy — não corta `sql.execute`. Cliente HTTP do hub: dois `http(s).Agent` (auth 4 / SQL 16); keep-alive = probe TCP 30s; idle até o peer; não o `fetch` global undici.
 
 UUID: `crypto.randomUUID()`. Crypto: AES-256-GCM + SHA-256 nativos.
 

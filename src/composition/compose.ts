@@ -3,6 +3,7 @@ import {
   AdicionarAcesso,
   AtualizarCredencialPlug,
   AtualizarDialeto,
+  AtualizarPersona,
   ListarAcessos,
   RegistrarAcesso,
   RemoverAcesso,
@@ -24,6 +25,7 @@ import {
   DetectarDerivaEsquema,
   InspecionarConsulta,
 } from "../application/use-cases/inspecionar.js";
+import { ExportarAnexo } from "../application/use-cases/exportar-anexo.js";
 import {
   AtualizarEscopoPadrao,
   HerdarCatalogo,
@@ -85,6 +87,13 @@ import {
   MemoryQueryResultCache,
   RedisQueryResultCache,
 } from "../infrastructure/cache/query-result-cache.js";
+import { MemoryAnexoHandleStore } from "../infrastructure/anexo/memory-anexo-handle.js";
+import { SharpPdfkitAnexoConverter } from "../infrastructure/anexo/converter-anexo.js";
+import {
+  createHubHttpAgents,
+  createPooledFetch,
+  destroyHubHttpAgents,
+} from "../infrastructure/plug-server/hub-http.js";
 import { CachedPlugGateway } from "../infrastructure/plug-server/policy-cache.js";
 import { PlugServerRestAdapter } from "../infrastructure/plug-server/plug-server-rest.adapter.js";
 import { UsuarioTokenManager } from "../infrastructure/plug-server/usuario-token-manager.js";
@@ -167,10 +176,28 @@ export const compose = async (
     });
   }
 
-  const plugInner =
-    overrides.plug ?? new PlugServerRestAdapter(config.PLUG_SERVER_BASE_URL, logger);
+  let plugInner: PlugServerGatewayPort;
+  if (overrides.plug) {
+    plugInner = overrides.plug;
+  } else {
+    const hubAgents = createHubHttpAgents();
+    disposers.push(() => {
+      destroyHubHttpAgents(hubAgents);
+    });
+    plugInner = new PlugServerRestAdapter(
+      config.PLUG_SERVER_BASE_URL,
+      logger,
+      {
+        sql: createPooledFetch(hubAgents.sql),
+        auth: createPooledFetch(hubAgents.auth),
+      },
+      config.PLUG_SERVER_HTTP_TIMEOUT_MS,
+    );
+  }
   const plug = overrides.plug ? plugInner : new CachedPlugGateway(plugInner, { kv: policyKv });
   const sessions = new UsuarioTokenManager(usuarios, crypto, plug, logger);
+  const anexoHandles = new MemoryAnexoHandleStore(config.MCP_ENCRYPTION_KEY);
+  const anexoConverter = new SharpPdfkitAnexoConverter();
 
   const useCases: ToolUseCases = {
     registrarAcesso: new RegistrarAcesso(
@@ -197,6 +224,7 @@ export const compose = async (
       config.MCP_TOKEN_TTL_DAYS,
     ),
     atualizarDialeto: new AtualizarDialeto(acessos, grafo, skills),
+    atualizarPersona: new AtualizarPersona(acessos),
     treinarComSql: new TreinarComSql(acessos, grafo, plug, sessions, crypto, audit, skills, {
       cache: queryCache,
       schemaDriftEnabled: config.MCP_SCHEMA_DRIFT_ENABLED,
@@ -217,6 +245,7 @@ export const compose = async (
         cache: queryCache,
         cacheTtlMs: config.QUERY_CACHE_TTL_MS,
         semanticQueryEnabled: config.MCP_SEMANTIC_QUERY_ENABLED,
+        anexos: anexoHandles,
       },
     ),
     explorarTabelas: new ExplorarTabelas(acessos, plug, sessions, crypto, audit),
@@ -280,6 +309,18 @@ export const compose = async (
       sessions,
       crypto,
       audit,
+      { anexos: anexoHandles },
+    ),
+    exportarAnexo: new ExportarAnexo(
+      acessos,
+      skills,
+      anexoHandles,
+      anexoConverter,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      logger,
     ),
     descobrirTabela: new DescobrirTabela(acessos, skills, grafo, plug, sessions, crypto),
     detectarDerivaEsquema: new DetectarDerivaEsquema(acessos, grafo, skills, queryCache),

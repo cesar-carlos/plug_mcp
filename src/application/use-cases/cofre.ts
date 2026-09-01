@@ -1,11 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
 import { isDialeto, type Dialeto } from "../../domain/entities/dialeto.js";
 import {
+  INSTRUCOES_PERSONA_MAX_CHARS,
+  NOME_PERSONA_MAX_CHARS,
   toAcessoPublico,
   type AcessoPublico,
   type SqlAccessSource,
   type SqlAccessState,
 } from "../../domain/entities/acesso.js";
+import { pareceSegredoEmTexto } from "../../domain/entities/parece-segredo.js";
 import { DomainError, isDomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
@@ -456,6 +459,93 @@ export class AtualizarDialeto {
       skillsRebaixadas += 1;
     }
     return { success: true, dialetoAnterior, dialeto: dialetoRaw, skillsRebaixadas };
+  }
+}
+
+const recusarSegredoPersona = (campo: string, valor: string): void => {
+  if (!pareceSegredoEmTexto(valor)) {
+    return;
+  }
+  throw new DomainError({
+    code: ERROR_CODES.VALIDATION_ERROR,
+    message: `O campo ${campo} parece conter senha, token ou JWT.`,
+    hint: "Reescreva a persona sem credenciais. A persona oriente tom/uso; o SQL continua no pacote.",
+  });
+};
+
+const normalizarNomePersona = (valor: string | null): string | null => {
+  const trimmed = valor?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return null;
+  }
+  if (trimmed.length > NOME_PERSONA_MAX_CHARS) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: `nomePersona excede ${NOME_PERSONA_MAX_CHARS} caracteres.`,
+      hint: "Use um nome curto (ex. vendedor, atendimento financeiro).",
+    });
+  }
+  recusarSegredoPersona("nomePersona", trimmed);
+  return trimmed;
+};
+
+const normalizarInstrucoesPersona = (valor: string | null): string | null => {
+  const trimmed = valor?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return null;
+  }
+  if (trimmed.length > INSTRUCOES_PERSONA_MAX_CHARS) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: `instrucoesPersona excede ${INSTRUCOES_PERSONA_MAX_CHARS} caracteres.`,
+      hint: "Enxugue o texto. A persona não substitui o pacote publicado.",
+    });
+  }
+  recusarSegredoPersona("instrucoesPersona", trimmed);
+  return trimmed;
+};
+
+export class AtualizarPersona {
+  constructor(private readonly acessos: AcessoRepositoryPort) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      nomePersona?: string | null;
+      instrucoesPersona?: string | null;
+      confirmadoPeloUsuario?: boolean;
+    },
+  ): Promise<{ success: true; acesso: AcessoPublico }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    if (input.nomePersona === undefined && input.instrucoesPersona === undefined) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Informe nomePersona e/ou instrucoesPersona.",
+        hint: "A persona oriente tom/uso neste acesso. Não recorta skills nem licencia SQL. String vazia ou null limpa o campo.",
+      });
+    }
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Atualizar a persona exige confirmação do usuário.",
+        hint: "Mostre o texto ao usuário e chame de novo com confirmadoPeloUsuario: true. A persona não licencia tabela, coluna, JOIN nem consultaPermitida.",
+      });
+    }
+    const nomePersona =
+      input.nomePersona === undefined
+        ? acesso.nomePersona
+        : normalizarNomePersona(input.nomePersona);
+    const instrucoesPersona =
+      input.instrucoesPersona === undefined
+        ? acesso.instrucoesPersona
+        : normalizarInstrucoesPersona(input.instrucoesPersona);
+    await this.acessos.updatePersona(acesso.id, nomePersona, instrucoesPersona);
+    return {
+      success: true,
+      acesso: toAcessoPublico({ ...acesso, nomePersona, instrucoesPersona }),
+    };
   }
 }
 

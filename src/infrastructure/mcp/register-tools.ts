@@ -1,5 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  INSTRUCOES_PERSONA_MAX_CHARS,
+  NOME_PERSONA_MAX_CHARS,
+} from "../../domain/entities/acesso.js";
 import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
@@ -11,6 +15,7 @@ import type {
   AdicionarAcesso,
   AtualizarCredencialPlug,
   AtualizarDialeto,
+  AtualizarPersona,
   ListarAcessos,
   RegistrarAcesso,
   RemoverAcesso,
@@ -33,6 +38,7 @@ import type {
   DetectarDerivaEsquema,
   InspecionarConsulta,
 } from "../../application/use-cases/inspecionar.js";
+import type { ExportarAnexo } from "../../application/use-cases/exportar-anexo.js";
 import type {
   AnotarGrafo,
   AtualizarSkill,
@@ -70,6 +76,7 @@ export interface ToolUseCases {
   atualizarCredencialPlug: AtualizarCredencialPlug;
   rotacionarTokenMcp: RotacionarTokenMcp;
   atualizarDialeto: AtualizarDialeto;
+  atualizarPersona: AtualizarPersona;
   treinarComSql: TreinarComSql;
   consultarDados: ConsultarDados;
   explorarTabelas: ExplorarTabelas;
@@ -102,6 +109,7 @@ export interface ToolUseCases {
   registrarLacunaFerramenta: RegistrarLacunaFerramenta;
   listarLacunas: ListarLacunas;
   inspecionarConsulta: InspecionarConsulta;
+  exportarAnexo: ExportarAnexo;
   descobrirTabela: DescobrirTabela;
   detectarDerivaEsquema: DetectarDerivaEsquema;
   cancelarOperacao: CancelarOperacao;
@@ -109,8 +117,11 @@ export interface ToolUseCases {
 
 import type { RateLimitStore } from "../http/rate-limit.js";
 import {
+  registerGuias,
+  registerPersonaCatalog,
   registerPreTreinoPrompt,
   registerSkillCatalog,
+  registerSkillWorkflowPrompts,
   type SkillCatalogPorts,
 } from "./skill-tools.js";
 
@@ -214,6 +225,24 @@ const politicaConsultaShape = z.object({
   modoPreferencial: z.enum(["agregado", "detalhe"]).optional(),
 });
 
+export const EXPORTAR_ANEXO_TOOL_DESCRIPTION =
+  "Rebusca/converte um anexo (foto, PDF) a partir do handle do stub kind=anexo de consultar_dados. Handle de inspecionar_consulta não é exportável. Não invente bytes. mimeDestino: image/jpeg, image/png ou application/pdf. Mesmos portões de consultar_dados. Foto pessoal: PRIVACIDADE_NEGADA — não use inspeção como segunda via.";
+
+export const CONSULTAR_DADOS_TOOL_DESCRIPTION =
+  "Consulta o ERP via plug-server no escopo publicado e no dialeto do acesso. pergunta obrigatória. skillIds opcional (omitido = união das publicadas do agentId; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist (fail-closed), consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Firebird: só consulta exemplo, sem SQL livre. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT.";
+
+export const OBTER_SKILL_TOOL_DESCRIPTION =
+  "Obtém o pacote da skill (mesmo conteúdo que skill://): escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios. Não invente schema — leia daqui.";
+
+export const VALIDAR_CONSULTA_TOOL_DESCRIPTION =
+  "Dry-run: valida o SQL contra o escopo publicado (fail-closed; skillIds opcional = união das publicadas) e executa envelope vazio no ERP via plug-server (sem ler dado). options.page + page_size aplicam a mesma regra de consultar_dados (ORDER BY externo, sem TOP/LIMIT/FETCH/FIRST). Placeholders ausentes ligam-se a null. Firebird: recusa SQL livre.";
+
+export const ATUALIZAR_PERSONA_TOOL_DESCRIPTION =
+  "Grava nomePersona (curto) e instrucoesPersona no acesso (usuário+agentId+token). Orienta tom/uso; não recorta skills nem licencia tabela, coluna, JOIN ou consultaPermitida. Em conflito vale o pacote. Exige confirmadoPeloUsuario: true. Recusa texto que pareça senha, token ou JWT. String vazia ou null limpa o campo.";
+
+export const EXPLORAR_TABELAS_TOOL_DESCRIPTION =
+  "Lista tabelas/views do ERP via catálogo de sistema do dialeto do acesso. Só no treino (descobrir estrutura); não licencia consultar_dados. Não invente nomes de tabela.";
+
 export const registerTools = (
   server: McpServer,
   config: AppConfig,
@@ -247,7 +276,9 @@ export const registerTools = (
     async (args) => run("registrar_acesso", () => useCases.registrarAcesso.execute(args)),
   );
 
-  registerPreTreinoPrompt(server);
+  registerPreTreinoPrompt(server, options?.catalog?.acessos);
+  registerGuias(server);
+  registerSkillWorkflowPrompts(server);
 
   if (options?.bootstrapOnly) {
     return;
@@ -269,7 +300,7 @@ export const registerTools = (
 
   server.tool(
     "listar_acessos",
-    "Lista acessos do usuário autenticado (client_token mascarado). sqlAccessState vem só do cofre (approved → unknown).",
+    "Lista acessos do usuário autenticado (client_token mascarado; nomePersona e instrucoesPersona). sqlAccessState vem só do cofre (approved → unknown). Persona não licencia SQL.",
     emptyShape,
     readList,
     async () => run("listar_acessos", () => useCases.listarAcessos.execute(currentAccountId())),
@@ -277,7 +308,7 @@ export const registerTools = (
 
   server.tool(
     "verificar_acesso",
-    "Consulta o status do pedido de acesso no plug-server e a prontidão SQL (hub + policy). Não faça polling agressivo. hasClientToken false no hub não prova token morto.",
+    "Consulta o status do pedido de acesso no plug-server e a prontidão SQL (hub + policy). Devolve nomePersona/instrucoesPersona. Não faça polling agressivo. hasClientToken false no hub não prova token morto.",
     { acessoId: z.string().optional() },
     readWorld,
     async (args) =>
@@ -327,8 +358,22 @@ export const registerTools = (
   );
 
   server.tool(
+    "atualizar_persona",
+    ATUALIZAR_PERSONA_TOOL_DESCRIPTION,
+    {
+      acessoId: z.string().optional(),
+      nomePersona: z.string().max(NOME_PERSONA_MAX_CHARS).nullable().optional(),
+      instrucoesPersona: z.string().max(INSTRUCOES_PERSONA_MAX_CHARS).nullable().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("atualizar_persona", () => useCases.atualizarPersona.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
     "treinar_com_sql",
-    "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso).",
+    "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: SQL livre → DIALECT_UNSUPPORTED.",
     {
       acessoId: z.string().optional(),
       sql: z.string().optional(),
@@ -342,7 +387,7 @@ export const registerTools = (
 
   server.tool(
     "explorar_tabelas",
-    "Lista tabelas/views do ERP via catálogo de sistema do dialeto do acesso.",
+    EXPLORAR_TABELAS_TOOL_DESCRIPTION,
     { acessoId: z.string().optional(), filtro: z.string().optional() },
     readWorld,
     async (args) =>
@@ -351,7 +396,7 @@ export const registerTools = (
 
   server.tool(
     "mapear_tabela",
-    "Lê colunas de uma tabela no ERP e funde no grafo (origem inferido). Infere papel/formato. Vários tipos por coluna viram aviso CATALOGO_TIPOS_AMBIGUOS (SQL Server → atualizar_dialeto para mssql).",
+    "Lê colunas de uma tabela no ERP e funde no grafo (origem inferido). Só no treino; não licencia consultar_dados. Infere papel/formato. Vários tipos por coluna viram aviso CATALOGO_TIPOS_AMBIGUOS (SQL Server → atualizar_dialeto para mssql). Não invente coluna.",
     { acessoId: z.string().optional(), tabela: z.string().optional() },
     writeWorld,
     async (args) =>
@@ -394,8 +439,7 @@ export const registerTools = (
   server.registerTool(
     "consultar_dados",
     {
-      description:
-        "Consulta o ERP no escopo publicado. pergunta obrigatória. skillIds opcional (omitido = união das publicadas do agentId; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist, consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT.",
+      description: CONSULTAR_DADOS_TOOL_DESCRIPTION,
       inputSchema: {
         acessoId: z.string().optional(),
         skillId: z.string().optional(),
@@ -477,6 +521,19 @@ export const registerTools = (
   );
 
   server.tool(
+    "exportar_anexo",
+    EXPORTAR_ANEXO_TOOL_DESCRIPTION,
+    {
+      acessoId: z.string().optional(),
+      handle: z.string(),
+      mimeDestino: z.enum(["image/jpeg", "image/png", "application/pdf"]).optional(),
+    },
+    readWorld,
+    async (args) =>
+      run("exportar_anexo", () => useCases.exportarAnexo.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
     "criar_skill",
     "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Pacote mínimo: uma tabela, colunas nomeadas, WHERE ou agregação, params com descricao; JOIN/KPI só se o usuário pedir. Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. A IA consulta o ERP pela skill publicada, não pelo grafo.",
     {
@@ -524,7 +581,7 @@ export const registerTools = (
 
   server.tool(
     "validar_skill",
-    "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo.",
+    "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo. Firebird: SQL livre → DIALECT_UNSUPPORTED.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -608,7 +665,7 @@ export const registerTools = (
 
   server.tool(
     "obter_skill",
-    "Obtém o pacote da skill: escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios.",
+    OBTER_SKILL_TOOL_DESCRIPTION,
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -620,7 +677,7 @@ export const registerTools = (
 
   server.tool(
     "expandir_escopo",
-    "Acrescenta tabelas já treinadas ao escopo da skill. Exige confirmadoPeloUsuario: true.",
+    "Acrescenta tabelas já treinadas ao escopo da skill. Exige confirmadoPeloUsuario: true. Skill publicada só une JOIN confirmado_usuario/validado_execucao — herdar_catalogo inferido não licencia o validador.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -634,7 +691,7 @@ export const registerTools = (
 
   server.tool(
     "confirmar_relacionamento",
-    "Confirma um JOIN no grafo (origem confirmado_usuario). pares[] para chave composta; colunaOrigem/colunaDestino continuam válidos (um par). Com skillId, persiste no pacote da skill — só o grafo não libera consulta.",
+    "Confirma um JOIN no grafo (origem confirmado_usuario). pares[] para chave composta; colunaOrigem/colunaDestino continuam válidos (um par). Pergunte cardinalidade e tipo de JOIN (INNER vs LEFT). Passe tipoJoin — omitir preserva o tipo já inferido do SQL/grafo (não grava inner por cima de LEFT). Com skillId, persiste no pacote da skill — só o grafo não libera consulta.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -675,13 +732,19 @@ export const registerTools = (
 
   server.tool(
     "validar_consulta",
-    "Dry-run: valida o SQL contra o escopo publicado (skillIds opcional = união das publicadas) e executa envelope vazio no ERP (sem ler dado). Placeholders ausentes ligam-se a null.",
+    VALIDAR_CONSULTA_TOOL_DESCRIPTION,
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
       skillIds: z.array(z.string()).optional(),
       sql: z.string().optional(),
       params: z.record(z.unknown()).optional(),
+      options: z
+        .object({
+          page: z.number().int().positive().optional(),
+          page_size: z.number().int().positive().optional(),
+        })
+        .optional(),
     },
     readWorld,
     async (args) =>
@@ -905,7 +968,7 @@ export const registerTools = (
   if (config.MCP_DISCOVERY_QUERY_ENABLED) {
     server.tool(
       "descobrir_tabela",
-      "Estrutura (colunas físicas, tipos, chaves, sensibilidade, relacionamentos) só de tabelas em skills publicadas. Sem linhas, contagens, DDL, valores nem título de anotação como coluna.",
+      "Estrutura (colunas físicas, tipos, chaves, sensibilidade, relacionamentos) só do pacote publicado da tabela (fingerprints como obter_skill). Sem vizinhança extra do grafo, linhas, contagens, DDL, valores nem título de anotação como coluna.",
       { acessoId: z.string().optional(), tabela: z.string().optional() },
       readList,
       async (args) =>
@@ -941,5 +1004,6 @@ export const registerTools = (
 
   if (options?.catalog) {
     registerSkillCatalog(server, options.catalog);
+    registerPersonaCatalog(server, options.catalog.acessos);
   }
 };

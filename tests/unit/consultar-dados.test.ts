@@ -380,6 +380,8 @@ describe("ConsultarDados", () => {
     ).rejects.toMatchObject({
       code: ERROR_CODES.INVALID_SQL,
       hint: expect.stringMatching(/produto/i),
+      source: "sql_engine",
+      stage: "sql.execute",
     });
   });
 
@@ -524,6 +526,36 @@ describe("ConsultarDados", () => {
     ).rejects.toMatchObject({
       code: ERROR_CODES.VALIDATION_ERROR,
       message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+    });
+    expect(plug.lastSql).toBeNull();
+  });
+
+  it("recusa consultaSemantica.limite com options.page", async () => {
+    const { consultar, created, skills, plug } = await setupAcesso();
+    plug.sqlImpl = async () => {
+      throw new Error("não deve chamar o plug");
+    };
+    const skill = await skills.create({
+      agentId,
+      slug: "kpi-receber",
+      nome: "Receber",
+      descricao: "Total",
+      sqlModelo: "SELECT SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "top 20 do total",
+        skillId: skill.id,
+        consultaSemantica: { versao: 1, metrica: "total", limite: 20 },
+        options: { page: 1, page_size: 10 },
+      }),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "consultaSemantica.limite não combina com options.page.",
+      hint: expect.stringMatching(/n[aã]o misture os dois padr[oõ]es/i),
     });
     expect(plug.lastSql).toBeNull();
   });

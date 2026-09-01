@@ -171,7 +171,7 @@ const validarSelect = (
   permitirStarSimples = false,
 ): void => {
   if (ast.temStar && !starSimplesInspecao(ast, permitirStarSimples)) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: permitirStarSimples
         ? "SELECT * com JOIN, subquery ou mais de uma tabela não é permitido na inspeção."
@@ -182,7 +182,7 @@ const validarSelect = (
     });
   }
   if (ast.groupByCount > GROUP_BY_MAX_EXPRESSIONS) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.VALIDATION_ERROR,
       message: `GROUP BY excede o teto de ${String(GROUP_BY_MAX_EXPRESSIONS)} expressões.`,
       hint: "Agregue menos dimensões ou quebre a consulta. Não use GROUP BY como listagem.",
@@ -193,16 +193,14 @@ const validarSelect = (
       continue;
     }
     if (!tabelaNoEscopo(escopo, tabela.nome)) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.TABELA_FORA_DO_ESCOPO,
         message: `Tabela ${tabela.nome} está fora do escopo das skills publicadas.`,
         hint: hintComProximos(
-          "Use só tabelas do pacote da skill. Expanda o escopo com expandir_escopo se o usuário confirmar.",
+          "Tabela fora do allowlist publicado. Leia obter_skill (escopo.tabelas). Não invente nem repita esta tabela no SQL livre. Só expandir_escopo se o usuário confirmar o treino.",
           tabela.nome,
           escopo.tabelas,
         ),
-        source: "sql",
-        stage: "validar_escopo",
       });
     }
   }
@@ -213,14 +211,14 @@ const validarSelect = (
     }
     if (!ref.table) {
       if (fisicas.length > 1) {
-        throw new DomainError({
+        throw DomainError.pacote({
           code: ERROR_CODES.COLUNA_AMBIGUA,
           message: `Coluna ${ref.column} sem qualificador com mais de uma tabela.`,
           hint: "Qualifique alias.coluna (ex.: p.codprod). Não deixe o validador adivinhar a tabela.",
         });
       }
     } else if (!aliasConhecido(ast, cteNomes, ref.table)) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.ALIAS_DESCONHECIDO,
         message: `Alias ${ref.table} não resolve para tabela deste SELECT.`,
         hint: "Use um alias declarado no FROM/JOIN ou o nome da tabela do pacote.",
@@ -228,7 +226,7 @@ const validarSelect = (
     }
     const resolved = resolveTabela(ast, cteNomes, ref.table);
     if (!resolved) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_AMBIGUA,
         message: `Não foi possível resolver a tabela de ${ref.column}.`,
         hint: "Qualifique a coluna com o alias do FROM.",
@@ -238,11 +236,11 @@ const validarSelect = (
       continue;
     }
     if (!colunaNoEscopo(escopo, resolved.nome, ref.column)) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Coluna ${ref.column} não existe neste dataset.`,
         hint: hintComProximos(
-          `Disponíveis para filtro em ${resolved.nome}:`,
+          `Coluna fora do pacote de ${resolved.nome}. Não invente nem repita.`,
           ref.column,
           colunasDaTabela(escopo, resolved.nome),
         ),
@@ -251,30 +249,30 @@ const validarSelect = (
   }
   for (const join of ast.joins) {
     if (join.tipoJoin.includes("cross")) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.JOIN_DESCONHECIDO,
         message: "CROSS JOIN / produto cartesiano é recusado.",
-        hint: "Declare INNER/LEFT JOIN com igualdade de colunas conhecidas no grafo.",
+        hint: "Declare INNER/LEFT JOIN com igualdade de colunas conhecidas no pacote. Não repita CROSS JOIN.",
       });
     }
     if (join.equalities.length === 0) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.JOIN_DESCONHECIDO,
         message: "JOIN sem igualdade conhecida no escopo.",
-        hint: "Use ON alias.coluna = alias.coluna de um relacionamento publicado. Chame confirmar_relacionamento para ensinar um novo.",
+        hint: "Use ON alias.coluna = alias.coluna de um relacionamento publicado. Não repita este ON. Só confirmar_relacionamento se o usuário ensinar o JOIN.",
       });
     }
     const eqs: IgualdadeResolvida[] = [];
     for (const eq of join.equalities) {
       if (!aliasConhecido(ast, cteNomes, eq.leftAlias)) {
-        throw new DomainError({
+        throw DomainError.pacote({
           code: ERROR_CODES.ALIAS_DESCONHECIDO,
           message: `Alias ${eq.leftAlias} do JOIN não resolve.`,
           hint: "O ON precisa usar alias declarados neste SELECT.",
         });
       }
       if (!aliasConhecido(ast, cteNomes, eq.rightAlias)) {
-        throw new DomainError({
+        throw DomainError.pacote({
           code: ERROR_CODES.ALIAS_DESCONHECIDO,
           message: `Alias ${eq.rightAlias} do JOIN não resolve.`,
           hint: "O ON precisa usar alias declarados neste SELECT.",
@@ -283,7 +281,7 @@ const validarSelect = (
       const leftTable = resolveTabela(ast, cteNomes, eq.leftAlias);
       const rightTable = resolveTabela(ast, cteNomes, eq.rightAlias);
       if (!leftTable || !rightTable) {
-        throw new DomainError({
+        throw DomainError.pacote({
           code: ERROR_CODES.JOIN_DESCONHECIDO,
           message: "JOIN com alias não resolvido.",
           hint: "Declare FROM/JOIN com alias e ON alias.coluna = alias.coluna.",
@@ -303,10 +301,10 @@ const validarSelect = (
       const label = eqs
         .map((eq) => `${eq.leftTable}.${eq.leftColumn} = ${eq.rightTable}.${eq.rightColumn}`)
         .join(" AND ");
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.JOIN_DESCONHECIDO,
         message: `JOIN ${label} não está no escopo como conjunto.`,
-        hint: "Não invente relacionamento. Confirme o JOIN composto com confirmar_relacionamento (pares[]) / expandir_escopo.",
+        hint: "Não invente nem repita este JOIN no SQL livre. Confirme o composto com confirmar_relacionamento (pares[]) / expandir_escopo só se o usuário ensinar.",
       });
     }
   }
@@ -321,14 +319,29 @@ const validarSelect = (
 
 const assertRecorte = (ast: SqlAstSelect): void => {
   if (!ast.temWhere && !ast.temAgregacaoLocal) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_SEM_RECORTE,
       message: "Consulta sem recorte nem agregação.",
-      hint: "Adicione WHERE (período, empresa, status) ou agregue no banco (SUM/COUNT/GROUP BY/OVER). Não puxe a listagem para somar na IA.",
+      hint: "Adicione WHERE (período, empresa, status) ou agregue no banco (SUM/COUNT/GROUP BY/OVER). Não reenvie o mesmo SELECT sem recorte nem some linhas na IA.",
     });
   }
   for (const branch of ast.setBranches) {
     assertRecorte(branch);
+  }
+};
+
+export const assertParPaginacao = (options?: { page?: number; pageSize?: number }): void => {
+  const page = options?.page;
+  const pageSize = options?.pageSize;
+  if (
+    (page !== undefined && pageSize === undefined) ||
+    (page === undefined && pageSize !== undefined)
+  ) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "Paginação exige options.page e options.page_size juntos.",
+      hint: "Envie os dois, com ORDER BY no SELECT externo e sem TOP/LIMIT. Consulta única limitada: TOP/LIMIT/FIRST do guia, sem options.page.",
+    });
   }
 };
 
@@ -337,12 +350,13 @@ export const exigirPaginacaoEstavel = (
   ast: SqlAstSelect | null,
   options?: { page?: number; pageSize?: number },
 ): void => {
+  assertParPaginacao(options);
   if (!options?.page || !options.pageSize) {
     return;
   }
   const temOrderBy = ast !== null ? temOrderByNoSelectExterno(ast) : sqlTemOrderByExterno(sql);
   if (!temOrderBy) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.VALIDATION_ERROR,
       message: "Paginação exige ORDER BY.",
       hint: "Sem ordem estável a página repete e perde linha. Inclua ORDER BY no SELECT externo (sqlModelo ou sql).",
@@ -353,10 +367,10 @@ export const exigirPaginacaoEstavel = (
       ? temLimiteNoSelectExterno(ast) || sqlDeclaraLimiteExterno(sql)
       : sqlDeclaraLimiteExterno(sql);
   if (temLimite) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.VALIDATION_ERROR,
       message: "Paginação via options.page não pode conviver com TOP/LIMIT/FIRST no SQL.",
-      hint: "A reescrita gerenciada controla o corte de linhas. Remova TOP/LIMIT/OFFSET/FETCH/FIRST/START AT do SQL e deixe só ORDER BY; envie options.page e options.page_size juntos.",
+      hint: "Não misture os dois padrões: página = só ORDER BY no SELECT externo + options.page e page_size (sem TOP/LIMIT/FETCH/FIRST); consulta única limitada = TOP/LIMIT/FIRST do guia, sem options.page.",
     });
   }
 };

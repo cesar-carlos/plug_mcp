@@ -4,6 +4,7 @@ import { assertOrcamentoConsulta } from "../../src/application/use-cases/shared/
 import { avisosKpiDesalinhado } from "../../src/application/use-cases/shared/avisos-kpi.js";
 import { tryParseSelect } from "../../src/application/use-cases/shared/sql-ast.js";
 import { parseEscopoSkill } from "../../src/domain/entities/escopo.js";
+import type { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 
 describe("pré-check de privacidade e orçamento", () => {
@@ -20,6 +21,18 @@ describe("pré-check de privacidade e orçamento", () => {
         negar: ["segredo", "pessoal"],
       }),
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.PRIVACIDADE_NEGADA }));
+    try {
+      assertPrivacidadeAntesDoHub({
+        ast: ast!,
+        lookup: () => "pessoal",
+        negar: ["segredo", "pessoal"],
+      });
+    } catch (error) {
+      const err = error as DomainError;
+      expect(err.nextAction).toBe("consultar_dados");
+      expect(err.nextAction).not.toBe("inspecionar_consulta");
+      expect(err.hint).toMatch(/n[aã]o é amostra mascarada/i);
+    }
   });
 
   it("inspeção só recusa segredo", () => {
@@ -84,7 +97,7 @@ describe("pré-check de privacidade e orçamento", () => {
         politica: { maxRows: 50 },
         maxRows: 200,
       }),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.CONSULTA_ORCAMENTO }));
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.CONSULTA_ORCAMENTO, source: "sql" }));
   });
 
   it("CONSULTA_ORCAMENTO quando maxTabelas estoura", () => {

@@ -15,7 +15,7 @@ export const assertOrcamentoConsulta = (input: {
   }
   let maxRows = input.maxRows;
   if (politica.maxRows != null && input.maxRows > politica.maxRows) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_ORCAMENTO,
       message: `max_rows ${input.maxRows} excede o teto da skill (${politica.maxRows}).`,
       hint: "Agregue no banco ou peça um recorte menor.",
@@ -25,7 +25,7 @@ export const assertOrcamentoConsulta = (input: {
     maxRows = Math.min(maxRows, politica.maxRows);
   }
   if (politica.maxTabelas != null && input.ast && input.ast.tabelas.length > politica.maxTabelas) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_ORCAMENTO,
       message: `A consulta usa ${input.ast.tabelas.length} tabelas; o teto da skill é ${politica.maxTabelas}.`,
       hint: "Reduza o JOIN ou use a consulta exemplo.",
@@ -37,7 +37,7 @@ export const assertOrcamentoConsulta = (input: {
     !input.ast.temAgregacao &&
     !input.ast.filtroRefs.some((ref) => /data|date|venc|emiss/i.test(ref.column))
   ) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_ORCAMENTO,
       message: "A skill exige recorte temporal para consulta detalhada.",
       hint: "Filtre por data de vencimento/pagamento ou agregue.",
@@ -49,7 +49,7 @@ export const assertOrcamentoConsulta = (input: {
     !input.ast.temAgregacao &&
     !input.ast.temWhere
   ) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_ORCAMENTO,
       message: "A skill prefere consulta agregada.",
       hint: "Use SUM/GROUP BY ou a consulta semântica certificada.",

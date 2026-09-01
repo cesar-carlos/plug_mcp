@@ -15,6 +15,7 @@ import { fingerprintPares } from "../../domain/entities/relacionamento.js";
 import type { Skill, StatusSkill } from "../../domain/entities/skill.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
+import { matchRelacionamentoEscopo } from "./shared/resolver-tipo-join.js";
 import {
   bindNamedParams,
   coerceBoundParams,
@@ -37,6 +38,9 @@ import {
   type ColumnMetadataHint,
   type ColumnMetadataItem,
 } from "./shared/columns-metadata.js";
+import type { AnexoHandlePort } from "../../domain/ports/anexo-handle.port.js";
+import { avisoAnexos, sanitizarLinhasConsulta } from "./shared/sanitizar-linhas-consulta.js";
+import { lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
 
 export const INSPECAO_MAX_ROWS = 100;
 export const FINALIDADES_INSPECAO = [
@@ -121,6 +125,7 @@ export class InspecionarConsulta {
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
     private readonly audit: AuditLogPort,
+    private readonly extras: { anexos?: AnexoHandlePort } = {},
   ) {}
 
   async execute(
@@ -215,10 +220,10 @@ export class InspecionarConsulta {
     const tabelaInformada = input.tabela?.trim() ?? "";
     const sqlLivre = sqlInformado.length > 0 || tabelaInformada.length > 0;
     if (acesso.dialeto === "firebird" && sqlLivre) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.DIALECT_UNSUPPORTED,
         message: "Inspeção com SQL livre não é suportada neste dialeto.",
-        hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql).",
+        hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql). Não reenvie SQL livre neste dialeto.",
       });
     }
     let sql: string;
@@ -291,6 +296,21 @@ export class InspecionarConsulta {
         result.columnsMetadata,
         columnHints,
       );
+      const columnTypes = new Map<string, string | null>(
+        columnsMetadata.map((item) => [item.name.toLowerCase(), item.type]),
+      );
+      const lookup = await lookupSensibilidadeGrafo(this.grafo, acesso.agentId, tabelasSql);
+      const sanitizadas = sanitizarLinhasConsulta({
+        rows,
+        columnTypes,
+        anexos: this.extras.anexos,
+        usuarioId: uid,
+        acessoId: acesso.id,
+        origem: "inspecionar_consulta",
+        lookupSensibilidade: (coluna) => lookup(null, coluna),
+      });
+      const rowsSanitizadas = sanitizadas.rows;
+      const avisoAnexo = avisoAnexos(sanitizadas.anexos, "inspecionar_consulta");
       const colunasNovasNoGrafo = await persistirColunasInspecao({
         grafo: this.grafo,
         agentId: acesso.agentId,
@@ -313,8 +333,8 @@ export class InspecionarConsulta {
         success: true,
         finalidade,
         columns,
-        rows,
-        rowCount: rows.length,
+        rows: rowsSanitizadas,
+        rowCount: rowsSanitizadas.length,
         maxRowsApplied: INSPECAO_MAX_ROWS,
         truncated: result.rows.length >= INSPECAO_MAX_ROWS || result.truncated === true,
         colunasMascaradas: [],
@@ -328,6 +348,7 @@ export class InspecionarConsulta {
             message:
               "Amostra crua, sem cache e sem consulta_aprendida. Não use para KPI. Origem inferido não licencia SQL de negócio.",
           },
+          ...(avisoAnexo ? [avisoAnexo] : []),
         ],
         hint:
           colunasNovasNoGrafo.length === 0
@@ -434,6 +455,19 @@ export class DescobrirTabela {
         hint: "Peça um client_token com a tabela no hub.",
       });
     }
+    const pacote = uniaoEscopos(
+      publicadas
+        .filter((skill) =>
+          skill.escopo.tabelas.some((nome) => nome.toLowerCase() === tabelaNome.toLowerCase()),
+        )
+        .map((skill) => skill.escopo),
+    );
+    const colunasDoPacote = (coluna: string): boolean => {
+      const entry = Object.entries(pacote.colunasPorTabela).find(
+        ([nome]) => nome.toLowerCase() === tabelaNome.toLowerCase(),
+      );
+      return (entry?.[1] ?? []).some((item) => item.toLowerCase() === coluna.toLowerCase());
+    };
     const tabela = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
     if (!tabela) {
       throw new DomainError({
@@ -450,7 +484,7 @@ export class DescobrirTabela {
       success: true,
       tabela: tabela.nome,
       colunas: colunas
-        .filter((coluna) => isIdentificadorSql(coluna.nome))
+        .filter((coluna) => isIdentificadorSql(coluna.nome) && colunasDoPacote(coluna.nome))
         .map((coluna) => ({
           nome: coluna.nome,
           tipo: coluna.tipo,
@@ -462,13 +496,27 @@ export class DescobrirTabela {
       relacionamentos: rels
         .filter((rel) => rel.tabelaOrigemId === tabela.id || rel.tabelaDestinoId === tabela.id)
         .map((rel) => ({
+          origemNome: nomeById.get(rel.tabelaOrigemId) ?? "",
+          destinoNome: nomeById.get(rel.tabelaDestinoId) ?? "",
           destino:
             rel.tabelaOrigemId === tabela.id
               ? (nomeById.get(rel.tabelaDestinoId) ?? "")
               : (nomeById.get(rel.tabelaOrigemId) ?? ""),
           pares: [...rel.pares],
           cardinalidade: rel.cardinalidade,
-        })),
+        }))
+        .filter(
+          (rel) =>
+            rel.origemNome &&
+            rel.destinoNome &&
+            matchRelacionamentoEscopo(
+              pacote.relacionamentos,
+              rel.origemNome,
+              rel.destinoNome,
+              rel.pares,
+            ),
+        )
+        .map(({ destino, pares, cardinalidade }) => ({ destino, pares, cardinalidade })),
     };
   }
 }

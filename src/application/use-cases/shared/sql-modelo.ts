@@ -67,7 +67,7 @@ export const lastIdent = (qualified: string): string => {
 export const assertSqlTamanho = (sql: string): void => {
   const bytes = Buffer.byteLength(sql, "utf8");
   if (bytes > SQL_MAX_BYTES) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.VALIDATION_ERROR,
       message: "SQL excede 1 MiB.",
       hint: "Reduza o SQL. O hub recusa comandos maiores que ~1 MiB.",
@@ -78,7 +78,7 @@ export const assertSqlTamanho = (sql: string): void => {
 export const parseSqlModelo = (raw: string): SqlModelo => {
   const sql = stripComments(raw);
   if (!sql) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.VALIDATION_ERROR,
       message: "sql é obrigatório.",
       hint: "Envie um SELECT com colunas nomeadas. Não use SELECT *.",
@@ -86,14 +86,14 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
   }
   assertSqlTamanho(sql);
   if (!/^(with\b[\s\S]+\)\s*)?select\b/i.test(sql)) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "Só SELECT pode treinar o grafo.",
       hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
     });
   }
   if (/\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke)\b/i.test(sql)) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "SQL de treino não pode mutar dados.",
       hint: "Use apenas SELECT. Mutações ficam a cargo do client_token em consultar_dados, não no treino.",
@@ -101,7 +101,7 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
   }
   const withoutTrailingSemi = sql.replace(/;+\s*$/, "");
   if (withoutTrailingSemi.includes(";")) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "SQL não pode conter um segundo comando.",
       hint: "Envie um único SELECT, sem ponto-e-vírgula no meio.",
@@ -109,7 +109,7 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
   }
   const ast = tryParseSelect(sql);
   if (!ast) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "Não foi possível interpretar o SQL neste dialeto.",
       hint: "SQL que o parser não entende não vira skill. Ajuste ao guia de dialeto (mssql/sybase/postgres). Firebird só consulta exemplo.",
@@ -120,7 +120,7 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
 
 const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
   if (ast.temStar) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "SELECT * não treina o grafo.",
       hint: "Nomeie as colunas (ex.: SELECT p.codprod, p.descricao FROM produto p).",
@@ -135,7 +135,7 @@ const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
     }
     const fisicas = item.tabelas.filter((tabela) => !tabela.isCte && !tabela.isSubquery);
     if (fisicas.length > 1 && item.joins.length === 0) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.INVALID_SQL,
         message: "Várias tabelas exigem JOIN explícito.",
         hint: "Não use FROM a, b. Declare JOIN ... ON para o grafo registrar o relacionamento.",
@@ -146,7 +146,7 @@ const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
         continue;
       }
       if (join.equalities.length === 0) {
-        throw new DomainError({
+        throw DomainError.pacote({
           code: ERROR_CODES.INVALID_SQL,
           message: "JOIN exige ON com igualdade alias.coluna = alias.coluna.",
           hint: "Ex.: INNER JOIN cliente c ON c.codcli = p.codcli. CROSS JOIN não grava relacionamento. Funções no ON não são aceitas.",
@@ -155,7 +155,7 @@ const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
     }
   });
   if (tabelas.length === 0) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "SQL de treino precisa de FROM com tabela real.",
       hint: "O agente classifica autorização por tabela. Referencie tabelas/views existentes.",
@@ -187,7 +187,7 @@ const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
   });
   const colunas: ColunaSql[] = ast.colunas.map((coluna) => {
     if (coluna.isExpression && !coluna.alias) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.INVALID_SQL,
         message: "Expressão no SELECT precisa de alias explícito.",
         hint: "Use AS (ex.: SUM(qtd) AS total). Sem alias o grafo gravaria um nome inválido.",
@@ -202,7 +202,7 @@ const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
     };
   });
   if (colunas.length === 0) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "Não foi possível ler as colunas do SELECT.",
       hint: "Use colunas simples ou alias (ex.: SUM(qtd) AS total).",
@@ -211,7 +211,7 @@ const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {
   if (ast.joins.length > 0) {
     for (const coluna of ast.colunas) {
       if (!coluna.isExpression && !coluna.table) {
-        throw new DomainError({
+        throw DomainError.pacote({
           code: ERROR_CODES.INVALID_SQL,
           message: "Coluna sem qualificador em JOIN.",
           hint: "Com JOIN, qualifique cada coluna (ex.: p.codprod em vez de codprod). Expressões com AS continuam válidas.",

@@ -57,6 +57,7 @@ import {
   validarSqlNoEscopo,
   coletarAvisosValidacao,
   exigirPaginacaoEstavel,
+  assertParPaginacao,
 } from "./shared/validar-escopo.js";
 import { promoverFatosDaExecucao } from "./shared/promover-fatos.js";
 import {
@@ -122,7 +123,10 @@ import {
 } from "./shared/schema-introspection.js";
 import { coletarAvisosAnotacaoConsulta } from "./shared/avisos-anotacao-consulta.js";
 import { inferirFormatoColuna, inferirPapelColuna } from "./shared/inferir-papel.js";
-import { inferirSensibilidadeColuna } from "../../domain/entities/privacidade.js";
+import {
+  inferirSensibilidadeColuna,
+  type SensibilidadeColuna,
+} from "../../domain/entities/privacidade.js";
 import {
   applySelectAliasHints,
   mergeColumnHints,
@@ -130,8 +134,8 @@ import {
   type ColumnMetadataHint,
   type ColumnMetadataItem,
 } from "./shared/columns-metadata.js";
-
-const QUERY_CELL_MAX_CHARS = 2_048;
+import type { AnexoHandlePort } from "../../domain/ports/anexo-handle.port.js";
+import { avisoAnexos, sanitizarLinhasConsulta } from "./shared/sanitizar-linhas-consulta.js";
 
 const PERIODO_NA_PERGUNTA =
   /\b(per[ií]odo|ano|m[eê]s|yoy|versus|compar(ar|ação|acao)|trimestre|semestre)\b/i;
@@ -222,7 +226,7 @@ const unirContratosParams = (skills: readonly Skill[]): Skill["params"] => {
         throw new DomainError({
           code: ERROR_CODES.MULTI_SKILL_PARAMS,
           message: `Param ${param.nome} conflita entre skills (tipo/obrigatoriedade).`,
-          hint: "Alinhe o contrato nas skills ou use nomes distintos no SQL.",
+          hint: "O mesmo :nome tem tipo ou obrigatoriedade diferentes entre as skills do envelope. Recorte skillIds a um domínio, alinhe params nas skills ou use placeholders distintos. Não reenvie o mesmo cruzamento.",
         });
       }
       map.set(param.nome, prev ?? param);
@@ -230,22 +234,6 @@ const unirContratosParams = (skills: readonly Skill[]): Skill["params"] => {
   }
   return [...map.values()];
 };
-
-const truncateCell = (value: unknown): unknown => {
-  if (typeof value !== "string" || value.length <= QUERY_CELL_MAX_CHARS) {
-    return value;
-  }
-  return `${value.slice(0, QUERY_CELL_MAX_CHARS)}…`;
-};
-
-const sanitizeQueryRows = (rows: readonly Record<string, unknown>[]): Record<string, unknown>[] =>
-  rows.map((row) => {
-    const next: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(row)) {
-      next[key] = truncateCell(value);
-    }
-    return next;
-  });
 
 const gravarAprendizadoDaConsulta = async (input: {
   extras: {
@@ -320,11 +308,7 @@ const rethrowCatalogDenied = (error: unknown): never => {
     error instanceof DomainError &&
     (error.code === ERROR_CODES.PERMISSION_DENIED || error.code === ERROR_CODES.ACCESS_REVOKED)
   ) {
-    throw new DomainError({
-      code: error.code,
-      message: error.message,
-      hint: hintCatalogoSistemaNegado(),
-    });
+    throw error.withHint(hintCatalogoSistemaNegado());
   }
   throw error;
 };
@@ -347,6 +331,7 @@ export class ConsultarDados {
       cacheTtlMs?: number;
       semanticQueryEnabled?: boolean;
       schemaDriftEnabled?: boolean;
+      anexos?: AnexoHandlePort;
     } = {},
   ) {}
 
@@ -445,11 +430,14 @@ export class ConsultarDados {
           hint: "Use SQL livre validado ou ligue MCP_SEMANTIC_QUERY_ENABLED.",
         });
       }
-      if (consultaSemantica.limite != null && input.options?.page != null) {
+      if (
+        consultaSemantica.limite != null &&
+        (input.options?.page != null || input.options?.page_size != null)
+      ) {
         throw new DomainError({
           code: ERROR_CODES.VALIDATION_ERROR,
           message: "consultaSemantica.limite não combina com options.page.",
-          hint: "Use limite (TOP/LIMIT) sem página, ou pagine com ORDER BY + page e page_size sem limite no IR.",
+          hint: "Não misture os dois padrões: use limite (TOP/LIMIT) sem página, ou pagine com ORDER BY + page e page_size sem limite no IR.",
         });
       }
       ancoraSemantica = ancoraConsultaSemantica(allowlist, aliasesMetricas(consultaSemantica), ids);
@@ -531,6 +519,7 @@ export class ConsultarDados {
         : contratoBase;
     const colunasDasTabelas: Record<string, string[]> = {};
     const columnHints = new Map<string, ColumnMetadataHint>();
+    let lookupAnexo: ((coluna: string) => SensibilidadeColuna | null) | undefined;
     if (this.extras.grafo) {
       for (const tabela of modelo.tabelas) {
         const found = await this.extras.grafo.findTabelaByNome(acesso.agentId, tabela.nome);
@@ -550,6 +539,7 @@ export class ConsultarDados {
           astPriv.tabelas.map((item) => item.nome),
         );
         assertPrivacidadeAntesDoHub({ ast: astPriv, lookup, negar: ["segredo", "pessoal"] });
+        lookupAnexo = (coluna) => lookup(null, coluna);
       }
     }
     exigirFiltroEscopoPadrao({
@@ -607,16 +597,7 @@ export class ConsultarDados {
     const maxRows = orcamento.maxRows;
     const page = input.options?.page;
     const pageSize = input.options?.page_size;
-    if (
-      (page !== undefined && pageSize === undefined) ||
-      (page === undefined && pageSize !== undefined)
-    ) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Paginação exige options.page e options.page_size juntos.",
-        hint: "Envie os dois, com ORDER BY no SELECT externo e sem TOP/LIMIT.",
-      });
-    }
+    assertParPaginacao({ page, pageSize });
     if (pageSize !== undefined && pageSize > maxRows) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -626,10 +607,10 @@ export class ConsultarDados {
     }
     const paginar = Boolean(page && pageSize);
     if (paginar && acesso.dialeto === "firebird") {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.DIALECT_UNSUPPORTED,
         message: "Firebird não pagina via options.page.",
-        hint: "Use só a consulta exemplo da skill, sem SQL livre nem paginação gerenciada.",
+        hint: "Firebird: só consulta exemplo da skill, sem SQL livre nem paginação gerenciada. Não reenvie options.page neste dialeto.",
       });
     }
     const fetchMax = paginar ? maxRows : Math.min(maxRows + 1, this.absoluteMaxRows + 1);
@@ -755,7 +736,6 @@ export class ConsultarDados {
           ? result.rows.slice(0, pageSize)
           : result.rows.slice(0, maxRows);
       const truncated = paginar ? false : result.rows.length > maxRows || result.truncated === true;
-      const rows = sanitizeQueryRows(pageRows);
       const paginacao =
         paginar && page !== undefined && pageSize !== undefined && result.pagination
           ? {
@@ -765,6 +745,30 @@ export class ConsultarDados {
               hasPreviousPage: result.pagination.hasPreviousPage,
             }
           : undefined;
+      const columns =
+        result.columns.length > 0
+          ? result.columns
+          : (result.columnsMetadata?.map((item) => item.name) ?? []);
+      const columnsMetadata = normalizeColumnsMetadata(
+        columns,
+        result.columnsMetadata,
+        columnHints,
+      );
+      const columnTypes = new Map<string, string | null>(
+        columnsMetadata.map((item) => [item.name.toLowerCase(), item.type]),
+      );
+      const sanitizadas = sanitizarLinhasConsulta({
+        rows: pageRows,
+        columnTypes,
+        anexos: this.extras.anexos,
+        usuarioId: uid,
+        acessoId: acesso.id,
+        origem: "consultar_dados",
+        lookupSensibilidade: (coluna) =>
+          lookupAnexo?.(coluna) ?? inferirSensibilidadeColuna(coluna),
+      });
+      const rows = sanitizadas.rows;
+      const avisoAnexo = avisoAnexos(sanitizadas.anexos, "consultar_dados");
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
@@ -786,16 +790,7 @@ export class ConsultarDados {
       if (consultaSemantica && !skill.consultaSemantica) {
         await this.skills.update(skill.id, { consultaSemantica });
       }
-      const columns =
-        result.columns.length > 0
-          ? result.columns
-          : (result.columnsMetadata?.map((item) => item.name) ?? []);
-      const columnsMetadata = normalizeColumnsMetadata(
-        columns,
-        result.columnsMetadata,
-        columnHints,
-      );
-      if (cacheable && this.extras.cache) {
+      if (cacheable && this.extras.cache && sanitizadas.anexos === 0) {
         await this.extras.cache.set(
           cacheKey,
           JSON.stringify({
@@ -838,7 +833,7 @@ export class ConsultarDados {
           filial: acesso.escopoPadrao?.filial,
           consolidado: !acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial,
         },
-        avisos: [...avisos, ...loop.avisos],
+        avisos: [...avisos, ...(avisoAnexo ? [avisoAnexo] : []), ...loop.avisos],
         aprendizadoGravado: loop.gravado,
         paginacao,
         hint: paginacao?.hasNextPage
@@ -861,13 +856,9 @@ export class ConsultarDados {
         duracaoMs: Date.now() - started,
       });
       if (error instanceof DomainError && isSqlClassificationDenial(error)) {
-        throw new DomainError({
-          code: error.code,
-          message: error.message,
-          hint: hintSqlNaoClassificavel(modelo.tabelas.map((tabela) => tabela.nome)),
-          retryable: error.retryable,
-          retryAfterMs: error.retryAfterMs,
-        });
+        throw error.withHint(
+          `${hintSqlNaoClassificavel(modelo.tabelas.map((tabela) => tabela.nome))} Não persista este SQL.`,
+        );
       }
       throw error;
     }
@@ -891,6 +882,7 @@ export class ValidarConsulta {
       skillIds?: string[];
       sql?: string;
       params?: Record<string, unknown>;
+      options?: { page?: number; page_size?: number };
     },
   ): Promise<{
     success: true;
@@ -918,7 +910,10 @@ export class ValidarConsulta {
     }
     const allowlist = await resolverSkillsConsulta(this.skills, acesso.agentId, ids);
     const escopo = uniaoEscoposPublicados(allowlist);
-    const ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo);
+    const ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo, {
+      page: input.options?.page,
+      pageSize: input.options?.page_size,
+    });
     await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.executeSql({
         accessToken,

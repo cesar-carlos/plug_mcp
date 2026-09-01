@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decidirMerge, tipoCompativelComPapel } from "../../src/domain/entities/merge-fato.js";
 import { relacoesSemSubconjuntos } from "../../src/domain/entities/relacionamento.js";
 import { uniaoEscopos, PACOTE_VERSAO_ATUAL } from "../../src/domain/entities/escopo.js";
+import { InMemoryGrafoRepository } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 
 describe("tipo físico no merge", () => {
   it("substitui uniqueidentifier por datetime2 mesmo com origem mais fraca", () => {
@@ -55,6 +56,26 @@ describe("tipo físico no merge", () => {
   it("papel data é incompatível com uuid", () => {
     expect(tipoCompativelComPapel("uniqueidentifier", "data")).toBe(false);
     expect(tipoCompativelComPapel("datetime2", "data")).toBe(true);
+  });
+
+  it("origem mais fraca não sobrescreve LEFT confirmado com inner de template", () => {
+    const result = decidirMerge(
+      {
+        origem: "confirmado_usuario",
+        status: "vigente",
+        descricao: "pedido-cliente",
+        tipoJoin: "left",
+      },
+      {
+        origem: "inferido",
+        status: "vigente",
+        descricao: null,
+        tipoJoin: "inner",
+      },
+    );
+    expect(result.origem).toBe("confirmado_usuario");
+    expect(result.tipoJoin).toBe("left");
+    expect(result.aplicar).toBe(false);
   });
 });
 
@@ -134,5 +155,47 @@ describe("JOIN composto substitui isolados", () => {
     expect(next.relacionamentos).toHaveLength(1);
     expect(next.relacionamentos[0]?.pares).toHaveLength(2);
     expect(next.relacionamentos[0]?.cardinalidade).toBe("1:1");
+  });
+});
+
+describe("tipoJoin no merge do grafo", () => {
+  it("LEFT confirmado não vira inner quando herdar_catalogo chega com origem inferido", async () => {
+    const grafo = new InMemoryGrafoRepository();
+    const pedido = await grafo.mergeTabela({
+      agentId: "agent-1",
+      nome: "pedido",
+      origem: "validado_execucao",
+      autorUsuarioId: "u1",
+    });
+    const cliente = await grafo.mergeTabela({
+      agentId: "agent-1",
+      nome: "cliente",
+      origem: "validado_execucao",
+      autorUsuarioId: "u1",
+    });
+    await grafo.mergeRelacionamento({
+      agentId: "agent-1",
+      tabelaOrigemId: pedido.tabela.id,
+      tabelaDestinoId: cliente.tabela.id,
+      pares: [{ colunaOrigem: "codcliente", colunaDestino: "codcliente" }],
+      tipoJoin: "left",
+      cardinalidade: "N:1",
+      origem: "confirmado_usuario",
+      autorUsuarioId: "u1",
+    });
+    await grafo.mergeRelacionamento({
+      agentId: "agent-1",
+      tabelaOrigemId: pedido.tabela.id,
+      tabelaDestinoId: cliente.tabela.id,
+      pares: [{ colunaOrigem: "codcliente", colunaDestino: "codcliente" }],
+      tipoJoin: "inner",
+      cardinalidade: "N:1",
+      origem: "inferido",
+      autorUsuarioId: "u1",
+    });
+    const rels = await grafo.listRelacionamentos("agent-1");
+    expect(rels).toHaveLength(1);
+    expect(rels[0]?.tipoJoin.toLowerCase()).toMatch(/left/);
+    expect(rels[0]?.origem).toBe("confirmado_usuario");
   });
 });

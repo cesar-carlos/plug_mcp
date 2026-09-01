@@ -8,6 +8,7 @@ import {
 import { escopoFromSqlModelo } from "../../../src/application/use-cases/shared/escopo-from-modelo.js";
 import { parseSqlModelo } from "../../../src/application/use-cases/shared/sql-modelo.js";
 import { ERROR_CODES } from "../../../src/domain/errors/error-codes.js";
+import { DomainError } from "../../../src/domain/errors/domain-error.js";
 
 const escopo = escopoFromSqlModelo(
   parseSqlModelo(
@@ -28,7 +29,13 @@ describe("validarSqlNoEscopo", () => {
   it("recusa tabela fora", () => {
     expect(() =>
       validarSqlNoEscopo("SELECT f.valor FROM fatura f WHERE f.ano = 2026", "mssql", escopo),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO }));
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.TABELA_FORA_DO_ESCOPO,
+        source: "sql",
+        hint: expect.stringMatching(/obter_skill|n[aã]o invente/i),
+      }),
+    );
   });
 
   it("recusa JOIN inventado", () => {
@@ -38,12 +45,16 @@ describe("validarSqlNoEscopo", () => {
         "mssql",
         escopo,
       ),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO }));
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO, source: "sql" }));
   });
 
   it("recusa SELECT sem recorte nem agregação", () => {
     expect(() => validarSqlNoEscopo("SELECT p.codprod FROM produto p", "mssql", escopo)).toThrow(
-      expect.objectContaining({ code: ERROR_CODES.CONSULTA_SEM_RECORTE }),
+      expect.objectContaining({
+        code: ERROR_CODES.CONSULTA_SEM_RECORTE,
+        source: "sql",
+        hint: expect.stringMatching(/n[aã]o reenvie/i),
+      }),
     );
   });
 
@@ -56,14 +67,20 @@ describe("validarSqlNoEscopo", () => {
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.VALIDATION_ERROR }));
   });
 
-  it("não recusa TOP quando só page vem (não pagina de verdade)", () => {
-    const ast = validarSqlNoEscopo(
-      "SELECT TOP 10 p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
-      "mssql",
-      escopo,
-      { page: 2 },
+  it("recusa page sem page_size mesmo com TOP", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT TOP 10 p.codprod FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
+        "mssql",
+        escopo,
+        { page: 2 },
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: expect.stringMatching(/page e options\.page_size juntos/i),
+      }),
     );
-    expect(ast.temLimite).toBe(true);
   });
 
   it("recusa paginação com TOP no SQL", () => {
@@ -78,6 +95,7 @@ describe("validarSqlNoEscopo", () => {
       expect.objectContaining({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+        hint: expect.stringMatching(/n[aã]o misture os dois padr[oõ]es/i),
       }),
     );
   });
@@ -143,7 +161,21 @@ describe("validarSqlNoEscopo", () => {
   it("recusa firebird no SQL livre", () => {
     expect(() =>
       validarSqlNoEscopo("SELECT p.codprod FROM produto p WHERE p.codprod > 0", "firebird", escopo),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.DIALECT_UNSUPPORTED }));
+    ).toThrow(
+      expect.objectContaining({
+        code: ERROR_CODES.DIALECT_UNSUPPORTED,
+        source: "sql",
+        hint: expect.stringMatching(/n[aã]o reenvie SQL livre/i),
+      }),
+    );
+    try {
+      validarSqlNoEscopo("SELECT p.codprod FROM produto p WHERE p.codprod > 0", "firebird", escopo);
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      const json = (error as DomainError).toJson();
+      expect(json.error.nextAction).toBe("inspecionar_consulta");
+      expect(json.error.nextAction).not.toBe("consultar_dados");
+    }
   });
 
   it("aviso de literal de texto no WHERE não é erro", () => {
@@ -187,10 +219,10 @@ describe("validarSqlNoEscopo", () => {
 
   it("consulta continua recusando SELECT * e sem recorte", () => {
     expect(() => validarSqlNoEscopo("SELECT * FROM produto", "mssql", escopo)).toThrow(
-      expect.objectContaining({ code: ERROR_CODES.INVALID_SQL }),
+      expect.objectContaining({ code: ERROR_CODES.INVALID_SQL, source: "sql" }),
     );
     expect(() => validarSqlNoEscopo("SELECT p.codprod FROM produto p", "mssql", escopo)).toThrow(
-      expect.objectContaining({ code: ERROR_CODES.CONSULTA_SEM_RECORTE }),
+      expect.objectContaining({ code: ERROR_CODES.CONSULTA_SEM_RECORTE, source: "sql" }),
     );
   });
 });

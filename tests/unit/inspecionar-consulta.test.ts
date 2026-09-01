@@ -194,7 +194,7 @@ describe("inspecionar_consulta", () => {
         sql: sqlModelo,
         finalidade: "amostra_estrutura",
       }),
-    ).rejects.toMatchObject({ code: ERROR_CODES.DIALECT_UNSUPPORTED });
+    ).rejects.toMatchObject({ code: ERROR_CODES.DIALECT_UNSUPPORTED, source: "sql" });
 
     const result = await inspecionar.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -568,5 +568,102 @@ describe("descobrir_tabela", () => {
     });
     expect(result.colunas.map((coluna) => coluna.nome)).toEqual(["DataPagamento", "ValorPago"]);
     expect(result.colunas.some((coluna) => coluna.nome.includes("/"))).toBe(false);
+  });
+
+  it("recorta colunas e arestas ao pacote publicado, não à vizinhança extra do grafo", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const skills = new InMemorySkillRepository();
+    const created = await new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "disc2@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const sqlModelo = "SELECT p.DataPagamento, p.ValorPago FROM ContaPagar p WHERE p.ValorPago > 0";
+    const skill = await skills.create({
+      agentId,
+      slug: "titulos-a-pagar-recorte",
+      nome: "Títulos a pagar",
+      descricao: "pagar",
+      sqlModelo,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sqlModelo)),
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const pagar = await grafo.mergeTabela({
+      agentId,
+      nome: "ContaPagar",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    const filial = await grafo.mergeTabela({
+      agentId,
+      nome: "Filial",
+      origem: "inferido",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: pagar.tabela.id,
+      nome: "DataPagamento",
+      tipo: "datetime",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: pagar.tabela.id,
+      nome: "ValorPago",
+      tipo: "numeric",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: pagar.tabela.id,
+      nome: "CodEmpresa",
+      tipo: "int",
+      origem: "inferido",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      tabelaId: filial.tabela.id,
+      nome: "CodEmpresa",
+      tipo: "int",
+      origem: "inferido",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeRelacionamento({
+      agentId,
+      tabelaOrigemId: pagar.tabela.id,
+      tabelaDestinoId: filial.tabela.id,
+      pares: [{ colunaOrigem: "CodEmpresa", colunaDestino: "CodEmpresa" }],
+      tipoJoin: "inner",
+      origem: "inferido",
+      autorUsuarioId: created.usuarioId,
+    });
+    const descobrir = new DescobrirTabela(acessos, skills, grafo, plug, sessions, crypto);
+    const result = await descobrir.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      tabela: "ContaPagar",
+    });
+    expect(result.colunas.map((coluna) => coluna.nome)).toEqual(["DataPagamento", "ValorPago"]);
+    expect(result.colunas.map((coluna) => coluna.nome)).not.toContain("CodEmpresa");
+    expect(result.relacionamentos).toEqual([]);
   });
 });

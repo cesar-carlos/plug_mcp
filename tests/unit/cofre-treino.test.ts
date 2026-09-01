@@ -153,7 +153,7 @@ describe("cofre e treino", () => {
         acessoId: created.acessoId,
         sql: "SELECT p.codprod FROM produto p",
       }),
-    ).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+    ).rejects.toMatchObject({ code: "PERMISSION_DENIED", source: "client_token_rpc" });
   });
 
   it("dois usuarios no mesmo agentId acumulam o grafo", async () => {
@@ -341,6 +341,54 @@ describe("cofre e treino", () => {
     expect(rels[0]?.colunaDestino.toLowerCase()).toBe("codcli");
     expect(rels[0]?.tabelaOrigemId).toBe(cliente!.id);
     expect(rels[0]?.tabelaDestinoId).toBe(produto!.id);
+  });
+
+  it("treinar_com_sql poda JOIN isolado coberto por composto", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const acessos = new InMemoryAcessoRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const audit = new InMemoryAuditLog();
+    const created = await new RegistrarAcesso(
+      new InMemoryUsuarioRepository(),
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const treinar = new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    );
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT f.empresa FROM filial f INNER JOIN receber r ON f.empresa = r.empresa WHERE r.valor > 0",
+    });
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT f.empresa FROM filial f INNER JOIN receber r ON f.empresa = r.empresa AND f.filial = r.filial WHERE r.valor > 0",
+    });
+    const rels = await grafo.listRelacionamentos(agentId);
+    expect(rels).toHaveLength(1);
+    expect(rels[0]?.pares).toHaveLength(2);
   });
 
   it("recusa SELECT sem qualificador quando há JOIN", async () => {

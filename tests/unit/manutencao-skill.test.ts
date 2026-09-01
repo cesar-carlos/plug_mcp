@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { RegistrarAprendizado } from "../../src/application/use-cases/aprendizado.js";
+import {
+  HerdarCatalogo,
+  RegistrarAprendizado,
+} from "../../src/application/use-cases/aprendizado.js";
 import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
+import { ValidarConsulta } from "../../src/application/use-cases/consultar.js";
 import {
   AtualizarSkill,
   ConfirmarColuna,
+  ConfirmarRelacionamento,
   CriarSkill,
   DespublicarSkill,
+  ExpandirEscopo,
   ListarSkills,
   PublicarSkill,
   ValidarSkill,
@@ -308,5 +314,109 @@ describe("manutenção de skill", () => {
     });
     const skill = await skills.findById(createdSkill.skill.id);
     expect(skill?.escopo.metricasSaida[0]?.definicao).toBe("Faturamento líquido sem cancelados");
+  });
+
+  it("expandir_escopo sem JOIN no grafo lança JOIN_DESCONHECIDO com source sql", async () => {
+    const { acessos, skills, grafo, created } = await seed();
+    await seedTabelaComColunas(grafo, {
+      agentId,
+      usuarioId: created.usuarioId,
+      nome: "cliente",
+      colunas: ["codcli"],
+    });
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const createdSkill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      nome: "Produtos",
+      descricao: "Lista produto",
+      sqlModelo: "SELECT p.codprod FROM produto p WHERE p.codprod > 0",
+    });
+    const expandir = new ExpandirEscopo(acessos, skills, grafo);
+    await expect(
+      expandir.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: createdSkill.skill.id,
+        tabelas: ["cliente"],
+        confirmadoPeloUsuario: true,
+      }),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.JOIN_DESCONHECIDO,
+      source: "sql",
+    });
+  });
+
+  it("expandir_escopo não copia JOIN só inferido de herdar_catalogo; após confirmar o validador aceita", async () => {
+    const { plug, acessos, skills, grafo, created, sessions } = await seed();
+    await seedTabelaComColunas(grafo, {
+      agentId,
+      usuarioId: created.usuarioId,
+      nome: "cliente",
+      colunas: ["codcli", "nome"],
+    });
+    await seedTabelaComColunas(grafo, {
+      agentId,
+      usuarioId: created.usuarioId,
+      nome: "receber",
+      colunas: ["codcli", "valor"],
+    });
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const createdSkill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      nome: "Clientes",
+      descricao: "Cadastro",
+      sqlModelo: "SELECT c.codcli, c.nome FROM cliente c WHERE c.codcli > 0",
+    });
+    await skills.setStatus(createdSkill.skill.id, "publicada");
+    await new HerdarCatalogo(acessos, grafo).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      confirmadoPeloUsuario: true,
+    });
+    const expandir = new ExpandirEscopo(acessos, skills, grafo);
+    const argsExpandir = {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      tabelas: ["receber"],
+      confirmadoPeloUsuario: true as const,
+    };
+    await expect(expandir.execute(created.usuarioId, argsExpandir)).rejects.toMatchObject({
+      code: ERROR_CODES.PACOTE_INCOMPLETO,
+      source: "sql",
+    });
+    const sqlJoin =
+      "SELECT c.codcli, r.valor FROM cliente c INNER JOIN receber r ON c.codcli = r.codcli WHERE r.valor > 0";
+    const validar = new ValidarConsulta(acessos, skills, plug, sessions, crypto);
+    await expect(
+      validar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: createdSkill.skill.id,
+        sql: sqlJoin,
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO });
+    await new ConfirmarRelacionamento(acessos, grafo, skills).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      tabelaOrigem: "cliente",
+      tabelaDestino: "receber",
+      pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
+      tipoJoin: "inner",
+      cardinalidade: "1:N",
+    });
+    const expanded = await expandir.execute(created.usuarioId, argsExpandir);
+    expect(expanded.skill.escopo.tabelas.map((nome) => nome.toLowerCase())).toEqual(
+      expect.arrayContaining(["cliente", "receber"]),
+    );
+    expect(
+      expanded.skill.escopo.relacionamentos.some(
+        (rel) =>
+          rel.pares.some((par) => par.colunaOrigem.toLowerCase() === "codcli") &&
+          (rel.tabelaOrigem.toLowerCase() === "cliente" ||
+            rel.tabelaDestino.toLowerCase() === "cliente"),
+      ),
+    ).toBe(true);
+    const ok = await validar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      sql: sqlJoin,
+    });
+    expect(ok.valido).toBe(true);
   });
 });

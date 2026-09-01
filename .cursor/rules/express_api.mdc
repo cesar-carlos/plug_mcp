@@ -14,4 +14,4 @@ alwaysApply: false
 - Sem rotas de Authorization Server, sem cookie de sessão.
 - Rate limit: bootstrap por IP; autenticado por hash do Bearer. Redis se `REDIS_URL`.
 - `helmet` ligado; não comprimir `text/event-stream`.
-- `compose().close()` fecha sweep de sessões, pool e Redis.
+- `compose().close()` fecha sweep de sessões, pool Postgres, Redis e os dois `http(s).Agent` do hub (`destroyHubHttpAgents`).

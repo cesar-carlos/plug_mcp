@@ -12,7 +12,7 @@ Três segredos distintos — nunca misturar:
 2. `client_token` por acesso (AES-256-GCM). Autoridade SQL. Nunca em tool/log/modelo.
 3. Token MCP opaco (hash SHA-256, `timingSafeEqual`). Um por usuário. Nunca na resposta de tool.
 
-`registrar_acesso` devolve `setupCode`/`setupUrl`. O token só aparece em `GET /setup/:code` (HTML, one-shot).
+`registrar_acesso` devolve `setupCode`/`setupUrl`. O token só aparece em `GET /setup/:code` (HTML, one-shot). Persona do acesso não pode trazer senha, `client_token` ou JWT no texto (`atualizar_persona` recusa).
 
 Não há Authorization Server, JWT de conta MCP, cookie de sessão, nem Client de serviço no `.env`.
 
@@ -27,4 +27,4 @@ Este processo não emite JWT de conta, não faz DCR e não usa cookie de sessão
 
 Segredos armazenados não são autorização. Cada consulta passa por três portões independentes: JWT do Client no hub, `ClientAgentAccess` para o `agentId` e policy do `client_token` no `plug_agente`. O pacote da skill recorta o que a IA pode pedir; a policy recorta o que o hub executa. Preserve a origem ao mapear falhas (`CLIENT_NOT_ACTIVE`, `AGENT_ACCESS_PENDING`, `ACCESS_REVOKED`, `PERMISSION_DENIED`, `INVALID_SQL`). Não faça retry cego nem exponha policy ou tokens.
 
-Cache de resultado (`mcp:query:{agentId}:{hash}`) inclui `usuarioId`, hash do token, fingerprint da policy e versões da skill. Não compartilhe só por `agentId`. Deriva/`deleteByPrefix` limpa **só** o prefixo daquele agente. Backfill de cutover também.
+Cache de resultado (`mcp:query:{agentId}:{hash}`) inclui `usuarioId`, hash do token, fingerprint da policy e versões da skill. Não compartilhe só por `agentId`. Deriva/`deleteByPrefix` limpa **só** o prefixo daquele agente. Backfill de cutover também. Resultado com stub de anexo **não** entra nesse cache; handle HMAC (`id:usuarioId`) + TTL em memória (1 instância, clock injetável nos testes, cap 64 por `usuarioId`; inspeção não faz `put`). `exportar_anexo` recusa handle de outro usuário/`acessoId`, origem `inspecionar_consulta` (legado) e coluna pessoal/segredo. Logs da conversão sem dump de bytes.

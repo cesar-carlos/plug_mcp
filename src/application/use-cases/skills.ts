@@ -55,6 +55,7 @@ import {
   exigirEscopoNoGrafo,
   exigirPacotePublicavel,
   listarFatosIncompletos,
+  origemLicenciaPacote,
   type FatoIncompleto,
 } from "./shared/gates-skill.js";
 import { validarSqlNoEscopo } from "./shared/validar-escopo.js";
@@ -86,6 +87,12 @@ import {
 } from "../../domain/entities/privacidade.js";
 import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.js";
 import { podarRelacionamentosSubsetNoGrafo } from "./shared/podar-relacionamentos.js";
+import {
+  inferirTipoJoinDoSql,
+  matchRelacionamentoEscopo,
+  matchRelacionamentoGrafo,
+  resolverTipoJoinConfirmacao,
+} from "./shared/resolver-tipo-join.js";
 
 interface ParamInput {
   nome?: string;
@@ -1292,7 +1299,10 @@ export class ExpandirEscopo {
     const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
     const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
     const conhecidas = new Set([...base.tabelas, ...extras].map((nome) => nome.toLowerCase()));
-    const relacionamentos = grafoRels
+    const tocaExtra = (tabelaOrigem: string, tabelaDestino: string): boolean =>
+      extras.some((nome) => nome.toLowerCase() === tabelaOrigem.toLowerCase()) ||
+      extras.some((nome) => nome.toLowerCase() === tabelaDestino.toLowerCase());
+    const candidatos = grafoRels
       .map((rel) => {
         const first = rel.pares[0] ?? {
           colunaOrigem: rel.colunaOrigem,
@@ -1306,6 +1316,7 @@ export class ExpandirEscopo {
           pares: rel.pares.length > 0 ? [...rel.pares] : [first],
           tipoJoin: rel.tipoJoin,
           cardinalidade: rel.cardinalidade ?? undefined,
+          origem: rel.origem,
         };
       })
       .filter(
@@ -1314,18 +1325,17 @@ export class ExpandirEscopo {
           rel.tabelaDestino &&
           conhecidas.has(rel.tabelaOrigem.toLowerCase()) &&
           conhecidas.has(rel.tabelaDestino.toLowerCase()) &&
-          (extras.some((nome) => nome.toLowerCase() === rel.tabelaOrigem.toLowerCase()) ||
-            extras.some((nome) => nome.toLowerCase() === rel.tabelaDestino.toLowerCase())),
+          tocaExtra(rel.tabelaOrigem, rel.tabelaDestino),
       );
     if (base.tabelas.length > 0) {
       for (const extra of extras) {
-        const ligada = relacionamentos.some(
+        const ligada = candidatos.some(
           (rel) =>
             rel.tabelaOrigem.toLowerCase() === extra.toLowerCase() ||
             rel.tabelaDestino.toLowerCase() === extra.toLowerCase(),
         );
         if (!ligada) {
-          throw new DomainError({
+          throw DomainError.pacote({
             code: ERROR_CODES.JOIN_DESCONHECIDO,
             message: `Tabela ${extra} não tem relacionamento com o pacote atual.`,
             hint: "Confirme o JOIN com confirmar_relacionamento (skillId) antes de expandir_escopo.",
@@ -1333,6 +1343,18 @@ export class ExpandirEscopo {
         }
       }
     }
+    const paraPacote = (rel: (typeof candidatos)[number]) => ({
+      tabelaOrigem: rel.tabelaOrigem,
+      colunaOrigem: rel.colunaOrigem,
+      tabelaDestino: rel.tabelaDestino,
+      colunaDestino: rel.colunaDestino,
+      pares: rel.pares,
+      tipoJoin: rel.tipoJoin,
+      ...(rel.cardinalidade ? { cardinalidade: rel.cardinalidade } : {}),
+    });
+    const relacionamentosLicenciados = candidatos
+      .filter((rel) => origemLicenciaPacote(rel.origem))
+      .map(paraPacote);
     const extraEscopo: EscopoSkill = {
       tabelas: extras,
       colunasPorTabela: Object.fromEntries(
@@ -1340,18 +1362,24 @@ export class ExpandirEscopo {
           extras.map(async (nome) => {
             const tabela = await this.grafo.findTabelaByNome(acesso.agentId, nome);
             const cols = tabela ? await this.grafo.listColunas(tabela.id) : [];
-            return [nome, cols.map((coluna) => coluna.nome)] as const;
+            return [
+              nome,
+              cols
+                .filter((coluna) => origemLicenciaPacote(coluna.origem))
+                .map((coluna) => coluna.nome),
+            ] as const;
           }),
         ),
       ),
-      relacionamentos,
+      relacionamentos: candidatos.map(paraPacote),
       graoPorTabela: {},
       graoResultado: [],
       metricasSaida: [],
       pacoteVersao: PACOTE_VERSAO_ATUAL,
     };
+    await exigirEscopoNoGrafo(this.grafo, acesso.agentId, extraEscopo);
     const updated = await this.skills.update(skill.id, {
-      escopo: uniaoEscopos([base, extraEscopo]),
+      escopo: uniaoEscopos([base, { ...extraEscopo, relacionamentos: relacionamentosLicenciados }]),
       status: skill.status,
     });
     return { success: true, skill: updated };
@@ -1402,7 +1430,15 @@ export class ConfirmarRelacionamento {
         hint: "Confirmar JOIN para consulta exige skillId do mesmo acesso.",
       });
     }
-    const tipoJoin = input.tipoJoin?.trim() ? input.tipoJoin.trim() : "inner";
+    const informado = input.tipoJoin?.trim() ? input.tipoJoin.trim() : undefined;
+    const doSql = skill
+      ? inferirTipoJoinDoSql(skill.sqlModelo, origemNome, destinoNome, pares)
+      : undefined;
+    const doEscopo = skill
+      ? matchRelacionamentoEscopo(skill.escopo.relacionamentos, origemNome, destinoNome, pares)
+          ?.tipoJoin
+      : undefined;
+    let tipoJoin = informado ?? "inner";
     const escopoValidacao = acesso.escopoPadrao
       ? {
           ...(acesso.escopoPadrao.empresa ? { empresa: acesso.escopoPadrao.empresa } : {}),
@@ -1433,6 +1469,18 @@ export class ConfirmarRelacionamento {
           autorUsuarioId: uid,
         });
       }
+      const existente = matchRelacionamentoGrafo(
+        await this.grafo.listRelacionamentos(acesso.agentId),
+        origem.id,
+        destino.id,
+        pares,
+      );
+      tipoJoin = resolverTipoJoinConfirmacao({
+        informado,
+        doSql,
+        doEscopo,
+        doGrafo: existente?.tipoJoin,
+      });
       await this.grafo.mergeRelacionamento({
         agentId: acesso.agentId,
         tabelaOrigemId: origem.id,

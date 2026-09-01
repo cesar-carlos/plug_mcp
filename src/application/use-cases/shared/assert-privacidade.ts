@@ -39,7 +39,8 @@ export const assertPrivacidadeAntesDoHub = (input: {
   throw new DomainError({
     code: ERROR_CODES.PRIVACIDADE_NEGADA,
     message: "A consulta projeta dado pessoal ou segredo.",
-    hint: "Use inspecionar_consulta para amostra mascarada. Segredos nunca são revelados, nem em MAX/MIN.",
+    hint: "Não projete colunas pessoais ou segredo. Pessoal só COUNT. Segredos nunca são revelados, nem em MAX/MIN. inspecionar_consulta não é amostra mascarada de foto — não use como segunda via.",
+    nextAction: "consultar_dados",
     details: { colunas: proibidas },
   });
 };

@@ -68,10 +68,10 @@ export const assertFanoutSeguro = (ast: SqlAstSelect, escopo: EscopoSkill): void
     }
     if (rel.cardinalidade === "N:N" || rel.cardinalidade == null) {
       const pares = paresDoRelacionamento(rel);
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.FANOUT_NAO_DECLARADO,
         message: `Agregação financeira bloqueada: JOIN ${labelPares(rel.tabelaOrigem, rel.tabelaDestino, pares)} sem cardinalidade segura.`,
-        hint: "Confirme a cardinalidade composta (não N:N não declarado) com confirmar_relacionamento no recorte de empresa/filial.",
+        hint: "Confirme a cardinalidade composta (não N:N não declarado) com confirmar_relacionamento no recorte de empresa/filial. Não reenvie a agregação com este JOIN até a cardinalidade estar no pacote.",
       });
     }
   }

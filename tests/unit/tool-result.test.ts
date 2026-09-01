@@ -59,5 +59,6 @@ describe("mapPlugServerAbort", () => {
     const err = mapPlugServerAbort();
     expect(err.code).toBe(ERROR_CODES.PLUG_SERVER_TIMEOUT);
     expect(err.retryable).toBe(true);
+    expect(err.source).toBe("plug_server_http");
   });
 });

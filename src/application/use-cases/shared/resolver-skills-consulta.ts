@@ -166,7 +166,7 @@ export const ancoraConsultaSemantica = (
     return candidatas[0]!;
   }
   if (candidatas.length === 0) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
       message: "Nenhuma skill publicada certifica essa métrica.",
       hint: "Use aliases de metricasSaida (obter_skill) ou passe skillId.",

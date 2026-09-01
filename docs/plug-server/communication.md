@@ -6,13 +6,13 @@ Fonte: `plug_server/docs/PROJECT_OVERVIEW.md` e `plug_server/docs/api/api_rest_b
 
 ## Canais
 
-| Canal                      | Entrada do consumer            | Streaming para o consumer                           | Fase 1 do MCP                          |
-| -------------------------- | ------------------------------ | --------------------------------------------------- | -------------------------------------- |
-| REST                       | `POST /api/v1/agents/commands` | Não. Hub **materializa** o stream e devolve um JSON | **Sim**                                |
-| Socket legado `/consumers` | evento `agents:command`        | Sim (`agents:command_stream_*`)                     | Não                                    |
-| Socket relay `/consumers`  | `relay:rpc.request`            | Sim; idempotência por conversa                      | Não (port já permite trocar o adapter) |
+| Canal                      | Entrada do consumer            | Streaming para o consumer                           | Canal do MCP         |
+| -------------------------- | ------------------------------ | --------------------------------------------------- | -------------------- |
+| REST                       | `POST /api/v1/agents/commands` | Não. Hub **materializa** o stream e devolve um JSON | **Sim** (único)      |
+| Socket legado `/consumers` | evento `agents:command`        | Sim (`agents:command_stream_*`)                     | Não (fora de escopo) |
+| Socket relay `/consumers`  | `relay:rpc.request`            | Sim; idempotência por conversa                      | Não (fora de escopo) |
 
-REST é o canal certo para tool MCP: cada `tools/call` é um request isolado, sem sessão Socket. O hub já materializa `stream_id`. Relay (`prefer_db_streaming`) entra depois, atrás de `PlugServerGatewayPort`, sem mudar tools.
+REST é o canal do MCP: cada `tools/call` é um request isolado, sem sessão Socket. O hub já materializa `stream_id`. Socket `/agents` é o namespace do `plug_agente` (hub → agente), não um canal deste servidor. Socket/relay de consumer (`/consumers`, `prefer_db_streaming`) está **fora de escopo**.
 
 Auth, catálogo, CRUD e métricas do hub **não** existem no Socket — só HTTP.
 
@@ -47,12 +47,12 @@ Header obrigatório: `Authorization: Bearer <accessToken do Client>`.
 }
 ```
 
-| Campo do body | Papel                                                                                                                                                                                                                                         |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agentId`     | Um agente por envelope. Batch JSON-RPC (array em `command`) vai todo para o **mesmo** agente.                                                                                                                                                 |
-| `command`     | Objeto JSON-RPC ou array (máx. 32). Discriminado por `method`.                                                                                                                                                                                |
-| `timeoutMs`   | Espera do **bridge** (default 30 s, teto 360 s). Não confundir com `options.timeout_ms` no agente.                                                                                                                                            |
-| `command.id`  | Omitido → hub gera UUID e **espera** resposta. `null` → notification (`202`). String/number → correlação. Replay do mesmo `id` em ~2 min no mesmo `agentId` → `-32014` `replay_detected` (por isso o MCP gera UUID novo a cada `executeSql`). |
+| Campo do body | Papel                                                                                                                                                                                                                                                                        |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentId`     | Um agente por envelope. Batch JSON-RPC (array em `command`) vai todo para o **mesmo** agente.                                                                                                                                                                                |
+| `command`     | Objeto JSON-RPC ou array (máx. 32). Discriminado por `method`.                                                                                                                                                                                                               |
+| `timeoutMs`   | Espera do **bridge** (default 30 s, teto 360 s). Não confundir com `options.timeout_ms` no agente. O MCP envia o wait efetivo (`timeout_ms + 5s` quando há timeout da skill) e aborta o HTTP só depois desse wait + download do JSON — não usa um teto fixo de 35s na query. |
+| `command.id`  | Omitido → hub gera UUID e **espera** resposta. `null` → notification (`202`). String/number → correlação. Replay do mesmo `id` em ~2 min no mesmo `agentId` → `-32014` `replay_detected` (por isso o MCP gera UUID novo a cada `executeSql`).                                |
 
 Métodos usados pelo MCP hoje: `sql.execute`. Útil em diagnóstico: `client_token.getPolicy` (sem SQL). Outros (`sql.executeBatch`, `agent.getHealth`, `rpc.discover`, …) existem no hub; não expor como tool até haver caso de uso.
 
@@ -69,6 +69,12 @@ Métodos usados pelo MCP hoje: `sql.execute`. Útil em diagnóstico: `client_tok
 | `options.execution_mode`     | não         | `managed` (default no hub, pode reescrever para paginar) ou `preserve`. Sem paginação o MCP envia **`preserve`**: já aplica `max_rows` e não pode deixar o hub reescrever `SUM`/`COUNT`. Com `page`+`page_size`, omite o campo. |
 
 O adapter normaliza o envelope (`response.item.result`) para `{ columns, rows }`. HTTP `200` com `response.item.error` **ainda é falha** — mapear via `mapPlugServerFailure`, não tratar como sucesso.
+
+### Células binárias (`sql.execute` result)
+
+O `plug_agente` (`normalizeOdbcWireCell`) serializa `varbinary` / `bytea` / `image` (ODBC `Uint8List`) como **string base64** no JSON. O hub REST **não** reencoda; o MCP também não. Não é o caminho habitual `{ type: "Buffer", data: [...] }` (Node `JSON.stringify(Buffer)`), hex, nem célula omitida — o MCP trata Buffer JSON / array de bytes só como defesa.
+
+Estouro no agente: JSON-RPC `-32105` `reason: result_too_large` (MCP → `CONSULTA_ORCAMENTO` / `sql_engine`). Payload ~10 MB → `-32009`. Materialize REST overflow → HTTP 503. O MCP **não** inventa RPC: se o blob passar, extrai para handle **antes** do corte de 2048 caracteres e **não** despeja bytes nas rows (stub `kind: anexo`). Célula acima do teto local também é `CONSULTA_ORCAMENTO` com `source: mcp` / `stage: anexo` (não é o validador do pacote — **não** reescreva o SQL). `Buffer`/`Uint8Array` reais extraem; zip/ole sem tipo não vazam 2048 chars de base64.
 
 ## Classificação SQL no agente
 
@@ -89,26 +95,36 @@ Dois envelopes possíveis no mesmo POST:
 
 Códigos RPC que o MCP mapeia:
 
-| RPC                                                        | Situação típica             | `code` MCP                              |
-| ---------------------------------------------------------- | --------------------------- | --------------------------------------- |
-| `-32001`                                                   | `client_token` ausente      | `MISSING_CLIENT_TOKEN`                  |
-| `-32002`                                                   | classificação SQL           | `INVALID_SQL`                           |
-| `-32002`                                                   | política / token            | `ACCESS_REVOKED`                        |
-| `-32008`                                                   | timeout no agente           | `QUERY_TIMEOUT`                         |
-| `-32009`                                                   | SQL inválido no dialeto     | `INVALID_SQL` + `details.engineMessage` |
-| 1033 / `ORDER BY` em derived table (mssql, wrap `managed`) | Paginação gerenciada        | `INVALID_SQL` (não `PLUG_SERVER_ERROR`) |
-| `-32013`                                                   | rate limit no agente        | `RATE_LIMITED`                          |
-| `-32000`                                                   | agente offline / não pronto | `AGENT_UNAVAILABLE`                     |
+| RPC                                                                           | Situação típica                         | `code` MCP                               | `source`           |
+| ----------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------- | ------------------ |
+| `-32001` `missing_client_token`                                               | `client_token` ausente                  | `MISSING_CLIENT_TOKEN`                   | `client_token_rpc` |
+| `-32001` `invalid_signature` / `authentication_failed`                        | credencial/assinatura inválida          | `ACCESS_REVOKED`                         | `client_token_rpc` |
+| `-32002`                                                                      | classificação SQL                       | `INVALID_SQL`                            | `sql_engine`       |
+| `-32002`                                                                      | política / token                        | `ACCESS_REVOKED`                         | `client_token_rpc` |
+| `-32008` / `-32107`                                                           | timeout no agente / motor               | `QUERY_TIMEOUT`                          | `sql_engine`       |
+| `-32009` `reason: invalid_payload`                                            | frame / PayloadFrame / batch            | `PLUG_SERVER_ERROR`                      | `plug_server_http` |
+| `-32009` haystack de motor (reason ≠ `invalid_payload`) / `-32101` / `-32102` | SQL inválido / execução no dialeto      | `INVALID_SQL` + `details.engineMessage`  | `sql_engine`       |
+| `-32103`                                                                      | transação (MCP só SELECT)               | `INVALID_SQL`                            | `sql_engine`       |
+| `-32105`                                                                      | resultado grande demais                 | `CONSULTA_ORCAMENTO`                     | `sql_engine`       |
+| 1033 / `ORDER BY` em derived table (mssql, wrap `managed`)                    | Paginação gerenciada                    | `INVALID_SQL`                            | `sql_engine`       |
+| `-32013`                                                                      | rate limit no agente                    | `RATE_LIMITED`                           | `client_token_rpc` |
+| `-32000`                                                                      | agente conhecido, socket down           | `AGENT_UNAVAILABLE`                      | `plug_server_http` |
+| `-32014`                                                                      | replay do mesmo `command.id`            | `PLUG_SERVER_ERROR`                      | `plug_server_http` |
+| `-32104` / `-32106`                                                           | pool / conexão com o ERP                | `AGENT_UNAVAILABLE`                      | `plug_server_http` |
+| HTTP 404                                                                      | `agentId` nunca registado nesta réplica | `AGENT_UNAVAILABLE` (`retryable: false`) | `plug_server_http` |
+| HTTP 429 / 503                                                                | quota do hub / fila / Nginx             | `RATE_LIMITED` / `AGENT_UNAVAILABLE`     | `plug_server_http` |
 
-Tabela completa e hints: [`../mcp/error-mapping.md`](../mcp/error-mapping.md).
+HTTP 200 + JSON-RPC de motor (`-32102`, `-32101`, `-32009` com haystack de motor **e** reason ≠ `invalid_payload`) **não** vira `PLUG_SERVER_ERROR`: a IA lê `INVALID_SQL` + `source: sql_engine` e distingue do validador do pacote (`source: sql`). `-32009` `reason: invalid_payload` **é** transporte (`PLUG_SERVER_ERROR` + `plug_server_http`) mesmo se o haystack parecer motor — **não** reescreva o SQL. HTTP 5xx com texto `denied`/`permission` e sem RPC de policy também **não** vira `PERMISSION_DENIED`. SQL recusado **não** persiste. Tabela completa e hints: [`../mcp/error-mapping.md`](../mcp/error-mapping.md).
 
 ## Limites que importam para o MCP
 
 Camadas independentes: Nginx (borda, costuma `503`) → Express (`429` `TOO_MANY_REQUESTS`) → agente (`-32013`).
 
-No REST de comandos, o hub materializa o stream em memória. Estouro de linhas/chunks de materialização → `503` (prefira Socket para resultados enormes). O MCP já corta em `QUERY_ABSOLUTE_MAX_ROWS` (5_000) **antes** de depender do teto do hub.
+`proxy_read_timeout` da borda do hub (ex. 180s no example de produção) corta o POST de `sql.execute` mesmo se o MCP esperar ~310s no teto (`timeout_ms` 300s + 5s de wait + 5s de download). Skills ~≥175s falham nessa borda; **120s** passa se o `location` de `/api/v1/agents/commands` estiver deployado com esse timeout. Isso não se mexe neste repo.
 
-`consultar_dados` deve preferir agregação, `WHERE` e paginação no SQL — não aumentar tetos.
+No REST de comandos, o hub materializa o stream em memória. Estouro de linhas/chunks de materialização → `503`. O MCP **não** muda para Socket: já corta em `QUERY_ABSOLUTE_MAX_ROWS` (5_000) **antes** de depender do teto do hub.
+
+`consultar_dados` deve preferir agregação, `WHERE` e paginação no SQL — não aumentar tetos. Pools HTTP, keepAlive e abort deste MCP: [rest-integration.md](rest-integration.md).
 
 ## O que não fazer neste canal
 

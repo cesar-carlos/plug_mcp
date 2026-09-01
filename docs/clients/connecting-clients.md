@@ -2,7 +2,9 @@
 
 O cliente MCP usa `Authorization: Bearer <token_mcp>`. Este servidor não publica metadados de Authorization Server.
 
-No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (consultor de gestão; SQL no **escopo da skill publicada** — treino grava o grafo; consulta usa o pacote). O protocolo só reenvia isso no `initialize`. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos) se o host não reinsere `instructions`. Após deploy, reconecte o cliente: o catálogo `tools/list` pode estar cacheado. O servidor envia `notifications/tools/list_changed` no `initialize` autenticado se SHA/versão do processo mudou. Resources: `guia://paginacao`, `guia://dialeto/{dialeto}`, `skill://{agentId}/{slug}` (só publicada).
+No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (SQL no **escopo da skill publicada**, depois a persona). Sem Bearer: só o SQL comum. Com Bearer e um acesso: SQL inalterado + persona depois. Com vários acessos: SQL comum + “depois de escolher o acesso, adote a persona desse `acessoId`” — **várias personas = vários acessos** (`adicionar_acesso`); um acesso = um chapéu; não concatena chapéus; leia `listar_acessos` / `persona://{acessoId}`. O protocolo só reenvia isso no `initialize`. Sessão que começa com 1 acesso e ganha o 2º (`adicionar_acesso`) **mantém o chapéu 1** em `initialize.instructions` até reconectar. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos; **releitura viva** da persona no banco; com N acessos não concatena) se o host não reinsere `instructions`. Após deploy, reconecte o cliente: o catálogo `tools/list` pode estar cacheado. O servidor envia `notifications/tools/list_changed` no `initialize` autenticado se SHA/versão do processo mudou. Resources: `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}` já no bootstrap (sem Bearer) e após Bearer — leia o guia do dialeto do acesso, não assuma mssql. `skill://{agentId}/{slug}` é o pacote da skill publicada e exige Bearer. `persona://{acessoId}` (Bearer) é a persona do acesso.
+
+O host (Cursor e similares) copia `initialize.instructions` no system prompt **na conexão** e **não** atualiza no meio da sessão. Se a sessão começou com um acesso e o usuário chama `adicionar_acesso`, o host continua com o chapéu 1 até reconectar; `pre_treino` relê o banco. Após rebuild/deploy, **reconecte** o MCP; senão a IA continua com `instructions` antigas (chapéu fixo, dialeto assumido) mesmo com o código novo no disco.
 
 ## Fluxo
 
@@ -25,9 +27,7 @@ No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (co
 }
 ```
 
-Conectores que **exigem** Authorization Server de terceiros (alguns custom connectors ChatGPT) ficam fora desta fase.
-
-Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS` > 0): o servidor responde 401 com `WWW-Authenticate` RFC 6750 (`error="invalid_token"`) e aponta `GET /setup/{code}`. `Origin` fora de `MCP_ALLOWED_ORIGINS` (quando a lista não é vazia) responde **403**. Existe `GET /.well-known/oauth-protected-resource` descrevendo o recurso **sem** `authorization_servers`.
+Conectores que **exigem** Authorization Server de terceiros (alguns custom connectors ChatGPT) ficam fora de escopo. TTL do token, Origin e `/.well-known/oauth-protected-resource`: [vault-and-mcp-token.md](../auth/vault-and-mcp-token.md).
 
 O **host MCP** (Cursor, Claude Desktop, etc.) pode registrar argumentos de tool em claro — senha e `client_token` inclusive. O servidor não controla esse transcript. Não ecoe esses valores na resposta; `listar_acessos` devolve o token mascarado.
 

@@ -8,7 +8,7 @@ export interface PoliticaConsulta {
   readonly modoPreferencial?: ModoConsultaPreferencial;
 }
 
-/** Alinhado a `QUERY_DEFAULT_MAX_ROWS` e ao timeout do adapter REST. Sem recorte temporal nem modo. */
+/** Alinhado a `QUERY_DEFAULT_MAX_ROWS` e ao timeout default do hub/agente (30s). Sem recorte temporal nem modo. */
 export const POLITICA_CONSULTA_DEFAULT_MAX_ROWS = 500;
 export const POLITICA_CONSULTA_DEFAULT_TIMEOUT_MS = 30_000;
 

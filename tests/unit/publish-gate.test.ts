@@ -36,6 +36,7 @@ describe("gate de publicação", () => {
       ),
     ).rejects.toMatchObject({
       code: ERROR_CODES.PERFIL_AUSENTE,
+      source: "sql",
       details: { faltas: expect.any(Array) },
     });
   });

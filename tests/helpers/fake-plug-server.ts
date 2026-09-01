@@ -22,7 +22,7 @@ export class FakePlugServer implements PlugServerGatewayPort {
   lastOptions:
     { maxRows?: number; page?: number; pageSize?: number; timeoutMs?: number } | undefined;
   policy: ClientTokenPolicy = { allTables: true, tables: [] };
-  sqlImpl: () => Promise<SqlExecuteResult> = async () => ({
+  sqlImpl: (sql: string) => Promise<SqlExecuteResult> = async () => ({
     columns: ["ok"],
     rows: [{ ok: 1 }],
   });
@@ -112,7 +112,7 @@ export class FakePlugServer implements PlugServerGatewayPort {
         hint: "verificar_acesso",
       });
     }
-    return this.sqlImpl();
+    return this.sqlImpl(input.sql);
   }
 
   approve(agentId: string): void {

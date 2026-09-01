@@ -249,8 +249,7 @@ describe("ValidarSkill", () => {
       sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.dtcad >= :dataInicio",
       params: [{ nome: "dataInicio", descricao: "Data inicial" }],
     });
-    plug.sqlImpl = async () => {
-      const sql = plug.lastSql ?? "";
+    plug.sqlImpl = async (sql: string) => {
       if (/column_name/i.test(sql) || /syscolumns/i.test(sql)) {
         return {
           columns: ["column_name", "data_type"],

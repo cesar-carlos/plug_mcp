@@ -1,9 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { compilarConsultaSemantica } from "../../src/application/use-cases/shared/compilar-consulta-semantica.js";
+import {
+  compilarConsultaSemantica,
+  keywordJoinDoPacote,
+} from "../../src/application/use-cases/shared/compilar-consulta-semantica.js";
 import { parseEscopoSkill } from "../../src/domain/entities/escopo.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 
 describe("consulta semântica", () => {
+  it("keywordJoinDoPacote honra left e default inner", () => {
+    expect(keywordJoinDoPacote("left")).toBe("LEFT JOIN");
+    expect(keywordJoinDoPacote("LEFT OUTER JOIN")).toBe("LEFT JOIN");
+    expect(keywordJoinDoPacote("inner")).toBe("INNER JOIN");
+    expect(keywordJoinDoPacote(undefined)).toBe("INNER JOIN");
+    expect(keywordJoinDoPacote("")).toBe("INNER JOIN");
+  });
+
   const escopo = parseEscopoSkill({
     tabelas: ["receber"],
     colunasPorTabela: { receber: ["valor", "empresa", "vencimento"] },
@@ -67,6 +78,91 @@ describe("consulta semântica", () => {
     expect(compiled.sql).toMatch(/receber\.empresa = :empresa/i);
   });
 
+  it("emite LEFT JOIN quando tipoJoin do pacote é left", () => {
+    const multi = parseEscopoSkill({
+      tabelas: ["receber", "cliente"],
+      colunasPorTabela: {
+        receber: ["valor", "codcli", "empresa"],
+        cliente: ["codcli", "nome"],
+      },
+      graoResultado: ["nome"],
+      metricasSaida: [{ alias: "total", expr: "SUM(receber.valor)" }],
+      relacionamentos: [
+        {
+          tabelaOrigem: "receber",
+          colunaOrigem: "codcli",
+          tabelaDestino: "cliente",
+          colunaDestino: "codcli",
+          pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
+          tipoJoin: "left",
+          cardinalidade: "N:1",
+        },
+      ],
+    });
+    const compiled = compilarConsultaSemantica(
+      { versao: 1, metrica: "total", dimensoes: ["nome"] },
+      multi,
+    );
+    expect(compiled.sql).toMatch(/LEFT JOIN cliente ON receber\.codcli = cliente\.codcli/i);
+    expect(compiled.sql).not.toMatch(/INNER JOIN/i);
+  });
+
+  it("emite LEFT JOIN quando tipoJoin do pacote é LEFT JOIN", () => {
+    const multi = parseEscopoSkill({
+      tabelas: ["receber", "cliente"],
+      colunasPorTabela: {
+        receber: ["valor", "codcli"],
+        cliente: ["codcli", "nome"],
+      },
+      graoResultado: ["nome"],
+      metricasSaida: [{ alias: "total", expr: "SUM(receber.valor)" }],
+      relacionamentos: [
+        {
+          tabelaOrigem: "receber",
+          colunaOrigem: "codcli",
+          tabelaDestino: "cliente",
+          colunaDestino: "codcli",
+          pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
+          tipoJoin: "LEFT JOIN",
+          cardinalidade: "N:1",
+        },
+      ],
+    });
+    const compiled = compilarConsultaSemantica(
+      { versao: 1, metrica: "total", dimensoes: ["nome"] },
+      multi,
+    );
+    expect(compiled.sql).toMatch(/LEFT JOIN cliente ON receber\.codcli = cliente\.codcli/i);
+  });
+
+  it("emite INNER JOIN quando tipoJoin está ausente no pacote", () => {
+    const multi = parseEscopoSkill({
+      tabelas: ["receber", "cliente"],
+      colunasPorTabela: {
+        receber: ["valor", "codcli"],
+        cliente: ["codcli", "nome"],
+      },
+      graoResultado: ["nome"],
+      metricasSaida: [{ alias: "total", expr: "SUM(receber.valor)" }],
+      relacionamentos: [
+        {
+          tabelaOrigem: "receber",
+          colunaOrigem: "codcli",
+          tabelaDestino: "cliente",
+          colunaDestino: "codcli",
+          pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
+          cardinalidade: "N:1",
+        },
+      ],
+    });
+    const compiled = compilarConsultaSemantica(
+      { versao: 1, metrica: "total", dimensoes: ["nome"] },
+      multi,
+    );
+    expect(compiled.sql).toMatch(/INNER JOIN cliente ON receber\.codcli = cliente\.codcli/i);
+    expect(compiled.sql).not.toMatch(/LEFT JOIN/i);
+  });
+
   it("falha sem caminho de JOIN no pacote", () => {
     const isolado = parseEscopoSkill({
       tabelas: ["receber", "cliente"],
@@ -80,7 +176,7 @@ describe("consulta semântica", () => {
     });
     expect(() =>
       compilarConsultaSemantica({ versao: 1, metrica: "total", dimensoes: ["nome"] }, isolado),
-    ).toThrow(expect.objectContaining({ code: ERROR_CODES.JOIN_DESCONHECIDO }));
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.JOIN_DESCONHECIDO, source: "sql" }));
   });
 
   it("emite IN (:param) para filtro in (expansão de lista no binder)", () => {

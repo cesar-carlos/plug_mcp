@@ -90,7 +90,7 @@ const resolverMetrica = (escopo: EscopoSkill, alias: string) => {
   const wanted = lower(alias);
   const found = escopo.metricasSaida.find((item) => lower(item.alias) === wanted);
   if (!found) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
       message: `Métrica ${alias} não está certificada no pacote.`,
       hint: "Use só aliases de metricasSaida da skill publicada.",
@@ -122,6 +122,12 @@ const acharColuna = (escopo: EscopoSkill, candidatos: readonly string[]): string
   return null;
 };
 
+/** INNER é default; LEFT só se o pacote/treino gravou `tipoJoin` left. */
+export const keywordJoinDoPacote = (tipoJoin: string | undefined): "LEFT JOIN" | "INNER JOIN" => {
+  const tipo = (tipoJoin ?? "").trim().toLowerCase();
+  return tipo.includes("left") ? "LEFT JOIN" : "INNER JOIN";
+};
+
 const caminhoJoins = (escopo: EscopoSkill, tabelas: readonly string[]): string[] => {
   if (tabelas.length <= 1) {
     return [];
@@ -146,12 +152,13 @@ const caminhoJoins = (escopo: EscopoSkill, tabelas: readonly string[]): string[]
             `${rel.tabelaOrigem}.${par.colunaOrigem} = ${rel.tabelaDestino}.${par.colunaDestino}`,
         )
         .join(" AND ");
+      const joinKw = keywordJoinDoPacote(rel.tipoJoin);
       if (reached.has(o) && wanted.has(d) && !reached.has(d)) {
-        clauses.push(`INNER JOIN ${rel.tabelaDestino} ON ${on}`);
+        clauses.push(`${joinKw} ${rel.tabelaDestino} ON ${on}`);
         reached.add(d);
         progressed = true;
       } else if (reached.has(d) && wanted.has(o) && !reached.has(o)) {
-        clauses.push(`INNER JOIN ${rel.tabelaOrigem} ON ${on}`);
+        clauses.push(`${joinKw} ${rel.tabelaOrigem} ON ${on}`);
         reached.add(o);
         progressed = true;
       }
@@ -161,7 +168,7 @@ const caminhoJoins = (escopo: EscopoSkill, tabelas: readonly string[]): string[]
     }
   }
   if (reached.size < wanted.size) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.JOIN_DESCONHECIDO,
       message: "Consulta semântica precisa de JOIN que não está no pacote.",
       hint: "Confirme o relacionamento composto com confirmar_relacionamento ou use SQL livre validado.",
@@ -199,7 +206,7 @@ export const compilarConsultaSemantica = (
   const metricas = aliases.map((alias) => resolverMetrica(escopo, alias));
   const primeira = metricas[0];
   if (!primeira) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
       message: "Consulta semântica exige ao menos uma métrica certificada.",
       hint: "Use aliases de metricasSaida da skill publicada.",
@@ -218,14 +225,14 @@ export const compilarConsultaSemantica = (
     .map((lista) => new Set(lista.map(lower)));
   for (const dim of consulta.dimensoes ?? []) {
     if (!colunaNoPacote(escopo, dim)) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Dimensão ${dim} não está no pacote.`,
         hint: "Declare só colunas certificadas em graoResultado/colunasPorTabela.",
       });
     }
     if (restricoesDim.length > 0 && restricoesDim.some((ok) => !ok.has(lower(dim)))) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Dimensão ${dim} não é permitida para as métricas desta consulta.`,
         hint: "Use só dimensoesPermitidas do KPI no pacote.",
@@ -239,7 +246,7 @@ export const compilarConsultaSemantica = (
   const where: string[] = [];
   for (const filtro of consulta.filtros ?? []) {
     if (!colunaNoPacote(escopo, filtro.coluna)) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Filtro ${filtro.coluna} não está no pacote.`,
         hint: "Use colunas do dataset publicado.",
@@ -267,7 +274,7 @@ export const compilarConsultaSemantica = (
   const colunaPeriodo = consulta.periodo?.coluna ?? colunaDataKpi;
   if (consulta.periodo) {
     if (!colunaNoPacote(escopo, consulta.periodo.coluna)) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Período ${consulta.periodo.coluna} não está no pacote.`,
         hint: "Use uma coluna de data certificada.",
@@ -300,7 +307,7 @@ export const compilarConsultaSemantica = (
   for (const item of consulta.having ?? []) {
     const metricaHaving = exprs.find((expr) => lower(expr.alias) === lower(item.metrica));
     if (!metricaHaving) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `HAVING ${item.metrica} não é métrica desta consulta.`,
         hint: "having[].metrica deve ser um alias de metricas[] / metrica desta IR.",
@@ -312,7 +319,7 @@ export const compilarConsultaSemantica = (
   const order: string[] = [];
   for (const item of consulta.ordenacao ?? []) {
     if (!colunaNoPacote(escopo, item.coluna) && !aliasesLower.has(lower(item.coluna))) {
-      throw new DomainError({
+      throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Ordenação ${item.coluna} não está no pacote.`,
         hint: "Ordene só por dimensão ou métrica certificada.",
@@ -343,7 +350,7 @@ export const compilarConsultaSemantica = (
     addTabela(escopo.tabelas[0] ?? null);
   }
   if (tabelas.length === 0) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.PACOTE_INCOMPLETO,
       message: "Pacote sem tabela para consulta semântica.",
       hint: "Publique a skill com sqlModelo e escopo.",

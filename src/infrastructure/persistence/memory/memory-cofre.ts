@@ -117,6 +117,8 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
       ...input,
       escopoPadrao: input.escopoPadrao ?? null,
       timezone: input.timezone ?? null,
+      nomePersona: input.nomePersona ?? null,
+      instrucoesPersona: input.instrucoesPersona ?? null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -190,6 +192,18 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
       return;
     }
     this.rows.set(acessoId, { ...row, escopoPadrao, timezone, updatedAt: now() });
+  }
+
+  async updatePersona(
+    acessoId: string,
+    nomePersona: string | null,
+    instrucoesPersona: string | null,
+  ): Promise<void> {
+    const row = this.rows.get(acessoId);
+    if (!row) {
+      return;
+    }
+    this.rows.set(acessoId, { ...row, nomePersona, instrucoesPersona, updatedAt: now() });
   }
 
   async deleteById(acessoId: string): Promise<void> {
@@ -392,11 +406,13 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
         origem: existing.origem,
         status: existing.status,
         descricao: existing.descricao,
+        tipoJoin: existing.tipoJoin,
       },
       {
         origem: input.origem,
         status: "vigente",
         descricao: input.descricao ?? null,
+        tipoJoin: input.tipoJoin,
       },
     );
     if (!merge.aplicar && input.cardinalidade == null && input.escopoValidacao == null) {
@@ -404,7 +420,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     }
     const relacionamento: RelacionamentoGrafo = {
       ...existing,
-      tipoJoin: input.tipoJoin,
+      tipoJoin: merge.tipoJoin ?? existing.tipoJoin,
       cardinalidade: input.cardinalidade ?? existing.cardinalidade,
       descricao: merge.descricao,
       escopoValidacao: input.escopoValidacao ?? existing.escopoValidacao,

@@ -115,6 +115,63 @@ describe("obter_skill pacote e backfill de escopo", () => {
     expect(plug.lastParams).toEqual({ codigo: null });
   });
 
+  it("validar_consulta recusa TOP no SELECT externo com options.page", async () => {
+    const { plug, acessos, skills, created, sessions } = await setup();
+    plug.sqlImpl = async () => {
+      throw new Error("não deve chamar o plug");
+    };
+    const skill = await skills.create({
+      agentId,
+      slug: "por-codigo-top",
+      nome: "Produto",
+      descricao: "Busca",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const validar = new ValidarConsulta(acessos, skills, plug, sessions, crypto);
+    await expect(
+      validar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: skill.id,
+        sql: "SELECT TOP 10 p.codprod AS codigo FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
+        options: { page: 1, page_size: 10 },
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message: expect.stringMatching(/TOP\/LIMIT\/FIRST/i),
+      hint: expect.stringMatching(/n[aã]o misture os dois padr[oõ]es/i),
+    });
+    expect(plug.lastSql).toBeNull();
+  });
+
+  it("validar_consulta aceita TOP sem página e página sem TOP", async () => {
+    const { plug, acessos, skills, created, sessions } = await setup();
+    const skill = await skills.create({
+      agentId,
+      slug: "lista-corte",
+      nome: "Produto",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const validar = new ValidarConsulta(acessos, skills, plug, sessions, crypto);
+    const unica = await validar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      sql: "SELECT TOP 10 p.codprod AS codigo FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
+    });
+    expect(unica.valido).toBe(true);
+    const pagina = await validar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: skill.id,
+      sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
+      options: { page: 2, page_size: 10 },
+    });
+    expect(pagina.valido).toBe(true);
+  });
+
   it("consultar_dados persiste escopo vazio", async () => {
     const { plug, acessos, skills, created, sessions } = await setup();
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });

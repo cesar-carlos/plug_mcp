@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Plug-server
 
-O MCP autentica **como o Client do usuário** (e-mail/senha do cofre). Não cadastra User/Client/Agent.
+O MCP autentica **como o Client do usuário** (e-mail/senha do cofre). Não cadastra User/Client/Agent. Canal do MCP: só REST (`POST /agents/commands`). Socket `/agents` é do `plug_agente`. Socket/relay de consumer fora de escopo.
 
 `PlugServerGatewayPort`: `login`, `refresh`, `requestAgentAccess`, `getAgentAccessStatus`, `putClientToken`, `getClientTokenPolicy`, `executeSql`.
 
@@ -16,11 +16,14 @@ RPCs: `sql.execute`; `client_token.getPolicy`. Contrato vivo: `plug_server/docs`
 
 - Sem paginação: enviar `execution_mode: preserve` (não deixar o hub reescrever `SUM`/`COUNT`).
 - Com `page`+`page_size`: **omitir** `execution_mode` (hub usa `managed`). Sem metadata `pagination` do agente → `METADATA_CONTRATO`.
-- SQL que o agente não classifica (`-32002` + classification) → `INVALID_SQL`, não `ACCESS_REVOKED`. Hint cita tabelas e dialeto.
-- SQL Server 1033 (ORDER BY em derived table do wrap `managed`) → `INVALID_SQL`, não `PLUG_SERVER_ERROR`. Hint: sem `options.page`, `TOP n` + `guia://dialeto/mssql`. Não acrescente `OFFSET`/`FETCH` com `page`. O rewrite é do `plug_agente`.
+- SQL que o agente não classifica (`-32002` + classification) → `INVALID_SQL` + `source: sql_engine`, não `ACCESS_REVOKED`. Hint cita tabelas e dialeto.
+- SQL Server 1033 (ORDER BY em derived table do wrap `managed`) → `INVALID_SQL` + `source: sql_engine`, não `PLUG_SERVER_ERROR`. Hint: sem `options.page`, `TOP n` + `guia://dialeto/mssql`. Não acrescente `OFFSET`/`FETCH` com `page`. O rewrite é do `plug_agente`.
+- Execução/validação no motor (`-32101`/`-32102`/`-32107`) → `INVALID_SQL` / `QUERY_TIMEOUT` + `source: sql_engine` (a IA distingue do validador do pacote, `source: sql`). `-32009` `reason: invalid_payload` é transporte (`PLUG_SERVER_ERROR` + `plug_server_http`) mesmo se `looksLikeEngineSql` — reason ganha. Haystack de motor só promove a `sql_engine` se a reason **não** for `invalid_payload` (1033 já coberto antes, salvo `invalid_payload`). `-32001` ramifica por `data.reason`: `missing_client_token` → `MISSING_CLIENT_TOKEN`; `invalid_signature` / `authentication_failed` → `ACCESS_REVOKED` + `client_token_rpc` (não peça cadastrar token como se faltasse). HTTP 404 de agentId nunca registado → `AGENT_UNAVAILABLE` sem retry cego. HTTP 429/503 → `source: plug_server_http`. HTTP 5xx com haystack `denied`/`permission` **sem** RPC de policy → `PLUG_SERVER_ERROR` + `plug_server_http` (não `PERMISSION_DENIED`). `-32014` replay → `PLUG_SERVER_ERROR` (não altere o SQL). `-32105` `result_too_large` → `CONSULTA_ORCAMENTO` + `sql_engine`. Células `varbinary`/`bytea`/`image` no result são **string base64** (agente); o MCP não inventa RPC. Não persista SQL recusado pelo hub.
 
 `UsuarioTokenManager`: JWT por `usuarioId`, refresh ~60s antes do `exp`, `inflight` por usuário. HTTP 401: invalida JWT, reloga com senha do cofre e **repete uma vez**. Senha recusada → `CREDENTIAL_STALE`.
 
 429: `Retry-After` / `RateLimit-Reset`. Cache de policy (memória + Redis) por `agentId` + hash do `client_token`.
+
+Timeouts: `PLUG_SERVER_HTTP_TIMEOUT_MS` é piso de login/policy (teto Zod 60s; não corta SQL). `sql.execute` alinha `timeoutMs` do bridge a `options.timeout_ms + 5s` (teto hub 360s / agente 300s) e o `AbortSignal` HTTP a esse wait + download. Dois `http(s).Agent`: auth 4 (login/refresh/`getPolicy`) e SQL 16. Probe TCP keepalive 30s (`keepAliveMsecs`) — não o `fetch` global undici (idle 4s); o socket fica até o peer fechar (Nginx `keepalive_timeout`). Sem retry de SQL. `proxy_read_timeout` da borda do hub (ex. 180s) ainda corta skills ~≥175s; 120s passa se o `location` de commands estiver deployado.
 
 `isHubConnected` é snapshot — `false` não prova agente offline. Distinga falhas do JWT Client, `ClientAgentAccess`, policy do `client_token` e SQL inválido; não tente SQL amplo nem retry cego como diagnóstico.

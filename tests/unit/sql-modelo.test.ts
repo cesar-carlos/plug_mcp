@@ -25,7 +25,9 @@ describe("parseSqlModelo", () => {
   });
 
   it("rejeita SELECT *", () => {
-    expect(() => parseSqlModelo("SELECT * FROM produto")).toThrow(DomainError);
+    expect(() => parseSqlModelo("SELECT * FROM produto")).toThrow(
+      expect.objectContaining({ code: ERROR_CODES.INVALID_SQL, source: "sql" }),
+    );
   });
 
   it("rejeita várias tabelas sem JOIN", () => {
@@ -78,6 +80,7 @@ describe("parseSqlModelo", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(DomainError);
       expect((error as DomainError).code).toBe(ERROR_CODES.INVALID_SQL);
+      expect((error as DomainError).source).toBe("sql");
     }
     const modelo = parseSqlModelo("SELECT SUM(qtd) AS total FROM item");
     expect(modelo.colunas.some((c) => c.alias.toLowerCase() === "total")).toBe(true);

@@ -10,9 +10,10 @@ import type { RateLimitStore } from "../http/rate-limit.js";
 import { wwwAuthenticate, readBearer } from "./mcp-auth.js";
 import { accountContext, currentClientIp } from "./account-context.js";
 import { registerTools, type ToolUseCases } from "./register-tools.js";
-import { MCP_SERVER_INSTRUCTIONS } from "./server-instructions.js";
+import { montarInstrucoesServidor } from "./server-instructions.js";
 import { createToolRunner } from "./tool-result.js";
 import { syncSkillTools, type SkillCatalogPorts } from "./skill-tools.js";
+import { personaSessaoDeAcesso, type PersonaSessao } from "../../domain/entities/acesso.js";
 
 interface Session {
   transport: StreamableHTTPServerTransport;
@@ -98,7 +99,23 @@ export const createMcpHttpHandler = (input: {
     }
   };
 
-  const createSession = (bootstrap: boolean, usuarioId: string | null): Session => {
+  const loadPersonaSessao = async (usuarioId: string | null): Promise<readonly PersonaSessao[]> => {
+    if (!usuarioId) {
+      return [];
+    }
+    try {
+      const lista = await input.catalog.acessos.listByUsuario(usuarioId);
+      return lista.map(personaSessaoDeAcesso);
+    } catch (error: unknown) {
+      input.logger.warn("failed to load acesso personas for initialize", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  };
+
+  const createSession = async (bootstrap: boolean, usuarioId: string | null): Promise<Session> => {
+    const personas = await loadPersonaSessao(usuarioId);
     const server = new McpServer(
       { name: "se7e-mcp-server", version: buildInfo().version },
       {
@@ -107,7 +124,7 @@ export const createMcpHttpHandler = (input: {
           resources: { listChanged: true },
           prompts: {},
         },
-        instructions: MCP_SERVER_INSTRUCTIONS,
+        instructions: montarInstrucoesServidor(personas),
       },
     );
     const session: Session = {
@@ -220,7 +237,7 @@ export const createMcpHttpHandler = (input: {
     }
 
     if (req.method === "POST" && isInitializeRequest(req.body)) {
-      const session = createSession(!usuarioId, usuarioId);
+      const session = await createSession(!usuarioId, usuarioId);
       await session.server.connect(session.transport);
       await run(session);
       return;

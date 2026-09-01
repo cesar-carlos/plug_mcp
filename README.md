@@ -1,6 +1,6 @@
 # Se7e MCP Server
 
-Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + base de conhecimento**: guarda as quatro credenciais do Client, emite **um** token MCP opaco, e dá à IA o pacote da skill publicada. A IA escreve SQL no dialeto do acesso, sempre dentro desse escopo.
+Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + base de conhecimento**: guarda as quatro credenciais do Client, emite **um** token MCP opaco, e dá à IA o pacote da skill publicada. A **base comum** de todo consumidor: SQL no plug_server, dialeto do `agentId`, resources (`guia://`, `skill://`, `persona://`) e estrutura pelas skills publicadas (consultas dinâmicas no pacote, fail-closed). Sem embeddings. Persona no acesso oriente tom/uso e não licencia SQL. O domínio (atendimento, pagamentos, KPI/gestão, etc.) é o que o usuário treinou e publicou, mais o chapéu da persona.
 
 Não há login próprio, Authorization Server, catálogo pronto com seed, nem Client de serviço no `.env`.
 
@@ -50,7 +50,7 @@ Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fecha
 
 ## Bootstrap
 
-Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. `buscar_contexto` não devolve SQL — use `obter_skill`. Skill em treino que cobre a pergunta: `blockingReason SKILL_NOT_PUBLISHED`. Sem skill capaz: `SKILL_GAP` (a busca por termos não prova ausência — `listar_skills`). Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
+Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. Stub `kind: anexo` em `consultar_dados`: use `exportar_anexo`. `buscar_contexto` não devolve SQL — use `obter_skill`. Skill em treino que cobre a pergunta: `blockingReason SKILL_NOT_PUBLISHED`. Sem skill capaz: `SKILL_GAP` (a busca por termos não prova ausência — `listar_skills`). Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
 
 1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
 2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**
@@ -80,10 +80,8 @@ Ver [docs/clients/connecting-clients.md](docs/clients/connecting-clients.md).
 
 ## Documentação
 
-Índice: [`docs/README.md`](docs/README.md). Histórico: [`CHANGELOG.md`](CHANGELOG.md).
-
 1. Norte — [docs/product/objective.md](docs/product/objective.md)
 2. Tools e erros — [docs/mcp/tools.md](docs/mcp/tools.md), [docs/mcp/error-mapping.md](docs/mcp/error-mapping.md)
-3. Modelo e FTS — [docs/data/data-model.md](docs/data/data-model.md)
-4. Hub REST — [docs/plug-server/](docs/plug-server/)
-5. Três camadas (histórico) — [docs/proposta-arquitetura-mcp-se7e.md](docs/proposta-arquitetura-mcp-se7e.md)
+3. Hub REST — [docs/plug-server/communication.md](docs/plug-server/communication.md) (adapter: [rest-integration.md](docs/plug-server/rest-integration.md))
+4. Modelo e FTS — [docs/data/data-model.md](docs/data/data-model.md)
+5. Índice — [`docs/README.md`](docs/README.md). Changelog — [`CHANGELOG.md`](CHANGELOG.md). Histórico das três camadas — [docs/proposta-arquitetura-mcp-se7e.md](docs/proposta-arquitetura-mcp-se7e.md)

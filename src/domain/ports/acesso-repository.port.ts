@@ -18,5 +18,10 @@ export interface AcessoRepositoryPort {
     escopoPadrao: Acesso["escopoPadrao"],
     timezone: string | null,
   ): Promise<void>;
+  updatePersona(
+    id: string,
+    nomePersona: string | null,
+    instrucoesPersona: string | null,
+  ): Promise<void>;
   deleteById(id: string): Promise<void>;
 }

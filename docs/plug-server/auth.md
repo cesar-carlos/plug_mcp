@@ -36,7 +36,7 @@ Rotas (prefixo `/api/v1`):
 | ------ | ---------------------- | ---------------------------------------------- |
 | POST   | `/client-auth/login`   | Email + senha → `accessToken` + `refreshToken` |
 | POST   | `/client-auth/refresh` | Rotação do access token                        |
-| POST   | `/client-auth/logout`  | Não usado na Fase 1                            |
+| POST   | `/client-auth/logout`  | Não usado pelo MCP                             |
 | GET    | `/client-auth/me`      | Diagnóstico (não é tool)                       |
 
 Regras:
@@ -73,6 +73,8 @@ MCP                         plug-server                      User (dono)
 | GET    | `/client/me/agent-access-requests?search=` | Pedidos `pending` / `approved` / `rejected` / `expired` / `revoked`.                                                                                                                                     |
 
 `isHubConnected` é um **instantâneo desta réplica** do hub (agente registado em `/agents` neste processo). Com várias instâncias, pode ser `false` mesmo com o agente online noutra réplica.
+
+`POST /agents/commands` com `agentId` **nunca** registado nesta réplica → HTTP **404** (`AGENT_UNAVAILABLE`, `retryable: false`, `verificar_acesso`). Agente conhecido sem socket → HTTP **200** + JSON-RPC `-32000`. Não trate 404 como SQL inválido.
 
 Em comandos (`POST /agents/commands`):
 

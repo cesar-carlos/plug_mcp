@@ -1,5 +1,6 @@
 import { DomainError, isDomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
+import { isAnexoExportPayload } from "../../domain/entities/anexo.js";
 import { absoluteErrorMappingUrl } from "../../domain/errors/error-next-action.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AppConfig } from "../../config/env.js";
@@ -7,9 +8,17 @@ import type { RateLimitStore } from "../http/rate-limit.js";
 import { wwwAuthenticate } from "./mcp-auth.js";
 import { currentAccountId, currentClientIp } from "./account-context.js";
 
+export type ToolContent =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string }
+  | {
+      type: "resource";
+      resource: { uri: string; mimeType: string; blob?: string; text?: string };
+    };
+
 export interface ToolResult {
   [key: string]: unknown;
-  content: { type: "text"; text: string }[];
+  content: ToolContent[];
   isError?: boolean;
   structuredContent?: Record<string, unknown>;
   _meta?: Record<string, unknown>;
@@ -29,6 +38,42 @@ const isTabularPayload = (
   Array.isArray((payload as { rows?: unknown }).rows);
 
 export const jsonResult = (payload: unknown): ToolResult => {
+  if (isAnexoExportPayload(payload)) {
+    const meta = {
+      success: true as const,
+      mime: payload.mime,
+      bytes: payload.bytes,
+      resized: payload.resized,
+      ...(payload.aviso ? { aviso: payload.aviso } : {}),
+    };
+    const summary = payload.aviso
+      ? `Anexo ${payload.mime}, ${String(payload.bytes)} bytes. ${payload.aviso}`
+      : `Anexo ${payload.mime}, ${String(payload.bytes)} bytes.`;
+    const dataB64 = Buffer.from(payload.data).toString("base64");
+    if (payload.mime === "application/pdf") {
+      return {
+        content: [
+          { type: "text", text: summary },
+          {
+            type: "resource",
+            resource: {
+              uri: "anexo://export/pdf",
+              mimeType: payload.mime,
+              blob: dataB64,
+            },
+          },
+        ],
+        structuredContent: meta,
+      };
+    }
+    return {
+      content: [
+        { type: "text", text: summary },
+        { type: "image", data: dataB64, mimeType: payload.mime },
+      ],
+      structuredContent: meta,
+    };
+  }
   const result: ToolResult = {
     content: [{ type: "text", text: JSON.stringify(payload) }],
   };
@@ -87,7 +132,12 @@ export interface ToolRunnerExtra {
 }
 
 const maxForTool = (config: AppConfig, tool: string): number => {
-  if (tool === "consultar_dados" || tool.startsWith("skill_") || tool === "treinar_com_sql") {
+  if (
+    tool === "consultar_dados" ||
+    tool === "exportar_anexo" ||
+    tool.startsWith("skill_") ||
+    tool === "treinar_com_sql"
+  ) {
     return config.MCP_QUERY_TOOL_RATE_LIMIT_MAX;
   }
   if (tool === "registrar_acesso") {

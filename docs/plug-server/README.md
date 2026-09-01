@@ -7,8 +7,8 @@ Fonte canónica no repositório irmão `plug_server/docs` (índice `docs/README.
 | Documento                                  | Abrir quando…                                                       |
 | ------------------------------------------ | ------------------------------------------------------------------- |
 | [auth.md](auth.md)                         | Login JWT, `principal_type`, aprovação Client→Agent, `client_token` |
-| [communication.md](communication.md)       | REST vs Socket, envelope JSON-RPC, classificação SQL                |
-| [rest-integration.md](rest-integration.md) | O que **este** MCP chama hoje (adapter + TokenManager)              |
+| [communication.md](communication.md)       | Canal REST do MCP (Socket `/agents` é do agente), envelope JSON-RPC |
+| [rest-integration.md](rest-integration.md) | Adapter deste MCP: timeout/bridge, dois Agents, keepAlive = probe   |
 
 O MCP autentica **como o Client do usuário** (e-mail/senha do cofre), não como um Client de serviço no `.env`.
 

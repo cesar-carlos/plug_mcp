@@ -10,12 +10,18 @@ import { inferirFormatoColuna, inferirPapelColuna } from "./inferir-papel.js";
 import { inferirSensibilidadeColuna } from "../../../domain/entities/privacidade.js";
 import { paresDeIgualdades } from "../../../domain/entities/relacionamento.js";
 import { cell, DESCREVER_TABELA_MAX_ROWS, sqlDescreverTabela } from "./schema-introspection.js";
+import { mapWithConcurrency } from "./map-with-concurrency.js";
 import { columnQualifier, lastIdent, parseJoinEqualities, type SqlModelo } from "./sql-modelo.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 
 /** Teto de consultas de perfilamento no ERP (opt-in `enriquecer=completo`). */
 export const PERFIL_MAX_QUERIES = 16;
+/**
+ * `sql.execute` em paralelo no perfil completo. Não dispara o teto de 16 de uma vez
+ * (pool HTTP do hub / pool do ERP). O adapter REST ainda não isola falha em `command: []`.
+ */
+export const PERFIL_SQL_CONCURRENCY = 4;
 const PERFIL_DISTINCT_MAX = 30;
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 
@@ -159,6 +165,7 @@ const colKey = (tabela: string, coluna: string): string =>
  * Sybase: catálogo via syscolumns/systypes (mesmo SQL de schema-introspection);
  * divergência de tipo não é bug deste perfil.
  * Falha de uma query vira aviso e não desfaz o merge do treino.
+ * `sql.execute` em paralelo (`PERFIL_SQL_CONCURRENCY`); `getPolicy` não entra neste lote.
  */
 export const enriquecerPerfilCompleto = async (
   deps: EnriquecerPerfilDeps,
@@ -194,49 +201,43 @@ export const enriquecerPerfilCompleto = async (
       queriesLimite: PERFIL_MAX_QUERIES,
     });
   };
-  const run = async (
-    sql: string,
-    params?: Record<string, unknown>,
-  ): Promise<Record<string, unknown> | null> => {
+  const avisoQueryFalhou = (): void => {
+    avisos.push({
+      code: "PERFIL_QUERY_FALHOU",
+      message: "Uma query de perfil falhou; o grafo do treino foi mantido.",
+    });
+  };
+  const reservarQuery = (): boolean => {
     throwIfCancelled();
     if (remaining <= 0) {
       avisarTeto();
-      return null;
+      return false;
     }
     remaining -= 1;
     report();
-    try {
-      const result = await deps.executeSql(sql, params);
-      return result.rows[0] ?? {};
-    } catch {
-      avisos.push({
-        code: "PERFIL_QUERY_FALHOU",
-        message: "Uma query de perfil falhou; o grafo do treino foi mantido.",
-      });
-      return null;
-    }
+    return true;
   };
-  const runRows = async (
+  const executarReservada = async (
     sql: string,
     params?: Record<string, unknown>,
-  ): Promise<readonly Record<string, unknown>[] | null> => {
+  ): Promise<{
+    columns: readonly string[];
+    rows: readonly Record<string, unknown>[];
+  } | null> => {
     throwIfCancelled();
-    if (remaining <= 0) {
-      avisarTeto();
-      return null;
-    }
-    remaining -= 1;
     try {
-      const result = await deps.executeSql(sql, params);
-      return result.rows;
+      return await deps.executeSql(sql, params);
     } catch {
-      avisos.push({
-        code: "PERFIL_QUERY_FALHOU",
-        message: "Uma query de perfil falhou; o grafo do treino foi mantido.",
-      });
+      avisoQueryFalhou();
       return null;
     }
   };
+  const primeiraLinha = (
+    result: {
+      columns: readonly string[];
+      rows: readonly Record<string, unknown>[];
+    } | null,
+  ): Record<string, unknown> | null => (result === null ? null : (result.rows[0] ?? {}));
 
   const aliasToNome = new Map<string, string>();
   for (const tabela of deps.modelo.tabelas) {
@@ -250,10 +251,10 @@ export const enriquecerPerfilCompleto = async (
     }
   }
 
-  const uniqueOnCols = async (
+  const montarUnicidade = (
     tabela: string,
     colunas: readonly string[],
-  ): Promise<boolean | null> => {
+  ): { sql: string; params: Record<string, unknown> } | null => {
     const t = ident(tabela);
     const cols = colunas
       .map((coluna) => ident(coluna))
@@ -262,7 +263,12 @@ export const enriquecerPerfilCompleto = async (
       return null;
     }
     const recorte = recorteOrganizacional(t, deps.escopoPadrao);
-    const row = await run(sqlCountDistinctCols(deps.dialeto, t, cols, recorte.sql), recorte.params);
+    return {
+      sql: sqlCountDistinctCols(deps.dialeto, t, cols, recorte.sql),
+      params: recorte.params,
+    };
+  };
+  const unicidadeDeLinha = (row: Record<string, unknown> | null): boolean | null => {
     if (!row) {
       return null;
     }
@@ -275,6 +281,20 @@ export const enriquecerPerfilCompleto = async (
   };
 
   const relsGrafo = await deps.grafo.listRelacionamentos(deps.agentId);
+  const trabalhosCardinalidade: {
+    origemId: string;
+    destinoId: string;
+    grouped: NonNullable<ReturnType<typeof paresDeIgualdades>>;
+    tipoJoin: string;
+    leftRow: Record<string, unknown> | null | undefined;
+    rightRow: Record<string, unknown> | null | undefined;
+  }[] = [];
+  const jobsCardinalidade: {
+    trabalhoIndex: number;
+    lado: "left" | "right";
+    sql: string;
+    params: Record<string, unknown>;
+  }[] = [];
 
   for (const rel of deps.modelo.relacionamentos) {
     throwIfCancelled();
@@ -319,8 +339,57 @@ export const enriquecerPerfilCompleto = async (
     if (jaTemCardinalidade) {
       continue;
     }
-    const leftUnique = await uniqueOnCols(grouped.tabelaOrigem, leftCols);
-    const rightUnique = await uniqueOnCols(grouped.tabelaDestino, rightCols);
+    const leftJob = montarUnicidade(grouped.tabelaOrigem, leftCols);
+    const rightJob = montarUnicidade(grouped.tabelaDestino, rightCols);
+    if (!leftJob || !rightJob) {
+      continue;
+    }
+    if (!reservarQuery()) {
+      break;
+    }
+    const trabalhoIndex = trabalhosCardinalidade.length;
+    trabalhosCardinalidade.push({
+      origemId: origem.id,
+      destinoId: destino.id,
+      grouped,
+      tipoJoin: rel.tipoJoin,
+      leftRow: undefined,
+      rightRow: undefined,
+    });
+    jobsCardinalidade.push({
+      trabalhoIndex,
+      lado: "left",
+      sql: leftJob.sql,
+      params: leftJob.params,
+    });
+    if (!reservarQuery()) {
+      break;
+    }
+    jobsCardinalidade.push({
+      trabalhoIndex,
+      lado: "right",
+      sql: rightJob.sql,
+      params: rightJob.params,
+    });
+  }
+
+  await mapWithConcurrency(jobsCardinalidade, PERFIL_SQL_CONCURRENCY, async (job) => {
+    const row = primeiraLinha(await executarReservada(job.sql, job.params));
+    const trabalho = trabalhosCardinalidade[job.trabalhoIndex];
+    if (!trabalho) {
+      return row;
+    }
+    if (job.lado === "left") {
+      trabalho.leftRow = row;
+    } else {
+      trabalho.rightRow = row;
+    }
+    return row;
+  });
+
+  for (const trabalho of trabalhosCardinalidade) {
+    const leftUnique = unicidadeDeLinha(trabalho.leftRow ?? null);
+    const rightUnique = unicidadeDeLinha(trabalho.rightRow ?? null);
     if (leftUnique == null || rightUnique == null) {
       continue;
     }
@@ -328,15 +397,15 @@ export const enriquecerPerfilCompleto = async (
     if (cardinalidade === "N:N") {
       avisos.push({
         code: "FANOUT_NAO_DECLARADO",
-        message: `JOIN composto ${grouped.tabelaOrigem} → ${grouped.tabelaDestino} perfilou N:N no recorte organizacional. Confirme a cardinalidade antes de agregar medidas.`,
+        message: `JOIN composto ${trabalho.grouped.tabelaOrigem} → ${trabalho.grouped.tabelaDestino} perfilou N:N no recorte organizacional. Confirme a cardinalidade antes de agregar medidas.`,
       });
     }
     await deps.grafo.mergeRelacionamento({
       agentId: deps.agentId,
-      tabelaOrigemId: origem.id,
-      tabelaDestinoId: destino.id,
-      pares: grouped.pares,
-      tipoJoin: rel.tipoJoin,
+      tabelaOrigemId: trabalho.origemId,
+      tabelaDestinoId: trabalho.destinoId,
+      pares: trabalho.grouped.pares,
+      tipoJoin: trabalho.tipoJoin,
       cardinalidade,
       escopoValidacao: deps.escopoPadrao ?? null,
       origem: "validado_execucao",
@@ -420,6 +489,7 @@ export const enriquecerPerfilCompleto = async (
   const tipos = new Map<string, string>();
   const tabelasUnicas = [...new Set(colunasFisicas.map((item) => item.tabela))];
   fase = "catalogo";
+  const jobsCatalogo: string[] = [];
   for (const tabelaNome of tabelasUnicas) {
     if (remaining <= 0) {
       avisarTeto();
@@ -432,23 +502,30 @@ export const enriquecerPerfilCompleto = async (
     if (todasPerfiladas) {
       continue;
     }
-    const sql = sqlDescreverTabela(deps.dialeto, false);
-    remaining -= 1;
-    try {
-      const result = await deps.executeSql(sql, { tabela: tabelaNome });
-      for (const row of result.rows.slice(0, DESCREVER_TABELA_MAX_ROWS)) {
-        const colunaNome = cell(row, "column_name");
-        const dataType = cell(row, "data_type");
-        if (!colunaNome || !dataType) {
-          continue;
-        }
-        tipos.set(colKey(tabelaNome, colunaNome), dataType);
+    if (!reservarQuery()) {
+      break;
+    }
+    jobsCatalogo.push(tabelaNome);
+  }
+  const catalogoResults = await mapWithConcurrency(
+    jobsCatalogo,
+    PERFIL_SQL_CONCURRENCY,
+    async (tabelaNome) => {
+      const sql = sqlDescreverTabela(deps.dialeto, false);
+      return { tabelaNome, result: await executarReservada(sql, { tabela: tabelaNome }) };
+    },
+  );
+  for (const item of catalogoResults) {
+    if (!item.result) {
+      continue;
+    }
+    for (const row of item.result.rows.slice(0, DESCREVER_TABELA_MAX_ROWS)) {
+      const colunaNome = cell(row, "column_name");
+      const dataType = cell(row, "data_type");
+      if (!colunaNome || !dataType) {
+        continue;
       }
-    } catch {
-      avisos.push({
-        code: "PERFIL_QUERY_FALHOU",
-        message: "Uma query de perfil falhou; o grafo do treino foi mantido.",
-      });
+      tipos.set(colKey(item.tabelaNome, colunaNome), dataType);
     }
   }
 
@@ -481,68 +558,125 @@ export const enriquecerPerfilCompleto = async (
   const ordenadas = [...colunasFisicas].sort((a, b) => prioridade(a) - prioridade(b));
 
   fase = "perfil";
+  const pendentesPerfil: { tabela: string; coluna: string }[] = [];
   for (const item of ordenadas) {
+    if (await colunaJaTemEstatistica(item.tabela, item.coluna)) {
+      continue;
+    }
+    pendentesPerfil.push(item);
+  }
+  let offsetPerfil = 0;
+  while (offsetPerfil < pendentesPerfil.length) {
+    throwIfCancelled();
     if (remaining <= 0) {
       avisarTeto();
       break;
     }
-    if (await colunaJaTemEstatistica(item.tabela, item.coluna)) {
-      continue;
+    const wave: { tabela: string; coluna: string }[] = [];
+    while (wave.length < PERFIL_SQL_CONCURRENCY && offsetPerfil < pendentesPerfil.length) {
+      if (!reservarQuery()) {
+        break;
+      }
+      const next = pendentesPerfil[offsetPerfil];
+      offsetPerfil += 1;
+      if (!next) {
+        break;
+      }
+      wave.push(next);
     }
-    const row = await run(sqlPerfilColuna(item.tabela, item.coluna));
-    if (!row) {
-      continue;
+    if (wave.length === 0) {
+      break;
     }
-    const total = cellNumber(row, "total");
-    const distintos = cellNumber(row, "distintos");
-    const nulos = cellNumber(row, "nulos");
-    const perfil: PerfilColuna = {
-      min: cellValue(row, "min_v", "min"),
-      max: cellValue(row, "max_v", "max"),
-      nulos,
-      distintos,
-    };
-    const tipo = tipos.get(colKey(item.tabela, item.coluna)) ?? null;
-    const papel: PapelColuna = inferirPapelColuna(item.coluna, tipo);
-    let candidatos: string[] | undefined;
-    const baixaCard =
-      distintos != null &&
-      distintos > 0 &&
-      distintos <= PERFIL_DISTINCT_MAX &&
-      (total == null || distintos < total);
-    if (remaining > 0 && baixaCard && (papel === "dimensao" || papel === "codigo")) {
+    const perfilRows = await mapWithConcurrency(wave, PERFIL_SQL_CONCURRENCY, async (item) =>
+      primeiraLinha(await executarReservada(sqlPerfilColuna(item.tabela, item.coluna))),
+    );
+    const merges: {
+      item: { tabela: string; coluna: string };
+      perfil: PerfilColuna;
+      tipo: string | null;
+      papel: PapelColuna;
+      candidatos?: string[];
+    }[] = [];
+    const dictJobs: {
+      mergeIndex: number;
+      item: { tabela: string; coluna: string };
+    }[] = [];
+    for (let i = 0; i < wave.length; i++) {
+      const item = wave[i];
+      const row = perfilRows[i];
+      if (!item || !row) {
+        continue;
+      }
+      const total = cellNumber(row, "total");
+      const distintos = cellNumber(row, "distintos");
+      const nulos = cellNumber(row, "nulos");
+      const perfil: PerfilColuna = {
+        min: cellValue(row, "min_v", "min"),
+        max: cellValue(row, "max_v", "max"),
+        nulos,
+        distintos,
+      };
+      const tipo = tipos.get(colKey(item.tabela, item.coluna)) ?? null;
+      const papel: PapelColuna = inferirPapelColuna(item.coluna, tipo);
+      const mergeIndex = merges.length;
+      merges.push({ item, perfil, tipo, papel });
+      const baixaCard =
+        distintos != null &&
+        distintos > 0 &&
+        distintos <= PERFIL_DISTINCT_MAX &&
+        (total == null || distintos < total);
+      if (baixaCard && (papel === "dimensao" || papel === "codigo") && reservarQuery()) {
+        dictJobs.push({ mergeIndex, item });
+      }
+    }
+    if (dictJobs.length > 0) {
       fase = "dicionario";
-      const rows = await runRows(sqlDistinctLimitado(deps.dialeto, item.tabela, item.coluna));
-      if (rows) {
+      const dictRows = await mapWithConcurrency(dictJobs, PERFIL_SQL_CONCURRENCY, async (job) => {
+        const result = await executarReservada(
+          sqlDistinctLimitado(deps.dialeto, job.item.tabela, job.item.coluna),
+        );
+        return result?.rows ?? null;
+      });
+      for (let i = 0; i < dictJobs.length; i++) {
+        const job = dictJobs[i];
+        const rows = dictRows[i];
+        const merge = job ? merges[job.mergeIndex] : undefined;
+        if (!job || !rows || !merge) {
+          continue;
+        }
         const values = [
           ...new Set(
             rows
-              .map((entry) => cell(entry, "valor", item.coluna))
+              .map((entry) => cell(entry, "valor", job.item.coluna))
               .filter((value) => value.length > 0),
           ),
         ];
         if (values.length > 0) {
-          candidatos = values;
+          merge.candidatos = values;
         }
       }
+      fase = "perfil";
     }
-    fase = "perfil";
-    const tabela = await deps.grafo.findTabelaByNome(deps.agentId, item.tabela);
-    if (!tabela) {
-      continue;
+    for (const merge of merges) {
+      const tabela = await deps.grafo.findTabelaByNome(deps.agentId, merge.item.tabela);
+      if (!tabela) {
+        continue;
+      }
+      const perfilFinal = merge.candidatos
+        ? { ...merge.perfil, candidatosDicionario: merge.candidatos }
+        : merge.perfil;
+      await deps.grafo.mergeColuna({
+        tabelaId: tabela.id,
+        nome: merge.item.coluna,
+        tipo: merge.tipo,
+        papel: merge.papel,
+        formato: inferirFormatoColuna(merge.tipo, perfilFinal),
+        perfil: perfilFinal,
+        sensibilidade: inferirSensibilidadeColuna(merge.item.coluna, merge.tipo),
+        origem: "validado_execucao",
+        autorUsuarioId: deps.autorUsuarioId,
+      });
     }
-    const perfilFinal = candidatos ? { ...perfil, candidatosDicionario: candidatos } : perfil;
-    await deps.grafo.mergeColuna({
-      tabelaId: tabela.id,
-      nome: item.coluna,
-      tipo,
-      papel,
-      formato: inferirFormatoColuna(tipo, perfilFinal),
-      perfil: perfilFinal,
-      sensibilidade: inferirSensibilidadeColuna(item.coluna, tipo),
-      origem: "validado_execucao",
-      autorUsuarioId: deps.autorUsuarioId,
-    });
   }
 
   if (tetoAtingido) {

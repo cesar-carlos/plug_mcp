@@ -7,10 +7,10 @@ import { sqlDeclaraLimiteExterno } from "./sql-scan.js";
 /** SELECT * cortado no dialeto (inspeção). Firebird não tem SQL livre. */
 export const sqlStarDescoberta = (dialeto: Dialeto, tabela: string, maxRows: number): string => {
   if (dialeto === "firebird") {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.DIALECT_UNSUPPORTED,
       message: "Inspeção com SQL livre não é suportada neste dialeto.",
-      hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql).",
+      hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql). Não reenvie SQL livre neste dialeto.",
     });
   }
   const ident = parseIdentificadorTabela(tabela);

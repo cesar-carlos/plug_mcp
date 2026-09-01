@@ -4,11 +4,15 @@
 
 Contrato atual: [product/objective.md](product/objective.md), [mcp/tools.md](mcp/tools.md), [mcp/error-mapping.md](mcp/error-mapping.md), [data/data-model.md](data/data-model.md). Índice: [README.md](README.md).
 
+O destino original descrevia a IA como consultor de gestão. O contrato vivo define a **base comum** como SQL no plug-server, dialeto do `agentId`, resources (`guia://`, `skill://`) e skills publicadas (fail-closed, sem embeddings); o domínio/papel vem do treino. Canal vivo com o hub: **REST**. “Fase 1” neste arquivo é jargão da data da proposta — Socket de consumer **não** é fase seguinte.
+
 Os apêndices A–C registram o diagnóstico e o aceite **na data da proposta**. Gaps listados lá já foram entregues (salvo parser Firebird para SQL livre).
 
 ## 1. Objetivo de negócio
 
 O destino é um plugin onde a IA age como **consultor de gestão**: lê números reais do ERP, consolida, compara períodos e entrega KPI, tabela e gráfico citáveis.
+
+Texto da data da proposta. Contrato vivo: [product/objective.md](product/objective.md).
 
 Isso exige três coisas:
 

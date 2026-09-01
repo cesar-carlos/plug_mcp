@@ -17,6 +17,28 @@ import {
   isAbortError,
   parseRetryAfterMs,
 } from "./map-plug-error.js";
+import {
+  clampAgentTimeoutMs,
+  createHubHttpAgents,
+  createPooledFetch,
+  hubBridgeWaitMs,
+  hubHttpAbortMs,
+} from "./hub-http.js";
+
+export interface PlugServerHttpClients {
+  readonly sql: typeof fetch;
+  readonly auth: typeof fetch;
+}
+
+const defaultHubHttpClients = (): PlugServerHttpClients => {
+  const agents = createHubHttpAgents();
+  return {
+    sql: createPooledFetch(agents.sql),
+    auth: createPooledFetch(agents.auth),
+  };
+};
+
+type HubHttpPool = "auth" | "sql";
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
@@ -27,12 +49,23 @@ const asStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
 export class PlugServerRestAdapter implements PlugServerGatewayPort {
+  private readonly sqlFetch: typeof fetch;
+  private readonly authFetch: typeof fetch;
+
   constructor(
     private readonly baseUrl: string,
     private readonly logger: LoggerPort,
-    private readonly fetchImpl: typeof fetch = fetch,
+    fetchOrClients: typeof fetch | PlugServerHttpClients = defaultHubHttpClients(),
     private readonly httpTimeoutMs = 35_000,
-  ) {}
+  ) {
+    if (typeof fetchOrClients === "function") {
+      this.sqlFetch = fetchOrClients;
+      this.authFetch = fetchOrClients;
+    } else {
+      this.sqlFetch = fetchOrClients.sql;
+      this.authFetch = fetchOrClients.auth;
+    }
+  }
 
   async login(email: string, password: string): Promise<PlugHubTokens> {
     return this.postTokens("/api/v1/client-auth/login", { email, password });
@@ -96,16 +129,23 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     agentId: string;
     clientToken: string;
   }): Promise<ClientTokenPolicy> {
-    const json = await this.request(input.accessToken, "POST", "/api/v1/agents/commands", {
-      agentId: input.agentId,
-      timeoutMs: 15_000,
-      command: {
-        jsonrpc: "2.0",
-        method: "client_token.getPolicy",
-        id: randomUUID(),
-        params: { client_token: input.clientToken },
+    const json = await this.request(
+      input.accessToken,
+      "POST",
+      "/api/v1/agents/commands",
+      {
+        agentId: input.agentId,
+        timeoutMs: 15_000,
+        command: {
+          jsonrpc: "2.0",
+          method: "client_token.getPolicy",
+          id: randomUUID(),
+          params: { client_token: input.clientToken },
+        },
       },
-    });
+      hubHttpAbortMs(this.httpTimeoutMs, hubBridgeWaitMs(15_000)),
+      "auth",
+    );
     const result = unwrapRpcResult(json);
     return {
       allTables: result.allTables === true || result.all_tables === true,
@@ -122,34 +162,43 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     options?: { maxRows?: number; timeoutMs?: number; page?: number; pageSize?: number };
   }): Promise<SqlExecuteResult> {
     const paginar = Boolean(input.options?.page && input.options.pageSize);
+    const agentTimeoutMs = clampAgentTimeoutMs(input.options?.timeoutMs);
+    const bridgeWaitMs = hubBridgeWaitMs(agentTimeoutMs);
     const options: Record<string, unknown> = {
       max_rows: input.options?.maxRows,
     };
     if (!paginar) {
       options.execution_mode = "preserve";
     }
-    if (input.options?.timeoutMs) {
-      options.timeout_ms = input.options.timeoutMs;
+    if (agentTimeoutMs != null) {
+      options.timeout_ms = agentTimeoutMs;
     }
     if (paginar) {
       options.page = input.options?.page;
       options.page_size = input.options?.pageSize;
     }
-    const json = await this.request(input.accessToken, "POST", "/api/v1/agents/commands", {
-      agentId: input.agentId,
-      timeoutMs: input.options?.timeoutMs ?? 30_000,
-      command: {
-        jsonrpc: "2.0",
-        method: "sql.execute",
-        id: randomUUID(),
-        params: {
-          sql: input.sql,
-          params: input.params,
-          client_token: input.clientToken,
-          options,
+    const json = await this.request(
+      input.accessToken,
+      "POST",
+      "/api/v1/agents/commands",
+      {
+        agentId: input.agentId,
+        timeoutMs: bridgeWaitMs,
+        command: {
+          jsonrpc: "2.0",
+          method: "sql.execute",
+          id: randomUUID(),
+          params: {
+            sql: input.sql,
+            params: input.params,
+            client_token: input.clientToken,
+            options,
+          },
         },
       },
-    });
+      hubHttpAbortMs(this.httpTimeoutMs, bridgeWaitMs),
+      "sql",
+    );
     return normalizeSqlResult(json);
   }
 
@@ -211,10 +260,13 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     method: string,
     path: string,
     body?: unknown,
+    abortMs = this.httpTimeoutMs,
+    pool: HubHttpPool = "auth",
   ): Promise<unknown> {
     let response: Response;
     try {
-      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      const fetchImpl = pool === "sql" ? this.sqlFetch : this.authFetch;
+      response = await fetchImpl(`${this.baseUrl}${path}`, {
         method,
         headers: {
           accept: "application/json",
@@ -222,7 +274,7 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
           ...(body !== undefined ? { "content-type": "application/json" } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(this.httpTimeoutMs),
+        signal: AbortSignal.timeout(abortMs),
       });
     } catch (error) {
       if (isAbortError(error)) {

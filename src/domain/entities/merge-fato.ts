@@ -10,6 +10,7 @@ export interface FatoMerge {
   readonly dicionario?: string | null;
   readonly tipo?: string | null;
   readonly formato?: string | null;
+  readonly tipoJoin?: string;
 }
 
 export interface MergeResultado extends FatoMerge {
@@ -125,13 +126,34 @@ const conflitaTexto = (
   return a.length > 0 && b.length > 0 && a !== b;
 };
 
+const tipoJoinAposMerge = (
+  atual: string | undefined,
+  incoming: string | undefined,
+  rankAtual: number,
+  rankNovo: number,
+): string | undefined => {
+  if (rankNovo < rankAtual) {
+    return atual ?? incoming;
+  }
+  return incoming ?? atual;
+};
+
 export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResultado => {
   const rankAtual = origemRank(atual.origem);
   const rankNovo = origemRank(incoming.origem);
   const tipo = tipoFisicoAposMerge(atual.tipo, incoming.tipo);
   const formato = formatoAposMerge(atual.formato, incoming.formato, tipo);
+  const tipoJoin = tipoJoinAposMerge(atual.tipoJoin, incoming.tipoJoin, rankAtual, rankNovo);
   if (rankNovo > rankAtual) {
-    return { ...incoming, tipo, formato, status: "vigente", conflito: false, aplicar: true };
+    return {
+      ...incoming,
+      tipo,
+      formato,
+      tipoJoin,
+      status: "vigente",
+      conflito: false,
+      aplicar: true,
+    };
   }
   if (rankNovo < rankAtual) {
     if (tipo !== atual.tipo || formato !== atual.formato) {
@@ -139,17 +161,18 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
         ...atual,
         tipo,
         formato,
+        tipoJoin,
         conflito: false,
         aplicar: true,
       };
     }
-    return { ...atual, conflito: false, aplicar: false };
+    return { ...atual, tipoJoin, conflito: false, aplicar: false };
   }
   const conflito =
     conflitaTexto(atual.descricao, incoming.descricao) ||
     conflitaTexto(atual.dicionario, incoming.dicionario);
   if (conflito) {
-    return { ...atual, tipo, formato, status: "conflito", conflito: true, aplicar: true };
+    return { ...atual, tipo, formato, tipoJoin, status: "conflito", conflito: true, aplicar: true };
   }
   return {
     origem: atual.origem,
@@ -158,6 +181,7 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
     dicionario: atual.dicionario ?? incoming.dicionario,
     tipo,
     formato,
+    tipoJoin,
     conflito: false,
     aplicar: true,
   };

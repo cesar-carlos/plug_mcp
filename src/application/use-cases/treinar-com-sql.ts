@@ -1,5 +1,5 @@
 import type { Dialeto } from "../../domain/entities/dialeto.js";
-import { DomainError } from "../../domain/errors/domain-error.js";
+import { DomainError, ERROR_SOURCE } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
@@ -32,6 +32,7 @@ import { sincronizarEscopoComGrafo } from "./shared/sincronizar-escopo.js";
 import { fluxoForAgentSkill, pickSkillInProgress } from "./shared/fluxo-treino.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
+import { podarRelacionamentosSubsetNoGrafo } from "./shared/podar-relacionamentos.js";
 
 const allowedByPolicy = (
   table: string,
@@ -104,6 +105,7 @@ export class TreinarComSql {
         code: ERROR_CODES.PERMISSION_DENIED,
         message: "O client_token não cobre uma ou mais tabelas deste SQL.",
         hint: `Tabelas fora da policy: ${denied.map((t) => t.nome).join(", ")}. Peça um client_token que inclua essas tabelas ou treine só o que a policy cobre.`,
+        source: ERROR_SOURCE.policy,
       });
     }
 
@@ -226,6 +228,7 @@ export class TreinarComSql {
           conflitos += 1;
         }
       }
+      await podarRelacionamentosSubsetNoGrafo(this.grafo, acesso.agentId);
       return { conflitos, rels };
     });
 

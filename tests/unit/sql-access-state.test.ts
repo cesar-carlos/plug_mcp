@@ -50,6 +50,8 @@ describe("sqlAccessState", () => {
     expect(result.acessos[0]?.statusAcesso).toBe("approved");
     expect(result.acessos[0]?.sqlAccessState).toBe("unknown");
     expect(result.acessos[0]?.sqlAccessSource).toBe("vault");
+    expect(result.acessos[0]?.nomePersona).toBeNull();
+    expect(result.acessos[0]?.instrucoesPersona).toBeNull();
   });
 
   it("verificar_acesso com policy ok → active/policy", async () => {
@@ -60,6 +62,7 @@ describe("sqlAccessState", () => {
     );
     expect(result.acesso.sqlAccessState).toBe("active");
     expect(result.acesso.sqlAccessSource).toBe("policy");
+    expect(result.acesso.nomePersona).toBeNull();
   });
 
   it("verificar_acesso mapeia ACCESS_REVOKED da policy para revoked", async () => {

@@ -54,6 +54,8 @@ export const acesso = pgTable(
     statusAcesso: text("status_acesso").notNull().default("pending"),
     escopoPadrao: jsonb("escopo_padrao"),
     timezone: text("timezone"),
+    nomePersona: text("nome_persona"),
+    instrucoesPersona: text("instrucoes_persona"),
     ...timestamps,
   },
   (t) => [

@@ -27,10 +27,10 @@ export const parserDatabaseForDialeto = (dialeto: Dialeto): ParserDatabase => {
     return "postgresql";
   }
   if (dialeto === "firebird") {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.DIALECT_UNSUPPORTED,
       message: "SQL livre não é suportado neste dialeto.",
-      hint: "Firebird não tem parser AST. Use a consulta exemplo da skill (consultar_dados sem sql) até haver parser adequado.",
+      hint: "Firebird não tem parser AST. Use só a consulta exemplo (consultar_dados / inspecionar_consulta sem sql). Não reenvie SQL livre neste dialeto.",
     });
   }
   return "transactsql";
@@ -462,7 +462,7 @@ const collectSubqueryAsts = (select: Record<string, unknown>): unknown[] => {
 
 const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): SqlAstSelect => {
   if (!isRecord(ast) || ast.type !== "select") {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "Só SELECT pode treinar o grafo.",
       hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
@@ -537,7 +537,7 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "SQL inválido.";
     const janela = /\bOVER\s*\(/i.test(sql);
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: janela
         ? "Não foi possível interpretar a função de janela (OVER) neste dialeto."
@@ -549,7 +549,7 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
   }
   const statements: unknown[] = Array.isArray(ast) ? ast : [ast];
   if (statements.length !== 1) {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "SQL não pode conter um segundo comando.",
       hint: "Envie um único SELECT, sem ponto-e-vírgula no meio.",
@@ -557,7 +557,7 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
   }
   const first = statements[0];
   if (!isRecord(first) || first.type !== "select") {
-    throw new DomainError({
+    throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "Só SELECT pode treinar o grafo.",
       hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",

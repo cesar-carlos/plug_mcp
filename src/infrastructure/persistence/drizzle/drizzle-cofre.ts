@@ -92,6 +92,8 @@ const toAcesso = (row: typeof schema.acesso.$inferSelect): Acesso => ({
   statusAcesso: row.statusAcesso as StatusAcesso,
   escopoPadrao: parseEscopoPadrao(row.escopoPadrao),
   timezone: row.timezone,
+  nomePersona: row.nomePersona ?? null,
+  instrucoesPersona: row.instrucoesPersona ?? null,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -162,7 +164,14 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
   constructor(private readonly db: Db) {}
 
   async create(input: NovoAcesso): Promise<Acesso> {
-    const [row] = await this.db.insert(schema.acesso).values(input).returning();
+    const [row] = await this.db
+      .insert(schema.acesso)
+      .values({
+        ...input,
+        nomePersona: input.nomePersona ?? null,
+        instrucoesPersona: input.instrucoesPersona ?? null,
+      })
+      .returning();
     return toAcesso(row!);
   }
 
@@ -244,6 +253,17 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
     await this.db
       .update(schema.acesso)
       .set({ escopoPadrao, timezone, updatedAt: new Date() })
+      .where(eq(schema.acesso.id, id));
+  }
+
+  async updatePersona(
+    id: string,
+    nomePersona: string | null,
+    instrucoesPersona: string | null,
+  ): Promise<void> {
+    await this.db
+      .update(schema.acesso)
+      .set({ nomePersona, instrucoesPersona, updatedAt: new Date() })
       .where(eq(schema.acesso.id, id));
   }
 
@@ -529,11 +549,13 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         origem: existing.origem as OrigemFato,
         status: existing.status as StatusFato,
         descricao: existing.descricao,
+        tipoJoin: existing.tipoJoin,
       },
       {
         origem: input.origem,
         status: "vigente",
         descricao: input.descricao ?? null,
+        tipoJoin: input.tipoJoin,
       },
     );
     if (!merge.aplicar && input.cardinalidade == null && input.escopoValidacao == null) {
@@ -542,7 +564,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     const [row] = await this.conn()
       .update(schema.relacionamentoGrafo)
       .set({
-        tipoJoin: input.tipoJoin,
+        tipoJoin: merge.tipoJoin ?? existing.tipoJoin,
         cardinalidade: input.cardinalidade ?? existing.cardinalidade,
         descricao: merge.descricao,
         escopoValidacao: input.escopoValidacao ?? existing.escopoValidacao,

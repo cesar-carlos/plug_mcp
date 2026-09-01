@@ -3,7 +3,7 @@
 O MCP não tem tela de login nem OAuth 2.1 próprio. Identidade:
 
 1. **Client no plug-server** — e-mail + senha já existentes. O MCP cifra e guarda.
-2. **Acesso** — `agentId` + dialeto + `client_token` (N por usuário; unique `(usuarioId, agentId, clientTokenHash)`).
+2. **Acesso** — `agentId` + dialeto + `client_token` (N por usuário; unique `(usuarioId, agentId, clientTokenHash)`). Persona opcional (`nomePersona` / `instrucoesPersona`) neste trio; `atualizar_persona` exige confirmação e recusa texto que pareça segredo.
 3. **Token MCP** — opaco, hash SHA-256 no banco, comparação `timingSafeEqual`. Um por usuário.
 
 ## O que nunca vai a log, tool ou modelo
@@ -12,7 +12,7 @@ O MCP não tem tela de login nem OAuth 2.1 próprio. Identidade:
 
 ## Bootstrap
 
-`POST /mcp` **sem** Bearer só aceita `initialize`, `notifications/initialized`, `tools/list` (catálogo mínimo), `prompts/list`, `prompts/get` e `tools/call` de `registrar_acesso`. Rate limit de bootstrap é mais apertado. O prompt `pre_treino` está disponível já no bootstrap.
+`POST /mcp` **sem** Bearer só aceita `initialize`, `notifications/initialized`, `tools/list` (catálogo mínimo), `prompts/list`, `prompts/get`, `resources/list`, `resources/templates/list`, `resources/read` e `tools/call` de `registrar_acesso`. Rate limit de bootstrap é mais apertado. Guias `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}` e prompts `pre_treino` / `consultar_com_skill` / `cadastrar_skill` já no bootstrap. `skill://`, `persona://` e tools de skill exigem Bearer. `initialize` sem Bearer: só o bloco SQL comum (sem chapéu de persona).
 
 `registrar_acesso` **não** devolve o token MCP (vaza no transcript). Devolve `setupCode` + `setupUrl`. O usuário abre `GET /setup/{code}` (HTML, one-shot) e copia o token.
 
@@ -28,6 +28,6 @@ JWT do hub (`accessToken` / `refreshToken`) **não** vai ao banco — só o `Usu
 
 ## Um Client por token MCP
 
-Um par e-mail/senha por usuário MCP. Outro Client = outro `registrar_acesso`. `adicionar_acesso` só pede `agentId` / dialeto / `client_token`.
+Um par e-mail/senha por usuário MCP. Outro Client = outro `registrar_acesso`. `adicionar_acesso` só pede `agentId` / dialeto / `client_token`. **Várias personas = vários acessos**; um acesso = um chapéu.
 
 Senha do hub mudou: refresh falha → login com senha cifrada falha → `CREDENTIAL_STALE` → `atualizar_credencial_plug`.

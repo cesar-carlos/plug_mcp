@@ -4,6 +4,7 @@ import { validarSqlNoEscopo } from "../../src/application/use-cases/shared/valid
 import { escopoFromSqlModelo } from "../../src/application/use-cases/shared/escopo-from-modelo.js";
 import { parseSqlModelo } from "../../src/application/use-cases/shared/sql-modelo.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
+import { DomainError } from "../../src/domain/errors/domain-error.js";
 
 describe("relacionamento composto", () => {
   const sql =
@@ -70,8 +71,21 @@ describe("relacionamento composto", () => {
     const incompleto =
       "SELECT r.valor FROM receber r INNER JOIN cliente c ON c.codcli = r.codcli WHERE r.valor > 0";
     expect(() => validarSqlNoEscopo(incompleto, "mssql", composto)).toThrow(
-      expect.objectContaining({ code: ERROR_CODES.JOIN_DESCONHECIDO }),
+      expect.objectContaining({
+        code: ERROR_CODES.JOIN_DESCONHECIDO,
+        source: "sql",
+        hint: expect.stringMatching(/n[aã]o invente nem repita/i),
+      }),
     );
+    try {
+      validarSqlNoEscopo(incompleto, "mssql", composto);
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      const json = (error as DomainError).toJson();
+      expect(json.error.source).toBe("sql");
+      expect(json.error.nextAction).toBe("obter_skill");
+      expect(json.error.nextAction).not.toBe("confirmar_relacionamento");
+    }
     expect(() => validarSqlNoEscopo(sql, "mssql", composto)).not.toThrow();
   });
 
@@ -93,7 +107,7 @@ describe("relacionamento composto", () => {
       ],
     });
     expect(() => validarSqlNoEscopo(sql, "mssql", parcial)).toThrow(
-      expect.objectContaining({ code: ERROR_CODES.JOIN_DESCONHECIDO }),
+      expect.objectContaining({ code: ERROR_CODES.JOIN_DESCONHECIDO, source: "sql" }),
     );
   });
 });
