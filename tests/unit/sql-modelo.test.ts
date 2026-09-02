@@ -7,6 +7,7 @@ import {
   columnQualifier,
   expandirInListas,
   extractNamedParams,
+  IN_LISTA_MAX_ITENS,
   parseJoinEqualities,
   parseSqlModelo,
   rewriteAtParamsToColon,
@@ -269,5 +270,29 @@ describe("sqlParaOdbc / limites", () => {
         empresas: [],
       }),
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.VALIDATION_ERROR }));
+  });
+
+  it("expande array de 17 inteiros e recusa acima do teto sem pedir literal", () => {
+    const dezessete = Array.from({ length: 17 }, (_, i) => i + 1);
+    const ok = expandirInListas("SELECT c.cod FROM cliente c WHERE c.cod IN (:codigos)", {
+      codigos: dezessete,
+    });
+    expect(ok.sql).toMatch(/IN \(:codigos_0, :codigos_1/);
+    expect(Object.keys(ok.params)).toHaveLength(17);
+
+    const acima = Array.from({ length: IN_LISTA_MAX_ITENS + 1 }, (_, i) => i + 1);
+    try {
+      expandirInListas("SELECT c.cod FROM cliente c WHERE c.cod IN (:codigos)", { codigos: acima });
+      expect.fail("esperava teto de IN");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        source: "mcp",
+        stage: "in_lista",
+        nextAction: "reduzir_lista_in",
+      });
+      expect((error as DomainError).hint).toMatch(/Não interpole literais/i);
+      expect((error as DomainError).hint).not.toMatch(/LITERAL_TEXTO.*use literais/i);
+    }
   });
 });

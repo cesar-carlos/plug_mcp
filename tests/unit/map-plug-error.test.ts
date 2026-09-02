@@ -217,6 +217,39 @@ describe("mapPlugServerFailure", () => {
     expect(err.hint).not.toContain("ContaReceber");
   });
 
+  it("mapeia SQL Server 4104 do wrap gerenciado para o mesmo hint de 1033", () => {
+    const err = mapPlugServerFailure(
+      {
+        status: 200,
+        body: {
+          response: {
+            item: {
+              error: {
+                code: -32101,
+                message: "sql_validation_failed",
+                data: {
+                  reason: "sql_validation_failed",
+                  technical_message:
+                    '[SQL Server] The multi-part identifier "p.CodProduto" could not be bound. (4104)',
+                },
+              },
+            },
+          },
+        },
+      },
+      undefined,
+      "sql.execute",
+    );
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.source).toBe("sql_engine");
+    expect(err.nextAction).toBe("consultar_dados");
+    expect(err.nextAction).not.toBe("validar_consulta");
+    expect(err.hint).toMatch(/1033\/4104|4104/);
+    expect(err.hint).toMatch(/options\.page/);
+    expect(err.hint).toMatch(/TOP n/);
+    expect(err.hint).not.toMatch(/FROM real/i);
+  });
+
   it("mapeia -32009 com 1033 para o hint de paginação, não o genérico de dialeto", () => {
     const err = mapPlugServerFailure({
       status: 200,

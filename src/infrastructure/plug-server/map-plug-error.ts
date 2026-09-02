@@ -104,17 +104,23 @@ export const isUnclassifiableSqlDenial = (
   haystack = "",
 ): boolean => rpcCode === -32002 && /classification/i.test(`${technicalMessage ?? ""} ${haystack}`);
 
-/** SQL Server 1033: ORDER BY em derived table do wrap gerenciado (page+page_size). */
+/**
+ * SQL Server 1033/4104: ORDER BY com alias no wrap gerenciado (page+page_size).
+ * O mapper não vê `options.page` no envelope (igual ao 1033): 4104 de alias
+ * solto fora do wrap também recebe este hint. O rewrite OFFSET/FETCH é do plug_agente.
+ */
 export const HINT_SQLSERVER_PAGINACAO_1033 =
-  "O wrap gerenciado do hub colocou ORDER BY numa derived table (SQL Server 1033). Não persista este SQL. Não repita options.page neste SQL. Sem página: TOP n + ORDER BY (guia://dialeto/mssql). Não acrescente OFFSET/FETCH com page — o validador recusa. validar_consulta já passa neste caso. O rewrite OFFSET/FETCH é do plug_agente. Não é recusa do pacote MCP.";
+  "O wrap gerenciado do hub colocou ORDER BY numa derived table (SQL Server 1033/4104). Não persista este SQL. Não repita options.page neste SQL. Sem página: TOP n + ORDER BY (guia://dialeto/mssql). Não acrescente OFFSET/FETCH com page — o validador recusa. validar_consulta já passa neste caso (não reproduz o wrap). O rewrite OFFSET/FETCH é do plug_agente. Não é recusa do pacote MCP.";
 
 export const isSqlServerOrderByWrap = (blob: string): boolean =>
   /\b1033\b/.test(blob) ||
+  /\b4104\b/.test(blob) ||
   /order by clause is invalid/i.test(blob) ||
-  /cl[aá]usula order by [eé] inv[aá]lida/i.test(blob);
+  /cl[aá]usula order by [eé] inv[aá]lida/i.test(blob) ||
+  (/multi-part identifier/i.test(blob) && /could not be bound/i.test(blob));
 
 const looksLikeEngineSql = (blob: string): boolean =>
-  /\b(sql state|odbc|invalid column|invalid object|unknown column|syntax error|conversion failed|does not exist|undefined column|42P01|42703|\b1033\b|\b207\b|\b208\b)\b/i.test(
+  /\b(sql state|odbc|invalid column|invalid object|unknown column|syntax error|conversion failed|does not exist|undefined column|42P01|42703|\b1033\b|\b4104\b|\b207\b|\b208\b)\b/i.test(
     blob,
   );
 

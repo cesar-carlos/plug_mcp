@@ -7,7 +7,6 @@ import type {
 } from "../../../domain/entities/escopo.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import { inferirFormatoColuna, inferirPapelColuna } from "./inferir-papel.js";
-import { inferirSensibilidadeColuna } from "../../../domain/entities/privacidade.js";
 import { paresDeIgualdades } from "../../../domain/entities/relacionamento.js";
 import { cell, DESCREVER_TABELA_MAX_ROWS, sqlDescreverTabela } from "./schema-introspection.js";
 import { mapWithConcurrency } from "./map-with-concurrency.js";
@@ -544,7 +543,6 @@ export const enriquecerPerfilCompleto = async (
       tipo,
       papel: inferirPapelColuna(item.coluna, tipo),
       formato: inferirFormatoColuna(tipo, null),
-      sensibilidade: inferirSensibilidadeColuna(item.coluna, tipo),
       origem: "validado_execucao",
       autorUsuarioId: deps.autorUsuarioId,
     });
@@ -672,7 +670,6 @@ export const enriquecerPerfilCompleto = async (
         papel: merge.papel,
         formato: inferirFormatoColuna(merge.tipo, perfilFinal),
         perfil: perfilFinal,
-        sensibilidade: inferirSensibilidadeColuna(merge.item.coluna, merge.tipo),
         origem: "validado_execucao",
         autorUsuarioId: deps.autorUsuarioId,
       });

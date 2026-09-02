@@ -908,4 +908,128 @@ describe("BuscarContexto", () => {
     expect(result.consultaPermitida).toBe(true);
     expect(result.consultaSemanticaSugerida).toBeUndefined();
   });
+
+  it("pergunta composta devolve fatias e consultaPermitida sem SELECT cruzado", async () => {
+    const { buscar, created, skills } = await setup();
+    const criar = async (slug: string, nome: string, descricao: string): Promise<void> => {
+      const row = await skills.create({
+        agentId,
+        slug,
+        nome,
+        descricao,
+        sqlModelo: "SELECT 1 AS n FROM dual d WHERE d.n > 0",
+        autorUsuarioId: created.usuarioId,
+      });
+      await skills.update(row.id, {
+        escopo: parseEscopoSkill({ tabelas: ["dual"], colunasPorTabela: { dual: ["n"] } }),
+      });
+      await skills.setStatus(row.id, "publicada");
+    };
+    await criar("vendas", "Vendas", "Vendas do período");
+    await criar("titulos-a-receber", "Títulos a receber", "Contas a receber");
+    await criar("titulos-a-pagar", "Títulos a pagar", "Contas a pagar");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "visão geral no mês de julho 2026 vendas receber pagar",
+    });
+    expect(result.cobertura).toBe("composta");
+    expect(result.consultaPermitida).toBe(true);
+    expect(result.fatias?.length).toBeGreaterThanOrEqual(2);
+    expect(result.fatias?.every((f) => f.consultaPermitida)).toBe(true);
+    expect(result.hint).toMatch(/fatia/i);
+    expect(result.hint).toMatch(/não cruze/i);
+  });
+
+  it("estoque do mês sem skill de estoque continua SKILL_GAP", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao: "Listar produtos ativos. Não agrega estoque.",
+      sqlModelo: "SELECT p.codprod FROM produto p WHERE p.ativo = :ativo",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(published.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["codprod"] },
+      }),
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "estoque do mês",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.gap?.code).toBe("SKILL_GAP");
+    expect(result.cobertura).not.toBe("composta");
+    const listing = result.candidatos.find((item) => item.slug === "listagem-de-produtos");
+    expect(listing?.termosEncontrados ?? []).not.toContain("estoqu");
+  });
+
+  it("estoque mínimo do produto não pede sinônimo nem marca estoqu encontrado", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao: "Listar produtos ativos. Não agrega estoque e não autoriza cruzar vendas.",
+      sqlModelo: "SELECT p.codprod FROM produto p WHERE p.ativo = :ativo",
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(published.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["codprod"] },
+      }),
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "estoque mínimo do produto",
+    });
+    expect(result.consultaPermitida).toBe(false);
+    expect(result.gap?.code).toBe("SKILL_GAP");
+    const listing = result.candidatos.find((item) => item.slug === "listagem-de-produtos");
+    expect(listing?.termosEncontrados ?? []).not.toContain("estoqu");
+    expect(`${result.hint ?? ""} ${result.gap?.hint ?? ""}`).not.toMatch(/sinonimo/);
+  });
+
+  it("listagem certificada sugere IR de dimensões/filtros sem inventar overlay", async () => {
+    const { buscar, created, skills } = await setup();
+    const published = await skills.create({
+      agentId,
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao: "Listar produtos ativos",
+      sqlModelo: "SELECT p.codprod, p.nome FROM produto p WHERE p.ativo = :ativo",
+      params: [{ nome: "ativo", descricao: "Produto ativo", obrigatorio: true, tipo: "string" }],
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.update(published.id, {
+      escopo: parseEscopoSkill({
+        tabelas: ["produto"],
+        colunasPorTabela: { produto: ["codprod", "nome", "precovenda"] },
+        graoResultado: ["codprod"],
+        metricasSaida: [{ alias: "PrecoVenda", expr: "p.precovenda" }],
+      }),
+    });
+    await skills.setStatus(published.id, "publicada");
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "listar produtos ativos",
+    });
+    expect(result.consultaPermitida).toBe(true);
+    expect(result.consultaSemanticaSugerida).toMatchObject({
+      versao: 1,
+      modo: "listagem",
+      dimensoes: ["codprod"],
+    });
+    expect(result.consultaSemanticaSugerida?.metrica).toBeUndefined();
+    expect(result.consultaSemanticaSugerida?.filtros).toEqual([
+      { coluna: "ativo", op: "=", param: "ativo" },
+    ]);
+    expect(result.metricasSemOverlay).toBeUndefined();
+  });
 });

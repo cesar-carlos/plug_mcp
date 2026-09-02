@@ -1,4 +1,4 @@
-export type CoberturaBusca = "completa" | "parcial" | "desconhecida";
+export type CoberturaBusca = "completa" | "parcial" | "desconhecida" | "composta";
 
 export type GapBusca = "none" | "SKILL_GAP" | "SKILL_NOT_PUBLISHED";
 
@@ -11,7 +11,7 @@ export interface TelemetriaBusca {
   readonly listarSkills: boolean;
 }
 
-const COBERTURAS = new Set<CoberturaBusca>(["completa", "parcial", "desconhecida"]);
+const COBERTURAS = new Set<CoberturaBusca>(["completa", "parcial", "desconhecida", "composta"]);
 const GAPS = new Set<GapBusca>(["none", "SKILL_GAP", "SKILL_NOT_PUBLISHED"]);
 
 const flag = (on: boolean): "0" | "1" => (on ? "1" : "0");

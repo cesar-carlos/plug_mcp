@@ -48,7 +48,8 @@ documentação de produto e os testes correspondentes.
   `salvar_consulta` e `SKILL_GAP` → `lacuna_consulta`.
 - Agregações, filtros e paginação devem acontecer no banco.
 - Treinamento segue `treinar_com_sql` → `criar_skill` → params →
-  `validar_skill` → confirmação → `publicar_skill`. Rascunho, validada ou
+  `validar_skill` (une `sqlModelo` ao escopo persistido; perfil não apaga
+  `sensibilidade` confirmada) → confirmação → `publicar_skill`. Rascunho, validada ou
   `rascunho_revalidacao` não consultam (`rascunho_revalidacao`: validar →
   republicar). `listar_skills` devolve status/`fluxoTreino`/`faltas[]`; o
   pacote fica em `obter_skill`. Skill `validada` com perfil incompleto:
@@ -65,11 +66,13 @@ documentação de produto e os testes correspondentes.
   (união das publicadas) e `consultaAprendidaId`. `confirmar_coluna` aceita `colunas[]`.
   Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
   `conhecimentos[]` é evidência FTS/`ILIKE` (não RAG), não licença de consulta.
-  Stem léxico une inflexão na cobertura. Envelope de
-  `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — reuse
-  `consultasAprendidas[].id` em `obter_skill`. `consultaSemanticaSugerida` só
+  Stem léxico une inflexão na cobertura. Negação na descrição não conta.
+  Envelope de `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — reuse
+  `consultasAprendidas[].id` em `obter_skill`. Cobertura `composta` + `fatias[]`
+  orquestra várias `consultar_dados` (não cruzar SELECT). `consultaSemanticaSugerida`
   com `consultaPermitida` e KPI de agregação (CAST não entra; IR só com alias
-  medida no pacote; score 0 sem IR omite; maior overlap da pergunta). `fluxoTreino.pacoteMinimo` oriente (uma
+  medida no pacote; score 0 sem IR omite; maior overlap da pergunta) **ou**
+  listagem só com dimensões/filtros. `metricasSemOverlay[]` não inventa `definicao`. `fluxoTreino.pacoteMinimo` oriente (uma
   tabela; CAST não é medida) sem afrouxar gates. `faltas[]` de KPI (não quantidade/parcelas/`NroParc`/`Qtde`) e JOIN isolado
   coberto por composto não bloqueiam publicação. `SKILL_GAP` omite `fluxoTreino` salvo skill em andamento e não pede sinônimo. Hint de cruzamento só na pergunta de cruzamento.
 

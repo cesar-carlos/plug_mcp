@@ -405,7 +405,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra). consultaPermitida só se cobertura completa. conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida e houver KPI de agregação (não CAST), consultaSemanticaSugerida (sem SQL). Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. SKILL_GAP: não registre sinônimo; não cruze sem JOIN publicado; fluxoTreino só com skill em andamento. grafoParaTreino só no fluxo de gap.",
+    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra; negação na descrição não conta). consultaPermitida se cobertura completa ou composta (fatias[] = várias consultar_dados, não um SELECT cruzado). conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; tokens de calendário não baixam cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida: consultaSemanticaSugerida (KPI de agregação, ou listagem só com dimensões/filtros; CAST não entra) e metricasSemOverlay[] se a medida não tem definicao. Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. SKILL_GAP: não registre sinônimo; não cruze sem JOIN publicado; fluxoTreino só com skill em andamento. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -677,7 +677,7 @@ export const registerTools = (
 
   server.tool(
     "expandir_escopo",
-    "Acrescenta tabelas já treinadas ao escopo da skill. Exige confirmadoPeloUsuario: true. Skill publicada só une JOIN confirmado_usuario/validado_execucao — herdar_catalogo inferido não licencia o validador.",
+    "Acrescenta tabelas já treinadas ao escopo da skill. Exige confirmadoPeloUsuario: true. Sem JOIN coluna=coluna: nextAction confirmar_coluna (tabela isolada); não invente igualdade. Skill publicada só une JOIN confirmado_usuario/validado_execucao — herdar_catalogo inferido não licencia o validador.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),

@@ -1,4 +1,4 @@
-import { DomainError } from "../../../domain/errors/domain-error.js";
+import { DomainError, ERROR_SOURCE } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { ParametroSkill } from "../../../domain/entities/skill.js";
@@ -17,6 +17,9 @@ export {
   sqlDeclaraLimiteExterno as sqlDeclaraLimiteDeLinhas,
   sqlTemOrderByExterno as sqlTemOrderBy,
 };
+
+/** Teto de itens expandido em `IN (:lista)` antes do RPC (ODBC/hub). Não interpolar literais. */
+export const IN_LISTA_MAX_ITENS = 64;
 
 export const SQL_MAX_BYTES = 1_048_576;
 
@@ -331,6 +334,16 @@ export const expandirInListas = (
         code: ERROR_CODES.VALIDATION_ERROR,
         message: `Lista IN :${nome} está vazia.`,
         hint: "Envie pelo menos um valor, ou um placeholder por item (IN (:a, :b)).",
+      });
+    }
+    if (value.length > IN_LISTA_MAX_ITENS) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Lista IN :${nome} tem ${String(value.length)} valores; o teto é ${String(IN_LISTA_MAX_ITENS)}.`,
+        hint: "Recorte a lista (vários consultar_dados) ou use um recorte no banco. Não interpole literais no SQL (LITERAL_TEXTO). Não reescreva o JOIN.",
+        source: ERROR_SOURCE.mcp,
+        stage: "in_lista",
+        nextAction: "reduzir_lista_in",
       });
     }
     const placeholders = value.map((_, index) => {

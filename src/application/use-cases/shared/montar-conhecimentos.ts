@@ -222,13 +222,14 @@ const CRUZAMENTO_RE = /\bcruzar\b|\bcruzamento\b|\bjuntas\b|única consulta|unic
 export const perguntaPareceCruzamento = (query: string): boolean => CRUZAMENTO_RE.test(query);
 
 export const hintRegraParcial = (
-  cobertura: "completa" | "parcial" | "desconhecida",
+  cobertura: "completa" | "parcial" | "desconhecida" | "composta",
   conhecimentos: readonly HitConhecimento[],
   temCandidatos = false,
   termosAusentes: readonly string[] = [],
   query = "",
+  omitirSinonimo = false,
 ): string | undefined => {
-  if (!temCandidatos || cobertura === "completa") {
+  if (!temCandidatos || cobertura === "completa" || cobertura === "composta") {
     return undefined;
   }
   const narrativa = conhecimentos.find(isNarrativaComSkill);
@@ -240,7 +241,10 @@ export const hintRegraParcial = (
       termosAusentes.length > 0
         ? ` Termos ausentes no pacote: ${termosAusentes.slice(0, 3).join(", ")}.`
         : "";
-    return `${prefixo}${ausentes} Match textual isolado não autoriza consultar_dados — registre sinônimo (registrar_aprendizado tipo=sinonimo) se o usuário confirmar o termo.`;
+    const fecho = omitirSinonimo
+      ? " Match textual isolado não autoriza consultar_dados. Não registre sinônimo — o termo ausente veio de domínio sem skill ou de negação na descrição. Oriente treinar_com_sql se faltar skill capaz."
+      : " Match textual isolado não autoriza consultar_dados — registre sinônimo (registrar_aprendizado tipo=sinonimo) se o usuário confirmar o termo.";
+    return `${prefixo}${ausentes}${fecho}`;
   }
   if (!narrativa) {
     return undefined;

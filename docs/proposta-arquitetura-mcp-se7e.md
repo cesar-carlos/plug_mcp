@@ -4,7 +4,7 @@
 
 Contrato atual: [product/objective.md](product/objective.md), [mcp/tools.md](mcp/tools.md), [mcp/error-mapping.md](mcp/error-mapping.md), [data/data-model.md](data/data-model.md). Índice: [README.md](README.md).
 
-O destino original descrevia a IA como consultor de gestão. O contrato vivo define a **base comum** como SQL no plug-server, dialeto do `agentId`, resources (`guia://`, `skill://`) e skills publicadas (fail-closed, sem embeddings); o domínio/papel vem do treino. Canal vivo com o hub: **REST**. “Fase 1” neste arquivo é jargão da data da proposta — Socket de consumer **não** é fase seguinte.
+O destino original descrevia a IA como consultor de gestão. O contrato vivo define a **base comum** como SQL no plug-server, dialeto do `agentId`, resources (`guia://`, `skill://`, `persona://`) e skills publicadas (fail-closed, sem embeddings); o domínio vem do treino e o chapéu de tom da persona do acesso. Canal vivo com o hub: **REST**. “Fase 1” neste arquivo é jargão da data da proposta — Socket de consumer **não** é fase seguinte.
 
 Os apêndices A–C registram o diagnóstico e o aceite **na data da proposta**. Gaps listados lá já foram entregues (salvo parser Firebird para SQL livre).
 
@@ -107,7 +107,8 @@ O validador **não** recusa `TOP` (só envelopes internos). Alias sem `AS` em co
 - `obter_skill.consultasExemplo`; `asOf` no timezone do acesso.
 - `atualizar_dialeto`; `validar_skill` não despublica em silêncio.
 - `pergunta` obrigatória; envelope slim de `buscar_contexto`; FTS + `conhecimentos[]`.
-- `inspecionar_consulta` em validada / `rascunho_revalidacao`.
+- `inspecionar_consulta` em validada / `rascunho_revalidacao` (amostra crua; `SELECT *` de uma tabela).
+- Persona no acesso (`atualizar_persona` / `persona://`); `exportar_anexo`; `skillIds` omitido = união das publicadas.
 
 ## Apêndice B — Gaps do teste real (histórico)
 
@@ -125,7 +126,7 @@ Critérios da proposta (ainda válidos como regressão). Detalhe operacional: [m
 1. Sem `sql` executa o `sqlModelo`.
 2. Com `sql`, só o que está no pacote publicado.
 3. Fora do escopo → código dedicado + nomes próximos.
-4. `SELECT *`, mutação, segundo comando e estrela em subquery recusados.
+4. `SELECT *`, mutação, segundo comando e estrela em subquery recusados em `consultar_dados` / treino. Exceção viva: `inspecionar_consulta` aceita `SELECT *` cru de **uma** tabela do allowlist (teto 100, sem máscara).
 5. Sem `WHERE` e sem agregação → `CONSULTA_SEM_RECORTE`.
 6. Paginação sem `ORDER BY` recusada.
 7. `truncated` só com linha a mais que o teto.

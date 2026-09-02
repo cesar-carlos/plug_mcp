@@ -187,19 +187,18 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
   };
 };
 
-/** Enriquecimento (`validado_execucao`/`inferido`) não apaga classe confirmada pelo usuário. */
+/**
+ * Só `confirmado_usuario` altera a classe. Perfil/`validado_execucao`/`inferido` preenchem
+ * tipo/formato/min/max e não reescrevem privacidade — mesmo depois da origem virar
+ * `validado_execucao` (segundo merge no `enriquecer=completo`).
+ */
 export const sensibilidadeAposMerge = (input: {
   readonly existenteOrigem: OrigemFato;
   readonly existenteSensibilidade: SensibilidadeColuna;
   readonly incomingOrigem: OrigemFato;
   readonly incomingSensibilidade?: SensibilidadeColuna | null;
 }): SensibilidadeColuna => {
-  const preservar =
-    input.existenteOrigem === "confirmado_usuario" && input.incomingOrigem !== "confirmado_usuario";
-  if (preservar) {
-    return input.existenteSensibilidade;
-  }
-  if (input.incomingSensibilidade) {
+  if (input.incomingOrigem === "confirmado_usuario" && input.incomingSensibilidade) {
     return parseSensibilidadeColuna(input.incomingSensibilidade);
   }
   return input.existenteSensibilidade;

@@ -23,4 +23,15 @@ describe("sensibilidadeAposMerge", () => {
       }),
     ).toBe("segredo");
   });
+
+  it("segundo merge de perfil não reescreve classe depois da origem virar validado_execucao", () => {
+    expect(
+      sensibilidadeAposMerge({
+        existenteOrigem: "validado_execucao",
+        existenteSensibilidade: "livre",
+        incomingOrigem: "validado_execucao",
+        incomingSensibilidade: "pessoal",
+      }),
+    ).toBe("livre");
+  });
 });

@@ -1,13 +1,29 @@
 import type { ConsultaSemantica } from "../../../domain/entities/consulta-semantica.js";
-import { colunaNomeQuantidade, metricaEhMedida } from "../../../domain/entities/metrica-medida.js";
+import {
+  colunaNomeQuantidade,
+  metricaEhMedida,
+  metricasMedidaSemDefinicao,
+} from "../../../domain/entities/metrica-medida.js";
 import type { Skill } from "../../../domain/entities/skill.js";
 import { overlapCapacidade } from "./cobertura-skill.js";
 
 export interface ConsultaSemanticaSugerida {
   readonly versao: 1;
-  readonly metrica: string;
+  readonly metrica?: string;
   readonly dimensoes?: readonly string[];
   readonly colunaData?: string;
+  readonly filtros?: readonly {
+    readonly coluna: string;
+    readonly op: "=";
+    readonly param: string;
+  }[];
+  readonly modo?: "listagem";
+}
+
+export interface MetricaSemOverlay {
+  readonly alias: string;
+  readonly skillId: string;
+  readonly nextAction: "atualizar_skill";
 }
 
 const HAYSTACK_QUANTIDADE = "quantidade volume qtd qtde parcelas";
@@ -108,7 +124,66 @@ export const esqueletoConsultaSemantica = (
       },
     });
   });
-  return escolherEsqueleto(candidatos);
+  return escolherEsqueleto(candidatos) ?? esqueletoListagem(skill);
+};
+
+const uniqueNomes = (nomes: readonly string[]): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const nome of nomes) {
+    const trimmed = nome.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+};
+
+const esqueletoListagem = (skill: Skill): ConsultaSemanticaSugerida | undefined => {
+  if (skill.escopo.metricasSaida.some(metricaEhMedida)) {
+    return undefined;
+  }
+  const dimensoes = uniqueNomes([
+    ...skill.escopo.graoResultado,
+    ...Object.values(skill.escopo.graoPorTabela).flat(),
+    ...(skill.escopo.metricasSaida[0]?.dimensoesPermitidas ?? []),
+  ]);
+  const filtros = skill.params.map((param) => ({
+    coluna: param.nome,
+    op: "=" as const,
+    param: param.nome,
+  }));
+  if (dimensoes.length === 0 && filtros.length === 0) {
+    return undefined;
+  }
+  return {
+    versao: 1,
+    modo: "listagem",
+    ...(dimensoes.length > 0 ? { dimensoes } : {}),
+    ...(filtros.length > 0 ? { filtros } : {}),
+  };
+};
+
+export const metricasSemOverlayDasSkills = (skills: readonly Skill[]): MetricaSemOverlay[] => {
+  const out: MetricaSemOverlay[] = [];
+  const seen = new Set<string>();
+  for (const skill of skills) {
+    for (const metrica of metricasMedidaSemDefinicao(skill.escopo)) {
+      const key = `${skill.id}:${metrica.alias.toLowerCase()}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      out.push({ alias: metrica.alias, skillId: skill.id, nextAction: "atualizar_skill" });
+    }
+  }
+  return out;
 };
 
 export const esqueletoDaPrimeiraSkillComKpi = (
@@ -118,25 +193,34 @@ export const esqueletoDaPrimeiraSkillComKpi = (
   const candidatos: CandidatoEsqueleto[] = [];
   skills.forEach((skill, skillIndex) => {
     const esqueleto = esqueletoConsultaSemantica(skill, query);
-    if (!esqueleto) {
+    if (!esqueleto || esqueleto.modo === "listagem") {
       return;
     }
+    const metricaAlias = esqueleto.metrica ?? "";
     const fromIr =
       skill.consultaSemantica !== null &&
-      skill.consultaSemantica.metrica.toLowerCase() === esqueleto.metrica.toLowerCase();
+      metricaAlias.length > 0 &&
+      skill.consultaSemantica.metrica.toLowerCase() === metricaAlias.toLowerCase();
     const metrica = skill.escopo.metricasSaida.find(
-      (item) => item.alias.toLowerCase() === esqueleto.metrica.toLowerCase(),
+      (item) => item.alias.toLowerCase() === metricaAlias.toLowerCase(),
     );
     candidatos.push({
-      score: overlapCapacidade(
-        query,
-        haystackKpi(esqueleto.metrica, metrica?.definicao, metrica?.grao),
-      ),
+      score: overlapCapacidade(query, haystackKpi(metricaAlias, metrica?.definicao, metrica?.grao)),
       fromIr,
       hasDefinicao: Boolean(metrica?.definicao?.trim()),
       order: skillIndex,
       esqueleto,
     });
   });
-  return escolherEsqueleto(candidatos);
+  const kpi = escolherEsqueleto(candidatos);
+  if (kpi) {
+    return kpi;
+  }
+  for (const skill of skills) {
+    const listagem = esqueletoListagem(skill);
+    if (listagem) {
+      return listagem;
+    }
+  }
+  return undefined;
 };

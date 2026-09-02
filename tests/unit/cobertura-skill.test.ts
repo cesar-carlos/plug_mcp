@@ -3,6 +3,7 @@ import { PACOTE_VERSAO_ATUAL, escopoVazio } from "../../src/domain/entities/esco
 import type { Skill } from "../../src/domain/entities/skill.js";
 import {
   coberturaDeSkill,
+  comporFatiasBusca,
   haystackCertificado,
 } from "../../src/application/use-cases/shared/cobertura-skill.js";
 import { stemPortugues } from "../../src/domain/entities/stem-portugues.js";
@@ -60,5 +61,96 @@ describe("coberturaDeSkill", () => {
     });
     expect(haystackCertificado(skill)).not.toMatch(/integer/);
     expect(coberturaDeSkill(skill, "integer").cobertura).toBe("desconhecida");
+  });
+
+  it("negação na descrição não conta estoque como termo encontrado", () => {
+    const skill = skillOf({
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao: "Não agrega estoque e não autoriza cruzar vendas.",
+    });
+    const cob = coberturaDeSkill(skill, "estoque mínimo do produto");
+    expect(cob.termosEncontrados).not.toContain(stemPortugues("estoque"));
+    expect(cob.termosEncontrados).toContain(stemPortugues("produto"));
+    expect(cob.cobertura).not.toBe("completa");
+    expect(haystackCertificado(skill)).not.toMatch(/estoqu/i);
+    expect(haystackCertificado(skill)).not.toMatch(/vendas/i);
+  });
+
+  it("segunda cláusula de negação não deixa vendas no haystack", () => {
+    const skill = skillOf({
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao: "Não agrega estoque e não autoriza cruzar vendas.",
+    });
+    expect(coberturaDeSkill(skill, "cruzar vendas").termosEncontrados).not.toContain(
+      stemPortugues("vendas"),
+    );
+  });
+
+  it("listar produtos ativos continua cobertura completa", () => {
+    const skill = skillOf({
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao: "Listar produtos ativos. Não agrega estoque.",
+    });
+    expect(coberturaDeSkill(skill, "listar produtos ativos").cobertura).toBe("completa");
+  });
+
+  it("duas skills publicadas viram cobertura composta, não um cruzamento", () => {
+    const vendas = skillOf({
+      id: "v",
+      slug: "vendas",
+      nome: "Vendas",
+      descricao: "Vendas do período",
+    });
+    const receber = skillOf({
+      id: "r",
+      slug: "titulos-a-receber",
+      nome: "Títulos a receber",
+      descricao: "Contas a receber",
+    });
+    const comp = comporFatiasBusca([vendas, receber], "visão geral vendas receber");
+    expect(comp.cobertura).toBe("composta");
+    expect(comp.consultaPermitida).toBe(true);
+    expect(comp.fatias).toHaveLength(2);
+    expect(comp.fatias.every((f) => f.consultaPermitida)).toBe(true);
+  });
+
+  it("eixos sem skill (estoque/compras) ficam em termosSemSkill na composição", () => {
+    const vendas = skillOf({
+      id: "v",
+      slug: "vendas",
+      nome: "Vendas",
+      descricao: "Vendas do período",
+    });
+    const receber = skillOf({
+      id: "r",
+      slug: "titulos-a-receber",
+      nome: "Títulos a receber",
+      descricao: "Contas a receber",
+    });
+    const pagar = skillOf({
+      id: "p",
+      slug: "titulos-a-pagar",
+      nome: "Títulos a pagar",
+      descricao: "Contas a pagar",
+    });
+    const listing = skillOf({
+      id: "l",
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao: "Listar produtos ativos. Não agrega estoque.",
+    });
+    const comp = comporFatiasBusca(
+      [vendas, receber, pagar, listing],
+      "visão geral vendas receber pagar estoque compras",
+    );
+    expect(comp.cobertura).toBe("composta");
+    expect(comp.consultaPermitida).toBe(true);
+    expect(comp.termosSemSkill).toEqual(
+      expect.arrayContaining([stemPortugues("estoque"), stemPortugues("compras")]),
+    );
+    expect(comp.fatias.some((f) => f.slug === "listagem-de-produtos")).toBe(false);
   });
 });

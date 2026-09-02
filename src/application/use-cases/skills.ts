@@ -465,7 +465,11 @@ export class ValidarSkill {
     const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
     const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
     const escopo = reaplicarKpiOverlay(
-      overlayCardinalidadeDoGrafo(escopoFromSqlModelo(modelo), grafoRels, nomeById),
+      overlayCardinalidadeDoGrafo(
+        uniaoEscopos([escopoFromSqlModelo(modelo), skill.escopo]),
+        grafoRels,
+        nomeById,
+      ),
       skill.escopo,
     );
     await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopo);
@@ -1338,7 +1342,8 @@ export class ExpandirEscopo {
           throw DomainError.pacote({
             code: ERROR_CODES.JOIN_DESCONHECIDO,
             message: `Tabela ${extra} não tem relacionamento com o pacote atual.`,
-            hint: "Confirme o JOIN com confirmar_relacionamento (skillId) antes de expandir_escopo.",
+            hint: "Tabela sem igualdade coluna=coluna: inclua as colunas com confirmar_coluna (skillId) e consulte-a sozinha (WHERE ou agregação). Não invente JOIN — tipos diferentes não casam. confirmar_relacionamento só se houver igualdade real no ERP.",
+            nextAction: "confirmar_coluna",
           });
         }
       }

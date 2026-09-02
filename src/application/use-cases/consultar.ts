@@ -91,7 +91,13 @@ import {
   pickSkillInProgress,
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
-import { coberturaDeSkill, tokensCapacidade } from "./shared/cobertura-skill.js";
+import {
+  coberturaDeSkill,
+  tokensCapacidade,
+  comporFatiasBusca,
+  type FatiaContexto,
+} from "./shared/cobertura-skill.js";
+import { stemsNegadosNaDescricao } from "../../domain/entities/negacao-cobertura.js";
 import { resolverSkillsPorSinonimos } from "./shared/resolver-sinonimos.js";
 import {
   consultaAprendidaRelevante,
@@ -103,7 +109,9 @@ import {
 } from "./shared/montar-conhecimentos.js";
 import {
   esqueletoDaPrimeiraSkillComKpi,
+  metricasSemOverlayDasSkills,
   type ConsultaSemanticaSugerida,
+  type MetricaSemOverlay,
 } from "./shared/esqueleto-semantico.js";
 import {
   formatarTagsTelemetriaBusca,
@@ -914,13 +922,14 @@ export class ValidarConsulta {
       page: input.options?.page,
       pageSize: input.options?.page_size,
     });
+    const expandido = expandirInListas(ast.sql, input.params ?? {});
     await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.executeSql({
         accessToken,
         agentId: acesso.agentId,
         clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-        sql: sqlValidacaoVazia(acesso.dialeto, sqlParaOdbc(ast.sql)),
-        params: bindParamsForValidation(ast.sql, input.params),
+        sql: sqlValidacaoVazia(acesso.dialeto, sqlParaOdbc(expandido.sql)),
+        params: bindParamsForValidation(expandido.sql, expandido.params),
         options: { maxRows: 1 },
       }),
     );
@@ -1218,7 +1227,7 @@ export class BuscarContexto {
   ): Promise<{
     success: true;
     consultaPermitida: boolean;
-    cobertura: "completa" | "parcial" | "desconhecida";
+    cobertura: "completa" | "parcial" | "desconhecida" | "composta";
     candidatos: {
       skillId: string;
       slug: string;
@@ -1227,14 +1236,16 @@ export class BuscarContexto {
       termosEncontrados: string[];
       termosAusentes: string[];
     }[];
+    fatias?: readonly FatiaContexto[];
     skillsPublicadas: readonly SkillResumoContexto[];
     skillsParaTreino: readonly SkillResumoContexto[];
     consultasAprendidas: readonly ConsultaAprendidaResumo[];
     conhecimentos: readonly HitConhecimento[];
     consultaSemanticaSugerida?: ConsultaSemanticaSugerida;
+    metricasSemOverlay?: readonly MetricaSemOverlay[];
     grafoParaTreino?: { tabelas: readonly TabelaGrafo[]; anotacoes: readonly unknown[] };
     fluxoTreino?: FluxoTreino;
-    gap?: { code: "SKILL_GAP"; hint: string };
+    gap?: { code: "SKILL_GAP"; hint: string; termosAusentes?: readonly string[] };
     blockingReason?: "SKILL_NOT_PUBLISHED";
     nextAction?: string;
     hint?: string;
@@ -1314,6 +1325,16 @@ export class BuscarContexto {
       STATUS_TREINO,
     );
     const tokens = tokensCapacidade(query);
+    const consultasPorSkill = new Map<string, string[]>();
+    for (const consulta of consultasAprendidas) {
+      for (const skillId of consulta.skillIds) {
+        const lista = consultasPorSkill.get(skillId) ?? [];
+        lista.push(consulta.id);
+        consultasPorSkill.set(skillId, lista);
+      }
+    }
+    const publicadasNoAgent = todas.filter((item) => item.status === "publicada");
+    const composicao = comporFatiasBusca(publicadasNoAgent, query, sinonimos, consultasPorSkill);
     const candidatos = skillsPublicadas.map((skill) => {
       const { cobertura, termosEncontrados, termosAusentes } = coberturaDeSkill(
         skill,
@@ -1329,32 +1350,43 @@ export class BuscarContexto {
         termosAusentes,
       };
     });
-    const coberturaGeral = candidatos.some((item) => item.cobertura === "completa")
-      ? "completa"
-      : candidatos.some((item) => item.cobertura === "parcial")
-        ? "parcial"
-        : "desconhecida";
-    const consultaPermitida = coberturaGeral === "completa";
-    const publicadasNoAgent = todas.filter((item) => item.status === "publicada");
+    const coberturaGeral = composicao.cobertura;
+    const consultaPermitida = composicao.consultaPermitida;
     const capazesTreino = skillsParaTreinoUnidas.filter(
       (item) => coberturaDeSkill(item, query, sinonimos).cobertura === "completa",
     );
-    const idsCompletas = new Set(
-      candidatos.filter((item) => item.cobertura === "completa").map((item) => item.skillId),
+    const idsFatias = new Set(composicao.fatias.map((item) => item.skillId));
+    const skillsCompletas = publicadasNoAgent.filter((skill) =>
+      composicao.fatias.some(
+        (fatia) => fatia.skillId === skill.id && fatia.cobertura === "completa",
+      ),
     );
-    const skillsCompletas = skillsPublicadas.filter((skill) => idsCompletas.has(skill.id));
+    const skillsFatias = publicadasNoAgent.filter((skill) => idsFatias.has(skill.id));
+    const skillsParaEsqueleto = skillsCompletas.length > 0 ? skillsCompletas : skillsFatias;
     const emAndamento = pickSkillInProgress(capazesTreino);
-    const skillFluxo = consultaPermitida ? (skillsCompletas[0] ?? null) : emAndamento;
+    const skillFluxo =
+      coberturaGeral === "completa"
+        ? (skillsCompletas[0] ?? null)
+        : coberturaGeral === "composta"
+          ? null
+          : emAndamento;
     const fluxoTreino = skillFluxo
       ? await fluxoForAgentSkill(this.grafo, acesso.agentId, skillFluxo)
       : undefined;
-    const precisaListar = !consultaPermitida && publicadasNoAgent.length > 0;
+    const precisaListar =
+      !consultaPermitida && coberturaGeral !== "composta" && publicadasNoAgent.length > 0;
     const hintCruzamento = perguntaPareceCruzamento(query) ? ` ${HINT_SKILL_GAP_CRUZAMENTO}` : "";
+    const gapHintComposta =
+      composicao.termosSemSkill.length > 0
+        ? `Eixos sem skill (${composicao.termosSemSkill.slice(0, 6).join(", ")}): SKILL_GAP só desses termos. Orquestre consultar_dados por fatia; não cruze skills num SELECT. Não invente JOIN.`
+        : "Orquestre consultar_dados por fatia (skillIds de cada fatia). Não cruze skills num SELECT só. Não invente JOIN.";
     const gapHint = emAndamento
       ? `Há skill em andamento "${emAndamento.nome}" (${emAndamento.status}). Continue o fluxo: ${fluxoTreino?.proximoPasso ?? "validar_skill"}. Não chame consultar_dados.`
-      : precisaListar
-        ? `A busca por termos não prova ausência. Chame listar_skills antes de desistir.${hintCruzamento} Não invente tabela, coluna nem JOIN.`
-        : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
+      : coberturaGeral === "composta"
+        ? gapHintComposta
+        : precisaListar
+          ? `A busca por termos não prova ausência. Chame listar_skills antes de desistir.${hintCruzamento} Não invente tabela, coluna nem JOIN.`
+          : "Não há skill publicada capaz (dado ou cruzamento). Não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.";
     const lacunaElegivel = query.trim().length >= 8 && tokens.length >= 1;
     const skillNaoPublicada = !consultaPermitida && capazesTreino.length > 0;
     if (this.aprendizado) {
@@ -1436,23 +1468,48 @@ export class BuscarContexto {
           .flatMap((item) => item.termosAusentes),
       ),
     ].slice(0, 3);
-    const hintRegra = hintRegraParcial(
-      coberturaGeral,
-      conhecimentos,
-      candidatos.length > 0,
-      termosAusentesHint,
-      query,
+    const stemsNegados = new Set(
+      publicadasNoAgent.flatMap((skill) => [...stemsNegadosNaDescricao(skill.descricao)]),
     );
+    const omitirSinonimoPorNegacao = termosAusentesHint.some((termo) => stemsNegados.has(termo));
+    const hintRegra =
+      coberturaGeral === "composta"
+        ? undefined
+        : hintRegraParcial(
+            coberturaGeral,
+            conhecimentos,
+            candidatos.length > 0,
+            termosAusentesHint,
+            query,
+            omitirSinonimoPorNegacao,
+          );
     const consultaSemanticaSugerida = consultaPermitida
-      ? esqueletoDaPrimeiraSkillComKpi(skillsCompletas, query)
+      ? esqueletoDaPrimeiraSkillComKpi(skillsParaEsqueleto, query)
       : undefined;
+    const metricasSemOverlay = consultaPermitida
+      ? metricasSemOverlayDasSkills(skillsParaEsqueleto)
+      : [];
+    const hintComposta =
+      coberturaGeral === "composta"
+        ? "Cobertura composta: chame consultar_dados por fatia (não um SELECT cruzado). Não cruze skills. Não invente JOIN entre skills."
+        : undefined;
     const hintSemantico = consultaSemanticaSugerida
-      ? "Prefira consultar_dados.consultaSemantica com metrica/dimensões do esqueleto; SQL livre só se faltar elemento certificado."
+      ? consultaSemanticaSugerida.modo === "listagem"
+        ? "Listagem certificada: consultaSemanticaSugerida traz dimensões/filtros (sem métrica de soma). Não invente definicao de KPI. SQL livre se faltar elemento certificado."
+        : "Prefira consultar_dados.consultaSemantica com metrica/dimensões do esqueleto; SQL livre só se faltar elemento certificado."
       : undefined;
-    const hint = [hintAprendidas, hintRegra, hintSemantico].filter(Boolean).join(" ") || undefined;
+    const hintOverlay =
+      metricasSemOverlay.length > 0 && !consultaSemanticaSugerida
+        ? "Medida no pacote sem overlay (metricasSemOverlay): não invente definicao; overlay só com atualizar_skill / registrar_aprendizado tipo=metrica confirmado."
+        : undefined;
+    const hint =
+      [hintAprendidas, hintComposta, hintRegra, hintSemantico, hintOverlay]
+        .filter(Boolean)
+        .join(" ") || undefined;
     const gapCode: GapBusca = skillNaoPublicada
       ? "SKILL_NOT_PUBLISHED"
-      : consultaPermitida
+      : consultaPermitida &&
+          (coberturaGeral !== "composta" || composicao.termosSemSkill.length === 0)
         ? "none"
         : "SKILL_GAP";
     const slotNarrativa = conhecimentos.some(
@@ -1485,11 +1542,13 @@ export class BuscarContexto {
       consultaPermitida,
       cobertura: coberturaGeral,
       candidatos,
+      ...(coberturaGeral === "composta" ? { fatias: composicao.fatias } : {}),
       skillsPublicadas: skillsPublicadas.map(resumoSkill),
       skillsParaTreino: capazesTreino.map(resumoSkill),
       consultasAprendidas: consultasAprendidas.map(resumoConsulta),
       conhecimentos,
       consultaSemanticaSugerida,
+      ...(metricasSemOverlay.length > 0 ? { metricasSemOverlay } : {}),
       grafoParaTreino: consultaPermitida
         ? undefined
         : {
@@ -1499,13 +1558,20 @@ export class BuscarContexto {
       fluxoTreino,
       blockingReason: skillNaoPublicada ? "SKILL_NOT_PUBLISHED" : undefined,
       nextAction: skillNaoPublicada ? (fluxoTreino?.proximoPasso ?? "publicar_skill") : undefined,
-      gap:
-        consultaPermitida || skillNaoPublicada
-          ? undefined
-          : {
-              code: "SKILL_GAP",
-              hint: gapHint,
-            },
+      gap: skillNaoPublicada
+        ? undefined
+        : coberturaGeral === "composta" && composicao.termosSemSkill.length > 0
+          ? {
+              code: "SKILL_GAP" as const,
+              hint: gapHintComposta,
+              termosAusentes: composicao.termosSemSkill,
+            }
+          : consultaPermitida
+            ? undefined
+            : {
+                code: "SKILL_GAP" as const,
+                hint: gapHint,
+              },
       hint,
     };
   }

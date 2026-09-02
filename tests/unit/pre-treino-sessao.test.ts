@@ -78,6 +78,9 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/consultaPermitida/);
     expect(PRE_TREINO_SESSAO).toContain("guia://paginacao");
     expect(PRE_TREINO_SESSAO).toMatch(/INVALID_SQL\/1033/);
+    expect(PRE_TREINO_SESSAO).toMatch(/4104/);
+    expect(PRE_TREINO_SESSAO).toContain("fatias");
+    expect(PRE_TREINO_SESSAO).toMatch(/teto 64/);
     expect(PRE_TREINO_SESSAO).toContain("skill://");
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
     expect(PRE_TREINO_SESSAO).toContain("consultaAprendidaId");

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   esqueletoConsultaSemantica,
   esqueletoDaPrimeiraSkillComKpi,
+  metricasSemOverlayDasSkills,
 } from "../../src/application/use-cases/shared/esqueleto-semantico.js";
 import {
   PACOTE_VERSAO_ATUAL,
@@ -189,5 +190,36 @@ describe("esqueletoConsultaSemantica", () => {
       }),
     );
     expect(esqueletoConsultaSemantica(skill, "quanto receber")).toBeUndefined();
+  });
+
+  it("listagem sem SUM sugere dimensões e filtros sem inventar definicao", () => {
+    const skill = skillOf(
+      parseEscopoSkill({
+        graoResultado: ["CodProduto"],
+        metricasSaida: [{ alias: "PrecoVenda", expr: "p.PrecoVenda" }],
+      }),
+    );
+    const listing = {
+      ...skill,
+      params: [{ nome: "ativo", descricao: "flag", obrigatorio: true, tipo: "string" as const }],
+    };
+    expect(esqueletoConsultaSemantica(listing, "listar produtos ativos")).toEqual({
+      versao: 1,
+      modo: "listagem",
+      dimensoes: ["CodProduto"],
+      filtros: [{ coluna: "ativo", op: "=", param: "ativo" }],
+    });
+    expect(metricasSemOverlayDasSkills([listing])).toEqual([]);
+  });
+
+  it("lista medida de agregação sem definicao em metricasSemOverlay", () => {
+    const skill = skillOf(
+      parseEscopoSkill({
+        metricasSaida: [{ alias: "ValorTotal", expr: "SUM(p.ValorTotal)" }],
+      }),
+    );
+    expect(metricasSemOverlayDasSkills([skill])).toEqual([
+      { alias: "ValorTotal", skillId: "s1", nextAction: "atualizar_skill" },
+    ]);
   });
 });

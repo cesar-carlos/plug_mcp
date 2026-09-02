@@ -13,7 +13,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- Envelope de `buscar_contexto` com cobertura `composta` e `fatias[]`: pergunta de gestão (vendas + receber + pagar) orquestra várias `consultar_dados` em vez de um único `SKILL_GAP`. Não cruza SELECT entre skills. Eixos sem skill ficam em `gap.termosAusentes`.
+- `consultaSemanticaSugerida` de listagem certificada (`modo: listagem`) só com dimensões/filtros; `metricasSemOverlay[]` quando a medida não tem `definicao`. Não inventa overlay de `PrecoVenda`/`ValorTotal`.
 - Tool `atualizar_persona`: `nomePersona` (teto 80) + `instrucoesPersona` (teto 4000) no **acesso** (usuário+agentId+token). Confirmação obrigatória; string vazia ou `null` limpa o campo; recusa texto que pareça senha/token/JWT. `listar_acessos` / `verificar_acesso` / resource `persona://{acessoId}` (Bearer) devolvem nome+instruções. `initialize`: 0 acessos = só SQL comum; 1 acesso = SQL + chapéu depois (bloco delimitado: instruções do usuário, não override do SQL); N acessos = não concatenar — a IA lê `listar_acessos`. Sessão que começa com 1 acesso e ganha o 2º (`adicionar_acesso`) **mantém o chapéu 1** em `initialize.instructions` até reconectar; `pre_treino` relê o banco. **Várias personas = vários acessos** (`adicionar_acesso`); um acesso = um chapéu. O mesmo `agentId` entre usuários MCP diferentes pode ter textos diferentes. Persona oriente tom/uso; não recorta skills nem licencia tabela/JOIN/`consultaPermitida`. Migration `0021_acesso_persona.sql` (colunas nulas).
+- Tool `exportar_anexo`: converte 1 handle de `consultar_dados` (jpeg/png → conteúdo MCP `image`; PDF → `resource`). Mesmos portões de consulta. Inspeção devolve stub **sem** handle; handle legado de inspeção → `MIDIA_ORIGEM_INVALIDA`. Pessoal/segredo → `PRIVACIDADE_NEGADA` (não use inspeção como segunda via). Cap 64 handles/usuário em memória.
 - `GET /docs/mcp/error-mapping.md` serve a matriz de erros (mesmo path de `documentationUrl`). Sem HTML extra.
 - `faltas[]` de medida (`kind: kpi`, `nextAction: atualizar_skill`) quando há agregação/`SUM` sem `definicao` — **não** bloqueia `podeLiberar` nem o pacote mínimo. CAST de data/`Situacao` não conta como KPI.
 - `publicar_skill` sem `politicaConsulta` devolve o default (`maxRows: 500`, `timeoutMs: 30000`) no `resumoPublicacao`; na confirmação o servidor grava esse default. Sem recorte empresa/filial nem `exigirRecorteTemporal`.
@@ -23,6 +26,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Changed
 
+- `validar_skill` une o escopo do `sqlModelo` ao pacote já persistido (não reconstrói o allowlist pelo SELECT). Fotos/JOINs de `confirmar_coluna` / `confirmar_relacionamento` sobrevivem à validação.
+- `IN (:lista)`: `validar_consulta` também expande o array; teto documentado de 64 itens (`VALIDATION_ERROR` `source: mcp`) — recorte a lista, não interpole literais. Transporte ODBC/hub de listas grandes permanece no `plug_agente`.
 - `consultaSemantica` honra `tipoJoin` do pacote (`LEFT JOIN` se left; `INNER JOIN` se inner/ausente). `validar_consulta` aceita `options.page`/`page_size` e aplica a mesma regra de `consultar_dados` (TOP/LIMIT no SELECT externo incompatível com página). `consultaSemantica.limite` + `options.page` recusa misturar os dois padrões de corte.
 - `enriquecer=completo`: até 16 `sql.execute` com concorrência 4 (`PERFIL_SQL_CONCURRENCY`), sem fundir `getPolicy` e sem retry. Falha isolada continua aviso; o teto 16 e o fail-closed não mudam.
 - Cliente REST do hub: AbortSignal de `sql.execute` acompanha o wait do bridge (`options.timeout_ms` + 5s, teto 360s) — não corta em 35s; `PLUG_SERVER_HTTP_TIMEOUT_MS` é piso de login/policy (teto Zod 60s). Dois `http(s).Agent` (auth 4 / SQL 16). Probe TCP keepalive 30s (`keepAliveMsecs`); idle até o peer (Nginx `keepalive_timeout`). Sem retry de SQL. Borda Nginx (`proxy_read_timeout`, ex. 180s) ainda corta skills ~≥175s mesmo com abort MCP ~310s.
@@ -50,6 +55,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- `confirmar_coluna` `livre` não volta a `pessoal`/`segredo` no perfil (`enriquecer=completo`): só origem `confirmado_usuario` altera a classe; o segundo merge `validado_execucao` não reinfere privacidade.
+- SQL Server **4104** (`multi-part identifier`) no wrap de paginação gerenciada entra no mesmo ramo de **1033**: `INVALID_SQL` `sql_engine`, hint TOP n sem `options.page`, `nextAction: consultar_dados` (não `validar_consulta`). O rewrite do wrap continua no `plug_agente`.
+- Negação na descrição da skill (“Não agrega estoque”) não entra em `termosEncontrados` da cobertura certificada. Cláusulas compostas (“não … e não …”) não deixam o segundo complemento no haystack. `SKILL_GAP` por termo negado não pede sinônimo.
+- `expandir_escopo` sem igualdade coluna=coluna aponta `nextAction: confirmar_coluna` (tabela isolada) em vez de convidar JOIN inventado.
 - `npm run build`: `ToolContent` de resource exige `blob` ou `text` (união, como o SDK MCP). PDF de `exportar_anexo` já enviava `blob`.
 - `expandir_escopo` em skill publicada não copia JOIN só `inferido` (`herdar_catalogo`) para o pacote: mesma origem mínima de `criar_skill`/`validar_skill` (`confirmado_usuario` / `validado_execucao`). O validador só autoriza o JOIN depois de `confirmar_relacionamento`.
 - `descobrir_tabela` recorta colunas e arestas ao pacote publicado (fingerprints como `obter_skill`), sem vizinhança extra do grafo.

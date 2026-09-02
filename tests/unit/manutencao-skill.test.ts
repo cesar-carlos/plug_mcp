@@ -342,7 +342,22 @@ describe("manutenção de skill", () => {
     ).rejects.toMatchObject({
       code: ERROR_CODES.JOIN_DESCONHECIDO,
       source: "sql",
+      nextAction: "confirmar_coluna",
     });
+    try {
+      await expandir.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: createdSkill.skill.id,
+        tabelas: ["cliente"],
+        confirmadoPeloUsuario: true,
+      });
+    } catch (error) {
+      expect((error as { hint: string }).hint).toMatch(/confirmar_coluna/);
+      expect((error as { hint: string }).hint).toMatch(/Não invente JOIN/i);
+      expect((error as { hint: string }).hint).not.toMatch(
+        /Confirme o JOIN com confirmar_relacionamento/,
+      );
+    }
   });
 
   it("expandir_escopo não copia JOIN só inferido de herdar_catalogo; após confirmar o validador aceita", async () => {

@@ -257,6 +257,21 @@ describe("hintRegraParcial", () => {
     expect(hintRegraParcial("desconhecida", [], true)).toBeUndefined();
   });
 
+  it("cobertura parcial por termo negado não pede sinônimo", () => {
+    const hint = hintRegraParcial(
+      "parcial",
+      [],
+      true,
+      ["estoqu"],
+      "estoque mínimo do produto",
+      true,
+    );
+    expect(hint).toMatch(/obter_skill/);
+    expect(hint).toMatch(/estoqu/);
+    expect(hint).not.toMatch(/sinonimo/);
+    expect(hint).toMatch(/treinar_com_sql/);
+  });
+
   it("desconhecida com regra skill-scoped pede obter_skill sem sinônimo", () => {
     const conhecimentos = [
       {
