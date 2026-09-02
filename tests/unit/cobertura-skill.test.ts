@@ -88,6 +88,33 @@ describe("coberturaDeSkill", () => {
     );
   });
 
+  it("lista após não autoriza cruzar não casa o segundo termo", () => {
+    const skill = skillOf({
+      slug: "listagem-de-produtos",
+      nome: "Listagem de produtos",
+      descricao:
+        "Listar produtos ativos. Não agrega estoque e não autoriza cruzar vendas, compras nem títulos.",
+    });
+    const hay = haystackCertificado(skill);
+    expect(hay).not.toMatch(/estoqu/i);
+    expect(hay).not.toMatch(/vendas/i);
+    expect(hay).not.toMatch(/compras/i);
+    expect(hay).not.toMatch(/t[ií]tulos/i);
+    expect(hay).toMatch(/produtos/i);
+    const visao = coberturaDeSkill(
+      skill,
+      "visão geral da empresa no mês de julho 2026 vendas faturamento estoque compras fluxo de caixa",
+    );
+    expect(visao.termosEncontrados).not.toContain(stemPortugues("compras"));
+    expect(visao.termosEncontrados).not.toContain(stemPortugues("vendas"));
+    expect(visao.termosAusentes).toEqual(
+      expect.arrayContaining([stemPortugues("compras"), stemPortugues("estoque")]),
+    );
+    const estoqueMinimo = coberturaDeSkill(skill, "estoque mínimo do produto");
+    expect(estoqueMinimo.termosEncontrados).not.toContain(stemPortugues("estoque"));
+    expect(estoqueMinimo.termosEncontrados).toContain(stemPortugues("produto"));
+  });
+
   it("listar produtos ativos continua cobertura completa", () => {
     const skill = skillOf({
       slug: "listagem-de-produtos",
@@ -140,7 +167,8 @@ describe("coberturaDeSkill", () => {
       id: "l",
       slug: "listagem-de-produtos",
       nome: "Listagem de produtos",
-      descricao: "Listar produtos ativos. Não agrega estoque.",
+      descricao:
+        "Listar produtos ativos. Não agrega estoque e não autoriza cruzar vendas, compras nem títulos.",
     });
     const comp = comporFatiasBusca(
       [vendas, receber, pagar, listing],

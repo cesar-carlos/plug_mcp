@@ -30,7 +30,7 @@ import type {
   StatusFato,
   TabelaGrafo,
 } from "../../../domain/entities/grafo.js";
-import { decidirMerge, sensibilidadeAposMerge } from "../../../domain/entities/merge-fato.js";
+import { decidirMerge, mergeCamposColuna } from "../../../domain/entities/merge-fato.js";
 import { parseParametroSkillList } from "../../../domain/entities/skill.js";
 import { parseEscopoPadrao, parseEscopoSkill } from "../../../domain/entities/escopo.js";
 import type { Cardinalidade, PapelColuna } from "../../../domain/entities/escopo.js";
@@ -424,45 +424,23 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         conflito: false,
       };
     }
-    const merge = decidirMerge(
-      {
-        origem: existing.origem,
-        status: existing.status,
-        descricao: existing.descricao,
-        dicionario: existing.dicionario,
-        tipo: existing.tipo,
-        formato: existing.formato,
-      },
-      {
-        origem: input.origem,
-        status: "vigente",
-        descricao: input.descricao ?? null,
-        dicionario: input.dicionario ?? null,
-        tipo: input.tipo ?? null,
-        formato: input.formato ?? null,
-      },
-    );
-    if (!merge.aplicar) {
+    const merged = mergeCamposColuna(existing, input);
+    if (!merged) {
       return { coluna: existing, conflito: false };
     }
     const [row] = await this.conn()
       .update(schema.colunaGrafo)
       .set({
-        tipo: merge.tipo ?? existing.tipo,
-        nullable: input.nullable ?? existing.nullable,
-        descricao: merge.descricao,
-        dicionario: merge.dicionario ?? existing.dicionario,
-        papel: input.papel ?? existing.papel,
-        formato: merge.formato ?? existing.formato,
-        perfil: input.perfil ?? existing.perfil,
-        sensibilidade: sensibilidadeAposMerge({
-          existenteOrigem: existing.origem,
-          existenteSensibilidade: existing.sensibilidade,
-          incomingOrigem: input.origem,
-          incomingSensibilidade: input.sensibilidade,
-        }),
-        origem: merge.origem,
-        status: merge.status,
+        tipo: merged.campos.tipo,
+        nullable: merged.campos.nullable,
+        descricao: merged.campos.descricao,
+        dicionario: merged.campos.dicionario,
+        papel: merged.campos.papel,
+        formato: merged.campos.formato,
+        perfil: merged.campos.perfil,
+        sensibilidade: merged.campos.sensibilidade,
+        origem: merged.campos.origem,
+        status: merged.campos.status,
         autorUsuarioId: input.autorUsuarioId,
         updatedAt: new Date(),
       })
@@ -470,7 +448,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       .returning();
     return {
       coluna: toColuna(row!),
-      conflito: merge.conflito,
+      conflito: merged.conflito,
     };
   }
 

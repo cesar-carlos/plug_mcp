@@ -14,6 +14,7 @@ import {
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { PACOTE_VERSAO_ATUAL, parseEscopoSkill } from "../../src/domain/entities/escopo.js";
 import { parseTagsTelemetriaBusca } from "../../src/application/use-cases/shared/telemetria-busca.js";
+import { stemPortugues } from "../../src/domain/entities/stem-portugues.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { SilentTestLogger } from "../helpers/silent-logger.js";
 
@@ -993,6 +994,51 @@ describe("BuscarContexto", () => {
     expect(result.gap?.code).toBe("SKILL_GAP");
     const listing = result.candidatos.find((item) => item.slug === "listagem-de-produtos");
     expect(listing?.termosEncontrados ?? []).not.toContain("estoqu");
+    expect(`${result.hint ?? ""} ${result.gap?.hint ?? ""}`).not.toMatch(/sinonimo/);
+  });
+
+  it("compras na lista negada da descrição não autoriza a skill de produtos", async () => {
+    const { buscar, created, skills } = await setup();
+    const criar = async (slug: string, nome: string, descricao: string): Promise<void> => {
+      const row = await skills.create({
+        agentId,
+        slug,
+        nome,
+        descricao,
+        sqlModelo: "SELECT 1 AS n FROM dual d WHERE d.n > 0",
+        autorUsuarioId: created.usuarioId,
+      });
+      await skills.update(row.id, {
+        escopo: parseEscopoSkill({ tabelas: ["dual"], colunasPorTabela: { dual: ["n"] } }),
+      });
+      await skills.setStatus(row.id, "publicada");
+    };
+    await criar("vendas", "Vendas", "Vendas do período");
+    await criar("titulos-a-receber", "Títulos a receber", "Contas a receber");
+    await criar("titulos-a-pagar", "Títulos a pagar", "Contas a pagar");
+    await criar(
+      "listagem-de-produtos",
+      "Listagem de produtos",
+      "Listar produtos ativos. Não agrega estoque e não autoriza cruzar vendas, compras nem títulos.",
+    );
+    const result = await buscar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      query: "visão geral vendas receber pagar estoque compras",
+    });
+    const listing = result.candidatos.find((item) => item.slug === "listagem-de-produtos");
+    expect(listing?.termosEncontrados ?? []).not.toContain(stemPortugues("compras"));
+    expect(listing?.termosEncontrados ?? []).not.toContain(stemPortugues("estoque"));
+    expect(listing?.termosAusentes ?? []).toEqual(
+      expect.arrayContaining([stemPortugues("compras"), stemPortugues("estoque")]),
+    );
+    expect(result.cobertura).toBe("composta");
+    expect(result.fatias?.some((item) => item.slug === "listagem-de-produtos") ?? false).toBe(
+      false,
+    );
+    expect(result.gap?.code).toBe("SKILL_GAP");
+    expect(result.gap?.termosAusentes ?? []).toEqual(
+      expect.arrayContaining([stemPortugues("compras"), stemPortugues("estoque")]),
+    );
     expect(`${result.hint ?? ""} ${result.gap?.hint ?? ""}`).not.toMatch(/sinonimo/);
   });
 

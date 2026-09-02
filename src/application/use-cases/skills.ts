@@ -1,4 +1,4 @@
-import { DomainError } from "../../domain/errors/domain-error.js";
+import { DomainError, ERROR_SOURCE } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { Acesso } from "../../domain/entities/acesso.js";
 import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
@@ -1099,6 +1099,20 @@ export class ConfirmarColuna {
           origem: "confirmado_usuario",
           autorUsuarioId: uid,
         });
+        if (item.sensibilidade !== undefined && input.confirmadoPeloUsuario === true) {
+          const esperada = parseSensibilidadeColuna(item.sensibilidade);
+          if (
+            result.coluna.sensibilidade !== esperada ||
+            result.coluna.origem !== "confirmado_usuario"
+          ) {
+            throw new DomainError({
+              code: ERROR_CODES.VALIDATION_ERROR,
+              message: "A confirmação de sensibilidade não foi gravada no grafo.",
+              hint: "confirmar_coluna com confirmadoPeloUsuario aplica a classe (origem confirmado_usuario) mesmo após validado_execucao. Não trate success como alteração se a classe não mudou.",
+              source: ERROR_SOURCE.mcp,
+            });
+          }
+        }
         algum = algum || result.conflito;
       }
       return algum;

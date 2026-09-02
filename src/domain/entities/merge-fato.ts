@@ -1,6 +1,6 @@
 import type { OrigemFato, StatusFato } from "./grafo.js";
 import { origemRank } from "./grafo.js";
-import type { PapelColuna } from "./escopo.js";
+import type { PapelColuna, PerfilColuna } from "./escopo.js";
 import { parseSensibilidadeColuna, type SensibilidadeColuna } from "./privacidade.js";
 
 export interface FatoMerge {
@@ -191,6 +191,8 @@ export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResult
  * Só `confirmado_usuario` altera a classe. Perfil/`validado_execucao`/`inferido` preenchem
  * tipo/formato/min/max e não reescrevem privacidade — mesmo depois da origem virar
  * `validado_execucao` (segundo merge no `enriquecer=completo`).
+ * O inverso também vale: confirmação do dono aplica a classe mesmo se o rank atual
+ * for `validado_execucao` (`confirmar_coluna` não é no-op silencioso).
  */
 export const sensibilidadeAposMerge = (input: {
   readonly existenteOrigem: OrigemFato;
@@ -202,4 +204,86 @@ export const sensibilidadeAposMerge = (input: {
     return parseSensibilidadeColuna(input.incomingSensibilidade);
   }
   return input.existenteSensibilidade;
+};
+
+export const confirmacaoSensibilidadeVenceRank = (
+  incomingOrigem: OrigemFato,
+  incomingSensibilidade?: SensibilidadeColuna | null,
+): boolean => incomingOrigem === "confirmado_usuario" && incomingSensibilidade != null;
+
+export interface SnapshotColunaMerge {
+  readonly origem: OrigemFato;
+  readonly status: StatusFato;
+  readonly descricao: string | null;
+  readonly dicionario: string | null;
+  readonly tipo: string | null;
+  readonly formato: string | null;
+  readonly nullable: boolean | null;
+  readonly papel: PapelColuna | null;
+  readonly perfil: PerfilColuna | null;
+  readonly sensibilidade: SensibilidadeColuna;
+}
+
+export interface IncomingColunaMerge {
+  readonly origem: OrigemFato;
+  readonly descricao?: string | null;
+  readonly dicionario?: string | null;
+  readonly tipo?: string | null;
+  readonly formato?: string | null;
+  readonly nullable?: boolean | null;
+  readonly papel?: PapelColuna | null;
+  readonly perfil?: PerfilColuna | null;
+  readonly sensibilidade?: SensibilidadeColuna | null;
+}
+
+/**
+ * Privacidade é exceção ao rank: `confirmado_usuario` + classe aplica mesmo quando
+ * `decidirMerge.aplicar` é false (`validado_execucao` não bloqueia `confirmar_coluna`).
+ */
+export const mergeCamposColuna = (
+  existing: SnapshotColunaMerge,
+  incoming: IncomingColunaMerge,
+): { campos: SnapshotColunaMerge; conflito: boolean } | null => {
+  const merge = decidirMerge(
+    {
+      origem: existing.origem,
+      status: existing.status,
+      descricao: existing.descricao,
+      dicionario: existing.dicionario,
+      tipo: existing.tipo,
+      formato: existing.formato,
+    },
+    {
+      origem: incoming.origem,
+      status: "vigente",
+      descricao: incoming.descricao ?? null,
+      dicionario: incoming.dicionario ?? null,
+      tipo: incoming.tipo ?? null,
+      formato: incoming.formato ?? null,
+    },
+  );
+  const confirmaClasse = confirmacaoSensibilidadeVenceRank(incoming.origem, incoming.sensibilidade);
+  if (!merge.aplicar && !confirmaClasse) {
+    return null;
+  }
+  return {
+    campos: {
+      tipo: merge.tipo ?? existing.tipo,
+      formato: merge.formato ?? existing.formato,
+      descricao: merge.descricao,
+      dicionario: merge.dicionario ?? existing.dicionario,
+      nullable: incoming.nullable ?? existing.nullable,
+      papel: incoming.papel ?? existing.papel,
+      perfil: incoming.perfil ?? existing.perfil,
+      sensibilidade: sensibilidadeAposMerge({
+        existenteOrigem: existing.origem,
+        existenteSensibilidade: existing.sensibilidade,
+        incomingOrigem: incoming.origem,
+        incomingSensibilidade: incoming.sensibilidade,
+      }),
+      origem: confirmaClasse ? "confirmado_usuario" : merge.origem,
+      status: merge.aplicar ? merge.status : existing.status,
+    },
+    conflito: merge.conflito,
+  };
 };

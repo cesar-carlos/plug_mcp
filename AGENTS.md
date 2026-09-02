@@ -54,7 +54,8 @@ documentação de produto e os testes correspondentes.
 - Agregações, filtros e paginação devem acontecer no banco.
 - Treinamento segue `treinar_com_sql` → `criar_skill` → params →
   `validar_skill` (une `sqlModelo` ao escopo persistido; perfil não apaga
-  `sensibilidade` confirmada) → confirmação → `publicar_skill`. `atualizar_skill`
+  `sensibilidade` confirmada; `confirmar_coluna` aplica a classe mesmo após
+  `validado_execucao`) → confirmação → `publicar_skill`. `atualizar_skill`
   com SQL novo une o AST ao pacote persistido (como `validar_skill`; grafo
   `inferido` não entra; status volta a rascunho). Firebird: treino parseia o `sqlModelo` (não
   `DIALECT_UNSUPPORTED`; sem FIRST/TOP/LIMIT no modelo); consulta publicada só
@@ -78,7 +79,8 @@ documentação de produto e os testes correspondentes.
   (união das publicadas) e `consultaAprendidaId`. `confirmar_coluna` aceita `colunas[]`.
   Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
   `conhecimentos[]` é evidência FTS/`ILIKE` (não RAG), não licença de consulta.
-  Stem léxico une inflexão na cobertura. Negação na descrição não conta.
+  Stem léxico une inflexão na cobertura. Negação na descrição (incluindo lista
+  após “não autoriza cruzar”) não conta.
   Envelope de `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — reuse
   `consultasAprendidas[].id` em `obter_skill`. Cobertura `composta` + `fatias[]`
   orquestra várias `consultar_dados` (não cruzar SELECT). `consultaSemanticaSugerida`

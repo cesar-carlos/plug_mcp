@@ -411,7 +411,7 @@ export const registerTools = (
 
   server.tool(
     "buscar_contexto",
-    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra; negação na descrição não conta). consultaPermitida se cobertura completa ou composta (fatias[] = várias consultar_dados, não um SELECT cruzado). conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; tokens de calendário não baixam cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida: consultaSemanticaSugerida (KPI de agregação, ou listagem só com dimensões/filtros; CAST não entra) e metricasSemOverlay[] se a medida não tem definicao. Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. SKILL_GAP: não registre sinônimo; não cruze sem JOIN publicado; fluxoTreino só com skill em andamento. grafoParaTreino só no fluxo de gap.",
+    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra; negação na descrição — inclusive lista após não autoriza cruzar — não conta). consultaPermitida se cobertura completa ou composta (fatias[] = várias consultar_dados, não um SELECT cruzado). conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; tokens de calendário não baixam cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida: consultaSemanticaSugerida (KPI de agregação, ou listagem só com dimensões/filtros; CAST não entra) e metricasSemOverlay[] se a medida não tem definicao. Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. SKILL_GAP: não registre sinônimo; não cruze sem JOIN publicado; fluxoTreino só com skill em andamento. grafoParaTreino só no fluxo de gap.",
     { acessoId: z.string().optional(), query: z.string().optional() },
     readWorld,
     async (args) =>
@@ -759,7 +759,7 @@ export const registerTools = (
 
   server.tool(
     "confirmar_coluna",
-    "Confirma significado/dicionário de coluna(s) no grafo (origem confirmado_usuario). colunas[] ou tabela+coluna. Com skillId, entra no pacote. sensibilidade só com confirmadoPeloUsuario: true.",
+    "Confirma significado/dicionário de coluna(s) no grafo (origem confirmado_usuario). colunas[] ou tabela+coluna. Com skillId, entra no pacote. sensibilidade só com confirmadoPeloUsuario: true; aplica a classe mesmo se a origem atual for validado_execucao (perfil não apaga depois).",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),

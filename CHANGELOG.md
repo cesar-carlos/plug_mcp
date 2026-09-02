@@ -26,6 +26,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- `confirmar_coluna` com `confirmadoPeloUsuario` aplica `sensibilidade` (origem `confirmado_usuario`) mesmo se a coluna já for `validado_execucao`. Perfil/`enriquecer=completo` posterior **não** rebaixa a classe. Se a classe não gravar, a tool recusa com `VALIDATION_ERROR` em vez de `success: true` opaco.
+- Lista após “não autoriza cruzar vendas, compras nem títulos” sai do haystack de cobertura: o segundo (e demais) termos da cláusula negada **não** entram em `termosEncontrados`. “Não agrega estoque” continua fora. `SKILL_GAP` por termo só negado não pede sinônimo.
 - Descrições de `treinar_com_sql` / `validar_skill` diziam Firebird SQL livre → `DIALECT_UNSUPPORTED` (falso vs o use-case). Treino parseia o `sqlModelo` no dialeto do acesso; `FIRST`/`TOP`/`LIMIT` no modelo é `INVALID_SQL`. `DIALECT_UNSUPPORTED` continua só em `consultar_dados` / `inspecionar_consulta` / `validar_consulta` **com** `sql` depois de publicar.
 - `atualizar_skill` com SQL novo apagava tabelas/colunas/JOINs extra do pacote (só reaplicava overlay de KPI). Agora une o AST ao pacote persistido, como `validar_skill`. Grafo só `inferido` não entra. Status volta a rascunho.
 - Envelope `PACOTE_INCOMPLETO`: `nextAction` era o fallback `validar_skill`; agora é o da primeira falta bloqueante em `details.faltas[]`.

@@ -265,6 +265,60 @@ describe("manutenção de skill", () => {
     expect(afterProfile?.tipo).toBe("varchar");
   });
 
+  it("confirmar_coluna livre aplica depois de validado_execucao e perfil não rebaixa", async () => {
+    const { acessos, skills, grafo, created } = await seed();
+    const tabela = await grafo.findTabelaByNome(agentId, "produto");
+    await grafo.mergeColuna({
+      tabelaId: tabela!.id,
+      nome: "nome",
+      tipo: "varchar",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+      sensibilidade: "pessoal",
+    });
+    await grafo.mergeColuna({
+      tabelaId: tabela!.id,
+      nome: "chave",
+      tipo: "int",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+      sensibilidade: "segredo",
+    });
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const createdSkill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+    });
+    const confirmar = new ConfirmarColuna(acessos, grafo, skills);
+    const result = await confirmar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      confirmadoPeloUsuario: true,
+      colunas: [
+        { tabela: "produto", coluna: "nome", sensibilidade: "livre" },
+        { tabela: "produto", coluna: "chave", sensibilidade: "livre" },
+      ],
+    });
+    expect(result.success).toBe(true);
+    const nome = await grafo.findColuna(tabela!.id, "nome");
+    const chave = await grafo.findColuna(tabela!.id, "chave");
+    expect(nome).toMatchObject({ sensibilidade: "livre", origem: "confirmado_usuario" });
+    expect(chave).toMatchObject({ sensibilidade: "livre", origem: "confirmado_usuario" });
+    await grafo.mergeColuna({
+      tabelaId: tabela!.id,
+      nome: "nome",
+      tipo: "varchar",
+      formato: "text",
+      origem: "validado_execucao",
+      autorUsuarioId: created.usuarioId,
+      sensibilidade: "pessoal",
+    });
+    const afterProfile = await grafo.findColuna(tabela!.id, "nome");
+    expect(afterProfile?.sensibilidade).toBe("livre");
+  });
+
   it("confirmar_coluna aceita colunas[] em lote no pacote", async () => {
     const { acessos, skills, grafo, created } = await seed();
     const criar = new CriarSkill(acessos, skills, grafo);
