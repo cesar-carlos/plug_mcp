@@ -8,7 +8,7 @@ alwaysApply: false
 
 Transport Streamable HTTP em `POST|GET|DELETE /mcp`. Sessões in-process; sticky em `mcp-session-id`. Sweep de idle (`MCP_SESSION_IDLE_TIMEOUT_MS`).
 
-Sem Bearer: `initialize`, `tools/list` mínimo, `prompts/list`/`prompts/get`, `resources/list`/`resources/templates/list`/`resources/read` (guias `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}`; não assuma mssql) e `tools/call` de `registrar_acesso`. Prompts `pre_treino` / `consultar_com_skill` / `cadastrar_skill` no bootstrap. `skill://`, `persona://` e tools de skill exigem Bearer. `initialize` sem Bearer: só SQL comum. Rate limit de bootstrap mais apertado.
+Sem Bearer: `initialize`, `tools/list` mínimo, `prompts/list`/`prompts/get`, `resources/list`/`resources/templates/list`/`resources/read` (guias `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}`; não assuma mssql) e `tools/call` de `registrar_acesso`. Prompts `pre_treino` / `consultar_com_skill` / `cadastrar_skill` no bootstrap. Identificar o GDBR e emitir SQL compatível é treino + IA; o hub não reescreve dialeto. `skill://`, `persona://` e tools de skill exigem Bearer. `initialize` sem Bearer: só SQL comum. Rate limit de bootstrap mais apertado.
 
 Com Bearer: token opaco → hash SHA-256 → `usuarioId` no ALS. Tools autenticadas não incluem `registrar_acesso` de novo.
 

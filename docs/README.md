@@ -21,9 +21,9 @@ Norte: [product/objective.md](product/objective.md). Tools: [mcp/tools.md](mcp/t
 
 ## Como ler
 
-1. [product/objective.md](product/objective.md) — invariantes: SQL no plug-server, dialeto do `agentId`, resources `guia://` (bootstrap), `skill://` e `persona://` (Bearer); papel = persona (tom) + skills (pacote); várias personas = vários acessos; fail-closed; sem embeddings.
+1. [product/objective.md](product/objective.md) — invariantes: SQL no plug-server, dialeto do `agentId` (identificar o GDBR e emitir SQL compatível é treino + IA; o hub não reescreve dialeto), resources `guia://` (bootstrap), `skill://` e `persona://` (Bearer); papel = persona (tom) + skills (pacote); várias personas = vários acessos; fail-closed; sem embeddings.
 2. [mcp/tools.md](mcp/tools.md) — contrato das tools. Envelope de `buscar_contexto` **sem** `sqlModelo`; `conhecimentos[]` = evidência FTS, não RAG.
-3. [mcp/error-mapping.md](mcp/error-mapping.md) — `source`: `sql` (validador) / `sql_engine` (motor) / policy / HTTP; `invalid_payload` **não** reescreve SQL; HTTP 5xx `denied` sem RPC ≠ policy.
+3. [mcp/error-mapping.md](mcp/error-mapping.md) — `source`: `sql` (validador) / `sql_engine` (motor/GDBR via agente, não camada de dialeto do hub) / policy / HTTP; `invalid_payload` **não** reescreve SQL; HTTP 5xx `denied` sem RPC ≠ policy.
 4. [plug-server/communication.md](plug-server/communication.md) — canal REST (Socket `/agents` é do `plug_agente`; consumer `/consumers` fora de escopo). Adapter: [rest-integration.md](plug-server/rest-integration.md) (timeout alinhado ao bridge; dois `http(s).Agent` — auth 4 / SQL 16; keepAlive = probe TCP; Nginx 180s na borda; `enriquecer` concorrência 4). Papéis Client: [auth.md](plug-server/auth.md).
 5. [data/data-model.md](data/data-model.md) — tabelas, FTS, pacote v2.
 6. [auth/vault-and-mcp-token.md](auth/vault-and-mcp-token.md) e [clients/connecting-clients.md](clients/connecting-clients.md) — bootstrap, Bearer, reconectar após deploy.

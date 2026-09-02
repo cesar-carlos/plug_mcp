@@ -25,7 +25,10 @@ documentação de produto e os testes correspondentes.
   `skill://` = pacote publicado, `persona://{acessoId}` = tom/uso do acesso), estrutura pelas skills publicadas e consultas
   dinâmicas só no pacote (fail-closed). Sem embeddings. Guias já no bootstrap
   (sem Bearer); `skill://` e `persona://` exigem Bearer. Não assuma mssql — leia o guia do
-  acesso. O **papel** combina a persona do acesso (tom, `atualizar_persona`)
+  acesso. Identificar o GDBR do acesso e emitir SQL compatível é **treino + IA** — o
+  `plug_server` é hub (não implementa linguagem SQL nem rewrite de dialeto);
+  `sql_engine` é o motor/GDBR via `plug_agente`. Skill treinada num dialeto não
+  licencia `TOP`/`OFFSET` de outro GDBR. O **papel** combina a persona do acesso (tom, `atualizar_persona`)
   com as skills publicadas daquele `agentId` (pacote). SQL comum primeiro;
   persona depois; em conflito vale o pacote fail-closed. Persona não recorta
   skills nem licencia consulta. **Várias personas = vários acessos**
@@ -40,8 +43,10 @@ documentação de produto e os testes correspondentes.
   fail-closed). Sem SQL, executa `sqlModelo`.
 - Nunca inventar tabela, coluna, JOIN, métrica ou regra de negócio.
 - Erro de consulta: a IA lê `code`/`message`/`hint`/`source` (`sql` = validador
-  do pacote, `sql_engine` = motor, policy/`client_token_rpc`, HTTP/`plug_server_http`).
-  `sql`/`sql_engine` → corrige o SQL no pacote e não repete o padrão recusado.
+  do pacote, `sql_engine` = motor/GDBR via `plug_agente` — não camada de dialeto
+  do hub; policy/`client_token_rpc`; HTTP/`plug_server_http`).
+  `sql`/`sql_engine` → corrige o SQL no pacote (no dialeto do GDBR) e não
+  repete o padrão recusado. Não espere o hub reescrever dialeto.
   `plug_server_http` + `invalid_payload` / `PLUG_SERVER_ERROR` de transporte →
   **não** reescreva o SQL. 429/503 ≠ policy. SQL falho não persiste;
   aprendizado continua sendo sucesso com `pergunta`, `registrar_aprendizado`,

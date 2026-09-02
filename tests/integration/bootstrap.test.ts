@@ -61,6 +61,9 @@ describe("bootstrap MCP", () => {
       expect(initResult.instructions).toContain("explorar_tabelas");
       expect(initResult.instructions).toContain("atualizar_persona");
       expect(initResult.instructions).toMatch(/n[aã]o assuma mssql/i);
+      expect(initResult.instructions).toMatch(/treino \+ esta IA/);
+      expect(initResult.instructions).toMatch(/n[aã]o implementa linguagem SQL/);
+      expect(initResult.instructions).toMatch(/n[aã]o espere o hub reescrever/);
       expect(initResult.instructions).not.toContain("Há vários acessos neste token");
       expect(initResult.instructions).not.toContain("ainda não cadastrada");
       expect(initResult.instructions).not.toContain("Persona deste acesso");
@@ -97,6 +100,7 @@ describe("bootstrap MCP", () => {
       expect(preTreino?.description).toMatch(/especialista em SQL/i);
       expect(preTreino?.description).toMatch(/plug-server/i);
       expect(preTreino?.description).toContain("guia://");
+      expect(preTreino?.description).toMatch(/hub n[aã]o reescreve dialeto/);
       expect(preTreino?.description).not.toMatch(/consultor de gestão/i);
       const promptNames = promptList.prompts?.map((prompt) => prompt.name) ?? [];
       expect(promptNames).toEqual(
@@ -126,6 +130,8 @@ describe("bootstrap MCP", () => {
       expect(promptText).toMatch(/consultor de gestão\/KPI/);
       expect(promptText).toMatch(/vendedor/);
       expect(promptText).toMatch(/plug-server/i);
+      expect(promptText).toMatch(/treino \+ esta IA/);
+      expect(promptText).toMatch(/n[aã]o implementa linguagem SQL/);
       expect(promptText).toContain("firebird");
       expect(promptText).toContain("guia://paginacao");
       expect(promptText).toContain("MULTI_SKILL_PARAMS");

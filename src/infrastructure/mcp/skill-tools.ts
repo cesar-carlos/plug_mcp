@@ -141,13 +141,13 @@ export const syncSkillTools = async (input: {
 };
 
 export const PRE_TREINO_PROMPT_DESCRIPTION =
-  "Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR daquele agentId (sybase/mssql/postgres/firebird; resources guia://paginacao, guia://dialeto/{dialeto}, skill://). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e, com Bearer, da persona do acesso (chapéu depois do SQL; não concatenar; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
+  "Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR daquele agentId (sybase/mssql/postgres/firebird; identifique o GDBR e emita SQL compatível — treino+IA, o hub não reescreve dialeto; resources guia://paginacao, guia://dialeto/{dialeto}, skill://). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e, com Bearer, da persona do acesso (chapéu depois do SQL; não concatenar; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
 
 export const CONSULTAR_COM_SKILL_PROMPT_DESCRIPTION =
   "Fluxo de consulta via plug-server: ler obter_skill / skill:// e guia://dialeto do acesso; SQL no pacote publicado (fail-closed). Firebird: só consulta exemplo. Não invente tabela, coluna nem JOIN.";
 
 export const CADASTRAR_SKILL_PROMPT_DESCRIPTION =
-  "Fluxo de treino até publicar: estrutura via explorar_tabelas/mapear_tabela (não invente schema); SQL no dialeto do acesso; depois consultar_dados só com skill publicada.";
+  "Fluxo de treino até publicar: estrutura via explorar_tabelas/mapear_tabela (não invente schema); SQL no dialeto do acesso (treino grava para aquele GDBR; o hub não reescreve dialeto); depois consultar_dados só com skill publicada.";
 
 export const registerPreTreinoPrompt = (
   server: McpServer,

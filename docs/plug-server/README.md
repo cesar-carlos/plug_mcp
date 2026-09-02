@@ -1,6 +1,6 @@
 # Integração com o plug-server
 
-O MCP **não** fala com o banco ERP. Ele é um `Client` do [plug-server](https://plug-server.se7esistemassinop.com.br/docs): autentica-se, pede acesso a um `Agent` e encaminha JSON-RPC (`sql.execute`). Autorização SQL, limites e execução ficam no hub + `plug_agente`.
+O MCP **não** fala com o banco ERP. Ele é um `Client` do [plug-server](https://plug-server.se7esistemassinop.com.br/docs): autentica-se, pede acesso a um `Agent` e encaminha JSON-RPC (`sql.execute`). Autorização SQL, limites e execução ficam no hub + `plug_agente`. O hub **não** implementa linguagem SQL nem rewrite de dialeto — identificar o GDBR e emitir SQL compatível é treino + IA ([objective.md](../product/objective.md)).
 
 Fonte canónica no repositório irmão `plug_server/docs` (índice `docs/README.md` daquele repo). OpenAPI vivo: `GET /docs` / `GET /docs.json`. Prefixo HTTP: `/api/v1`.
 

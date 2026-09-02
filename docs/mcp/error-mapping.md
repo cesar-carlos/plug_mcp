@@ -24,7 +24,7 @@ Não vaze stack, SQL interno do MCP, senha, `client_token` ou token MCP.
 
 A IA consumidora interpreta `code`, `message` e `hint` (e `source`/`nextAction`/`details` quando existirem). **Não** trate todo erro como SQL a reescrever:
 
-- `source` `sql` ou `sql_engine`: corrija o SQL **dentro do pacote publicado** e **não repita** o JOIN/tabela/coluna/padrão recusado. Não invente identificador para “consertar”.
+- `source` `sql` ou `sql_engine`: corrija o SQL **dentro do pacote publicado** e **não repita** o JOIN/tabela/coluna/padrão recusado. Não invente identificador para “consertar”. `sql_engine` = motor/GDBR via `plug_agente`, não camada de dialeto do `plug_server` — corrija no dialeto do pacote; não espere o hub reescrever.
 - `source` `plug_server_http` com `PLUG_SERVER_ERROR` ou `details.reason` `invalid_payload`: transporte (frame/batch/PayloadFrame) — **não reescreva o SQL**.
 - HTTP 429/503 (`RATE_LIMITED` / `AGENT_UNAVAILABLE`, `source: plug_server_http`) **não** são policy (`client_token_rpc`).
 
@@ -32,14 +32,14 @@ SQL recusado (`sql` / `sql_engine`) **não** é gravado; persistência continua 
 
 `source` preserva a origem (não misture JWT, acesso, policy, motor SQL e pacote):
 
-| `source`              | Origem                                                                                                                                             | Não tratar como…                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `plug_server_http`    | JWT, HTTP 401/404/429/503, abort, transporte RPC                                                                                                   | SQL inválido ou gap de skill                                  |
-| `client_agent_access` | Sem `ClientAgentAccess` / acesso revogado no cofre                                                                                                 | Senha errada                                                  |
-| `client_token_rpc`    | Policy do `client_token` (`-32001` missing / assinatura, `-32002` sem classification)                                                              | Validador do pacote (`source: sql`)                           |
-| `sql_engine`          | Motor/classificação no `plug_agente` (`-32101`/`-32102`, `-32009` só se reason **não** for `invalid_payload` e o haystack for de motor, 1033/4104) | `ACCESS_REVOKED` nem recusa do allowlist MCP                  |
-| `sql`                 | Validador fail-closed do **pacote** publicado                                                                                                      | Erro de dialeto/ODBC do hub                                   |
-| `mcp`                 | Rate limit da tool neste servidor **ou** teto de anexo (`stage: anexo`)                                                                            | Validador do pacote (`source: sql`) — **não** reescreva o SQL |
+| `source`              | Origem                                                                                                                                                                                    | Não tratar como…                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `plug_server_http`    | JWT, HTTP 401/404/429/503, abort, transporte RPC                                                                                                                                          | SQL inválido ou gap de skill                                  |
+| `client_agent_access` | Sem `ClientAgentAccess` / acesso revogado no cofre                                                                                                                                        | Senha errada                                                  |
+| `client_token_rpc`    | Policy do `client_token` (`-32001` missing / assinatura, `-32002` sem classification)                                                                                                     | Validador do pacote (`source: sql`)                           |
+| `sql_engine`          | Motor/GDBR via `plug_agente` (`-32101`/`-32102`, `-32009` só se reason **não** for `invalid_payload` e o haystack for de motor, 1033/4104). **Não** é camada de dialeto do `plug_server`. | `ACCESS_REVOKED` nem recusa do allowlist MCP                  |
+| `sql`                 | Validador fail-closed do **pacote** publicado                                                                                                                                             | Erro de dialeto/ODBC do GDBR (isso é `sql_engine`, não o hub) |
+| `mcp`                 | Rate limit da tool neste servidor **ou** teto de anexo (`stage: anexo`)                                                                                                                   | Validador do pacote (`source: sql`) — **não** reescreva o SQL |
 
 Validador MCP vs hub: `INVALID_SQL` com `source: sql_engine` (e `details.engineMessage` / sufixo `Motor:`) foi recusado **depois** do pacote — leia o motor, não invente coluna. `TABELA_FORA_DO_ESCOPO` / `COLUNA_FORA_DO_ESCOPO` / `JOIN_DESCONHECIDO` / `CONSULTA_SEM_RECORTE` / `INVALID_SQL` do validador (`SELECT *`, AST, `parseSqlModelo`) / `DIALECT_UNSUPPORTED` / gates de skill levam `source: sql`. Depois de erro do hub: **não** persista o SQL; não chame `registrar_aprendizado` com o SELECT falho; 429/503/timeout/`invalid_payload` → não mude o SQL.
 

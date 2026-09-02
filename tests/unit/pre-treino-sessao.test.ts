@@ -118,6 +118,13 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/segunda via de foto pessoal/);
     expect(PRE_TREINO_SESSAO).toContain("atualizar_persona");
     expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o recorte skills/);
+    expect(PRE_TREINO_SESSAO).toMatch(/treino \+ esta IA/);
+    expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o implementa linguagem SQL/);
+    expect(PRE_TREINO_SESSAO).toMatch(/rewrite de dialeto/);
+    expect(PRE_TREINO_SESSAO).toMatch(/GDBR via plug_agente/);
+    expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o espere o hub reescrever/);
+    expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o licencia TOP\/OFFSET/);
+    expect(PRE_TREINO_SESSAO).toMatch(/hub n[aã]o [eé] camada de dialeto/);
   });
 
   it("entra em MCP_SERVER_INSTRUCTIONS junto com a operação", () => {
@@ -215,6 +222,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toContain("firebird");
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/chapéu depois do SQL/);
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/rel[eê] o banco/);
+    expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/treino\+IA/);
+    expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/hub n[aã]o reescreve dialeto/);
     expect(PRE_TREINO_PROMPT_DESCRIPTION).not.toMatch(/consultor de gestão/i);
     expect(PRE_TREINO_PROMPT_DESCRIPTION).not.toMatch(/^Você é consultor/i);
   });
@@ -229,6 +238,7 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toContain("mapear_tabela");
     expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/n[aã]o invente schema/i);
     expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/dialeto do acesso/);
+    expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/hub n[aã]o reescreve dialeto/);
   });
 
   it("descrições de tools de SQL/resources não assumem um único dialeto", () => {

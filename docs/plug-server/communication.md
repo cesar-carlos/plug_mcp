@@ -1,6 +1,6 @@
 # Comunicação com o plug-server (visão do MCP)
 
-O hub é um proxy: o consumer (MCP) manda um comando; o hub valida, empacota em `PayloadFrame` e despacha JSON-RPC 2.0 para o `plug_agente` no namespace Socket `/agents`. A resposta volta pelo **mesmo canal** em que o consumer entrou.
+O hub é um proxy: o consumer (MCP) manda um comando; o hub valida, empacota em `PayloadFrame` e despacha JSON-RPC 2.0 para o `plug_agente` no namespace Socket `/agents`. A resposta volta pelo **mesmo canal** em que o consumer entrou. O hub **não** implementa linguagem SQL, rewrite de dialeto nem classificação de erro mssql/sybase/postgres/firebird — isso é treino + IA e o motor no GDBR via `plug_agente` ([objective.md](../product/objective.md)).
 
 Fonte: `plug_server/docs/PROJECT_OVERVIEW.md` e `plug_server/docs/api/api_rest_bridge.md`. OpenAPI vivo: `GET /docs` / `GET /docs.json`.
 

@@ -4,7 +4,7 @@
 
 Contrato atual: [product/objective.md](product/objective.md), [mcp/tools.md](mcp/tools.md), [mcp/error-mapping.md](mcp/error-mapping.md), [data/data-model.md](data/data-model.md). Índice: [README.md](README.md).
 
-O destino original descrevia a IA como consultor de gestão. O contrato vivo define a **base comum** como SQL no plug-server, dialeto do `agentId`, resources (`guia://`, `skill://`, `persona://`) e skills publicadas (fail-closed, sem embeddings); o domínio vem do treino e o chapéu de tom da persona do acesso. Canal vivo com o hub: **REST**. “Fase 1” neste arquivo é jargão da data da proposta — Socket de consumer **não** é fase seguinte.
+O destino original descrevia a IA como consultor de gestão. O contrato vivo define a **base comum** como SQL no plug-server, dialeto do `agentId`, resources (`guia://`, `skill://`, `persona://`) e skills publicadas (fail-closed, sem embeddings); o domínio vem do treino e o chapéu de tom da persona do acesso. Identificar o GDBR e emitir SQL compatível é treino + IA — o hub não implementa dialeto ([objective.md](product/objective.md)). Canal vivo com o hub: **REST**. “Fase 1” neste arquivo é jargão da data da proposta — Socket de consumer **não** é fase seguinte.
 
 Os apêndices A–C registram o diagnóstico e o aceite **na data da proposta**. Gaps listados lá já foram entregues (salvo parser Firebird para SQL livre).
 

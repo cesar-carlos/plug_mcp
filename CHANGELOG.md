@@ -26,6 +26,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Changed
 
+- Pre-treino e docs: identificar o GDBR do acesso e emitir SQL compatível é treino + IA — o `plug_server` (hub) não reescreve dialeto nem trata erro de linguagem SQL; `sql_engine` vem do motor/GDBR via `plug_agente`.
 - `validar_skill` une o escopo do `sqlModelo` ao pacote já persistido (não reconstrói o allowlist pelo SELECT). Fotos/JOINs de `confirmar_coluna` / `confirmar_relacionamento` sobrevivem à validação.
 - `IN (:lista)`: `validar_consulta` também expande o array; teto documentado de 64 itens (`VALIDATION_ERROR` `source: mcp`) — recorte a lista, não interpole literais. Transporte ODBC/hub de listas grandes permanece no `plug_agente`.
 - `consultaSemantica` honra `tipoJoin` do pacote (`LEFT JOIN` se left; `INNER JOIN` se inner/ausente). `validar_consulta` aceita `options.page`/`page_size` e aplica a mesma regra de `consultar_dados` (TOP/LIMIT no SELECT externo incompatível com página). `consultaSemantica.limite` + `options.page` recusa misturar os dois padrões de corte.
