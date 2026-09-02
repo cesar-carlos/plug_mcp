@@ -78,7 +78,7 @@ export const assertSqlTamanho = (sql: string): void => {
   }
 };
 
-export const parseSqlModelo = (raw: string): SqlModelo => {
+export const parseSqlModelo = (raw: string, dialeto?: Dialeto): SqlModelo => {
   const sql = stripComments(raw);
   if (!sql) {
     throw DomainError.pacote({
@@ -110,15 +110,37 @@ export const parseSqlModelo = (raw: string): SqlModelo => {
       hint: "Envie um único SELECT, sem ponto-e-vírgula no meio.",
     });
   }
-  const ast = tryParseSelect(sql);
+  if (dialeto === "firebird" && sqlDeclaraLimiteExterno(withoutTrailingSemi)) {
+    throw DomainError.pacote({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "sqlModelo Firebird não pode declarar FIRST/TOP/LIMIT.",
+      hint: "Não coloque FIRST/TOP/LIMIT no sqlModelo. A amostra FIRST é wrap do servidor. Depois de publicar, consultar_dados e inspecionar_consulta só rodam a consulta exemplo (sem sql). Treino não é DIALECT_UNSUPPORTED.",
+    });
+  }
+  const ast = tryParseSelect(sql, dialeto);
   if (!ast) {
     throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
       message: "Não foi possível interpretar o SQL neste dialeto.",
-      hint: "SQL que o parser não entende não vira skill. Ajuste ao guia de dialeto (mssql/sybase/postgres). Firebird só consulta exemplo.",
+      hint:
+        dialeto === "firebird"
+          ? "Ajuste o SELECT sem FIRST/CONTAINING no sqlModelo. A amostra FIRST é wrap do servidor. Treino não é DIALECT_UNSUPPORTED; SQL livre depois de publicar continua só consulta exemplo."
+          : "SQL que o parser não entende não vira skill. Ajuste ao guia de dialeto do acesso (mssql/sybase/postgres/firebird).",
     });
   }
   return sqlModeloFromAst(sql, ast);
+};
+
+/** Aviso de treino: sqlModelo com TOP/LIMIT/FIRST recusa options.page (dois padrões). */
+export const avisoLimiteNoSqlModelo = (sql: string): { code: string; message: string } | null => {
+  if (!sqlDeclaraLimiteExterno(sql)) {
+    return null;
+  }
+  return {
+    code: "PAGINACAO_MODELO",
+    message:
+      "sqlModelo declara TOP/LIMIT/FIRST; options.page + page_size serão recusados (dois padrões de corte). Consulta única limitada: corte no SQL sem page; páginas: só ORDER BY + options.page.",
+  };
 };
 
 const sqlModeloFromAst = (sql: string, ast: SqlAstSelect): SqlModelo => {

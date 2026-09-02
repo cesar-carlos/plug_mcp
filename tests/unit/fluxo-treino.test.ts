@@ -10,6 +10,7 @@ import {
 import {
   pickSkillInProgress,
   buildFluxoTreino,
+  fluxoEFaltasForAgentSkill,
 } from "../../src/application/use-cases/shared/fluxo-treino.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
@@ -519,5 +520,84 @@ describe("fluxo guiado de treino", () => {
     });
     expect(fluxo.pacoteMinimo).toBe(true);
     expect(fluxo.podeLiberar).toBe(true);
+  });
+
+  it("params com tipo default string geram falta kind=param sem bloquear podeLiberar", async () => {
+    const { plug, acessos, skills, grafo, created, sessions } = await seed();
+    await seedTabela(grafo, created.usuarioId);
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
+    const createdSkill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      nome: "Por código",
+      descricao: "Filtra produto",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      params: [{ nome: "codigo", descricao: "Código do produto" }],
+    });
+    await validar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+    });
+    const persisted = await skills.findById(createdSkill.skill.id);
+    const { fluxo, faltas } = await fluxoEFaltasForAgentSkill(grafo, agentId, persisted);
+    expect(
+      faltas.some((falta) => falta.kind === "param" && falta.nextAction === "atualizar_skill"),
+    ).toBe(true);
+    expect(fluxo.podeLiberar).toBe(true);
+  });
+
+  it("treinar_com_sql no Firebird não lança DIALECT_UNSUPPORTED", async () => {
+    const plug = new FakePlugServer();
+    const fbAgent = "22222222-2222-4222-8222-222222222222";
+    plug.approve(fbAgent);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
+    const created = await new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "fb@b.com",
+      senha: "secret-pass",
+      agentId: fbAgent,
+      dialeto: "firebird",
+      clientToken: "tok-sql-firebird",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const treinar = new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      new InMemoryAuditLog(),
+      skills,
+    );
+    const trained = await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+    });
+    expect(trained.success).toBe(true);
+    expect(trained.dialeto).toBe("firebird");
+    try {
+      await treinar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        sql: "SELECT FIRST 10 p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      });
+      expect.fail("esperava INVALID_SQL no sqlModelo Firebird com FIRST");
+    } catch (error) {
+      expect(error).toMatchObject({ code: ERROR_CODES.INVALID_SQL });
+      expect(error).not.toMatchObject({ code: ERROR_CODES.DIALECT_UNSUPPORTED });
+    }
   });
 });

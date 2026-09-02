@@ -240,6 +240,12 @@ export const VALIDAR_CONSULTA_TOOL_DESCRIPTION =
 export const ATUALIZAR_PERSONA_TOOL_DESCRIPTION =
   "Grava nomePersona (curto) e instrucoesPersona no acesso (usuário+agentId+token). Orienta tom/uso; não recorta skills nem licencia tabela, coluna, JOIN ou consultaPermitida. Em conflito vale o pacote. Exige confirmadoPeloUsuario: true. Recusa texto que pareça senha, token ou JWT. String vazia ou null limpa o campo.";
 
+export const TREINAR_COM_SQL_TOOL_DESCRIPTION =
+  "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no SQL (amostra FIRST é wrap do servidor). Aviso PAGINACAO_MODELO se o SQL já declara TOP/LIMIT/FIRST. Depois de publicar: só consultar_dados / inspecionar_consulta sem sql.";
+
+export const VALIDAR_SKILL_TOOL_DESCRIPTION =
+  "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo. Une o sqlModelo ao escopo persistido. Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no sqlModelo (amostra é wrap do servidor). Aviso PAGINACAO_MODELO se o modelo já declara TOP/LIMIT/FIRST. SQL livre depois de publicar continua DIALECT_UNSUPPORTED.";
+
 export const EXPLORAR_TABELAS_TOOL_DESCRIPTION =
   "Lista tabelas/views do ERP via catálogo de sistema do dialeto do acesso. Só no treino (descobrir estrutura); não licencia consultar_dados. Não invente nomes de tabela.";
 
@@ -373,7 +379,7 @@ export const registerTools = (
 
   server.tool(
     "treinar_com_sql",
-    "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: SQL livre → DIALECT_UNSUPPORTED.",
+    TREINAR_COM_SQL_TOOL_DESCRIPTION,
     {
       acessoId: z.string().optional(),
       sql: z.string().optional(),
@@ -535,7 +541,7 @@ export const registerTools = (
 
   server.tool(
     "criar_skill",
-    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Pacote mínimo: uma tabela, colunas nomeadas, WHERE ou agregação, params com descricao; JOIN/KPI só se o usuário pedir. Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. A IA consulta o ERP pela skill publicada, não pelo grafo.",
+    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Pacote mínimo: uma tabela, colunas nomeadas, WHERE ou agregação, params com descricao; JOIN/KPI só se o usuário pedir. Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. Firebird: parseia o sqlModelo (não DIALECT_UNSUPPORTED); FIRST/TOP/LIMIT no modelo → INVALID_SQL. A IA consulta o ERP pela skill publicada, não pelo grafo.",
     {
       acessoId: z.string().optional(),
       slug: z.string().optional(),
@@ -553,7 +559,7 @@ export const registerTools = (
 
   server.tool(
     "atualizar_skill",
-    "Atualiza nome/descrição/SQL/params/KPI. Se o SQL mudar, as tabelas precisam estar no grafo e o status volta a rascunho. Patch só de nome/descrição/params/KPI/slug mantém o status. Renomear slug exige confirmadoPeloUsuario.",
+    "Atualiza nome/descrição/SQL/params/KPI. Se o SQL mudar, une o novo sqlModelo ao pacote persistido (não apaga confirmar_coluna / confirmar_relacionamento / expandir_escopo), as tabelas do SQL precisam estar no grafo e o status volta a rascunho. Grafo inferido não entra. Patch só de nome/descrição/params/KPI/slug mantém o status. Renomear slug exige confirmadoPeloUsuario. Firebird: FIRST/TOP/LIMIT no sqlModelo → INVALID_SQL (não DIALECT_UNSUPPORTED).",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -581,7 +587,7 @@ export const registerTools = (
 
   server.tool(
     "validar_skill",
-    "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo. Firebird: SQL livre → DIALECT_UNSUPPORTED.",
+    VALIDAR_SKILL_TOOL_DESCRIPTION,
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -691,7 +697,7 @@ export const registerTools = (
 
   server.tool(
     "confirmar_relacionamento",
-    "Confirma um JOIN no grafo (origem confirmado_usuario). pares[] para chave composta; colunaOrigem/colunaDestino continuam válidos (um par). Pergunte cardinalidade e tipo de JOIN (INNER vs LEFT). Passe tipoJoin — omitir preserva o tipo já inferido do SQL/grafo (não grava inner por cima de LEFT). Com skillId, persiste no pacote da skill — só o grafo não libera consulta.",
+    "Confirma um JOIN no grafo (origem confirmado_usuario). pares[] para chave composta; colunaOrigem/colunaDestino continuam válidos (um par). Pergunte cardinalidade e tipo de JOIN (INNER vs LEFT). Passe tipoJoin — omitir preserva o tipo já inferido do SQL/grafo (não grava inner por cima de LEFT). Com skillId, persiste no pacote da skill — só o grafo não libera consulta. Sem skillId o validador publicado não vê o JOIN até ele entrar no pacote.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),

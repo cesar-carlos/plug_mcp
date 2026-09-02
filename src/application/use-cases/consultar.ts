@@ -52,7 +52,7 @@ import {
   sqlParaOdbc,
   type SqlModelo,
 } from "./shared/sql-modelo.js";
-import { tryParseSelect } from "./shared/sql-ast.js";
+import { recusarSqlLivreFirebird, tryParseSelect } from "./shared/sql-ast.js";
 import {
   validarSqlNoEscopo,
   coletarAvisosValidacao,
@@ -427,6 +427,9 @@ export class ConsultarDados {
       }
     }
     const sqlLivre = aprendida ? aprendida.sql.trim() : sqlInformado;
+    if (acesso.dialeto === "firebird" && (sqlLivre.length > 0 || Boolean(consultaSemantica))) {
+      recusarSqlLivreFirebird();
+    }
     let sqlSemantico: string | null = null;
     let avisoSemantico: { code: string; message: string } | null = null;
     let ancoraSemantica: Skill | null = null;
@@ -495,7 +498,7 @@ export class ConsultarDados {
       });
       avisos.push(...coletarAvisosValidacao(ast));
       sqlExecutar = ast.sql;
-      modelo = parseSqlModelo(sqlParaValidar);
+      modelo = parseSqlModelo(sqlParaValidar, acesso.dialeto);
       assertFanoutSeguro(ast, escopoConsulta);
       avisos.push(...avisosKpiDesalinhado(ast, escopoConsulta));
       atribuidas = ancoraSemantica
@@ -504,7 +507,7 @@ export class ConsultarDados {
     } else {
       const ancora = ancoraSqlModelo(allowlist, ids);
       sqlExecutar = ancora.sqlModelo;
-      modelo = parseSqlModelo(sqlExecutar);
+      modelo = parseSqlModelo(sqlExecutar, acesso.dialeto);
       atribuidas = [ancora];
       const astModelo = tryParseSelect(sqlExecutar, acesso.dialeto);
       if (astModelo) {
@@ -915,6 +918,9 @@ export class ValidarConsulta {
         message: "sql é obrigatório.",
         hint: "Passe o SELECT a validar. skillId é opcional: omitido usa todas as publicadas do agentId.",
       });
+    }
+    if (acesso.dialeto === "firebird") {
+      recusarSqlLivreFirebird();
     }
     const allowlist = await resolverSkillsConsulta(this.skills, acesso.agentId, ids);
     const escopo = uniaoEscoposPublicados(allowlist);

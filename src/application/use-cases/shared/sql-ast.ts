@@ -26,14 +26,19 @@ export const parserDatabaseForDialeto = (dialeto: Dialeto): ParserDatabase => {
   if (dialeto === "postgres") {
     return "postgresql";
   }
-  if (dialeto === "firebird") {
-    throw DomainError.pacote({
-      code: ERROR_CODES.DIALECT_UNSUPPORTED,
-      message: "SQL livre não é suportado neste dialeto.",
-      hint: "Firebird não tem parser AST. Use só a consulta exemplo (consultar_dados / inspecionar_consulta sem sql). Não reenvie SQL livre neste dialeto.",
-    });
-  }
+  // Firebird: node-sql-parser não tem dialeto próprio. Treino parseia SELECT ANSI
+  // via transactsql. FIRST/CONTAINING no sqlModelo → INVALID_SQL em parseSqlModelo.
+  // SQL livre depois de publicar continua DIALECT_UNSUPPORTED (consultar/inspecionar).
   return "transactsql";
+};
+
+/** Recusa SQL livre no Firebird depois de publicar (não o parser de treino). */
+export const recusarSqlLivreFirebird = (): never => {
+  throw DomainError.pacote({
+    code: ERROR_CODES.DIALECT_UNSUPPORTED,
+    message: "SQL livre não é suportado neste dialeto.",
+    hint: "Firebird: só consulta exemplo (consultar_dados / inspecionar_consulta sem sql). Não reenvie SQL livre neste dialeto. Treino (treinar_com_sql / validar_skill) não é DIALECT_UNSUPPORTED.",
+  });
 };
 
 export interface SqlAstTabela {
@@ -569,9 +574,6 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
 export const tryParseSelect = (sql: string, dialeto?: Dialeto): SqlAstSelect | null => {
   const order: Dialeto[] = dialeto ? [dialeto] : ["mssql", "postgres"];
   for (const item of order) {
-    if (item === "firebird") {
-      continue;
-    }
     try {
       return parseSelect(sql, item);
     } catch {

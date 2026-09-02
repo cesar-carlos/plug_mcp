@@ -8,7 +8,6 @@ import {
 import { escopoFromSqlModelo } from "../../../src/application/use-cases/shared/escopo-from-modelo.js";
 import { parseSqlModelo } from "../../../src/application/use-cases/shared/sql-modelo.js";
 import { ERROR_CODES } from "../../../src/domain/errors/error-codes.js";
-import { DomainError } from "../../../src/domain/errors/domain-error.js";
 
 const escopo = escopoFromSqlModelo(
   parseSqlModelo(
@@ -158,24 +157,13 @@ describe("validarSqlNoEscopo", () => {
     expect(ast.temLimite).toBe(false);
   });
 
-  it("recusa firebird no SQL livre", () => {
-    expect(() =>
-      validarSqlNoEscopo("SELECT p.codprod FROM produto p WHERE p.codprod > 0", "firebird", escopo),
-    ).toThrow(
-      expect.objectContaining({
-        code: ERROR_CODES.DIALECT_UNSUPPORTED,
-        source: "sql",
-        hint: expect.stringMatching(/n[aã]o reenvie SQL livre/i),
-      }),
+  it("parser Firebird no treino aceita SELECT padrão; SQL livre continua DIALECT_UNSUPPORTED via recusa dedicada", () => {
+    const ast = validarSqlNoEscopo(
+      "SELECT p.codprod FROM produto p WHERE p.codprod > 0",
+      "firebird",
+      escopo,
     );
-    try {
-      validarSqlNoEscopo("SELECT p.codprod FROM produto p WHERE p.codprod > 0", "firebird", escopo);
-    } catch (error) {
-      expect(error).toBeInstanceOf(DomainError);
-      const json = (error as DomainError).toJson();
-      expect(json.error.nextAction).toBe("inspecionar_consulta");
-      expect(json.error.nextAction).not.toBe("consultar_dados");
-    }
+    expect(ast.tabelas.some((tabela) => tabela.nome.toLowerCase() === "produto")).toBe(true);
   });
 
   it("aviso de literal de texto no WHERE não é erro", () => {

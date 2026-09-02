@@ -2,20 +2,31 @@ import { describe, expect, it } from "vitest";
 import {
   parseSelect,
   parserDatabaseForDialeto,
+  recusarSqlLivreFirebird,
   tryParseSelect,
 } from "../../src/application/use-cases/shared/sql-ast.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 
 describe("sql-ast", () => {
-  it("mapeia mssql e sybase para transactsql", () => {
+  it("mapeia mssql, sybase e firebird para transactsql", () => {
     expect(parserDatabaseForDialeto("mssql")).toBe("transactsql");
     expect(parserDatabaseForDialeto("sybase")).toBe("transactsql");
     expect(parserDatabaseForDialeto("postgres")).toBe("postgresql");
+    expect(parserDatabaseForDialeto("firebird")).toBe("transactsql");
   });
 
-  it("recusa firebird no caminho de SQL livre", () => {
-    expect(() => parserDatabaseForDialeto("firebird")).toThrow(
+  it("tryParseSelect no Firebird aceita SELECT sem FIRST", () => {
+    const ast = tryParseSelect(
+      "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      "firebird",
+    );
+    expect(ast?.tabelas.some((tabela) => tabela.nome.toLowerCase() === "produto")).toBe(true);
+    expect(ast?.temWhere).toBe(true);
+  });
+
+  it("recusarSqlLivreFirebird aponta inspecionar_consulta", () => {
+    expect(() => recusarSqlLivreFirebird()).toThrow(
       expect.objectContaining({
         code: ERROR_CODES.DIALECT_UNSUPPORTED,
         source: "sql",
@@ -23,7 +34,7 @@ describe("sql-ast", () => {
       }),
     );
     try {
-      parserDatabaseForDialeto("firebird");
+      recusarSqlLivreFirebird();
     } catch (error) {
       expect(error).toBeInstanceOf(DomainError);
       const json = (error as DomainError).toJson();

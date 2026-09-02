@@ -110,6 +110,22 @@ describe("ConfirmarRelacionamento", () => {
     });
   });
 
+  it("sem skillId devolve hint de que o validador publicado não vê o JOIN", async () => {
+    const { created, confirmar } = await setup();
+    const result = await confirmar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      tabelaOrigem: "pedido",
+      colunaOrigem: "codcliente",
+      tabelaDestino: "cliente",
+      colunaDestino: "codcliente",
+      tipoJoin: "inner",
+      cardinalidade: "N:1",
+    });
+    expect(result.skill).toBeUndefined();
+    expect(result.hint).toMatch(/skillId/i);
+    expect(result.hint).toMatch(/pacote/i);
+  });
+
   it("persiste JOIN composto com pares[]", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);

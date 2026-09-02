@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { escopoFromSqlModelo } from "../../src/application/use-cases/shared/escopo-from-modelo.js";
 import {
+  avisoLimiteNoSqlModelo,
   bindNamedParams,
   bindParamsForValidation,
   coerceBoundParams,
@@ -139,6 +140,44 @@ describe("parseSqlModelo", () => {
   it("aceita CROSS JOIN sem exigir ON", () => {
     const modelo = parseSqlModelo("SELECT p.codprod, c.nome FROM produto p CROSS JOIN cliente c");
     expect(modelo.relacionamentos.some((rel) => rel.tipoJoin.includes("cross"))).toBe(true);
+  });
+
+  it("Firebird sqlModelo sem FIRST parseia; FIRST é INVALID_SQL e não DIALECT_UNSUPPORTED", () => {
+    const modelo = parseSqlModelo(
+      "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      "firebird",
+    );
+    expect(modelo.tabelas.map((tabela) => tabela.nome.toLowerCase())).toContain("produto");
+    try {
+      parseSqlModelo(
+        "SELECT FIRST 10 p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+        "firebird",
+      );
+      expect.fail("deveria recusar FIRST no sqlModelo Firebird");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      expect((error as DomainError).code).toBe(ERROR_CODES.INVALID_SQL);
+      expect((error as DomainError).code).not.toBe(ERROR_CODES.DIALECT_UNSUPPORTED);
+      expect((error as DomainError).hint).toMatch(/wrap do servidor/i);
+    }
+  });
+
+  it("parseia LIMIT/ILIKE no postgres e recusa no mssql", () => {
+    const sql = "SELECT p.codprod AS codigo FROM produto p WHERE p.nome ILIKE :q LIMIT 10";
+    const modelo = parseSqlModelo(sql, "postgres");
+    expect(modelo.tabelas.map((tabela) => tabela.nome.toLowerCase())).toContain("produto");
+    expect(() => parseSqlModelo(sql, "mssql")).toThrow(
+      expect.objectContaining({ code: ERROR_CODES.INVALID_SQL }),
+    );
+  });
+
+  it("avisoLimiteNoSqlModelo quando TOP/LIMIT/FIRST já está no SQL", () => {
+    expect(avisoLimiteNoSqlModelo("SELECT TOP 10 p.codprod FROM produto p")).toMatchObject({
+      code: "PAGINACAO_MODELO",
+    });
+    expect(
+      avisoLimiteNoSqlModelo("SELECT p.codprod FROM produto p WHERE p.codprod > 0"),
+    ).toBeNull();
   });
 
   it("bind recusa number com string não numérica", () => {

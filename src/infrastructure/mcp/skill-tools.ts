@@ -147,7 +147,7 @@ export const CONSULTAR_COM_SKILL_PROMPT_DESCRIPTION =
   "Fluxo de consulta via plug-server: ler obter_skill / skill:// e guia://dialeto do acesso; SQL no pacote publicado (fail-closed). Firebird: só consulta exemplo. Não invente tabela, coluna nem JOIN.";
 
 export const CADASTRAR_SKILL_PROMPT_DESCRIPTION =
-  "Fluxo de treino até publicar: estrutura via explorar_tabelas/mapear_tabela (não invente schema); SQL no dialeto do acesso (treino grava para aquele GDBR; o hub não reescreve dialeto); depois consultar_dados só com skill publicada.";
+  "Fluxo de treino até publicar: estrutura via explorar_tabelas/mapear_tabela (não invente schema); SQL no dialeto do acesso (treino grava para aquele GDBR; o hub não reescreve dialeto). Firebird: treino parseia o sqlModelo (não DIALECT_UNSUPPORTED); não coloque FIRST/TOP/LIMIT no modelo; depois consultar_dados só com skill publicada (consulta exemplo).";
 
 export const registerPreTreinoPrompt = (
   server: McpServer,
@@ -354,13 +354,13 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
               `Cadastre uma skill para: ${objetivo}`,
               "Siga o pre-treino de sessão (prompt pre_treino / initialize.instructions).",
               "Explique o objetivo da skill ao usuário.",
-              "SQL no dialeto do acesso (guia://dialeto/{dialeto}; não assuma mssql). Firebird: só consulta exemplo depois de publicar.",
+              "SQL no dialeto do acesso (guia://dialeto/{dialeto}; não assuma mssql). Firebird: treino parseia o sqlModelo (não DIALECT_UNSUPPORTED); não coloque FIRST/TOP/LIMIT no modelo; só consulta exemplo depois de publicar. Aviso PAGINACAO_MODELO se o modelo já declara corte.",
               "Não invente schema: explorar_tabelas / mapear_tabela para estrutura que faltar.",
               "1) Peça o SQL e chame treinar_com_sql (SELECT nomeado; JOIN se várias tabelas; colunas qualificadas).",
               "2) Mostre o fluxoTreino e peça nome/descrição → criar_skill (tabelas já no grafo).",
               "3) Se houver placeholders :nome/@nome, peça significado e tipo (string/number/integer/decimal/date/datetime/boolean) → atualizar_skill com params[{ nome, descricao, tipo }].",
               "4) Se fluxoTreino indicar conflitos, chame resolver_conflito.",
-              "5) validar_skill (envelope vazio).",
+              "5) validar_skill (une o sqlModelo ao escopo persistido; envelope vazio). atualizar_skill com SQL novo une o AST ao pacote (grafo inferido não entra).",
               "6) Mostre o resumo e só chame publicar_skill com confirmadoPeloUsuario: true se o usuário confirmar. Sem confirmação, não publique.",
               "Não consulte o ERP pelo grafo. A consulta depois usa só a skill publicada.",
             ].join("\n"),

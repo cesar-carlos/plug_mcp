@@ -24,7 +24,18 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Envelope de `MULTI_SKILL_PARAMS` e `DIALECT_UNSUPPORTED` com `category`, `nextAction` e `documentationUrl`.
 - Resources: `initialize` declara `capabilities.resources`; instructions citam `guia://paginacao`, `guia://dialeto/{mssql|sybase|postgres|firebird}` e `skill://` (só publicada) como chão comum de todo consumidor. Os guias (e prompts `pre_treino` / `consultar_com_skill` / `cadastrar_skill`) entram no bootstrap sem Bearer — `resources/list` já lista `guia://`. `skill://` e tools de skill continuam exigindo Bearer.
 
+### Fixed
+
+- Descrições de `treinar_com_sql` / `validar_skill` diziam Firebird SQL livre → `DIALECT_UNSUPPORTED` (falso vs o use-case). Treino parseia o `sqlModelo` no dialeto do acesso; `FIRST`/`TOP`/`LIMIT` no modelo é `INVALID_SQL`. `DIALECT_UNSUPPORTED` continua só em `consultar_dados` / `inspecionar_consulta` / `validar_consulta` **com** `sql` depois de publicar.
+- `atualizar_skill` com SQL novo apagava tabelas/colunas/JOINs extra do pacote (só reaplicava overlay de KPI). Agora une o AST ao pacote persistido, como `validar_skill`. Grafo só `inferido` não entra. Status volta a rascunho.
+- Envelope `PACOTE_INCOMPLETO`: `nextAction` era o fallback `validar_skill`; agora é o da primeira falta bloqueante em `details.faltas[]`.
+
 ### Changed
+
+- `parseSqlModelo` / `tryParseSelect` recebem `acesso.dialeto` no treino/criar/validar/atualizar (postgres `LIMIT`/`ILIKE` vs mssql; Firebird via parser transactsql, sem `FIRST` no modelo).
+- Params: falta não bloqueante `kind: param` quando `tipo` ficou no default `string` (não impede `podeLiberar`). Passo 4 do pre-treino pede `tipo`.
+- `confirmar_relacionamento` sem `skillId` devolve hint: o validador publicado não vê o JOIN até ele entrar no pacote.
+- Treino: aviso `PAGINACAO_MODELO` se o `sqlModelo` já declara TOP/LIMIT/FIRST (`options.page` será recusado).
 
 - Pre-treino e docs: identificar o GDBR do acesso e emitir SQL compatível é treino + IA — o `plug_server` (hub) não reescreve dialeto nem trata erro de linguagem SQL; `sql_engine` vem do motor/GDBR via `plug_agente`.
 - `validar_skill` une o escopo do `sqlModelo` ao pacote já persistido (não reconstrói o allowlist pelo SELECT). Fotos/JOINs de `confirmar_coluna` / `confirmar_relacionamento` sobrevivem à validação.

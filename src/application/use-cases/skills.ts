@@ -12,7 +12,6 @@ import {
   PACOTE_VERSAO_ATUAL,
   overlayMetricasSaida,
   paresDoRelacionamento,
-  reaplicarKpiOverlay,
   uniaoEscopos,
   type Cardinalidade,
   type EscopoSkill,
@@ -64,9 +63,11 @@ import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import {
   overlayCardinalidadeDoGrafo,
   sincronizarEscopoComGrafo,
+  unirEscopoSqlComPacote,
 } from "./shared/sincronizar-escopo.js";
 import { enriquecerPerfilCompleto, type AvisoPerfil } from "./shared/enriquecer-perfil.js";
 import {
+  avisoLimiteNoSqlModelo,
   bindParamsForValidation,
   parseSqlModelo,
   sqlParaOdbc,
@@ -232,7 +233,7 @@ export class CriarSkill {
         hint: "A skill nomeia um SQL de negócio já treinado. Use treinar_com_sql antes, se o grafo ainda não tiver as tabelas.",
       });
     }
-    const modelo = parseSqlModelo(sqlModelo);
+    const modelo = parseSqlModelo(sqlModelo, acesso.dialeto);
     const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
     const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
     const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
@@ -341,7 +342,7 @@ export class AtualizarSkill {
       }
     }
     if (sqlChanged) {
-      const modelo = parseSqlModelo(sqlModelo);
+      const modelo = parseSqlModelo(sqlModelo, acesso.dialeto);
       const missing = await missingGraphTables(
         this.grafo,
         acesso.agentId,
@@ -354,16 +355,21 @@ export class AtualizarSkill {
           hint: `Chame treinar_com_sql antes. Tabelas ausentes: ${missing.join(", ")}.`,
         });
       }
-      await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopoFromSqlModelo(modelo));
     } else if (input.sqlModelo) {
-      parseSqlModelo(sqlModelo);
+      parseSqlModelo(sqlModelo, acesso.dialeto);
     }
+    const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
+    const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
+    const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
     const baseParams = paramsFromSql(sqlModelo, skill.params);
     const params = mergeParamInput(baseParams, normalizeParamInput(input.params));
     const escopoBase = sqlChanged
-      ? reaplicarKpiOverlay(escopoFromSqlModelo(parseSqlModelo(sqlModelo)), skill.escopo)
+      ? unirEscopoSqlComPacote(sqlModelo, skill.escopo, grafoRels, nomeById, acesso.dialeto)
       : skill.escopo;
     const escopoNext = aplicarMetricasSaida(escopoBase, input.metricasSaida);
+    if (sqlChanged) {
+      await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopoNext);
+    }
     const consultaSemantica =
       input.consultaSemantica !== undefined
         ? parseConsultaSemantica(input.consultaSemantica)
@@ -460,22 +466,19 @@ export class ValidarSkill {
         hint: "Chame atualizar_skill com params[{ nome, descricao }] para cada placeholder :nome/@nome.",
       });
     }
-    const modelo = parseSqlModelo(skill.sqlModelo);
+    const modelo = parseSqlModelo(skill.sqlModelo, acesso.dialeto);
     const grafoRels = await this.grafo.listRelacionamentos(acesso.agentId);
     const grafoTabelas = await this.grafo.listTabelas(acesso.agentId);
     const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
-    const escopo = reaplicarKpiOverlay(
-      overlayCardinalidadeDoGrafo(
-        uniaoEscopos([escopoFromSqlModelo(modelo), skill.escopo]),
-        grafoRels,
-        nomeById,
-      ),
+    const escopo = unirEscopoSqlComPacote(
+      skill.sqlModelo,
       skill.escopo,
+      grafoRels,
+      nomeById,
+      acesso.dialeto,
     );
     await exigirEscopoNoGrafo(this.grafo, acesso.agentId, escopo);
-    if (acesso.dialeto !== "firebird") {
-      validarSqlNoEscopo(skill.sqlModelo, acesso.dialeto, escopo);
-    }
+    validarSqlNoEscopo(skill.sqlModelo, acesso.dialeto, escopo);
     const persisted = await this.skills.update(skill.id, {
       escopo,
       pacoteVersao: PACOTE_VERSAO_ATUAL,
@@ -498,6 +501,10 @@ export class ValidarSkill {
       ? persisted
       : await this.skills.setStatus(persisted.id, "validada");
     const avisos: AvisoPerfil[] = [];
+    const avisoLimite = avisoLimiteNoSqlModelo(modelo.sql);
+    if (avisoLimite) {
+      avisos.push(avisoLimite);
+    }
     if (input.enriquecer === "completo") {
       const perfil = await enriquecerPerfilCompleto({
         grafo: this.grafo,
@@ -1411,7 +1418,7 @@ export class ConfirmarRelacionamento {
       tipoJoin?: string;
       cardinalidade?: Cardinalidade;
     },
-  ): Promise<{ success: true; skill?: Skill; fluxoTreino: FluxoTreino }> {
+  ): Promise<{ success: true; skill?: Skill; fluxoTreino: FluxoTreino; hint?: string }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const origemNome = input.tabelaOrigem?.trim() ?? "";
@@ -1506,6 +1513,7 @@ export class ConfirmarRelacionamento {
       return {
         success: true,
         fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
+        hint: "JOIN gravado só no grafo. O validador da skill publicada não vê este JOIN até confirmar_relacionamento com skillId (entra no pacote).",
       };
     }
     const extraEscopo: EscopoSkill = {

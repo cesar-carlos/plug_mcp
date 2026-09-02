@@ -54,7 +54,14 @@ documentação de produto e os testes correspondentes.
 - Agregações, filtros e paginação devem acontecer no banco.
 - Treinamento segue `treinar_com_sql` → `criar_skill` → params →
   `validar_skill` (une `sqlModelo` ao escopo persistido; perfil não apaga
-  `sensibilidade` confirmada) → confirmação → `publicar_skill`. Rascunho, validada ou
+  `sensibilidade` confirmada) → confirmação → `publicar_skill`. `atualizar_skill`
+  com SQL novo une o AST ao pacote persistido (como `validar_skill`; grafo
+  `inferido` não entra; status volta a rascunho). Firebird: treino parseia o `sqlModelo` (não
+  `DIALECT_UNSUPPORTED`; sem FIRST/TOP/LIMIT no modelo); consulta publicada só
+  exemplo. Aviso `PAGINACAO_MODELO` se o modelo já declara TOP/LIMIT/FIRST.
+  Envelope `PACOTE_INCOMPLETO.nextAction` é a primeira falta bloqueante (não
+  sempre `validar_skill`). `confirmar_relacionamento` sem `skillId` grava só no
+  grafo — o validador publicado não vê o JOIN até ele entrar no pacote. Rascunho, validada ou
   `rascunho_revalidacao` não consultam (`rascunho_revalidacao`: validar →
   republicar). `listar_skills` devolve status/`fluxoTreino`/`faltas[]`; o
   pacote fica em `obter_skill`. Skill `validada` com perfil incompleto:
@@ -79,7 +86,8 @@ documentação de produto e os testes correspondentes.
   medida no pacote; score 0 sem IR omite; maior overlap da pergunta) **ou**
   listagem só com dimensões/filtros. `metricasSemOverlay[]` não inventa `definicao`. `fluxoTreino.pacoteMinimo` oriente (uma
   tabela; CAST não é medida) sem afrouxar gates. `faltas[]` de KPI (não quantidade/parcelas/`NroParc`/`Qtde`) e JOIN isolado
-  coberto por composto não bloqueiam publicação. `SKILL_GAP` omite `fluxoTreino` salvo skill em andamento e não pede sinônimo. Hint de cruzamento só na pergunta de cruzamento.
+  coberto por composto não bloqueiam publicação. Falta `kind: param` (tipo
+  default `string`) também não bloqueia. `SKILL_GAP` omite `fluxoTreino` salvo skill em andamento e não pede sinônimo. Hint de cruzamento só na pergunta de cruzamento.
 
 ## Segurança e autorização
 

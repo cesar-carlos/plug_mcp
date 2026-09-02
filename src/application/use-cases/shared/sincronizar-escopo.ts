@@ -1,5 +1,10 @@
+import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { EscopoSkill, RelacionamentoEscopo } from "../../../domain/entities/escopo.js";
-import { paresDoRelacionamento } from "../../../domain/entities/escopo.js";
+import {
+  paresDoRelacionamento,
+  reaplicarKpiOverlay,
+  uniaoEscopos,
+} from "../../../domain/entities/escopo.js";
 import type { RelacionamentoGrafo } from "../../../domain/entities/grafo.js";
 import {
   fingerprintPares,
@@ -46,6 +51,23 @@ export const overlayCardinalidadeDoGrafo = (
   });
   return { ...escopo, relacionamentos };
 };
+
+/** Une AST do sqlModelo ao pacote persistido; overlay de cardinalidade só nos JOINs já no pacote (grafo inferido não entra). */
+export const unirEscopoSqlComPacote = (
+  sqlModelo: string,
+  pacote: EscopoSkill,
+  grafoRels: readonly RelacionamentoGrafo[],
+  nomeById: ReadonlyMap<string, string>,
+  dialeto?: Dialeto,
+): EscopoSkill =>
+  reaplicarKpiOverlay(
+    overlayCardinalidadeDoGrafo(
+      uniaoEscopos([escopoFromSqlModelo(parseSqlModelo(sqlModelo, dialeto)), pacote]),
+      grafoRels,
+      nomeById,
+    ),
+    pacote,
+  );
 
 const escopoDaSkill = (skill: Skill): EscopoSkill =>
   skill.escopo.tabelas.length > 0

@@ -822,4 +822,53 @@ describe("ConsultarDados avisos de anotação", () => {
     expect(plug.lastParams).toEqual({ codigo: 2 });
     expect(result.sqlExecutado).toMatch(/codprod = /i);
   });
+
+  it("Firebird recusa SQL livre com DIALECT_UNSUPPORTED", async () => {
+    const plug = new FakePlugServer();
+    const fbAgent = "33333333-3333-4333-8333-333333333333";
+    plug.approve(fbAgent);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const skills = new InMemorySkillRepository();
+    const audit = new InMemoryAuditLog();
+    const created = await new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "fb@b.com",
+      senha: "secret-pass",
+      agentId: fbAgent,
+      dialeto: "firebird",
+      clientToken: "tok-sql-firebird",
+    });
+    const sessions = {
+      getAccessToken: async () => "access-test",
+      invalidate: () => undefined,
+      remember: () => undefined,
+    };
+    const sqlModelo = "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0";
+    const skill = await skills.create({
+      agentId: fbAgent,
+      slug: "produtos-fb",
+      nome: "Produtos FB",
+      descricao: "lista",
+      sqlModelo,
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    const consultar = new ConsultarDados(acessos, skills, plug, sessions, crypto, audit, 500, 5000);
+    await expect(
+      consultar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        pergunta: "lista",
+        skillId: skill.id,
+        sql: sqlModelo,
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.DIALECT_UNSUPPORTED, source: "sql" });
+  });
 });

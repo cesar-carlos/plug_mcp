@@ -37,14 +37,14 @@ export type FaltaNextAction =
   | "atualizar_skill";
 
 export interface FatoIncompleto {
-  readonly kind: "tabela" | "coluna" | "join" | "perfil" | "conflito" | "kpi";
+  readonly kind: "tabela" | "coluna" | "join" | "perfil" | "conflito" | "kpi" | "param";
   readonly message: string;
   readonly alvo: string;
   readonly nextAction: FaltaNextAction;
 }
 
 export const faltaOrientaSemBloquear = (falta: FatoIncompleto): boolean =>
-  falta.kind === "kpi" || falta.nextAction === "remover_relacionamento";
+  falta.kind === "kpi" || falta.kind === "param" || falta.nextAction === "remover_relacionamento";
 
 const lower = (value: string): string => value.trim().toLowerCase();
 
@@ -240,10 +240,12 @@ export const exigirEscopoNoGrafo = async (
   if (bloqueantes.length === 0) {
     return;
   }
+  const primeira = bloqueantes[0];
   throw DomainError.pacote({
     code: ERROR_CODES.PACOTE_INCOMPLETO,
     message: "O SQL da skill ainda não está confirmado no grafo.",
     hint: `${bloqueantes.map((item) => item.message).join(" ")} Chame treinar_com_sql e confirme relacionamentos no escopo da skill.`,
+    ...(primeira ? { nextAction: primeira.nextAction } : {}),
     details: { faltas: bloqueantes },
   });
 };
@@ -261,13 +263,18 @@ export const exigirPacotePublicavel = async (
   const bloqueantes = faltas.filter((item) => !faltaOrientaSemBloquear(item));
   if (bloqueantes.length > 0) {
     const perfil = bloqueantes.filter((item) => item.kind === "perfil");
+    const code = perfil.length > 0 ? ERROR_CODES.PERFIL_AUSENTE : ERROR_CODES.PACOTE_INCOMPLETO;
+    const primeira = bloqueantes[0];
     throw DomainError.pacote({
-      code: perfil.length > 0 ? ERROR_CODES.PERFIL_AUSENTE : ERROR_CODES.PACOTE_INCOMPLETO,
+      code,
       message:
         perfil.length > 0
           ? "Perfil incompleto: tipo, formato ou cardinalidade ausentes."
           : "Pacote da skill incompleto para publicar.",
       hint: faltas.map((item) => item.message).join(" "),
+      ...(code === ERROR_CODES.PACOTE_INCOMPLETO && primeira
+        ? { nextAction: primeira.nextAction }
+        : {}),
       details: { faltas },
     });
   }

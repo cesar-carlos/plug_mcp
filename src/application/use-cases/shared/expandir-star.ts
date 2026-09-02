@@ -1,17 +1,12 @@
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
-import { DomainError } from "../../../domain/errors/domain-error.js";
-import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
+import { recusarSqlLivreFirebird } from "./sql-ast.js";
 import { parseIdentificadorTabela } from "./schema-introspection.js";
 import { sqlDeclaraLimiteExterno } from "./sql-scan.js";
 
 /** SELECT * cortado no dialeto (inspeção). Firebird não tem SQL livre. */
 export const sqlStarDescoberta = (dialeto: Dialeto, tabela: string, maxRows: number): string => {
   if (dialeto === "firebird") {
-    throw DomainError.pacote({
-      code: ERROR_CODES.DIALECT_UNSUPPORTED,
-      message: "Inspeção com SQL livre não é suportada neste dialeto.",
-      hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql). Não reenvie SQL livre neste dialeto.",
-    });
+    recusarSqlLivreFirebird();
   }
   const ident = parseIdentificadorTabela(tabela);
   const from = ident.schema ? `${ident.schema}.${ident.tabela}` : ident.tabela;

@@ -434,4 +434,74 @@ describe("manutenção de skill", () => {
     });
     expect(ok.valido).toBe(true);
   });
+
+  it("atualizar_skill une o sqlModelo ao pacote persistido e não puxa JOIN inferido", async () => {
+    const { acessos, skills, grafo, created } = await seed();
+    await seedTabelaComColunas(grafo, {
+      agentId,
+      usuarioId: created.usuarioId,
+      nome: "cliente",
+      colunas: ["codcli", "nome"],
+    });
+    const criar = new CriarSkill(acessos, skills, grafo);
+    const createdSkill = await criar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      nome: "Produtos",
+      descricao: "Lista",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+    });
+    await new ConfirmarColuna(acessos, grafo, skills).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      tabela: "produto",
+      coluna: "obs",
+    });
+    await new ConfirmarColuna(acessos, grafo, skills).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      tabela: "cliente",
+      coluna: "nome",
+    });
+    await new ConfirmarRelacionamento(acessos, grafo, skills).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      tabelaOrigem: "produto",
+      tabelaDestino: "cliente",
+      pares: [{ colunaOrigem: "codprod", colunaDestino: "codcli" }],
+      tipoJoin: "inner",
+      cardinalidade: "N:1",
+    });
+    await new HerdarCatalogo(acessos, grafo).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      confirmadoPeloUsuario: true,
+    });
+    const atualizar = new AtualizarSkill(acessos, skills, grafo);
+    const updated = await atualizar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      skillId: createdSkill.skill.id,
+      sqlModelo: "SELECT p.valor AS valor FROM produto p WHERE p.valor > 0",
+    });
+    expect(updated.skill.status).toBe("rascunho");
+    expect(updated.skill.escopo.tabelas.map((nome) => nome.toLowerCase())).toEqual(
+      expect.arrayContaining(["produto", "cliente"]),
+    );
+    expect(updated.skill.escopo.colunasPorTabela.produto).toEqual(
+      expect.arrayContaining(["valor", "obs", "codprod"]),
+    );
+    expect(
+      updated.skill.escopo.relacionamentos.some(
+        (rel) =>
+          (rel.tabelaOrigem.toLowerCase() === "produto" ||
+            rel.tabelaDestino.toLowerCase() === "produto") &&
+          (rel.tabelaOrigem.toLowerCase() === "cliente" ||
+            rel.tabelaDestino.toLowerCase() === "cliente"),
+      ),
+    ).toBe(true);
+    expect(updated.skill.escopo.tabelas.some((nome) => nome.toLowerCase() === "pagar")).toBe(false);
+    expect(
+      updated.skill.escopo.relacionamentos.some((rel) =>
+        [rel.tabelaOrigem, rel.tabelaDestino].some((nome) => nome.toLowerCase() === "pagar"),
+      ),
+    ).toBe(false);
+  });
 });

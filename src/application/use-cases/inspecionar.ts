@@ -25,7 +25,7 @@ import {
 import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { validarSqlNoEscopo, coletarAvisosValidacao } from "./shared/validar-escopo.js";
-import { tryParseSelect, type SqlAstSelect } from "./shared/sql-ast.js";
+import { recusarSqlLivreFirebird, tryParseSelect, type SqlAstSelect } from "./shared/sql-ast.js";
 import { mesclarParamsEscopo } from "./shared/escopo-filtro.js";
 import { garantirLimiteInspecao, sqlStarDescoberta } from "./shared/expandir-star.js";
 import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
@@ -220,11 +220,7 @@ export class InspecionarConsulta {
     const tabelaInformada = input.tabela?.trim() ?? "";
     const sqlLivre = sqlInformado.length > 0 || tabelaInformada.length > 0;
     if (acesso.dialeto === "firebird" && sqlLivre) {
-      throw DomainError.pacote({
-        code: ERROR_CODES.DIALECT_UNSUPPORTED,
-        message: "Inspeção com SQL livre não é suportada neste dialeto.",
-        hint: "Firebird só consulta exemplo (inspecionar_consulta sem sql). Não reenvie SQL livre neste dialeto.",
-      });
+      recusarSqlLivreFirebird();
     }
     let sql: string;
     if (sqlInformado) {

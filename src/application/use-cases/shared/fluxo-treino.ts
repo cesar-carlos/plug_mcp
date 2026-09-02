@@ -354,6 +354,20 @@ const fluxoComConflitos = async (
       ];
     }
     perfilCompleto = faltas.filter((item) => item.kind === "perfil").length === 0;
+    const paramsDefaultString = skill.params.filter(
+      (param) => param.descricao.trim().length > 0 && param.tipo === "string",
+    );
+    if (paramsDefaultString.length > 0) {
+      faltas = [
+        ...faltas,
+        {
+          kind: "param",
+          alvo: paramsDefaultString.map((param) => param.nome).join(", "),
+          message: `Param(s) ${paramsDefaultString.map((param) => param.nome).join(", ")} ficaram com tipo default string. Informe tipo (number/integer/decimal/date/datetime/boolean) em atualizar_skill se o placeholder não for texto; string continua aceito e não bloqueia publicar.`,
+          nextAction: "atualizar_skill",
+        },
+      ];
+    }
   }
   return {
     fluxo: buildFluxoTreino({

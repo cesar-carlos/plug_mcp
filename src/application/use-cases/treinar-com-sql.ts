@@ -13,9 +13,10 @@ import type {
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { paresDoRelacionamento } from "../../domain/entities/escopo.js";
 import {
+  avisoLimiteNoSqlModelo,
+  bindParamsForValidation,
   parseSqlModelo,
   sqlAmostra,
-  bindParamsForValidation,
   sqlParaOdbc,
 } from "./shared/sql-modelo.js";
 import { inferirPapelColuna } from "./shared/inferir-papel.js";
@@ -86,7 +87,7 @@ export class TreinarComSql {
       await requireAcesso(this.acessos, input.acessoId, uid),
       uid,
     );
-    const modelo = parseSqlModelo(input.sql ?? "");
+    const modelo = parseSqlModelo(input.sql ?? "", acesso.dialeto);
     const escopo = escopoFromSqlModelo(modelo);
     const origem = "validado_execucao" as const;
     const params = bindParamsForValidation(modelo.sql, input.params);
@@ -233,6 +234,10 @@ export class TreinarComSql {
     });
 
     const avisos: AvisoPerfil[] = [];
+    const avisoLimite = avisoLimiteNoSqlModelo(modelo.sql);
+    if (avisoLimite) {
+      avisos.push(avisoLimite);
+    }
     let progresso:
       | { operacaoId: string; fase: string; queriesUsadas: number; queriesLimite: number }
       | undefined;

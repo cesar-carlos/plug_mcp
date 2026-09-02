@@ -13,6 +13,8 @@ import {
   CADASTRAR_SKILL_PROMPT_DESCRIPTION,
 } from "../../src/infrastructure/mcp/skill-tools.js";
 import {
+  TREINAR_COM_SQL_TOOL_DESCRIPTION,
+  VALIDAR_SKILL_TOOL_DESCRIPTION,
   CONSULTAR_DADOS_TOOL_DESCRIPTION,
   EXPORTAR_ANEXO_TOOL_DESCRIPTION,
   OBTER_SKILL_TOOL_DESCRIPTION,
@@ -59,6 +61,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toContain("hasNextPage");
     expect(PRE_TREINO_SESSAO).toContain("LITERAL_TEXTO");
     expect(PRE_TREINO_SESSAO).toMatch(/inspecionar_consulta sem sql/i);
+    expect(PRE_TREINO_SESSAO).toMatch(/treino parseia o sqlModelo/);
+    expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o DIALECT_UNSUPPORTED/);
     expect(PRE_TREINO_SESSAO).toMatch(/Aceita skill validada/i);
     expect(PRE_TREINO_SESSAO).toMatch(/SELECT \*/);
     expect(PRE_TREINO_SESSAO).toContain("details.engineMessage");
@@ -125,6 +129,9 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o espere o hub reescrever/);
     expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o licencia TOP\/OFFSET/);
     expect(PRE_TREINO_SESSAO).toMatch(/hub n[aã]o [eé] camada de dialeto/);
+    expect(PRE_TREINO_SESSAO).toContain("PACOTE_INCOMPLETO.nextAction");
+    expect(PRE_TREINO_SESSAO).toMatch(/primeira falta bloqueante/);
+    expect(PRE_TREINO_SESSAO).toMatch(/criar_skill \/ validar_skill \/ atualizar_skill/);
   });
 
   it("entra em MCP_SERVER_INSTRUCTIONS junto com a operação", () => {
@@ -157,6 +164,11 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/at[eé] reconectar/);
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/pre_treino rel[eê] o banco/);
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/INNER vs LEFT/);
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("PAGINACAO_MODELO");
+    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/une o AST ao pacote/);
+    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/grafo inferido n[aã]o entra/);
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("PACOTE_INCOMPLETO.nextAction");
+    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/kind=param n[aã]o bloqueia publicar/);
   });
 
   it("Bearer com um acesso anexa persona depois do SQL; vários não concatenam chapéus", () => {
@@ -239,6 +251,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/n[aã]o invente schema/i);
     expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/dialeto do acesso/);
     expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/hub n[aã]o reescreve dialeto/);
+    expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/n[aã]o DIALECT_UNSUPPORTED/);
+    expect(CADASTRAR_SKILL_PROMPT_DESCRIPTION).toMatch(/FIRST\/TOP\/LIMIT/);
   });
 
   it("descrições de tools de SQL/resources não assumem um único dialeto", () => {
@@ -258,5 +272,11 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(ATUALIZAR_PERSONA_TOOL_DESCRIPTION).toMatch(/n[aã]o recorta skills/);
     expect(ATUALIZAR_PERSONA_TOOL_DESCRIPTION).toMatch(/consultaPermitida/);
     expect(ATUALIZAR_PERSONA_TOOL_DESCRIPTION).toMatch(/String vazia ou null limpa/);
+    expect(TREINAR_COM_SQL_TOOL_DESCRIPTION).toMatch(/N[AÃ]O é DIALECT_UNSUPPORTED/);
+    expect(TREINAR_COM_SQL_TOOL_DESCRIPTION).toMatch(/FIRST\/TOP\/LIMIT/);
+    expect(TREINAR_COM_SQL_TOOL_DESCRIPTION).toContain("PAGINACAO_MODELO");
+    expect(VALIDAR_SKILL_TOOL_DESCRIPTION).toMatch(/N[AÃ]O é DIALECT_UNSUPPORTED/);
+    expect(VALIDAR_SKILL_TOOL_DESCRIPTION).toContain("PAGINACAO_MODELO");
+    expect(VALIDAR_SKILL_TOOL_DESCRIPTION).not.toMatch(/Firebird: SQL livre → DIALECT_UNSUPPORTED/);
   });
 });

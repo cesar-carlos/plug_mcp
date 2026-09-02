@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { exigirPacotePublicavel } from "../../src/application/use-cases/shared/gates-skill.js";
+import {
+  exigirEscopoNoGrafo,
+  exigirPacotePublicavel,
+} from "../../src/application/use-cases/shared/gates-skill.js";
 import { parseEscopoSkill } from "../../src/domain/entities/escopo.js";
+import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { InMemoryGrafoRepository } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
@@ -128,5 +132,44 @@ describe("gate de publicação", () => {
         "SELECT SUM(r.valor) AS total FROM receber r INNER JOIN cliente c ON r.codcli = c.codcli WHERE r.valor > 0",
       ),
     ).rejects.toMatchObject({ code: ERROR_CODES.PERFIL_AUSENTE });
+  });
+
+  it("PACOTE_INCOMPLETO nextAction é a primeira falta bloqueante", async () => {
+    const grafo = new InMemoryGrafoRepository();
+    await seedTabelaComColunas(grafo, {
+      agentId,
+      usuarioId: "u1",
+      nome: "receber",
+      colunas: ["valor", "codcli"],
+    });
+    await seedTabelaComColunas(grafo, {
+      agentId,
+      usuarioId: "u1",
+      nome: "cliente",
+      colunas: ["codcli"],
+    });
+    const escopo = parseEscopoSkill({
+      tabelas: ["receber", "cliente"],
+      colunasPorTabela: { receber: ["valor", "codcli"], cliente: ["codcli"] },
+      relacionamentos: [
+        {
+          tabelaOrigem: "receber",
+          tabelaDestino: "cliente",
+          pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
+        },
+      ],
+    });
+    try {
+      await exigirEscopoNoGrafo(grafo, agentId, escopo);
+      expect.fail("esperava PACOTE_INCOMPLETO");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DomainError);
+      const domain = error as DomainError;
+      expect(domain.code).toBe(ERROR_CODES.PACOTE_INCOMPLETO);
+      expect(domain.nextAction).toBe("confirmar_relacionamento");
+      const json = domain.toJson();
+      expect(json.error.nextAction).toBe("confirmar_relacionamento");
+      expect(json.error.nextAction).not.toBe("validar_skill");
+    }
   });
 });

@@ -94,6 +94,8 @@ const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
   },
   [ERROR_CODES.PACOTE_INCOMPLETO]: {
     category: "profile",
+    // Fallback se DomainError.nextAction não vier; exigirEscopoNoGrafo / exigirPacotePublicavel
+    // passam a primeira falta bloqueante (confirmar_relacionamento, treinar_sql, …).
     nextAction: "validar_skill",
     documentationUrl: doc("pacote_incompleto"),
   },
