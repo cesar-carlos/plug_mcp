@@ -82,6 +82,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- Migration `0022_catalogo_por_acesso`: o fan-out de catálogo para acessos extras copia `agent_id` nos INSERTs enquanto a coluna ainda é NOT NULL (depois o SQL a remove). Sem isso, `tabela_grafo` (e as demais tabelas do grafo) recusam a duplicação.
 - `confirmar_coluna` `livre` não volta a `pessoal`/`segredo` no perfil (`enriquecer=completo`): só origem `confirmado_usuario` altera a classe; o segundo merge `validado_execucao` não reinfere privacidade.
 - SQL Server **4104** (`multi-part identifier`) no wrap de paginação gerenciada entra no mesmo ramo de **1033**: `INVALID_SQL` `sql_engine`, hint TOP n sem `options.page`, `nextAction: consultar_dados` (não `validar_consulta`). O rewrite do wrap continua no `plug_agente`.
 - Negação na descrição da skill (“Não agrega estoque”) não entra em `termosEncontrados` da cobertura certificada. Cláusulas compostas (“não … e não …”) não deixam o segundo complemento no haystack. `SKILL_GAP` por termo negado não pede sinônimo.

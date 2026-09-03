@@ -130,10 +130,11 @@ BEGIN
     WHERE acesso_id = canonical;
 
     INSERT INTO tabela_grafo (
-      id, acesso_id, nome, descricao, origem, status, autor_usuario_id, created_at, updated_at
+      id, agent_id, acesso_id, nome, descricao, origem, status, autor_usuario_id, created_at, updated_at
     )
     SELECT
       m.new_id,
+      extra.agent_id,
       extra.acesso_id,
       t.nome,
       t.descricao,
@@ -175,12 +176,13 @@ BEGIN
     WHERE acesso_id = canonical;
 
     INSERT INTO relacionamento_grafo (
-      id, acesso_id, tabela_origem_id, coluna_origem, tabela_destino_id, coluna_destino,
+      id, agent_id, acesso_id, tabela_origem_id, coluna_origem, tabela_destino_id, coluna_destino,
       pares_fingerprint, tipo_join, cardinalidade, descricao, escopo_validacao, origem, status,
       autor_usuario_id, created_at, updated_at
     )
     SELECT
       mr.new_id,
+      extra.agent_id,
       extra.acesso_id,
       mo.new_id,
       r.coluna_origem,
@@ -206,8 +208,8 @@ BEGIN
     FROM relacionamento_grafo_par p
     JOIN map_rel mr ON mr.old_id = p.relacionamento_id;
 
-    INSERT INTO schema_snapshot (id, acesso_id, tabela_nome, assinatura, created_at, updated_at)
-    SELECT gen_random_uuid(), extra.acesso_id, s.tabela_nome, s.assinatura, s.created_at, s.updated_at
+    INSERT INTO schema_snapshot (id, agent_id, acesso_id, tabela_nome, assinatura, created_at, updated_at)
+    SELECT gen_random_uuid(), extra.agent_id, extra.acesso_id, s.tabela_nome, s.assinatura, s.created_at, s.updated_at
     FROM schema_snapshot s
     WHERE s.acesso_id = canonical;
 
@@ -227,12 +229,13 @@ BEGIN
     WHERE acesso_id = canonical;
 
     INSERT INTO skill (
-      id, acesso_id, slug, nome, descricao, sql_modelo, params, escopo, versao, pacote_versao,
+      id, agent_id, acesso_id, slug, nome, descricao, sql_modelo, params, escopo, versao, pacote_versao,
       status, motivo_revalidacao, consulta_semantica, politica_consulta, autor_usuario_id,
       created_at, updated_at
     )
     SELECT
       ms.new_id,
+      extra.agent_id,
       extra.acesso_id,
       s.slug,
       s.nome,
@@ -253,10 +256,11 @@ BEGIN
     JOIN map_skill ms ON ms.old_id = s.id;
 
     INSERT INTO anotacao_grafo (
-      id, acesso_id, tabela_id, skill_id, tipo, titulo, texto, autor_usuario_id, created_at, updated_at
+      id, agent_id, acesso_id, tabela_id, skill_id, tipo, titulo, texto, autor_usuario_id, created_at, updated_at
     )
     SELECT
       gen_random_uuid(),
+      extra.agent_id,
       extra.acesso_id,
       CASE WHEN n.tabela_id IS NULL THEN NULL ELSE mt.new_id END,
       CASE WHEN n.skill_id IS NULL THEN NULL ELSE ms.new_id END,
@@ -277,11 +281,12 @@ BEGIN
     WHERE acesso_id = canonical;
 
     INSERT INTO consulta_aprendida (
-      id, acesso_id, pergunta, sql, params_contrato, execucoes, ultima_execucao, status,
+      id, agent_id, acesso_id, pergunta, sql, params_contrato, execucoes, ultima_execucao, status,
       autor_usuario_id, created_at, updated_at
     )
     SELECT
       mc.new_id,
+      extra.agent_id,
       extra.acesso_id,
       c.pergunta,
       c.sql,
@@ -301,9 +306,10 @@ BEGIN
     JOIN map_consulta mc ON mc.old_id = cs.consulta_id
     JOIN map_skill ms ON ms.old_id = cs.skill_id;
 
-    INSERT INTO sinonimo (id, acesso_id, termo, alvo_tipo, alvo_id, created_at)
+    INSERT INTO sinonimo (id, agent_id, acesso_id, termo, alvo_tipo, alvo_id, created_at)
     SELECT
       gen_random_uuid(),
+      extra.agent_id,
       extra.acesso_id,
       s.termo,
       s.alvo_tipo,
@@ -317,10 +323,11 @@ BEGIN
     WHERE s.acesso_id = canonical;
 
     INSERT INTO lacuna_consulta (
-      id, acesso_id, pergunta, pergunta_chave, tipo, status, contrato, created_at, updated_at
+      id, agent_id, acesso_id, pergunta, pergunta_chave, tipo, status, contrato, created_at, updated_at
     )
     SELECT
       gen_random_uuid(),
+      extra.agent_id,
       extra.acesso_id,
       l.pergunta,
       l.pergunta_chave,
