@@ -37,8 +37,12 @@ export const listPublishedSkillsForUsuario = async (
 
 export const skillToolName = (skill: Skill, all: readonly Skill[]): string => {
   const slug = skill.slug.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
+  const acessoIds = new Set(
+    all.map((item) => item.acessoId).filter((id): id is string => Boolean(id)),
+  );
   const clash = all.filter((item) => item.slug === skill.slug).length > 1;
-  if (clash) {
+  const variosAcessos = acessoIds.size > 1;
+  if (clash || variosAcessos) {
     return `skill_${slug}_${(skill.acessoId ?? skill.id).replace(/-/g, "").slice(0, 8)}`;
   }
   return `skill_${slug}`;
@@ -99,7 +103,7 @@ export const syncSkillTools = async (input: {
       {
         title: skill.nome,
         description:
-          `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados. N=1 omita acessoId; N>1 o skillId desta tool amarra o acesso.`.trim(),
+          `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados. N=1 omita acessoId; N>1 o nome inclui sufixo do acesso e o skillId desta tool amarra o catálogo.`.trim(),
         inputSchema: shape,
         annotations: queryAnnotations,
       },

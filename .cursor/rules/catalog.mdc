@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Grafo e skills
 
-Não existe catálogo `Fonte` nem seed `vendas/produtos/clientes`. Schema vive no **grafo** por `acesso_id` (**1 `client_token` = 1 catálogo**). Consulta só com **pacote** de skill publicada (`EscopoSkill` + `sqlModelo`). Grafo não licencia JOIN. Persona (`nomePersona`/`instrucoesPersona`) vive no **acesso**, não no pacote — não recorta skills nem licencia SQL. **Várias personas = vários acessos**.
+Não existe catálogo `Fonte` nem seed `vendas/produtos/clientes`. Schema vive no **grafo** por `acesso_id` (**1 `client_token` = 1 catálogo**). Consulta só com **pacote** de skill publicada (`EscopoSkill` + `sqlModelo`). Grafo não licencia JOIN. Persona (`nomePersona`/`instrucoesPersona`) vive no **acesso**, não no pacote — não recorta skills **neste acesso** (outro token = outro catálogo) nem licencia SQL. Senha autentica; não particiona. Hub SQL continua `agentId` + `client_token`. **Várias personas = vários acessos**.
 
 - Escrita do grafo é por acesso (não acumula entre tokens do mesmo `agentId`). `listColunas` / `mergeColuna` / `deleteRelacionamento` (e writes chaveados por UUID) recortam por `acesso_id` ou JOIN via tabelas daquele acesso — UUID de outro catálogo é no-op, não oráculo. Leitura recortada pela policy do `client_token` daquele acesso. `acesso_id` NULL (órfão de cutover) **não** vira tenant `""`. `remover_acesso` CASCADE apaga skills/grafo/anotações/aprendizado (memória e Postgres).
 - Proveniência: `validado_execucao` > `confirmado_usuario` > `inferido`. Empate de texto → `conflito` até `resolver_conflito`. Merge de relacionamento: origem mais fraca **não** sobrescreve `tipoJoin` (LEFT confirmado permanece se o incoming for `inferido`).

@@ -1,4 +1,4 @@
-import type { AnotacaoGrafo, ParametroSkill } from "../../../domain/entities/skill.js";
+import type { AnotacaoGrafo, ParametroSkill, Skill } from "../../../domain/entities/skill.js";
 import type { ConsultaAprendida } from "../../../domain/entities/aprendizado.js";
 import { overlayMetricasSaida } from "../../../domain/entities/escopo.js";
 import { isDomainError } from "../../../domain/errors/domain-error.js";
@@ -83,8 +83,25 @@ export const persistirItensAprendizado = async (input: {
       continue;
     }
     const skillId: string | null = item.skillId?.trim() ? item.skillId.trim() : null;
-    const skill =
-      skillId === null ? null : await requireSkillDoAcesso(input.skills, skillId, input.acessoId);
+    let skill: Skill | null = null;
+    if (skillId !== null) {
+      try {
+        skill = await requireSkillDoAcesso(input.skills, skillId, input.acessoId);
+      } catch (err) {
+        if (
+          input.strictMetricas === false &&
+          isDomainError(err) &&
+          err.code === ERROR_CODES.SKILL_NOT_FOUND
+        ) {
+          avisos.push({
+            code: "APRENDIZADO_IGNORADO",
+            message: "skillId não pertence a este acesso; item de aprendizado ignorado.",
+          });
+          continue;
+        }
+        throw err;
+      }
+    }
     if (tipo === "sinonimo") {
       await input.aprendizado.registrarSinonimo({
         acessoId: input.acessoId,

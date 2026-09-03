@@ -20,9 +20,9 @@ documentação de produto e os testes correspondentes.
 ## Invariantes do produto
 
 - O MCP é cofre + grafo de treinamento + skills; não é um proxy SQL genérico.
-  A **base comum** de todo consumidor: SQL no plug_server, dialeto do `agentId`,
+  A **base comum** de todo consumidor: SQL no plug_server, dialeto do acesso,
   resources (`guia://paginacao`, `guia://dialeto/{mssql|sybase|postgres|firebird}`,
-  `skill://` = pacote publicado, `persona://{acessoId}` = tom/uso do acesso), estrutura pelas skills publicadas e consultas
+  `skill://{acessoId}/{slug}` = pacote publicado, `persona://{acessoId}` = tom/uso do acesso), estrutura pelas skills publicadas e consultas
   dinâmicas só no pacote (fail-closed). Sem embeddings. Guias já no bootstrap
   (sem Bearer); `skill://` e `persona://` exigem Bearer. Não assuma mssql — leia o guia do
   acesso. Identificar o GDBR do acesso e emitir SQL compatível é **treino + IA** — o
@@ -31,12 +31,13 @@ documentação de produto e os testes correspondentes.
   licencia `TOP`/`OFFSET` de outro GDBR. O **papel** combina a persona do acesso (tom, `atualizar_persona`)
   com as skills publicadas daquele acesso (pacote). SQL comum primeiro;
   persona depois; em conflito vale o pacote fail-closed. Persona não recorta
-  skills nem licencia consulta. **1 client_token = 1 persona = 1 catálogo**
-  (`acesso_id`). Mesmo e-mail/`agentId` + outro token (`adicionar_acesso`)
-  começa vazio. **Várias personas = vários acessos**; um acesso = um chapéu —
-  não concatenar nem unir pacotes. N=1: omita `acessoId`. N>1: passe `acessoId`;
-  `skillId`/slug único amarra o acesso (não una catálogos). `exportar_anexo`
-  infere do handle; `listar_auditoria` N>1 exige `acessoId`.
+  skills **neste acesso** (outro token = outro catálogo) nem licencia consulta.
+  Senha autentica, não particiona. Hub SQL continua `agentId` + `client_token`.
+  **1 client_token = 1 persona = 1 catálogo** (`acesso_id`). Mesmo e-mail/`agentId`
+  + outro token (`adicionar_acesso`) começa vazio. **Várias personas = vários
+  acessos**; um acesso = um chapéu — não concatenar nem unir pacotes. N=1: omita
+  `acessoId`. N>1: passe `acessoId` **ou** infira (`skillId`/slug único; handle
+  em `exportar_anexo`). `listar_auditoria` N>1 exige `acessoId`.
   Resource `skill://{acessoId}/{slug}`. Sessão que começa com 1 acesso e ganha
   o 2º (`adicionar_acesso`) mantém o chapéu 1 em `initialize.instructions` até
   reconectar; `pre_treino` relê o banco. O mesmo `agentId` entre usuários MCP

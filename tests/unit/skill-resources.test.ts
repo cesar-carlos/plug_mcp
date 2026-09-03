@@ -7,6 +7,7 @@ import {
   envelopeSkillResource,
   envelopePersonaResource,
   listPublishedSkillsForUsuario,
+  skillToolName,
   urisGuiaDialeto,
   uriPersona,
 } from "../../src/infrastructure/mcp/skill-tools.js";
@@ -123,5 +124,32 @@ describe("resources skill:// e guia://", () => {
       instrucoesPersona: "Tom executivo.",
     });
     expect(JSON.stringify(envelopePersonaResource(acesso))).not.toContain("clientToken");
+  });
+
+  it("skill_* N=1 usa só o slug; N>1 sempre sufixa o acessoId", async () => {
+    const skills = new InMemorySkillRepository();
+    const acessoA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const acessoB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const vendas = await skills.create({
+      acessoId: acessoA,
+      slug: "vendas",
+      nome: "Vendas",
+      descricao: "a",
+      sqlModelo: "SELECT 1 AS n WHERE 1=1",
+      escopo: { ...escopoVazio(), pacoteVersao: PACOTE_VERSAO_ATUAL },
+      autorUsuarioId: "u1",
+    });
+    const estoque = await skills.create({
+      acessoId: acessoB,
+      slug: "estoque",
+      nome: "Estoque",
+      descricao: "b",
+      sqlModelo: "SELECT 1 AS n WHERE 1=1",
+      escopo: { ...escopoVazio(), pacoteVersao: PACOTE_VERSAO_ATUAL },
+      autorUsuarioId: "u1",
+    });
+    expect(skillToolName(vendas, [vendas])).toBe("skill_vendas");
+    expect(skillToolName(vendas, [vendas, estoque])).toBe("skill_vendas_aaaaaaaa");
+    expect(skillToolName(estoque, [vendas, estoque])).toBe("skill_estoque_bbbbbbbb");
   });
 });

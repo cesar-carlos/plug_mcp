@@ -704,4 +704,60 @@ describe("catálogo isolado por acesso (client_token)", () => {
       "SELECT b FROM persona_b",
     ]);
   });
+
+  it("consultar_dados.aprendizado[] com skillId de outro acesso não falha a consulta nem grava no B", async () => {
+    const ctx = repos();
+    const a = await registrar(ctx, "aprq2@b.com", "tok-aprq2-a-111");
+    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
+      a.usuarioId,
+      { agentId, dialeto: "mssql", clientToken: "tok-aprq2-b-222" },
+    );
+    const acessoB = added.acesso.id;
+    await seedTabelaComColunas(ctx.grafo, {
+      acessoId: a.acessoId,
+      usuarioId: a.usuarioId,
+      nome: "produto",
+      colunas: ["codprod"],
+    });
+    await seedTabelaComColunas(ctx.grafo, {
+      acessoId: acessoB,
+      usuarioId: a.usuarioId,
+      nome: "produto",
+      colunas: ["codprod"],
+    });
+    const skillA = await treinarECriar(ctx, a.usuarioId, a.acessoId, "Produtos A");
+    const skillB = await treinarECriar(ctx, a.usuarioId, acessoB, "Produtos B");
+    await ctx.skills.setStatus(skillA, "publicada");
+    await ctx.skills.setStatus(skillB, "publicada");
+    const consultar = new ConsultarDados(
+      ctx.acessos,
+      ctx.skills,
+      ctx.plug,
+      stubSessions(),
+      crypto,
+      ctx.audit,
+      500,
+      5000,
+      { grafo: ctx.grafo, aprendizado: ctx.aprendizado, anotacoes: ctx.anotacoes },
+    );
+    const result = await consultar.execute(a.usuarioId, {
+      acessoId: acessoB,
+      skillId: skillB,
+      pergunta: "lista produtos",
+      sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
+      aprendizado: [
+        {
+          skillId: skillA,
+          tipo: "regra",
+          titulo: "Regra A no B",
+          texto: "Não grave ponteiro do outro catálogo",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    expect(result.rowCount).toBeGreaterThan(0);
+    expect(result.avisos.some((aviso) => aviso.code === "APRENDIZADO_IGNORADO")).toBe(true);
+    expect(await ctx.anotacoes.list(acessoB)).toHaveLength(0);
+    expect(await ctx.anotacoes.list(a.acessoId)).toHaveLength(0);
+  });
 });

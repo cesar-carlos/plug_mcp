@@ -60,6 +60,7 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toContain("truncated");
     expect(PRE_TREINO_SESSAO).toContain("hasNextPage");
     expect(PRE_TREINO_SESSAO).toContain("LITERAL_TEXTO");
+    expect(PRE_TREINO_SESSAO).toContain("APRENDIZADO_IGNORADO");
     expect(PRE_TREINO_SESSAO).toMatch(/inspecionar_consulta sem sql/i);
     expect(PRE_TREINO_SESSAO).toMatch(/treino parseia o sqlModelo/);
     expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o DIALECT_UNSUPPORTED/);

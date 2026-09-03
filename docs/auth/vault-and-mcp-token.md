@@ -12,7 +12,7 @@ O MCP não tem tela de login nem OAuth 2.1 próprio. Identidade:
 
 ## Bootstrap
 
-`POST /mcp` **sem** Bearer só aceita `initialize`, `notifications/initialized`, `tools/list` (catálogo mínimo), `prompts/list`, `prompts/get`, `resources/list`, `resources/templates/list`, `resources/read` e `tools/call` de `registrar_acesso`. Rate limit de bootstrap é mais apertado. Guias `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}` e prompts `pre_treino` / `consultar_com_skill` / `cadastrar_skill` já no bootstrap. `skill://{acessoId}/{slug}`, `persona://` e tools de skill exigem Bearer. `initialize` sem Bearer: só o bloco SQL comum (sem chapéu de persona). Com Bearer e um acesso: persona depois do SQL; tools omitem `acessoId`.
+`POST /mcp` **sem** Bearer só aceita `initialize`, `notifications/initialized`, `tools/list` (catálogo mínimo), `prompts/list`, `prompts/get`, `resources/list`, `resources/templates/list`, `resources/read` e `tools/call` de `registrar_acesso`. Rate limit de bootstrap é mais apertado. Guias `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}` e prompts `pre_treino` / `consultar_com_skill` / `cadastrar_skill` já no bootstrap. `skill://{acessoId}/{slug}`, `persona://` e tools de skill exigem Bearer. `initialize` sem Bearer: só o bloco SQL comum (sem chapéu de persona). Com Bearer e um acesso: persona depois do SQL; tools omitem `acessoId`. N>1: passe `acessoId` **ou** infira (`skillId`/slug único; handle). Hub SQL continua `agentId` + `client_token` daquele acesso.
 
 `registrar_acesso` **não** devolve o token MCP (vaza no transcript). Devolve `setupCode` + `setupUrl`. O usuário abre `GET /setup/{code}` (HTML, one-shot) e copia o token.
 
