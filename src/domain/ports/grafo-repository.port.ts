@@ -13,7 +13,7 @@ import type { SensibilidadeColuna } from "../entities/privacidade.js";
 import type { HitBusca } from "../entities/hit-busca.js";
 
 export interface MergeTabelaInput {
-  readonly agentId: string;
+  readonly acessoId: string;
   readonly nome: string;
   readonly descricao?: string | null;
   readonly origem: OrigemFato;
@@ -21,6 +21,7 @@ export interface MergeTabelaInput {
 }
 
 export interface MergeColunaInput {
+  readonly acessoId: string;
   readonly tabelaId: string;
   readonly nome: string;
   readonly tipo?: string | null;
@@ -36,7 +37,7 @@ export interface MergeColunaInput {
 }
 
 export interface MergeRelacionamentoInput {
-  readonly agentId: string;
+  readonly acessoId: string;
   readonly tabelaOrigemId: string;
   readonly colunaOrigem?: string;
   readonly tabelaDestinoId: string;
@@ -62,29 +63,31 @@ export interface ConflitoGrafo {
 }
 
 export interface GrafoRepositoryPort {
-  withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T>;
-  getDialeto(agentId: string): Promise<GrafoDialeto | null>;
-  setDialeto(agentId: string, dialeto: string): Promise<void>;
+  withAcessoLock<T>(acessoId: string, fn: () => Promise<T>): Promise<T>;
+  getDialeto(acessoId: string): Promise<GrafoDialeto | null>;
+  setDialeto(acessoId: string, dialeto: string): Promise<void>;
+  deleteByAcesso(acessoId: string): Promise<void>;
   mergeTabela(input: MergeTabelaInput): Promise<{ tabela: TabelaGrafo; conflito: boolean }>;
   mergeColuna(input: MergeColunaInput): Promise<{ coluna: ColunaGrafo; conflito: boolean }>;
   mergeRelacionamento(
     input: MergeRelacionamentoInput,
   ): Promise<{ relacionamento: RelacionamentoGrafo; conflito: boolean }>;
-  deleteRelacionamento(id: string): Promise<boolean>;
-  listTabelas(agentId: string): Promise<readonly TabelaGrafo[]>;
-  listColunas(tabelaId: string): Promise<readonly ColunaGrafo[]>;
-  listRelacionamentos(agentId: string): Promise<readonly RelacionamentoGrafo[]>;
-  countConflitos(agentId: string): Promise<number>;
-  listConflitos(agentId: string): Promise<readonly ConflitoGrafo[]>;
-  findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null>;
-  findColuna(tabelaId: string, nome: string): Promise<ColunaGrafo | null>;
+  deleteRelacionamento(acessoId: string, id: string): Promise<boolean>;
+  listTabelas(acessoId: string): Promise<readonly TabelaGrafo[]>;
+  listColunas(acessoId: string, tabelaId: string): Promise<readonly ColunaGrafo[]>;
+  listRelacionamentos(acessoId: string): Promise<readonly RelacionamentoGrafo[]>;
+  countConflitos(acessoId: string): Promise<number>;
+  listConflitos(acessoId: string): Promise<readonly ConflitoGrafo[]>;
+  findTabelaByNome(acessoId: string, nome: string): Promise<TabelaGrafo | null>;
+  findColuna(acessoId: string, tabelaId: string, nome: string): Promise<ColunaGrafo | null>;
   saveSchemaSnapshot(input: {
-    agentId: string;
+    acessoId: string;
     tabelaNome: string;
     assinatura: string;
   }): Promise<{ drifted: boolean; anterior: string | null }>;
-  listSchemaSnapshots(agentId: string): Promise<readonly SchemaSnapshotGrafo[]>;
+  listSchemaSnapshots(acessoId: string): Promise<readonly SchemaSnapshotGrafo[]>;
   resolverConflito(input: {
+    acessoId: string;
     tabelaId?: string;
     colunaId?: string;
     relacionamentoId?: string;
@@ -93,5 +96,9 @@ export interface GrafoRepositoryPort {
     dicionario?: string | null;
     autorUsuarioId: string | null;
   }): Promise<void>;
-  buscar(agentId: string, query: string, limite: number): Promise<readonly HitBusca<TabelaGrafo>[]>;
+  buscar(
+    acessoId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<TabelaGrafo>[]>;
 }

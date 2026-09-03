@@ -3,20 +3,21 @@ import type { GrafoRepositoryPort } from "../../src/domain/ports/grafo-repositor
 export const seedTabelaComColunas = async (
   grafo: GrafoRepositoryPort,
   input: {
-    agentId: string;
+    acessoId: string;
     usuarioId: string;
     nome: string;
     colunas?: readonly string[];
   },
 ): Promise<void> => {
   const { tabela } = await grafo.mergeTabela({
-    agentId: input.agentId,
+    acessoId: input.acessoId,
     nome: input.nome,
     origem: "validado_execucao",
     autorUsuarioId: input.usuarioId,
   });
   for (const nome of input.colunas ?? ["codprod"]) {
     await grafo.mergeColuna({
+      acessoId: input.acessoId,
       tabelaId: tabela.id,
       nome,
       tipo: "int",

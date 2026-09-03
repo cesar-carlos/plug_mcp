@@ -2,7 +2,7 @@ import type { ParametroSkill } from "./skill.js";
 
 export interface ConsultaAprendida {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly skillIds: readonly string[];
   readonly pergunta: string;
   readonly sql: string;
@@ -15,7 +15,7 @@ export interface ConsultaAprendida {
 
 export interface Sinonimo {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly termo: string;
   readonly alvoTipo: string;
   readonly alvoId: string;
@@ -29,7 +29,7 @@ export const chavePerguntaLacuna = (pergunta: string): string =>
 
 export interface LacunaConsulta {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly pergunta: string;
   readonly tipo: TipoLacuna;
   readonly status: StatusLacuna;

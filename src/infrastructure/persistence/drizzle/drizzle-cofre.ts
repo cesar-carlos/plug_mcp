@@ -69,6 +69,7 @@ import type {
 import { chavePerguntaLacuna } from "../../../domain/entities/aprendizado.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
 import type { ParametroSkill } from "../../../domain/entities/skill.js";
+import { asAcessoId } from "../as-acesso-id.js";
 
 const toUsuario = (row: typeof schema.usuarioMcp.$inferSelect): UsuarioMcp => ({
   id: row.id,
@@ -274,7 +275,7 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
 
 const toTabela = (row: typeof schema.tabelaGrafo.$inferSelect): TabelaGrafo => ({
   id: row.id,
-  agentId: row.agentId,
+  acessoId: asAcessoId(row.acessoId),
   nome: row.nome,
   descricao: row.descricao,
   origem: row.origem as OrigemFato,
@@ -299,6 +300,23 @@ const toColuna = (row: typeof schema.colunaGrafo.$inferSelect): ColunaGrafo => (
   autorUsuarioId: row.autorUsuarioId,
 });
 
+const colunaNaoPersistida = (input: MergeColunaInput): ColunaGrafo => ({
+  id: input.tabelaId,
+  tabelaId: input.tabelaId,
+  nome: input.nome,
+  tipo: input.tipo ?? null,
+  nullable: input.nullable ?? null,
+  descricao: input.descricao ?? null,
+  dicionario: input.dicionario ?? null,
+  papel: input.papel ?? null,
+  formato: input.formato ?? null,
+  perfil: input.perfil ?? null,
+  sensibilidade: parseSensibilidadeColuna(input.sensibilidade ?? "livre"),
+  origem: input.origem,
+  status: "vigente",
+  autorUsuarioId: input.autorUsuarioId,
+});
+
 const toRelacionamento = (
   row: typeof schema.relacionamentoGrafo.$inferSelect,
   pares: readonly ParRelacionamento[] = [],
@@ -309,7 +327,7 @@ const toRelacionamento = (
       : [{ colunaOrigem: row.colunaOrigem, colunaDestino: row.colunaDestino }];
   return {
     id: row.id,
-    agentId: row.agentId,
+    acessoId: asAcessoId(row.acessoId),
     tabelaOrigemId: row.tabelaOrigemId,
     colunaOrigem: row.colunaOrigem,
     tabelaDestinoId: row.tabelaDestinoId,
@@ -335,39 +353,60 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     return grafoTx.getStore() ?? this.db;
   }
 
-  async withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
+  async withAcessoLock<T>(acessoId: string, fn: () => Promise<T>): Promise<T> {
     return this.db.transaction(async (tx) => {
-      await tx.insert(schema.grafoLock).values({ agentId }).onConflictDoNothing();
+      await tx.insert(schema.grafoLock).values({ acessoId }).onConflictDoNothing();
       await tx.execute(
-        sql`select agent_id from grafo_lock where agent_id = ${agentId}::uuid for update`,
+        sql`select acesso_id from grafo_lock where acesso_id = ${acessoId}::uuid for update`,
       );
       return grafoTx.run(tx as unknown as Db, fn);
     });
   }
 
-  async getDialeto(agentId: string): Promise<GrafoDialeto | null> {
+  async getDialeto(acessoId: string): Promise<GrafoDialeto | null> {
     const [row] = await this.conn()
       .select()
       .from(schema.grafoDialeto)
-      .where(eq(schema.grafoDialeto.agentId, agentId))
+      .where(eq(schema.grafoDialeto.acessoId, acessoId))
       .limit(1);
-    return row ? { agentId: row.agentId, dialeto: row.dialeto } : null;
+    return row ? { acessoId: asAcessoId(row.acessoId), dialeto: row.dialeto } : null;
   }
 
-  async setDialeto(agentId: string, dialeto: string): Promise<void> {
+  async setDialeto(acessoId: string, dialeto: string): Promise<void> {
     await this.conn()
       .insert(schema.grafoDialeto)
-      .values({ agentId, dialeto })
-      .onConflictDoUpdate({ target: schema.grafoDialeto.agentId, set: { dialeto } });
+      .values({ acessoId, dialeto })
+      .onConflictDoUpdate({ target: schema.grafoDialeto.acessoId, set: { dialeto } });
+  }
+
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    await this.conn()
+      .delete(schema.relacionamentoGrafo)
+      .where(eq(schema.relacionamentoGrafo.acessoId, acessoId));
+    await this.conn().delete(schema.tabelaGrafo).where(eq(schema.tabelaGrafo.acessoId, acessoId));
+    await this.conn()
+      .delete(schema.schemaSnapshot)
+      .where(eq(schema.schemaSnapshot.acessoId, acessoId));
+    await this.conn().delete(schema.grafoDialeto).where(eq(schema.grafoDialeto.acessoId, acessoId));
+    await this.conn().delete(schema.grafoLock).where(eq(schema.grafoLock.acessoId, acessoId));
+  }
+
+  private async tabelaDoAcesso(acessoId: string, tabelaId: string): Promise<TabelaGrafo | null> {
+    const [row] = await this.conn()
+      .select()
+      .from(schema.tabelaGrafo)
+      .where(and(eq(schema.tabelaGrafo.id, tabelaId), eq(schema.tabelaGrafo.acessoId, acessoId)))
+      .limit(1);
+    return row ? toTabela(row) : null;
   }
 
   async mergeTabela(input: MergeTabelaInput): Promise<{ tabela: TabelaGrafo; conflito: boolean }> {
-    const existing = await this.findTabelaByNome(input.agentId, input.nome);
+    const existing = await this.findTabelaByNome(input.acessoId, input.nome);
     if (!existing) {
       const [row] = await this.conn()
         .insert(schema.tabelaGrafo)
         .values({
-          agentId: input.agentId,
+          acessoId: input.acessoId,
           nome: input.nome,
           descricao: input.descricao ?? null,
           origem: input.origem,
@@ -399,7 +438,10 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
   }
 
   async mergeColuna(input: MergeColunaInput): Promise<{ coluna: ColunaGrafo; conflito: boolean }> {
-    const existing = await this.findColuna(input.tabelaId, input.nome);
+    if (!(await this.tabelaDoAcesso(input.acessoId, input.tabelaId))) {
+      return { coluna: colunaNaoPersistida(input), conflito: false };
+    }
+    const existing = await this.findColuna(input.acessoId, input.tabelaId, input.nome);
     if (!existing) {
       const [row] = await this.conn()
         .insert(schema.colunaGrafo)
@@ -459,6 +501,35 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     if (pares.length === 0) {
       throw new Error("relacionamento exige ao menos um par de colunas");
     }
+    const origemOk = await this.tabelaDoAcesso(input.acessoId, input.tabelaOrigemId);
+    const destinoOk = await this.tabelaDoAcesso(input.acessoId, input.tabelaDestinoId);
+    if (!origemOk || !destinoOk) {
+      const first = pares[0]!;
+      return {
+        relacionamento: toRelacionamento(
+          {
+            id: input.tabelaOrigemId,
+            acessoId: input.acessoId,
+            tabelaOrigemId: input.tabelaOrigemId,
+            colunaOrigem: first.colunaOrigem,
+            tabelaDestinoId: input.tabelaDestinoId,
+            colunaDestino: first.colunaDestino,
+            paresFingerprint: fingerprintPares(pares),
+            tipoJoin: input.tipoJoin,
+            cardinalidade: input.cardinalidade ?? null,
+            descricao: input.descricao ?? null,
+            escopoValidacao: input.escopoValidacao ?? null,
+            origem: input.origem,
+            status: "vigente",
+            autorUsuarioId: input.autorUsuarioId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          pares,
+        ),
+        conflito: false,
+      };
+    }
     const fp = fingerprintPares(pares);
     const fpInv = fingerprintParesInvertidos(pares);
     const first = pares[0]!;
@@ -467,7 +538,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       .from(schema.relacionamentoGrafo)
       .where(
         and(
-          eq(schema.relacionamentoGrafo.agentId, input.agentId),
+          eq(schema.relacionamentoGrafo.acessoId, input.acessoId),
           or(
             and(
               eq(schema.relacionamentoGrafo.tabelaOrigemId, input.tabelaOrigemId),
@@ -502,7 +573,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       const [row] = await this.conn()
         .insert(schema.relacionamentoGrafo)
         .values({
-          agentId: input.agentId,
+          acessoId: input.acessoId,
           tabelaOrigemId: input.tabelaOrigemId,
           colunaOrigem: first.colunaOrigem,
           tabelaDestinoId: input.tabelaDestinoId,
@@ -560,35 +631,43 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     };
   }
 
-  async deleteRelacionamento(id: string): Promise<boolean> {
+  async deleteRelacionamento(acessoId: string, id: string): Promise<boolean> {
     const rows = await this.conn()
       .delete(schema.relacionamentoGrafo)
-      .where(eq(schema.relacionamentoGrafo.id, id))
+      .where(
+        and(
+          eq(schema.relacionamentoGrafo.id, id),
+          eq(schema.relacionamentoGrafo.acessoId, acessoId),
+        ),
+      )
       .returning({ id: schema.relacionamentoGrafo.id });
     return rows.length > 0;
   }
 
-  async listTabelas(agentId: string): Promise<readonly TabelaGrafo[]> {
+  async listTabelas(acessoId: string): Promise<readonly TabelaGrafo[]> {
     const rows = await this.conn()
       .select()
       .from(schema.tabelaGrafo)
-      .where(eq(schema.tabelaGrafo.agentId, agentId));
+      .where(eq(schema.tabelaGrafo.acessoId, acessoId));
     return rows.map(toTabela);
   }
 
-  async listColunas(tabelaId: string): Promise<readonly ColunaGrafo[]> {
+  async listColunas(acessoId: string, tabelaId: string): Promise<readonly ColunaGrafo[]> {
     const rows = await this.conn()
-      .select()
+      .select({ coluna: schema.colunaGrafo })
       .from(schema.colunaGrafo)
-      .where(eq(schema.colunaGrafo.tabelaId, tabelaId));
-    return rows.map(toColuna);
+      .innerJoin(schema.tabelaGrafo, eq(schema.colunaGrafo.tabelaId, schema.tabelaGrafo.id))
+      .where(
+        and(eq(schema.colunaGrafo.tabelaId, tabelaId), eq(schema.tabelaGrafo.acessoId, acessoId)),
+      );
+    return rows.map((row) => toColuna(row.coluna));
   }
 
-  async listRelacionamentos(agentId: string): Promise<readonly RelacionamentoGrafo[]> {
+  async listRelacionamentos(acessoId: string): Promise<readonly RelacionamentoGrafo[]> {
     const rows = await this.conn()
       .select()
       .from(schema.relacionamentoGrafo)
-      .where(eq(schema.relacionamentoGrafo.agentId, agentId));
+      .where(eq(schema.relacionamentoGrafo.acessoId, acessoId));
     if (rows.length === 0) {
       return [];
     }
@@ -610,35 +689,35 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     return rows.map((row) => toRelacionamento(row, byId.get(row.id) ?? []));
   }
 
-  async countConflitos(agentId: string): Promise<number> {
+  async countConflitos(acessoId: string): Promise<number> {
     const conn = this.conn();
     const [tabelas] = await conn
       .select({ n: count() })
       .from(schema.tabelaGrafo)
       .where(
-        and(eq(schema.tabelaGrafo.agentId, agentId), eq(schema.tabelaGrafo.status, "conflito")),
+        and(eq(schema.tabelaGrafo.acessoId, acessoId), eq(schema.tabelaGrafo.status, "conflito")),
       );
     const [colunas] = await conn
       .select({ n: count() })
       .from(schema.colunaGrafo)
       .innerJoin(schema.tabelaGrafo, eq(schema.colunaGrafo.tabelaId, schema.tabelaGrafo.id))
       .where(
-        and(eq(schema.tabelaGrafo.agentId, agentId), eq(schema.colunaGrafo.status, "conflito")),
+        and(eq(schema.tabelaGrafo.acessoId, acessoId), eq(schema.colunaGrafo.status, "conflito")),
       );
     const [rels] = await conn
       .select({ n: count() })
       .from(schema.relacionamentoGrafo)
       .where(
         and(
-          eq(schema.relacionamentoGrafo.agentId, agentId),
+          eq(schema.relacionamentoGrafo.acessoId, acessoId),
           eq(schema.relacionamentoGrafo.status, "conflito"),
         ),
       );
     return (tabelas?.n ?? 0) + (colunas?.n ?? 0) + (rels?.n ?? 0);
   }
 
-  async listConflitos(agentId: string): Promise<readonly ConflitoGrafo[]> {
-    const tabelas = await this.listTabelas(agentId);
+  async listConflitos(acessoId: string): Promise<readonly ConflitoGrafo[]> {
+    const tabelas = await this.listTabelas(acessoId);
     const tabelaIds = tabelas.map((tabela) => tabela.id);
     const colunas =
       tabelaIds.length === 0
@@ -647,33 +726,36 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
             .select()
             .from(schema.colunaGrafo)
             .where(inArray(schema.colunaGrafo.tabelaId, tabelaIds));
-    const rels = await this.listRelacionamentos(agentId);
+    const rels = await this.listRelacionamentos(acessoId);
     return montarListaConflitos(tabelas, colunas.map(toColuna), rels);
   }
 
-  async findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null> {
+  async findTabelaByNome(acessoId: string, nome: string): Promise<TabelaGrafo | null> {
     const rows = await this.conn()
       .select()
       .from(schema.tabelaGrafo)
-      .where(eq(schema.tabelaGrafo.agentId, agentId));
+      .where(eq(schema.tabelaGrafo.acessoId, acessoId));
     const row = rows.find((item) => item.nome.toLowerCase() === nome.toLowerCase());
     return row ? toTabela(row) : null;
   }
 
-  async findColuna(tabelaId: string, nome: string): Promise<ColunaGrafo | null> {
+  async findColuna(acessoId: string, tabelaId: string, nome: string): Promise<ColunaGrafo | null> {
     const rows = await this.conn()
-      .select()
+      .select({ coluna: schema.colunaGrafo })
       .from(schema.colunaGrafo)
-      .where(eq(schema.colunaGrafo.tabelaId, tabelaId));
-    const row = rows.find((item) => item.nome.toLowerCase() === nome.toLowerCase());
+      .innerJoin(schema.tabelaGrafo, eq(schema.colunaGrafo.tabelaId, schema.tabelaGrafo.id))
+      .where(
+        and(eq(schema.colunaGrafo.tabelaId, tabelaId), eq(schema.tabelaGrafo.acessoId, acessoId)),
+      );
+    const row = rows.find((item) => item.coluna.nome.toLowerCase() === nome.toLowerCase());
     if (!row) {
       return null;
     }
-    return toColuna(row);
+    return toColuna(row.coluna);
   }
 
   async saveSchemaSnapshot(input: {
-    agentId: string;
+    acessoId: string;
     tabelaNome: string;
     assinatura: string;
   }): Promise<{ drifted: boolean; anterior: string | null }> {
@@ -682,7 +764,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       .from(schema.schemaSnapshot)
       .where(
         and(
-          eq(schema.schemaSnapshot.agentId, input.agentId),
+          eq(schema.schemaSnapshot.acessoId, input.acessoId),
           eq(schema.schemaSnapshot.tabelaNome, input.tabelaNome),
         ),
       )
@@ -691,7 +773,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     const drifted = anterior !== null && anterior !== input.assinatura;
     if (!existing) {
       await this.conn().insert(schema.schemaSnapshot).values({
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         tabelaNome: input.tabelaNome,
         assinatura: input.assinatura,
       });
@@ -704,19 +786,20 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
     return { drifted, anterior };
   }
 
-  async listSchemaSnapshots(agentId: string): Promise<readonly SchemaSnapshotGrafo[]> {
+  async listSchemaSnapshots(acessoId: string): Promise<readonly SchemaSnapshotGrafo[]> {
     const rows = await this.conn()
       .select()
       .from(schema.schemaSnapshot)
-      .where(eq(schema.schemaSnapshot.agentId, agentId));
+      .where(eq(schema.schemaSnapshot.acessoId, acessoId));
     return rows.map((row) => ({
-      agentId: row.agentId,
+      acessoId: asAcessoId(row.acessoId),
       tabelaNome: row.tabelaNome,
       assinatura: row.assinatura,
     }));
   }
 
   async resolverConflito(input: {
+    acessoId: string;
     tabelaId?: string;
     colunaId?: string;
     relacionamentoId?: string;
@@ -735,9 +818,22 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
           autorUsuarioId: input.autorUsuarioId,
           updatedAt: new Date(),
         })
-        .where(eq(schema.tabelaGrafo.id, input.tabelaId));
+        .where(
+          and(
+            eq(schema.tabelaGrafo.id, input.tabelaId),
+            eq(schema.tabelaGrafo.acessoId, input.acessoId),
+          ),
+        );
     }
     if (input.colunaId) {
+      const tabelas = await this.conn()
+        .select({ id: schema.tabelaGrafo.id })
+        .from(schema.tabelaGrafo)
+        .where(eq(schema.tabelaGrafo.acessoId, input.acessoId));
+      const tabelaIds = tabelas.map((item) => item.id);
+      if (tabelaIds.length === 0) {
+        return;
+      }
       await this.conn()
         .update(schema.colunaGrafo)
         .set({
@@ -748,7 +844,12 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
           autorUsuarioId: input.autorUsuarioId,
           updatedAt: new Date(),
         })
-        .where(eq(schema.colunaGrafo.id, input.colunaId));
+        .where(
+          and(
+            eq(schema.colunaGrafo.id, input.colunaId),
+            inArray(schema.colunaGrafo.tabelaId, tabelaIds),
+          ),
+        );
     }
     if (input.relacionamentoId) {
       await this.conn()
@@ -760,12 +861,17 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
           autorUsuarioId: input.autorUsuarioId,
           updatedAt: new Date(),
         })
-        .where(eq(schema.relacionamentoGrafo.id, input.relacionamentoId));
+        .where(
+          and(
+            eq(schema.relacionamentoGrafo.id, input.relacionamentoId),
+            eq(schema.relacionamentoGrafo.acessoId, input.acessoId),
+          ),
+        );
     }
   }
 
   async buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<TabelaGrafo>[]> {
@@ -788,7 +894,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
         rank: exprTsRank("tabela_grafo", query),
       })
       .from(schema.tabelaGrafo)
-      .where(and(eq(schema.tabelaGrafo.agentId, agentId), busca))
+      .where(and(eq(schema.tabelaGrafo.acessoId, acessoId), busca))
       .orderBy(ordemPorTsRank("tabela_grafo", query))
       .limit(janelaBuscaFts(limite));
     return rows
@@ -804,7 +910,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
     const [row] = await this.db
       .insert(schema.skill)
       .values({
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         slug: input.slug,
         nome: input.nome,
         descricao: input.descricao,
@@ -881,18 +987,25 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
     return row ? this.toSkill(row) : null;
   }
 
-  async findBySlug(agentId: string, slug: string): Promise<Skill | null> {
+  async findBySlug(acessoId: string, slug: string): Promise<Skill | null> {
     const [row] = await this.db
       .select()
       .from(schema.skill)
-      .where(and(eq(schema.skill.agentId, agentId), eq(schema.skill.slug, slug)))
+      .where(and(eq(schema.skill.acessoId, acessoId), eq(schema.skill.slug, slug)))
       .limit(1);
     return row ? this.toSkill(row) : null;
   }
 
-  async listByAgent(agentId: string): Promise<readonly Skill[]> {
-    const rows = await this.db.select().from(schema.skill).where(eq(schema.skill.agentId, agentId));
+  async listByAcesso(acessoId: string): Promise<readonly Skill[]> {
+    const rows = await this.db
+      .select()
+      .from(schema.skill)
+      .where(eq(schema.skill.acessoId, acessoId));
     return rows.map((row) => this.toSkill(row));
+  }
+
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    await this.db.delete(schema.skill).where(eq(schema.skill.acessoId, acessoId));
   }
 
   async deleteById(id: string): Promise<boolean> {
@@ -901,7 +1014,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
   }
 
   async buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
     status?: StatusSkill | readonly StatusSkill[],
@@ -945,7 +1058,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
         rank: exprTsRank("skill", query),
       })
       .from(schema.skill)
-      .where(and(eq(schema.skill.agentId, agentId), statusFilter, busca))
+      .where(and(eq(schema.skill.acessoId, acessoId), statusFilter, busca))
       .orderBy(ordemPorTsRank("skill", query))
       .limit(janelaBuscaFts(limite));
     return rows
@@ -956,7 +1069,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
   private toSkill(row: typeof schema.skill.$inferSelect): Skill {
     return {
       id: row.id,
-      agentId: row.agentId,
+      acessoId: asAcessoId(row.acessoId),
       slug: row.slug,
       nome: row.nome,
       descricao: row.descricao,
@@ -980,7 +1093,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
   constructor(private readonly db: Db) {}
 
   async create(input: {
-    agentId: string;
+    acessoId: string;
     tabelaId: string | null;
     skillId?: string | null;
     tipo: string;
@@ -991,7 +1104,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
     const [row] = await this.db
       .insert(schema.anotacaoGrafo)
       .values({
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         tabelaId: input.tabelaId,
         skillId: input.skillId ?? null,
         tipo: input.tipo,
@@ -1004,11 +1117,11 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
   }
 
   async list(
-    agentId: string,
+    acessoId: string,
     tabelaId?: string | null,
     skillId?: string | null,
   ): Promise<readonly AnotacaoGrafo[]> {
-    const filters = [eq(schema.anotacaoGrafo.agentId, agentId)];
+    const filters = [eq(schema.anotacaoGrafo.acessoId, acessoId)];
     if (tabelaId === null) {
       filters.push(isNull(schema.anotacaoGrafo.tabelaId));
     } else if (tabelaId !== undefined) {
@@ -1035,6 +1148,10 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
     return row ? this.toAnotacao(row) : null;
   }
 
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    await this.db.delete(schema.anotacaoGrafo).where(eq(schema.anotacaoGrafo.acessoId, acessoId));
+  }
+
   async deleteById(id: string): Promise<boolean> {
     const rows = await this.db
       .delete(schema.anotacaoGrafo)
@@ -1044,7 +1161,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
   }
 
   async buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<AnotacaoGrafo>[]> {
@@ -1067,7 +1184,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
         rank: exprTsRank("anotacao_grafo", query),
       })
       .from(schema.anotacaoGrafo)
-      .where(and(eq(schema.anotacaoGrafo.agentId, agentId), busca))
+      .where(and(eq(schema.anotacaoGrafo.acessoId, acessoId), busca))
       .orderBy(ordemPorTsRank("anotacao_grafo", query))
       .limit(janelaBuscaFts(limite));
     return rows
@@ -1078,7 +1195,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
   private toAnotacao(row: typeof schema.anotacaoGrafo.$inferSelect): AnotacaoGrafo {
     return {
       id: row.id,
-      agentId: row.agentId,
+      acessoId: asAcessoId(row.acessoId),
       tabelaId: row.tabelaId,
       skillId: row.skillId,
       tipo: row.tipo,
@@ -1112,7 +1229,7 @@ export class DrizzleAuditLog implements AuditLogPort {
       id: row!.id,
       createdAt: row!.createdAt,
       usuarioId: row!.usuarioId,
-      acessoId: row!.acessoId,
+      acessoId: asAcessoId(row!.acessoId),
       tool: row!.tool,
       sqlEnviado: row!.sqlEnviado,
       sucesso: row!.sucesso === 1,
@@ -1141,7 +1258,28 @@ export class DrizzleAuditLog implements AuditLogPort {
       id: row.id,
       createdAt: row.createdAt,
       usuarioId: row.usuarioId,
-      acessoId: row.acessoId,
+      acessoId: asAcessoId(row.acessoId),
+      tool: row.tool,
+      sqlEnviado: row.sqlEnviado,
+      sucesso: row.sucesso === 1,
+      codigoErro: row.codigoErro,
+      linhasRetornadas: row.linhasRetornadas,
+      duracaoMs: row.duracaoMs,
+    }));
+  }
+
+  async listByAcesso(acessoId: string, limite: number): Promise<readonly AuditLogEntry[]> {
+    const rows = await this.db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.acessoId, acessoId))
+      .orderBy(desc(schema.auditLog.createdAt))
+      .limit(limite);
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      usuarioId: row.usuarioId,
+      acessoId: asAcessoId(row.acessoId),
       tool: row.tool,
       sqlEnviado: row.sqlEnviado,
       sucesso: row.sucesso === 1,
@@ -1157,7 +1295,7 @@ const toConsultaAprendida = (
   skillIds: readonly string[] = [],
 ): ConsultaAprendida => ({
   id: row.id,
-  agentId: row.agentId,
+  acessoId: asAcessoId(row.acessoId),
   skillIds,
   pergunta: row.pergunta,
   sql: row.sql,
@@ -1170,7 +1308,7 @@ const toConsultaAprendida = (
 
 const toLacuna = (row: typeof schema.lacunaConsulta.$inferSelect): LacunaConsulta => ({
   id: row.id,
-  agentId: row.agentId,
+  acessoId: asAcessoId(row.acessoId),
   pergunta: row.pergunta,
   tipo: row.tipo === "ferramenta" ? "ferramenta" : "skill_gap",
   status: row.status === "arquivada" ? "arquivada" : "aberta",
@@ -1206,7 +1344,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   }
 
   async salvarConsulta(input: {
-    agentId: string;
+    acessoId: string;
     skillIds: readonly string[];
     pergunta: string;
     sql: string;
@@ -1218,7 +1356,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .from(schema.consultaAprendida)
       .where(
         and(
-          eq(schema.consultaAprendida.agentId, input.agentId),
+          eq(schema.consultaAprendida.acessoId, input.acessoId),
           eq(schema.consultaAprendida.sql, input.sql),
         ),
       )
@@ -1249,7 +1387,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     const [row] = await this.db
       .insert(schema.consultaAprendida)
       .values({
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         pergunta: input.pergunta,
         sql: input.sql,
         paramsContrato: [...input.paramsContrato],
@@ -1266,18 +1404,18 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     return hydrated!;
   }
 
-  async listarConsultas(agentId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
+  async listarConsultas(acessoId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
     const rows = await this.db
       .select()
       .from(schema.consultaAprendida)
-      .where(eq(schema.consultaAprendida.agentId, agentId))
+      .where(eq(schema.consultaAprendida.acessoId, acessoId))
       .orderBy(desc(schema.consultaAprendida.execucoes))
       .limit(limite);
     return this.hydrate(rows);
   }
 
   async listarConsultasDaSkill(
-    agentId: string,
+    acessoId: string,
     skillId: string,
     limite: number,
   ): Promise<readonly ConsultaAprendida[]> {
@@ -1294,7 +1432,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .from(schema.consultaAprendida)
       .where(
         and(
-          eq(schema.consultaAprendida.agentId, agentId),
+          eq(schema.consultaAprendida.acessoId, acessoId),
           inArray(schema.consultaAprendida.id, ids),
         ),
       )
@@ -1303,12 +1441,12 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     return this.hydrate(rows);
   }
 
-  async obterConsulta(agentId: string, id: string): Promise<ConsultaAprendida | null> {
+  async obterConsulta(acessoId: string, id: string): Promise<ConsultaAprendida | null> {
     const [row] = await this.db
       .select()
       .from(schema.consultaAprendida)
       .where(
-        and(eq(schema.consultaAprendida.agentId, agentId), eq(schema.consultaAprendida.id, id)),
+        and(eq(schema.consultaAprendida.acessoId, acessoId), eq(schema.consultaAprendida.id, id)),
       )
       .limit(1);
     if (!row) {
@@ -1319,7 +1457,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   }
 
   async buscarConsultas(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<ConsultaAprendida>[]> {
@@ -1341,7 +1479,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .from(schema.consultaAprendida)
       .where(
         and(
-          eq(schema.consultaAprendida.agentId, agentId),
+          eq(schema.consultaAprendida.acessoId, acessoId),
           eq(schema.consultaAprendida.status, "ativa"),
           busca,
         ),
@@ -1357,7 +1495,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   }
 
   async registrarSinonimo(input: {
-    agentId: string;
+    acessoId: string;
     termo: string;
     alvoTipo: string;
     alvoId: string;
@@ -1365,21 +1503,21 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     const [row] = await this.db.insert(schema.sinonimo).values(input).returning();
     return {
       id: row!.id,
-      agentId: row!.agentId,
+      acessoId: asAcessoId(row!.acessoId),
       termo: row!.termo,
       alvoTipo: row!.alvoTipo,
       alvoId: row!.alvoId,
     };
   }
 
-  async listarSinonimos(agentId: string): Promise<readonly Sinonimo[]> {
+  async listarSinonimos(acessoId: string): Promise<readonly Sinonimo[]> {
     const rows = await this.db
       .select()
       .from(schema.sinonimo)
-      .where(eq(schema.sinonimo.agentId, agentId));
+      .where(eq(schema.sinonimo.acessoId, acessoId));
     return rows.map((row) => ({
       id: row.id,
-      agentId: row.agentId,
+      acessoId: asAcessoId(row.acessoId),
       termo: row.termo,
       alvoTipo: row.alvoTipo,
       alvoId: row.alvoId,
@@ -1387,7 +1525,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   }
 
   async desvincularSkill(
-    agentId: string,
+    acessoId: string,
     skillId: string,
   ): Promise<{ consultas: number; sinonimos: number }> {
     const consultas = await this.db
@@ -1398,7 +1536,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .delete(schema.sinonimo)
       .where(
         and(
-          eq(schema.sinonimo.agentId, agentId),
+          eq(schema.sinonimo.acessoId, acessoId),
           eq(schema.sinonimo.alvoTipo, "skill"),
           eq(schema.sinonimo.alvoId, skillId),
         ),
@@ -1408,7 +1546,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   }
 
   async registrarLacuna(
-    agentId: string,
+    acessoId: string,
     pergunta: string,
     tipo: TipoLacuna = "skill_gap",
     contrato: Record<string, unknown> | null = null,
@@ -1417,7 +1555,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     const [row] = await this.db
       .insert(schema.lacunaConsulta)
       .values({
-        agentId,
+        acessoId,
         pergunta,
         perguntaChave,
         tipo,
@@ -1427,7 +1565,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       })
       .onConflictDoUpdate({
         target: [
-          schema.lacunaConsulta.agentId,
+          schema.lacunaConsulta.acessoId,
           schema.lacunaConsulta.tipo,
           schema.lacunaConsulta.perguntaChave,
         ],
@@ -1442,7 +1580,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     return toLacuna(row!);
   }
 
-  async arquivarLacunaSkillGap(agentId: string, pergunta: string): Promise<number> {
+  async arquivarLacunaSkillGap(acessoId: string, pergunta: string): Promise<number> {
     const perguntaChave = chavePerguntaLacuna(pergunta);
     if (!perguntaChave) {
       return 0;
@@ -1452,7 +1590,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .set({ status: "arquivada", updatedAt: new Date() })
       .where(
         and(
-          eq(schema.lacunaConsulta.agentId, agentId),
+          eq(schema.lacunaConsulta.acessoId, acessoId),
           eq(schema.lacunaConsulta.tipo, "skill_gap"),
           eq(schema.lacunaConsulta.perguntaChave, perguntaChave),
           eq(schema.lacunaConsulta.status, "aberta"),
@@ -1463,7 +1601,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
   }
 
   async listarLacunas(
-    agentId: string,
+    acessoId: string,
     limite: number,
     status: StatusLacuna = "aberta",
   ): Promise<readonly LacunaConsulta[]> {
@@ -1471,10 +1609,18 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .select()
       .from(schema.lacunaConsulta)
       .where(
-        and(eq(schema.lacunaConsulta.agentId, agentId), eq(schema.lacunaConsulta.status, status)),
+        and(eq(schema.lacunaConsulta.acessoId, acessoId), eq(schema.lacunaConsulta.status, status)),
       )
       .orderBy(desc(schema.lacunaConsulta.createdAt))
       .limit(limite);
     return rows.map(toLacuna);
+  }
+
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    await this.db
+      .delete(schema.consultaAprendida)
+      .where(eq(schema.consultaAprendida.acessoId, acessoId));
+    await this.db.delete(schema.sinonimo).where(eq(schema.sinonimo.acessoId, acessoId));
+    await this.db.delete(schema.lacunaConsulta).where(eq(schema.lacunaConsulta.acessoId, acessoId));
   }
 }

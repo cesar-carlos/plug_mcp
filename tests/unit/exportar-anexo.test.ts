@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { ExportarAnexo } from "../../src/application/use-cases/exportar-anexo.js";
 import { ConsultarDados } from "../../src/application/use-cases/consultar.js";
 import { InspecionarConsulta } from "../../src/application/use-cases/inspecionar.js";
-import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
+import { AdicionarAcesso, RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
 import {
   isErroTetoConversao,
   SharpPdfkitAnexoConverter,
@@ -34,6 +34,7 @@ import { escopoFromSqlModelo } from "../../src/application/use-cases/shared/esco
 import { parseSqlModelo } from "../../src/application/use-cases/shared/sql-modelo.js";
 import { MemoryQueryResultCache } from "../../src/infrastructure/cache/query-result-cache.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
+import { stubSessions } from "../helpers/stub-sessions.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -143,7 +144,7 @@ describe("exportar_anexo", () => {
       { aprendizado: new InMemoryAprendizadoRepository(), anexos },
     );
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "fotos",
       nome: "Fotos",
       descricao: "anexos",
@@ -353,7 +354,7 @@ describe("exportar_anexo", () => {
     };
     const sqlModelo = "SELECT p.foto FROM produto p WHERE p.codprod = :codigo";
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "fotos-insp",
       nome: "Fotos",
       descricao: "anexos",
@@ -435,12 +436,13 @@ describe("exportar_anexo", () => {
     });
 
     const { tabela } = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "produto",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela.id,
       nome: "foto",
       tipo: "image",
@@ -533,7 +535,7 @@ describe("exportar_anexo", () => {
       { aprendizado: new InMemoryAprendizadoRepository(), anexos, cache, cacheTtlMs: 60_000 },
     );
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "fotos-agg",
       nome: "Fotos agg",
       descricao: "anexos",
@@ -551,5 +553,89 @@ describe("exportar_anexo", () => {
     expect(cell.kind).toBe("anexo");
     expect(cell.handle).toBeTruthy();
     expect(sets).toHaveLength(0);
+  });
+
+  it("N>1: omite acessoId e infere do handle; recusa handle de outro acesso", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentId);
+    const usuarios = new InMemoryUsuarioRepository();
+    const acessos = new InMemoryAcessoRepository();
+    const skills = new InMemorySkillRepository();
+    const audit = new InMemoryAuditLog();
+    const anexos = new MemoryAnexoHandleStore("secret-anexo-hmac-key-32bytes-min");
+    const created = await new RegistrarAcesso(
+      usuarios,
+      acessos,
+      plug,
+      crypto,
+      new SetupCodeStore(),
+      "http://localhost",
+      0,
+    ).execute({
+      email: "a@b.com",
+      senha: "secret-pass",
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-123456",
+    });
+    const added = await new AdicionarAcesso(acessos, plug, stubSessions(), crypto).execute(
+      created.usuarioId,
+      { agentId, dialeto: "sybase", clientToken: "tok-sql-654321" },
+    );
+    const acessoB = added.acesso.id;
+    const sqlModelo = "SELECT p.foto FROM produto p WHERE p.codprod = 1";
+    const skillA = await skills.create({
+      acessoId: created.acessoId,
+      slug: "fotos-a",
+      nome: "Fotos A",
+      descricao: "anexos",
+      sqlModelo,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sqlModelo)),
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skillA.id, "publicada");
+    const skillB = await skills.create({
+      acessoId: acessoB,
+      slug: "fotos-b",
+      nome: "Fotos B",
+      descricao: "anexos",
+      sqlModelo,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sqlModelo)),
+      autorUsuarioId: created.usuarioId,
+    });
+    await skills.setStatus(skillB.id, "publicada");
+    const jpeg = await jpegBytes();
+    const handle = anexos.put({
+      usuarioId: created.usuarioId,
+      acessoId: created.acessoId,
+      bytes: jpeg,
+      coluna: "foto",
+      sensibilidade: "livre",
+      origem: "consultar_dados",
+    });
+    const exportar = new ExportarAnexo(
+      acessos,
+      skills,
+      anexos,
+      new SharpPdfkitAnexoConverter(),
+      plug,
+      stubSessions(),
+      crypto,
+      audit,
+      silentLogger,
+    );
+    const inferred = await exportar.execute(created.usuarioId, {
+      handle,
+      mimeDestino: "image/png",
+    });
+    expect(inferred.kind).toBe(ANEXO_EXPORT_KIND);
+    expect(inferred.mime).toBe("image/png");
+    await expect(
+      exportar.execute(created.usuarioId, {
+        acessoId: acessoB,
+        handle,
+        mimeDestino: "image/png",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.MIDIA_ORIGEM_INVALIDA });
   });
 });

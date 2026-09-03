@@ -226,22 +226,22 @@ const politicaConsultaShape = z.object({
 });
 
 export const EXPORTAR_ANEXO_TOOL_DESCRIPTION =
-  "Rebusca/converte um anexo (foto, PDF) a partir do handle do stub kind=anexo de consultar_dados. Handle de inspecionar_consulta não é exportável. Não invente bytes. mimeDestino: image/jpeg, image/png ou application/pdf. Mesmos portões de consultar_dados. Foto pessoal: PRIVACIDADE_NEGADA — não use inspeção como segunda via.";
+  "Rebusca/converte um anexo (foto, PDF) a partir do handle do stub kind=anexo de consultar_dados. Handle de inspecionar_consulta não é exportável. Não invente bytes. mimeDestino: image/jpeg, image/png ou application/pdf. Mesmos portões de consultar_dados. Foto pessoal: PRIVACIDADE_NEGADA — não use inspeção como segunda via. N=1 omita acessoId; N>1 o handle amarra o acesso se for deste usuário (acessoId de outro acesso → MIDIA_ORIGEM_INVALIDA).";
 
 export const CONSULTAR_DADOS_TOOL_DESCRIPTION =
-  "Consulta o ERP via plug-server no escopo publicado e no dialeto do acesso. pergunta obrigatória. skillIds opcional (omitido = união das publicadas do agentId; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist (fail-closed), consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Firebird: só consulta exemplo, sem SQL livre. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT.";
+  "Consulta o ERP via plug-server no escopo publicado e no dialeto do acesso. pergunta obrigatória. skillIds opcional (omitido = união das publicadas deste acesso/persona; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist (fail-closed), consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Firebird: só consulta exemplo, sem SQL livre. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT. N=1 omita acessoId; N>1 passe acessoId ou skillId/slug único (não una catálogos).";
 
 export const OBTER_SKILL_TOOL_DESCRIPTION =
-  "Obtém o pacote da skill (mesmo conteúdo que skill://): escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios. Não invente schema — leia daqui.";
+  "Obtém o pacote da skill (mesmo conteúdo que skill://): escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios. Não invente schema — leia daqui. N=1 omita acessoId; N>1 passe acessoId ou skillId/slug único nos seus catálogos.";
 
 export const VALIDAR_CONSULTA_TOOL_DESCRIPTION =
-  "Dry-run: valida o SQL contra o escopo publicado (fail-closed; skillIds opcional = união das publicadas) e executa envelope vazio no ERP via plug-server (sem ler dado). options.page + page_size aplicam a mesma regra de consultar_dados (ORDER BY externo, sem TOP/LIMIT/FETCH/FIRST). Placeholders ausentes ligam-se a null. Firebird: recusa SQL livre.";
+  "Dry-run: valida o SQL contra o escopo publicado (fail-closed; skillIds opcional = união das publicadas deste acesso) e executa envelope vazio no ERP via plug-server (sem ler dado). options.page + page_size aplicam a mesma regra de consultar_dados (ORDER BY externo, sem TOP/LIMIT/FETCH/FIRST). Placeholders ausentes ligam-se a null. Firebird: recusa SQL livre.";
 
 export const ATUALIZAR_PERSONA_TOOL_DESCRIPTION =
   "Grava nomePersona (curto) e instrucoesPersona no acesso (usuário+agentId+token). Orienta tom/uso; não recorta skills nem licencia tabela, coluna, JOIN ou consultaPermitida. Em conflito vale o pacote. Exige confirmadoPeloUsuario: true. Recusa texto que pareça senha, token ou JWT. String vazia ou null limpa o campo.";
 
 export const TREINAR_COM_SQL_TOOL_DESCRIPTION =
-  "Treina o grafo compartilhado do agentId com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no SQL (amostra FIRST é wrap do servidor). Aviso PAGINACAO_MODELO se o SQL já declara TOP/LIMIT/FIRST. Depois de publicar: só consultar_dados / inspecionar_consulta sem sql.";
+  "Treina o grafo deste acesso/persona com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no SQL (amostra FIRST é wrap do servidor). Aviso PAGINACAO_MODELO se o SQL já declara TOP/LIMIT/FIRST. Depois de publicar: só consultar_dados / inspecionar_consulta sem sql. Com um único acesso, acessoId pode ser omitido.";
 
 export const VALIDAR_SKILL_TOOL_DESCRIPTION =
   "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo. Une o sqlModelo ao escopo persistido. Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no sqlModelo (amostra é wrap do servidor). Aviso PAGINACAO_MODELO se o modelo já declara TOP/LIMIT/FIRST. SQL livre depois de publicar continua DIALECT_UNSUPPORTED.";
@@ -292,7 +292,7 @@ export const registerTools = (
 
   server.tool(
     "adicionar_acesso",
-    "Com token MCP, adiciona outro agentId/client_token sem pedir senha de novo. Não ecoe o client_token no chat.",
+    "Com token MCP, adiciona outro agentId/client_token sem pedir senha de novo. O novo acesso começa com catálogo vazio (não herda skills/grafo do outro acesso). Não ecoe o client_token no chat.",
     {
       agentId: z.string().optional(),
       dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
@@ -323,7 +323,7 @@ export const registerTools = (
 
   server.tool(
     "remover_acesso",
-    "Remove o acesso do cofre. O grafo compartilhado do agentId permanece.",
+    "Remove o acesso do cofre. O catálogo (skills/grafo) deste acesso é apagado com ele; outros acessos do mesmo agentId ficam intactos.",
     { acessoId: z.string().optional() },
     destroyLocal,
     async (args) =>
@@ -352,7 +352,7 @@ export const registerTools = (
 
   server.tool(
     "atualizar_dialeto",
-    "Muda o dialeto do acesso e do grafo do agentId. Skills deixam de estar publicadas (voltam a rascunho) porque o SQL pode não valer no dialeto novo. Exige confirmadoPeloUsuario: true.",
+    "Muda o dialeto deste acesso e do grafo da persona. Skills deste acesso deixam de estar publicadas (voltam a rascunho) porque o SQL pode não valer no dialeto novo. Exige confirmadoPeloUsuario: true.",
     {
       acessoId: z.string().optional(),
       dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
@@ -435,7 +435,7 @@ export const registerTools = (
 
   server.tool(
     "listar_conflitos",
-    "Lista fatos em conflito do agentId (kind, ids, nomes, hint) para resolver_conflito. Sem SQL e sem linhas de ERP.",
+    "Lista fatos em conflito do grafo deste acesso (kind, ids, nomes, hint) para resolver_conflito. Sem SQL e sem linhas de ERP.",
     { acessoId: z.string().optional() },
     readList,
     async (args) =>
@@ -641,7 +641,7 @@ export const registerTools = (
 
   server.tool(
     "remover_skill",
-    "Apaga a skill (pacote e sqlModelo) deste agentId. Exige confirmadoPeloUsuario: true. O grafo permanece; consultas aprendidas ficam desvinculadas. Mostre nome/slug/status no chat antes.",
+    "Apaga a skill (pacote e sqlModelo) deste acesso/persona. Exige confirmadoPeloUsuario: true. O grafo do acesso permanece; consultas aprendidas ficam desvinculadas. Mostre nome/slug/status no chat antes.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
@@ -662,7 +662,7 @@ export const registerTools = (
 
   server.tool(
     "listar_skills",
-    "Lista skills do agentId (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote.",
+    "Lista skills deste acesso/persona (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote. Com vários acessos, passe acessoId (não infere de slug); catálogos não se misturam mesmo com o mesmo agentId.",
     { acessoId: z.string().optional() },
     readList,
     async (args) =>
@@ -788,7 +788,7 @@ export const registerTools = (
 
   server.tool(
     "anotar_grafo",
-    "Grava nota/glossário no grafo compartilhado do agentId. Não invente significado.",
+    "Grava nota/glossário no grafo deste acesso. Não invente significado.",
     {
       acessoId: z.string().optional(),
       tabela: z.string().optional(),
@@ -803,7 +803,7 @@ export const registerTools = (
 
   server.tool(
     "listar_anotacoes",
-    "Lista anotações do agentId (opcionalmente de uma tabela).",
+    "Lista anotações deste acesso (opcionalmente de uma tabela).",
     { acessoId: z.string().optional(), tabelaId: z.string().nullable().optional() },
     readList,
     async (args) =>
@@ -883,7 +883,7 @@ export const registerTools = (
 
   server.tool(
     "listar_auditoria",
-    "Lista as últimas execuções de tools deste acesso (sem SQL completo nem segredos). buscar_contexto inclui telemetria (counts/enums, sem a pergunta).",
+    "Lista as últimas execuções de tools deste acesso (sem SQL completo nem segredos). N=1 omita acessoId; N>1 passe acessoId — não mistura o histórico da outra persona. buscar_contexto inclui telemetria (counts/enums, sem a pergunta).",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>
@@ -892,7 +892,7 @@ export const registerTools = (
 
   server.tool(
     "listar_metricas_agente",
-    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, SKILL_NOT_PUBLISHED, slot narrativo). Sem SQL, params ou linhas de ERP.",
+    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, SKILL_NOT_PUBLISHED, slot narrativo). Sem SQL, params ou linhas de ERP. N=1 omita acessoId; N>1 passe acessoId.",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>
@@ -922,7 +922,7 @@ export const registerTools = (
 
   server.tool(
     "listar_lacunas",
-    "Lista lacunas abertas de skill (SKILL_GAP) e de ferramenta deste agentId. status=arquivada lista o que o treino já cobriu. SKILL_GAP da busca não grava lacuna se já houver skill publicada.",
+    "Lista lacunas abertas de skill (SKILL_GAP) e de ferramenta deste acesso. status=arquivada lista o que o treino já cobriu. SKILL_GAP da busca não grava lacuna se já houver skill publicada.",
     {
       acessoId: z.string().optional(),
       limite: z.number().int().positive().optional(),

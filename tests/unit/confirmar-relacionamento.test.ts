@@ -49,13 +49,13 @@ const setup = async () => {
     clientToken: "tok-sql-123456",
   });
   await grafo.mergeTabela({
-    agentId,
+      acessoId: created.acessoId,
     nome: "pedido",
     origem: "validado_execucao",
     autorUsuarioId: created.usuarioId,
   });
   await grafo.mergeTabela({
-    agentId,
+      acessoId: created.acessoId,
     nome: "cliente",
     origem: "validado_execucao",
     autorUsuarioId: created.usuarioId,
@@ -101,7 +101,7 @@ describe("ConfirmarRelacionamento", () => {
       cardinalidade: "N:1",
     });
 
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels).toHaveLength(1);
     expect(rels[0]?.pares).toHaveLength(1);
     expect(rels[0]).toMatchObject({
@@ -149,13 +149,13 @@ describe("ConfirmarRelacionamento", () => {
       clientToken: "tok-sql-123456",
     });
     await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "receber",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "cliente",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
@@ -171,7 +171,7 @@ describe("ConfirmarRelacionamento", () => {
       ],
       cardinalidade: "N:1",
     });
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels).toHaveLength(1);
     expect(rels[0]?.pares).toHaveLength(2);
     expect(rels[0]?.paresFingerprint).toContain("codcli=codcli");
@@ -181,11 +181,11 @@ describe("ConfirmarRelacionamento", () => {
 
   it("sem tipoJoin preserva LEFT já inferido no grafo", async () => {
     const { created, grafo, confirmar } = await setup();
-    const pedido = await grafo.findTabelaByNome(agentId, "pedido");
-    const cliente = await grafo.findTabelaByNome(agentId, "cliente");
+    const pedido = await grafo.findTabelaByNome(created.acessoId, "pedido");
+    const cliente = await grafo.findTabelaByNome(created.acessoId, "cliente");
     expect(pedido && cliente).toBeTruthy();
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: created.acessoId,
       tabelaOrigemId: pedido!.id,
       colunaOrigem: "codcliente",
       tabelaDestinoId: cliente!.id,
@@ -205,7 +205,7 @@ describe("ConfirmarRelacionamento", () => {
       cardinalidade: "N:1",
     });
 
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels).toHaveLength(1);
     expect(rels[0]?.tipoJoin.toLowerCase()).toMatch(/left/);
     expect(rels[0]?.cardinalidade).toBe("N:1");
@@ -220,7 +220,7 @@ describe("ConfirmarRelacionamento", () => {
       relacionamentos: escopo.relacionamentos.map((rel) => ({ ...rel, tipoJoin: "inner" })),
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "pedidos",
       nome: "Pedidos",
       descricao: "lista",
@@ -239,7 +239,7 @@ describe("ConfirmarRelacionamento", () => {
       cardinalidade: "N:1",
     });
 
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels[0]?.tipoJoin.toLowerCase()).toMatch(/left/);
     const updated = await skills.findById(skill.id);
     expect(updated?.escopo.relacionamentos[0]?.tipoJoin.toLowerCase()).toMatch(/left/);

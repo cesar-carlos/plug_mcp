@@ -25,6 +25,6 @@ Bearer MCP → hash SHA-256 → `usuario_mcp`. ALS só na borda (`currentAccount
 
 ## Grafo e skills
 
-Escrita do grafo com `withAgentLock`. Leitura filtrada por `getClientTokenPolicy`. Consulta só com **pacote publicado** — o grafo apoia o treino, não licencia JOIN. Contrato: [objective.md](../product/objective.md) e [tools.md](../mcp/tools.md).
+Escrita do grafo com `withAcessoLock(acessoId)`. Grafo, skills e aprendizado por `acesso_id`. Leitura filtrada por `getClientTokenPolicy` (policy recorta SQL/leitura **dentro** do grafo daquele acesso). Consulta só com **pacote publicado** — o grafo apoia o treino, não licencia JOIN. Contrato: [objective.md](../product/objective.md) e [tools.md](../mcp/tools.md).
 
 _Porquê_ das três camadas (histórico): [proposta-arquitetura-mcp-se7e.md](../proposta-arquitetura-mcp-se7e.md).

@@ -7,7 +7,7 @@ const agora = new Date();
 
 const skillOf = (id: string, slug: string, nome: string): Skill => ({
   id,
-  agentId: "agent",
+  acessoId: "agent",
   slug,
   nome,
   descricao: "Totais",
@@ -34,7 +34,7 @@ describe("resolverSkillsPorSinonimos", () => {
       [
         {
           id: "syn",
-          agentId: "agent",
+          acessoId: "agent",
           termo: "faturamentoabc",
           alvoTipo: "skill",
           alvoId: skill.id,
@@ -51,7 +51,7 @@ describe("resolverSkillsPorSinonimos", () => {
       [
         {
           id: "syn",
-          agentId: "agent",
+          acessoId: "agent",
           termo: "faturamentoabc",
           alvoTipo: "skill",
           alvoId: "vendas",
@@ -65,7 +65,7 @@ describe("resolverSkillsPorSinonimos", () => {
       [
         {
           id: "syn2",
-          agentId: "agent",
+          acessoId: "agent",
           termo: "faturamentoabc",
           alvoTipo: "skill",
           alvoId: "Vendas",
@@ -82,7 +82,7 @@ describe("resolverSkillsPorSinonimos", () => {
       [
         {
           id: "syn",
-          agentId: "agent",
+          acessoId: "agent",
           termo: "faturamentoabc",
           alvoTipo: "skill",
           alvoId: skill.id,
@@ -99,7 +99,7 @@ describe("resolverSkillsPorSinonimos", () => {
       [
         {
           id: "syn",
-          agentId: "agent",
+          acessoId: "agent",
           termo: "titulo",
           alvoTipo: "skill",
           alvoId: skill.id,
@@ -116,7 +116,7 @@ describe("resolverSkillsPorSinonimos", () => {
       [
         {
           id: "syn",
-          agentId: "agent",
+          acessoId: "agent",
           termo: "tit",
           alvoTipo: "skill",
           alvoId: skill.id,

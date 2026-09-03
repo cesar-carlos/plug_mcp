@@ -16,4 +16,4 @@ Env só em `src/config/env.ts`. `.env` via `--env-file-if-exists`. `PLUG_SERVER_
 
 UUID: `crypto.randomUUID()`. Crypto: AES-256-GCM + SHA-256 nativos.
 
-Postgres em produção. FTS: `unaccent`, `btree_gin`, `pg_trgm` (`npm run db:migrate` precisa de `CREATE EXTENSION`). Redis opcional (`REDIS_URL`): rate limit, cache de policy e cache de resultado (`QUERY_CACHE_TTL_MS`, prefixo `mcp:query:{agentId}:`). Sessão MCP fica in-process (sticky `mcp-session-id`). Compose local publica Postgres na porta **5433** (CI usa 5432).
+Postgres em produção. FTS: `unaccent`, `btree_gin`, `pg_trgm` (`npm run db:migrate` precisa de `CREATE EXTENSION`). Redis opcional (`REDIS_URL`): rate limit, cache de policy e cache de resultado (`QUERY_CACHE_TTL_MS`, prefixo `mcp:query:acesso:{acessoId}:`). Sessão MCP fica in-process (sticky `mcp-session-id`). Compose local publica Postgres na porta **5433** (CI usa 5432).

@@ -173,7 +173,7 @@ describe("bootstrap MCP", () => {
           jsonrpc: "2.0",
           id: 15,
           method: "resources/read",
-          params: { uri: `skill://${agentId}/produtos` },
+          params: { uri: "skill://00000000-0000-4000-8000-000000000000/produtos" },
         });
       expect(skillLeak.status).toBeLessThan(500);
       const skillLeakPayload = parseMcpPayload(skillLeak);

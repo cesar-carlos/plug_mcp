@@ -10,46 +10,47 @@ import type { ParametroSkill } from "../entities/skill.js";
 
 export interface AprendizadoRepositoryPort {
   salvarConsulta(input: {
-    agentId: string;
+    acessoId: string;
     skillIds: readonly string[];
     pergunta: string;
     sql: string;
     paramsContrato: readonly ParametroSkill[];
     autorUsuarioId: string | null;
   }): Promise<ConsultaAprendida>;
-  listarConsultas(agentId: string, limite: number): Promise<readonly ConsultaAprendida[]>;
+  listarConsultas(acessoId: string, limite: number): Promise<readonly ConsultaAprendida[]>;
   listarConsultasDaSkill(
-    agentId: string,
+    acessoId: string,
     skillId: string,
     limite: number,
   ): Promise<readonly ConsultaAprendida[]>;
-  obterConsulta(agentId: string, id: string): Promise<ConsultaAprendida | null>;
+  obterConsulta(acessoId: string, id: string): Promise<ConsultaAprendida | null>;
   buscarConsultas(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<ConsultaAprendida>[]>;
   registrarSinonimo(input: {
-    agentId: string;
+    acessoId: string;
     termo: string;
     alvoTipo: string;
     alvoId: string;
   }): Promise<Sinonimo>;
-  listarSinonimos(agentId: string): Promise<readonly Sinonimo[]>;
+  listarSinonimos(acessoId: string): Promise<readonly Sinonimo[]>;
   desvincularSkill(
-    agentId: string,
+    acessoId: string,
     skillId: string,
   ): Promise<{ consultas: number; sinonimos: number }>;
   registrarLacuna(
-    agentId: string,
+    acessoId: string,
     pergunta: string,
     tipo?: TipoLacuna,
     contrato?: Record<string, unknown> | null,
   ): Promise<LacunaConsulta>;
-  arquivarLacunaSkillGap(agentId: string, pergunta: string): Promise<number>;
+  arquivarLacunaSkillGap(acessoId: string, pergunta: string): Promise<number>;
   listarLacunas(
-    agentId: string,
+    acessoId: string,
     limite: number,
     status?: StatusLacuna,
   ): Promise<readonly LacunaConsulta[]>;
+  deleteByAcesso(acessoId: string): Promise<void>;
 }

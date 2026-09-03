@@ -18,7 +18,7 @@ const skillOf = (
   consultaSemantica: Skill["consultaSemantica"] = null,
 ): Skill => ({
   id: "s1",
-  agentId: "agent",
+  acessoId: "agent",
   slug: "faturamento",
   nome: "Faturamento",
   descricao: "Total",

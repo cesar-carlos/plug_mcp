@@ -3,26 +3,27 @@ import { listarFatosIncompletos } from "../../src/application/use-cases/shared/g
 import { PACOTE_VERSAO_ATUAL } from "../../src/domain/entities/escopo.js";
 import { InMemoryGrafoRepository } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 
-const agentId = "11111111-1111-4111-8111-111111111111";
+const acessoId = "11111111-1111-4111-8111-111111111111";
 const usuarioId = "user-1";
 
 describe("gates JOIN isolado e KPI", () => {
   it("composto 1:1 + isolados pede remover_relacionamento, não confirmar o par solto", async () => {
     const grafo = new InMemoryGrafoRepository();
     const filial = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "Filial",
       origem: "validado_execucao",
       autorUsuarioId: usuarioId,
     });
     const receber = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "ContaReceber",
       origem: "validado_execucao",
       autorUsuarioId: usuarioId,
     });
     for (const nome of ["CodEmpresa", "CodFilial"] as const) {
       await grafo.mergeColuna({
+        acessoId: acessoId,
         tabelaId: filial.tabela.id,
         nome,
         tipo: "int",
@@ -30,6 +31,7 @@ describe("gates JOIN isolado e KPI", () => {
         autorUsuarioId: usuarioId,
       });
       await grafo.mergeColuna({
+        acessoId: acessoId,
         tabelaId: receber.tabela.id,
         nome,
         tipo: "int",
@@ -38,6 +40,7 @@ describe("gates JOIN isolado e KPI", () => {
       });
     }
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "SaldoReceber",
       tipo: "numeric",
@@ -46,7 +49,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: acessoId,
       tabelaOrigemId: filial.tabela.id,
       tabelaDestinoId: receber.tabela.id,
       pares: [{ colunaOrigem: "CodEmpresa", colunaDestino: "CodEmpresa" }],
@@ -56,7 +59,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: acessoId,
       tabelaOrigemId: filial.tabela.id,
       tabelaDestinoId: receber.tabela.id,
       pares: [{ colunaOrigem: "CodFilial", colunaDestino: "CodFilial" }],
@@ -66,7 +69,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: acessoId,
       tabelaOrigemId: filial.tabela.id,
       tabelaDestinoId: receber.tabela.id,
       pares: [
@@ -80,7 +83,7 @@ describe("gates JOIN isolado e KPI", () => {
     });
     const faltas = await listarFatosIncompletos(
       grafo,
-      agentId,
+      acessoId,
       {
         tabelas: ["ContaReceber", "Filial"],
         colunasPorTabela: {
@@ -134,12 +137,13 @@ describe("gates JOIN isolado e KPI", () => {
   it("coluna papel=medida no pacote sem metricasSaida vira falta kpi sem bloquear CAST", async () => {
     const grafo = new InMemoryGrafoRepository();
     const receber = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "ContaReceber",
       origem: "validado_execucao",
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "SaldoReceber",
       tipo: "numeric",
@@ -148,6 +152,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "Situacao",
       tipo: "char",
@@ -156,6 +161,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "DataEmissao",
       tipo: "datetime",
@@ -165,7 +171,7 @@ describe("gates JOIN isolado e KPI", () => {
     });
     const faltas = await listarFatosIncompletos(
       grafo,
-      agentId,
+      acessoId,
       {
         tabelas: ["ContaReceber"],
         colunasPorTabela: {
@@ -190,18 +196,19 @@ describe("gates JOIN isolado e KPI", () => {
   it("duas tabelas com a mesma medida e overlay vazio geram duas faltas kpi", async () => {
     const grafo = new InMemoryGrafoRepository();
     const receber = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "ContaReceber",
       origem: "validado_execucao",
       autorUsuarioId: usuarioId,
     });
     const pagar = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "ContaPagar",
       origem: "validado_execucao",
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "SaldoReceber",
       tipo: "numeric",
@@ -210,6 +217,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: pagar.tabela.id,
       nome: "SaldoReceber",
       tipo: "numeric",
@@ -219,7 +227,7 @@ describe("gates JOIN isolado e KPI", () => {
     });
     const faltas = await listarFatosIncompletos(
       grafo,
-      agentId,
+      acessoId,
       {
         tabelas: ["ContaReceber", "ContaPagar"],
         colunasPorTabela: {
@@ -244,12 +252,13 @@ describe("gates JOIN isolado e KPI", () => {
   it("QuantidadeParcelas, NroParc e NumParc não pedem overlay de KPI financeiro", async () => {
     const grafo = new InMemoryGrafoRepository();
     const receber = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "ContaReceber",
       origem: "validado_execucao",
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "SaldoReceber",
       tipo: "numeric",
@@ -258,6 +267,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "Valor",
       tipo: "numeric",
@@ -266,6 +276,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "QuantidadeParcelas",
       tipo: "int",
@@ -274,6 +285,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "NroParc",
       tipo: "int",
@@ -282,6 +294,7 @@ describe("gates JOIN isolado e KPI", () => {
       autorUsuarioId: usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.tabela.id,
       nome: "NumParc",
       tipo: "int",
@@ -291,7 +304,7 @@ describe("gates JOIN isolado e KPI", () => {
     });
     const faltas = await listarFatosIncompletos(
       grafo,
-      agentId,
+      acessoId,
       {
         tabelas: ["ContaReceber"],
         colunasPorTabela: {

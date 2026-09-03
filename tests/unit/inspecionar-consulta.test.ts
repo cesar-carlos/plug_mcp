@@ -56,7 +56,7 @@ describe("inspecionar_consulta", () => {
     };
     const sqlModelo = "SELECT c.codcli, c.nome, c.senha FROM cliente c WHERE c.codcli > 0";
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "clientes",
       nome: "Clientes",
       descricao: "cadastro",
@@ -165,7 +165,7 @@ describe("inspecionar_consulta", () => {
     };
     const sqlModelo = "SELECT c.codcli, c.nome FROM cliente c WHERE c.codcli > 0";
     const skill = await skills.create({
-      agentId: fbAgent,
+      acessoId: created.acessoId,
       slug: "clientes-fb",
       nome: "Clientes FB",
       descricao: "cadastro",
@@ -238,7 +238,7 @@ describe("inspecionar_consulta", () => {
     };
     const sqlModelo = "SELECT c.codcli AS codigo FROM cliente c WHERE c.codcli > 0";
     const rascunho = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "clientes-rascunho",
       nome: "Clientes rascunho",
       descricao: "cadastro",
@@ -247,7 +247,7 @@ describe("inspecionar_consulta", () => {
       autorUsuarioId: created.usuarioId,
     });
     const validada = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "clientes-validada",
       nome: "Clientes validada",
       descricao: "cadastro",
@@ -312,7 +312,7 @@ describe("inspecionar_consulta", () => {
     };
     const sqlModelo = "SELECT c.codcli FROM cliente c WHERE c.codcli > 0";
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "clientes-star",
       nome: "Clientes star",
       descricao: "cadastro",
@@ -350,9 +350,9 @@ describe("inspecionar_consulta", () => {
     expect(result.colunasNovasNoGrafo).toEqual(expect.arrayContaining(["codcli", "nome", "ativo"]));
     expect(result.hint).toMatch(/confirmar_coluna/);
     expect(result.hint).not.toMatch(/republicar/);
-    const tabela = await grafo.findTabelaByNome(agentId, "cliente");
+    const tabela = await grafo.findTabelaByNome(created.acessoId, "cliente");
     expect(tabela).not.toBeNull();
-    const cols = await grafo.listColunas(tabela!.id);
+    const cols = await grafo.listColunas(created.acessoId, tabela!.id);
     expect(cols.map((coluna) => coluna.nome)).toEqual(
       expect.arrayContaining(["codcli", "nome", "ativo"]),
     );
@@ -388,7 +388,7 @@ describe("inspecionar_consulta", () => {
       remember: () => undefined,
     };
     const skillCliente = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "clientes-nav",
       nome: "Clientes",
       descricao: "cadastro",
@@ -399,7 +399,7 @@ describe("inspecionar_consulta", () => {
       autorUsuarioId: created.usuarioId,
     });
     const skillProduto = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos-nav",
       nome: "Produtos",
       descricao: "cadastro",
@@ -466,7 +466,7 @@ describe("inspecionar_consulta", () => {
     };
     const sqlModelo = "SELECT c.codcli FROM cliente c WHERE c.codcli > 0";
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "clientes-join",
       nome: "Clientes",
       descricao: "cadastro",
@@ -526,7 +526,7 @@ describe("descobrir_tabela", () => {
     };
     const sqlModelo = "SELECT p.DataPagamento, p.ValorPago FROM ContaPagar p WHERE p.ValorPago > 0";
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-pagar",
       nome: "Títulos a pagar",
       descricao: "pagar",
@@ -536,12 +536,13 @@ describe("descobrir_tabela", () => {
     });
     await skills.setStatus(skill.id, "publicada");
     const tabela = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "ContaPagar",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela.tabela.id,
       nome: "DataPagamento",
       tipo: "datetime",
@@ -549,6 +550,7 @@ describe("descobrir_tabela", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela.tabela.id,
       nome: "ValorPago",
       tipo: "numeric",
@@ -556,6 +558,7 @@ describe("descobrir_tabela", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela.tabela.id,
       nome: "Status / Situacao pagar",
       origem: "inferido",
@@ -599,7 +602,7 @@ describe("descobrir_tabela", () => {
     };
     const sqlModelo = "SELECT p.DataPagamento, p.ValorPago FROM ContaPagar p WHERE p.ValorPago > 0";
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-pagar-recorte",
       nome: "Títulos a pagar",
       descricao: "pagar",
@@ -609,18 +612,19 @@ describe("descobrir_tabela", () => {
     });
     await skills.setStatus(skill.id, "publicada");
     const pagar = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "ContaPagar",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     const filial = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "Filial",
       origem: "inferido",
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: pagar.tabela.id,
       nome: "DataPagamento",
       tipo: "datetime",
@@ -628,6 +632,7 @@ describe("descobrir_tabela", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: pagar.tabela.id,
       nome: "ValorPago",
       tipo: "numeric",
@@ -635,6 +640,7 @@ describe("descobrir_tabela", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: pagar.tabela.id,
       nome: "CodEmpresa",
       tipo: "int",
@@ -642,6 +648,7 @@ describe("descobrir_tabela", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: filial.tabela.id,
       nome: "CodEmpresa",
       tipo: "int",
@@ -649,7 +656,7 @@ describe("descobrir_tabela", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: created.acessoId,
       tabelaOrigemId: pagar.tabela.id,
       tabelaDestinoId: filial.tabela.id,
       pares: [{ colunaOrigem: "CodEmpresa", colunaDestino: "CodEmpresa" }],

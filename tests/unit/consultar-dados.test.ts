@@ -62,7 +62,7 @@ describe("ConsultarDados", () => {
   it("recusa SQL com tabela fora do escopo", async () => {
     const { consultar, created, skills } = await setupAcesso();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista produtos",
@@ -93,7 +93,7 @@ describe("ConsultarDados", () => {
   it("recusa skill não publicada", async () => {
     const { consultar, created, skills } = await setupAcesso();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista produtos",
@@ -116,7 +116,7 @@ describe("ConsultarDados", () => {
       rows: [{ codigo: 1 }],
     });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produto-por-codigo",
       nome: "Produto",
       descricao: "Busca produto",
@@ -149,7 +149,7 @@ describe("ConsultarDados", () => {
       rows: [{ codigo: 1 }],
     });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "meta-name-only",
       nome: "Produto",
       descricao: "Busca produto",
@@ -192,12 +192,13 @@ describe("ConsultarDados", () => {
       clientToken: "tok-sql-123456",
     });
     const produto = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "produto",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: produto.tabela.id,
       nome: "codprod",
       tipo: "int",
@@ -226,7 +227,7 @@ describe("ConsultarDados", () => {
       { grafo },
     );
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "meta-alias",
       nome: "Produto",
       descricao: "Busca produto",
@@ -247,7 +248,7 @@ describe("ConsultarDados", () => {
     const { consultar, created, skills, acessos } = await setupAcesso();
     await acessos.updateEscopoPadrao(created.acessoId, null, "America/Cuiaba");
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "tz",
       nome: "Tz",
       descricao: "Tz",
@@ -270,7 +271,7 @@ describe("ConsultarDados", () => {
       rows: [{ codigo: 1 }, { codigo: 2 }],
     });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista",
       nome: "Lista",
       descricao: "Lista",
@@ -303,7 +304,7 @@ describe("ConsultarDados", () => {
   it("sugere slug próximo quando skillId não existe", async () => {
     const { consultar, created, skills } = await setupAcesso();
     await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-receber",
       nome: "Títulos",
       descricao: "Lista",
@@ -325,7 +326,7 @@ describe("ConsultarDados", () => {
   it("recusa segundo comando no modelo persistido", async () => {
     const { consultar, created, skills } = await setupAcesso();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "injecao",
       nome: "Ruim",
       descricao: "SQL inválido",
@@ -363,7 +364,7 @@ describe("ConsultarDados", () => {
       });
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
@@ -391,7 +392,7 @@ describe("ConsultarDados", () => {
       throw new Error("não deve chamar o plug");
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista",
       nome: "Lista",
       descricao: "Lista",
@@ -416,7 +417,7 @@ describe("ConsultarDados", () => {
   it("recusa page sem page_size", async () => {
     const { consultar, created, skills, plug } = await setupAcesso();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista-ordenada",
       nome: "Lista",
       descricao: "Lista",
@@ -457,7 +458,7 @@ describe("ConsultarDados", () => {
       pagination: { page: 1, pageSize: 2, hasNextPage: true, hasPreviousPage: false },
     });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista-paginada",
       nome: "Lista",
       descricao: "Lista",
@@ -483,7 +484,7 @@ describe("ConsultarDados", () => {
   it("reescreve @nome para :nome no SQL enviado ao hub", async () => {
     const { consultar, created, skills, plug } = await setupAcesso();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "por-codigo",
       nome: "Lista",
       descricao: "Lista",
@@ -508,7 +509,7 @@ describe("ConsultarDados", () => {
       throw new Error("não deve chamar o plug");
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista-top",
       nome: "Lista",
       descricao: "Lista",
@@ -536,7 +537,7 @@ describe("ConsultarDados", () => {
       throw new Error("não deve chamar o plug");
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "kpi-receber",
       nome: "Receber",
       descricao: "Total",
@@ -563,7 +564,7 @@ describe("ConsultarDados", () => {
   it("exige pergunta", async () => {
     const { consultar, created, skills } = await setupAcesso();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
@@ -582,7 +583,7 @@ describe("ConsultarDados", () => {
   it("cruza skills só com SQL customizado", async () => {
     const { consultar, created, skills } = await setupAcesso();
     const a = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
@@ -590,7 +591,7 @@ describe("ConsultarDados", () => {
       autorUsuarioId: created.usuarioId,
     });
     const b = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "estoque",
       nome: "Estoque",
       descricao: "Lista",
@@ -636,7 +637,7 @@ describe("ConsultarDados avisos de anotação", () => {
       clientToken: "tok-sql-123456",
     });
     const pagar = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-pagar",
       nome: "Títulos a pagar",
       descricao: "pagar",
@@ -644,7 +645,7 @@ describe("ConsultarDados avisos de anotação", () => {
       autorUsuarioId: created.usuarioId,
     });
     const receber = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-receber",
       nome: "Títulos a receber",
       descricao: "receber",
@@ -654,7 +655,7 @@ describe("ConsultarDados avisos de anotação", () => {
     await skills.setStatus(pagar.id, "publicada");
     await skills.setStatus(receber.id, "publicada");
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: null,
       skillId: receber.id,
       tipo: "regra",
@@ -663,7 +664,7 @@ describe("ConsultarDados avisos de anotação", () => {
       autorUsuarioId: created.usuarioId,
     });
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: null,
       skillId: pagar.id,
       tipo: "regra",
@@ -672,7 +673,7 @@ describe("ConsultarDados avisos de anotação", () => {
       autorUsuarioId: created.usuarioId,
     });
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: null,
       skillId: null,
       tipo: "regra",
@@ -717,7 +718,7 @@ describe("ConsultarDados avisos de anotação", () => {
     const { consultar, created, skills, plug } = await setupAcesso();
     plug.sqlImpl = async () => ({ columns: ["valor"], rows: [{ valor: 10 }] });
     const produtos = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos-a",
       nome: "Produtos",
       descricao: "Lista",
@@ -725,7 +726,7 @@ describe("ConsultarDados avisos de anotação", () => {
       autorUsuarioId: created.usuarioId,
     });
     const fatura = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "faturamento-a",
       nome: "Faturamento",
       descricao: "Soma",
@@ -746,7 +747,7 @@ describe("ConsultarDados avisos de anotação", () => {
   it("recusa JOIN inventado mesmo com allowlist amplo", async () => {
     const { consultar, created, skills } = await setupAcesso();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos-join",
       nome: "Produtos",
       descricao: "Lista",
@@ -766,7 +767,7 @@ describe("ConsultarDados avisos de anotação", () => {
   it("sqlModelo sem âncora com várias publicadas recusa", async () => {
     const { consultar, created, skills } = await setupAcesso();
     const a = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "a-modelo",
       nome: "A",
       descricao: "A",
@@ -774,7 +775,7 @@ describe("ConsultarDados avisos de anotação", () => {
       autorUsuarioId: created.usuarioId,
     });
     const b = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "b-modelo",
       nome: "B",
       descricao: "B",
@@ -795,7 +796,7 @@ describe("ConsultarDados avisos de anotação", () => {
     const { consultar, created, skills, aprendizado, plug } = await setupAcesso();
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 2 }] });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "aprendida",
       nome: "Produto",
       descricao: "Busca",
@@ -805,7 +806,7 @@ describe("ConsultarDados avisos de anotação", () => {
     });
     await skills.setStatus(skill.id, "publicada");
     const gravada = await aprendizado.salvarConsulta({
-      agentId,
+      acessoId: created.acessoId,
       skillIds: [skill.id],
       pergunta: "produto 1",
       sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
@@ -853,7 +854,7 @@ describe("ConsultarDados avisos de anotação", () => {
     };
     const sqlModelo = "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0";
     const skill = await skills.create({
-      agentId: fbAgent,
+      acessoId: created.acessoId,
       slug: "produtos-fb",
       nome: "Produtos FB",
       descricao: "lista",

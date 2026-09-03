@@ -85,7 +85,11 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toMatch(/4104/);
     expect(PRE_TREINO_SESSAO).toContain("fatias");
     expect(PRE_TREINO_SESSAO).toMatch(/teto 64/);
-    expect(PRE_TREINO_SESSAO).toContain("skill://");
+    expect(PRE_TREINO_SESSAO).toContain("skill://{acessoId}/{slug}");
+    expect(PRE_TREINO_SESSAO).not.toContain("skill://{agentId}/{slug}");
+    expect(PRE_TREINO_SESSAO).toMatch(/1 client_token = 1 persona/);
+    expect(PRE_TREINO_SESSAO).toMatch(/catálogo isolado/);
+    expect(PRE_TREINO_SESSAO).toMatch(/omita acessoId/);
     expect(PRE_TREINO_SESSAO).toMatch(/IN \(:nome\)/);
     expect(PRE_TREINO_SESSAO).toContain("consultaAprendidaId");
     expect(PRE_TREINO_SESSAO).toContain("colunas[]");
@@ -138,6 +142,9 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(MCP_SERVER_INSTRUCTIONS.startsWith(PRE_TREINO_SESSAO)).toBe(true);
     expect(MCP_SERVER_INSTRUCTIONS).toContain("não invente especialidade");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("Skills e especialidade implícita");
+    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/catálogo vazio/);
+    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/omita acessoId/);
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("skill://{acessoId}/{slug}");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("registrar_acesso");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("consultar_dados");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("despublicar_skill");
@@ -197,6 +204,7 @@ describe("PRE_TREINO_SESSAO", () => {
     const varios = montarPreTreinoSessao([unico, outro]);
     expect(varios.startsWith(PRE_TREINO_SESSAO)).toBe(true);
     expect(varios).toContain(BLOCO_PERSONA_VARIOS_ACESSOS);
+    expect(BLOCO_PERSONA_VARIOS_ACESSOS).toMatch(/catálogo isolado/);
     expect(varios).not.toContain("Tom formal. Nunca invente JOIN.");
     expect(varios).not.toContain("Chapéu que não deve aparecer concatenado.");
     expect(varios).not.toContain("Atendimento financeiro");
@@ -228,7 +236,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/especialista em SQL/i);
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/skills treinadas/i);
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/vendedor/);
-    expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/agentId/);
+    expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/deste acesso/);
+    expect(PRE_TREINO_PROMPT_DESCRIPTION).toContain("skill://{acessoId}/{slug}");
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toMatch(/plug-server/i);
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toContain("guia://");
     expect(PRE_TREINO_PROMPT_DESCRIPTION).toContain("firebird");

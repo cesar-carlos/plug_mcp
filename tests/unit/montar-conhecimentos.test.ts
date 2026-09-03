@@ -14,7 +14,7 @@ const agora = new Date();
 
 const skillOf = (id: string, nome: string, descricao: string): Skill => ({
   id,
-  agentId: "agent",
+  acessoId: "agent",
   slug: nome.toLowerCase().replace(/\s+/g, "-"),
   nome,
   descricao,
@@ -34,7 +34,7 @@ const skillOf = (id: string, nome: string, descricao: string): Skill => ({
 
 const notaOf = (id: string, texto: string, extra: Partial<AnotacaoGrafo> = {}): AnotacaoGrafo => ({
   id,
-  agentId: "agent",
+  acessoId: "agent",
   tabelaId: extra.tabelaId ?? null,
   skillId: extra.skillId ?? "skill-regra",
   tipo: extra.tipo ?? "regra",
@@ -47,7 +47,7 @@ const notaOf = (id: string, texto: string, extra: Partial<AnotacaoGrafo> = {}): 
 
 const tabelaOf = (id: string, nome: string): TabelaGrafo => ({
   id,
-  agentId: "agent",
+  acessoId: "agent",
   nome,
   descricao: nome,
   origem: "inferido",
@@ -167,7 +167,7 @@ describe("montarConhecimentos", () => {
       sinonimos: [
         {
           id: "syn",
-          agentId: "agent",
+          acessoId: "agent",
           termo: "faturamentoabc",
           alvoTipo: "skill",
           alvoId: skill.id,
@@ -316,7 +316,7 @@ describe("hintRegraParcial", () => {
       consultas: [
         {
           id: "c-ruido",
-          agentId: "agent",
+          acessoId: "agent",
           skillIds: ["s1"],
           pergunta: "tente fazer a consulta agora, para eu ver se existe erro no servidor",
           sql: "SELECT 1",

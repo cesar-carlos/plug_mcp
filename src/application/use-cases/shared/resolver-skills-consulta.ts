@@ -29,11 +29,11 @@ export const escopoDaSkillPublicada = (skill: Skill): EscopoSkill =>
 
 export const resolverSkillsConsulta = async (
   skills: SkillRepositoryPort,
-  agentId: string,
+  acessoId: string,
   ids: readonly string[],
 ): Promise<Skill[]> => {
   if (ids.length === 0) {
-    const conhecidas = await skills.listByAgent(agentId);
+    const conhecidas = await skills.listByAcesso(acessoId);
     const publicadas: Skill[] = [];
     for (const item of conhecidas) {
       if (item.status === "publicada") {
@@ -43,7 +43,7 @@ export const resolverSkillsConsulta = async (
     if (publicadas.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.SKILL_GAP,
-        message: "Não há skill publicada neste agentId.",
+        message: "Não há skill publicada neste acesso.",
         hint: "Publique uma skill (validar_skill → publicar_skill) ou treine uma nova. SKILL_GAP da busca por termos não prova ausência — listar_skills.",
       });
     }
@@ -52,11 +52,11 @@ export const resolverSkillsConsulta = async (
   const out: Skill[] = [];
   for (const id of ids) {
     const found = await skills.findById(id);
-    if (found?.agentId !== agentId) {
-      const conhecidas = await skills.listByAgent(agentId);
+    if (found?.acessoId !== acessoId) {
+      const conhecidas = await skills.listByAcesso(acessoId);
       throw new DomainError({
         code: ERROR_CODES.SKILL_NOT_FOUND,
-        message: "Skill não encontrada neste agentId.",
+        message: "Skill não encontrada neste acesso.",
         hint: hintComProximos(
           "Confira skillId com listar_skills no mesmo acesso.",
           id,

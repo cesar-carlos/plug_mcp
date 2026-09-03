@@ -52,12 +52,13 @@ describe("mapear_tabela", () => {
       remember: () => undefined,
     };
     const seeded = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "ContaReceber",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: seeded.tabela.id,
       nome: "Valor",
       origem: "validado_execucao",
@@ -77,8 +78,8 @@ describe("mapear_tabela", () => {
     expect(valor?.tipo).toBe("numeric");
     expect(valor?.formato).toBe("number");
     expect(valor?.papel).toBe("medida");
-    const tabela = await grafo.findTabelaByNome(agentId, "ContaReceber");
-    const cols = tabela ? await grafo.listColunas(tabela.id) : [];
+    const tabela = await grafo.findTabelaByNome(created.acessoId, "ContaReceber");
+    const cols = tabela ? await grafo.listColunas(created.acessoId, tabela.id) : [];
     expect(cols).toHaveLength(2);
     expect(cols.find((coluna) => coluna.nome === "DtEmissao")?.tipo).toBeNull();
     expect(cols.find((coluna) => coluna.nome === "Valor")?.tipo).toBe("numeric");

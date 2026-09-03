@@ -82,19 +82,19 @@ const relsIguais = (
 export const sincronizarEscopoComGrafo = async (
   skills: SkillRepositoryPort,
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   opts?: { skillId?: string; tabelas?: readonly string[] },
 ): Promise<readonly Skill[]> => {
   const wantedTables = (opts?.tabelas ?? []).map(lower);
   const catalog = opts?.skillId
     ? [await skills.findById(opts.skillId)].filter((item): item is Skill => Boolean(item))
-    : [...(await skills.listByAgent(agentId))];
-  const grafoRels = await grafo.listRelacionamentos(agentId);
-  const grafoTabelas = await grafo.listTabelas(agentId);
+    : [...(await skills.listByAcesso(acessoId))];
+  const grafoRels = await grafo.listRelacionamentos(acessoId);
+  const grafoTabelas = await grafo.listTabelas(acessoId);
   const nomeById = new Map(grafoTabelas.map((item) => [item.id, item.nome]));
   const updated: Skill[] = [];
   for (const skill of catalog) {
-    if (skill.agentId !== agentId) {
+    if (skill.acessoId !== acessoId) {
       continue;
     }
     const base = escopoDaSkill(skill);

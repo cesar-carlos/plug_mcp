@@ -10,7 +10,7 @@ import {
 import {
   pickSkillInProgress,
   buildFluxoTreino,
-  fluxoEFaltasForAgentSkill,
+  fluxoEFaltasForAcessoSkill,
 } from "../../src/application/use-cases/shared/fluxo-treino.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
@@ -29,6 +29,7 @@ const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 );
 const agentId = "11111111-1111-4111-8111-111111111111";
+const acessoId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 const seed = async () => {
   const plug = new FakePlugServer();
@@ -62,11 +63,17 @@ const seed = async () => {
 
 const seedTabela = async (
   grafo: InMemoryGrafoRepository,
+  acessoId: string,
   usuarioId: string,
   nome = "produto",
   colunas: readonly string[] = ["codprod"],
 ): Promise<void> => {
-  await seedTabelaComColunas(grafo, { agentId, usuarioId, nome, colunas });
+  await seedTabelaComColunas(grafo, {
+    acessoId,
+    usuarioId,
+    nome,
+    colunas,
+  });
 };
 
 describe("fluxo guiado de treino", () => {
@@ -85,7 +92,7 @@ describe("fluxo guiado de treino", () => {
 
   it("validar_skill falha sem descrição dos params", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    await seedTabela(grafo, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
     const createdSkill = await criar.execute(created.usuarioId, {
@@ -105,7 +112,7 @@ describe("fluxo guiado de treino", () => {
 
   it("atualizar_skill recusa SQL com tabela fora do grafo", async () => {
     const { acessos, skills, grafo, created } = await seed();
-    await seedTabela(grafo, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
     const atualizar = new AtualizarSkill(acessos, skills, grafo);
     const createdSkill = await criar.execute(created.usuarioId, {
@@ -125,7 +132,7 @@ describe("fluxo guiado de treino", () => {
 
   it("atualizar só params em skill validada mantém validada", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    await seedTabela(grafo, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
     const atualizar = new AtualizarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
@@ -150,8 +157,8 @@ describe("fluxo guiado de treino", () => {
 
   it("atualizar SQL demove para rascunho", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    await seedTabela(grafo, created.usuarioId);
-    await seedTabela(grafo, created.usuarioId, "estoque");
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId, "estoque");
     const criar = new CriarSkill(acessos, skills, grafo);
     const atualizar = new AtualizarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
@@ -176,7 +183,7 @@ describe("fluxo guiado de treino", () => {
 
   it("publicar_skill sem confirmação devolve resumo e não publica", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    await seedTabela(grafo, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
     const publicar = new PublicarSkill(acessos, skills, grafo);
@@ -203,7 +210,7 @@ describe("fluxo guiado de treino", () => {
 
   it("publica quando o checklist está completo", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    await seedTabela(grafo, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
     const publicar = new PublicarSkill(acessos, skills, grafo);
@@ -230,7 +237,7 @@ describe("fluxo guiado de treino", () => {
 
   it("treinar com rascunho do mesmo SQL não pede criar_skill de novo", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    await seedTabela(grafo, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
     await criar.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -256,7 +263,7 @@ describe("fluxo guiado de treino", () => {
 
   it("pickSkillInProgress prefere SQL igual e depois tabelas do rascunho", () => {
     const base = {
-      agentId,
+      acessoId,
       descricao: "d",
       versao: 1,
       autorUsuarioId: null,
@@ -305,7 +312,7 @@ describe("fluxo guiado de treino", () => {
   it("podeLiberar fica falso com perfil incompleto mesmo skill validada", () => {
     const skill = {
       id: "1",
-      agentId,
+      acessoId,
       slug: "a",
       nome: "A",
       descricao: "d",
@@ -357,7 +364,7 @@ describe("fluxo guiado de treino", () => {
   it("rascunho_revalidacao pede validar_skill citando motivoRevalidacao", () => {
     const skill = {
       id: "1",
-      agentId,
+      acessoId,
       slug: "a",
       nome: "A",
       descricao: "d",
@@ -414,7 +421,7 @@ describe("fluxo guiado de treino", () => {
   it("CAST de data não desliga pacoteMinimo; SUM sem definição não bloqueia podeLiberar", () => {
     const castOnly = {
       id: "1",
-      agentId,
+      acessoId,
       slug: "a",
       nome: "A",
       descricao: "d",
@@ -479,7 +486,7 @@ describe("fluxo guiado de treino", () => {
   it("medida no SELECT detalhe sem overlay não bloqueia podeLiberar", () => {
     const detalhe = {
       id: "1",
-      agentId,
+      acessoId,
       slug: "receber",
       nome: "Receber",
       descricao: "d",
@@ -524,7 +531,7 @@ describe("fluxo guiado de treino", () => {
 
   it("params com tipo default string geram falta kind=param sem bloquear podeLiberar", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    await seedTabela(grafo, created.usuarioId);
+    await seedTabela(grafo, created.acessoId, created.usuarioId);
     const criar = new CriarSkill(acessos, skills, grafo);
     const validar = new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo);
     const createdSkill = await criar.execute(created.usuarioId, {
@@ -539,7 +546,11 @@ describe("fluxo guiado de treino", () => {
       skillId: createdSkill.skill.id,
     });
     const persisted = await skills.findById(createdSkill.skill.id);
-    const { fluxo, faltas } = await fluxoEFaltasForAgentSkill(grafo, agentId, persisted);
+    const { fluxo, faltas } = await fluxoEFaltasForAcessoSkill(
+      grafo,
+      created.acessoId,
+      persisted,
+    );
     expect(
       faltas.some((falta) => falta.kind === "param" && falta.nextAction === "atualizar_skill"),
     ).toBe(true);

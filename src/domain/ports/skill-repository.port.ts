@@ -24,11 +24,12 @@ export interface SkillRepositoryPort {
   ): Promise<Skill>;
   setStatus(id: string, status: StatusSkill, versao?: number): Promise<Skill>;
   findById(id: string): Promise<Skill | null>;
-  findBySlug(agentId: string, slug: string): Promise<Skill | null>;
-  listByAgent(agentId: string): Promise<readonly Skill[]>;
+  findBySlug(acessoId: string, slug: string): Promise<Skill | null>;
+  listByAcesso(acessoId: string): Promise<readonly Skill[]>;
+  deleteByAcesso(acessoId: string): Promise<void>;
   deleteById(id: string): Promise<boolean>;
   buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
     status?: StatusSkill | readonly StatusSkill[],
@@ -37,7 +38,7 @@ export interface SkillRepositoryPort {
 
 export interface AnotacaoGrafoRepositoryPort {
   create(input: {
-    agentId: string;
+    acessoId: string;
     tabelaId: string | null;
     skillId?: string | null;
     tipo: string;
@@ -46,14 +47,15 @@ export interface AnotacaoGrafoRepositoryPort {
     autorUsuarioId: string | null;
   }): Promise<AnotacaoGrafo>;
   list(
-    agentId: string,
+    acessoId: string,
     tabelaId?: string | null,
     skillId?: string | null,
   ): Promise<readonly AnotacaoGrafo[]>;
   findById(id: string): Promise<AnotacaoGrafo | null>;
+  deleteByAcesso(acessoId: string): Promise<void>;
   deleteById(id: string): Promise<boolean>;
   buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<AnotacaoGrafo>[]>;

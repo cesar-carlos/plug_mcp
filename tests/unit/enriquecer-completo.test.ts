@@ -96,11 +96,11 @@ describe("treinar_com_sql enriquecer=completo", () => {
       sql: "SELECT p.codprod AS codigo, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
       enriquecer: "completo",
     });
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels.some((rel) => rel.cardinalidade === "1:1")).toBe(true);
-    const produto = await grafo.findTabelaByNome(agentId, "produto");
+    const produto = await grafo.findTabelaByNome(created.acessoId, "produto");
     expect(produto).toBeTruthy();
-    const cols = await grafo.listColunas(produto!.id);
+    const cols = await grafo.listColunas(created.acessoId, produto!.id);
     const codigo = cols.find((coluna) => coluna.nome.toLowerCase() === "codprod");
     expect(codigo?.perfil?.min).toBe(1);
     expect(codigo?.tipo).toBe("int");
@@ -126,7 +126,7 @@ describe("treinar_com_sql enriquecer=completo", () => {
       enriquecer: "completo",
     });
     expect(result.avisos.some((aviso) => aviso.code === "PERFIL_QUERY_FALHOU")).toBe(true);
-    const tabelas = await grafo.listTabelas(agentId);
+    const tabelas = await grafo.listTabelas(created.acessoId);
     expect(tabelas.some((tabela) => tabela.nome.toLowerCase() === "produto")).toBe(true);
   });
 
@@ -294,8 +294,8 @@ describe("treinar_com_sql enriquecer=completo", () => {
       enriquecer: "completo",
     });
     expect(result.avisos.some((aviso) => aviso.code === "PERFIL_QUERY_FALHOU")).toBe(true);
-    const produto = await grafo.findTabelaByNome(agentId, "produto");
-    const cols = produto ? await grafo.listColunas(produto.id) : [];
+    const produto = await grafo.findTabelaByNome(created.acessoId, "produto");
+    const cols = produto ? await grafo.listColunas(created.acessoId, produto.id) : [];
     const codigo = cols.find((coluna) => coluna.nome.toLowerCase() === "codprod");
     expect(codigo?.perfil?.min).toBe(1);
   });

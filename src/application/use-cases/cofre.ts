@@ -16,7 +16,11 @@ import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../domain/ports/usuario-repository.port.js";
 import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
-import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
+import type {
+  AnotacaoGrafoRepositoryPort,
+  SkillRepositoryPort,
+} from "../../domain/ports/skill-repository.port.js";
+import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type {
   PlugHubTokens,
   PlugServerGatewayPort,
@@ -357,7 +361,15 @@ export class VerificarAcesso {
 }
 
 export class RemoverAcesso {
-  constructor(private readonly acessos: AcessoRepositoryPort) {}
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly catalog: {
+      readonly grafo: Pick<GrafoRepositoryPort, "deleteByAcesso">;
+      readonly skills: Pick<SkillRepositoryPort, "deleteByAcesso">;
+      readonly anotacoes: Pick<AnotacaoGrafoRepositoryPort, "deleteByAcesso">;
+      readonly aprendizado: Pick<AprendizadoRepositoryPort, "deleteByAcesso">;
+    },
+  ) {}
 
   async execute(
     usuarioId: string | undefined,
@@ -365,6 +377,10 @@ export class RemoverAcesso {
   ): Promise<{ success: true }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    await this.catalog.aprendizado.deleteByAcesso(acesso.id);
+    await this.catalog.anotacoes.deleteByAcesso(acesso.id);
+    await this.catalog.skills.deleteByAcesso(acesso.id);
+    await this.catalog.grafo.deleteByAcesso(acesso.id);
     await this.acessos.deleteById(acesso.id);
     return { success: true };
   }
@@ -433,23 +449,18 @@ export class AtualizarDialeto {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "Atualizar o dialeto exige confirmação do usuário.",
-        hint: "Mostre que as skills do agentId voltam a rascunho e chame de novo com confirmadoPeloUsuario: true.",
+        hint: "Mostre que as skills deste acesso voltam a rascunho e chame de novo com confirmadoPeloUsuario: true.",
       });
     }
     const dialetoAnterior = acesso.dialeto;
     if (dialetoAnterior === dialetoRaw) {
       return { success: true, dialetoAnterior, dialeto: dialetoRaw, skillsRebaixadas: 0 };
     }
-    const doMesmoAgente = (await this.acessos.listByUsuario(uid)).filter(
-      (item) => item.agentId === acesso.agentId,
-    );
-    for (const item of doMesmoAgente) {
-      await this.acessos.updateDialeto(item.id, dialetoRaw);
-    }
-    await this.grafo.withAgentLock(acesso.agentId, async () => {
-      await this.grafo.setDialeto(acesso.agentId, dialetoRaw);
+    await this.acessos.updateDialeto(acesso.id, dialetoRaw);
+    await this.grafo.withAcessoLock(acesso.id, async () => {
+      await this.grafo.setDialeto(acesso.id, dialetoRaw);
     });
-    const skills = await this.skills.listByAgent(acesso.agentId);
+    const skills = await this.skills.listByAcesso(acesso.id);
     let skillsRebaixadas = 0;
     for (const skill of skills) {
       if (skill.status === "rascunho") {

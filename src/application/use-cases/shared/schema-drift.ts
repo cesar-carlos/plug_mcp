@@ -5,7 +5,7 @@ import { fingerprintPares } from "../../../domain/entities/relacionamento.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import type { QueryResultCachePort } from "../../../domain/ports/query-result-cache.port.js";
 import type { SkillRepositoryPort } from "../../../domain/ports/skill-repository.port.js";
-import { queryCachePrefixForAgent } from "./query-cache-key.js";
+import { queryCachePrefixForAcesso } from "./query-cache-key.js";
 
 const STATUS_PACOTE: ReadonlySet<StatusSkill> = new Set([
   "validada",
@@ -136,7 +136,7 @@ export const colunasPacoteDaTabela = (
 const rebaixarSkillsDaTabela = async (input: {
   skills: SkillRepositoryPort;
   cache?: QueryResultCachePort;
-  agentId: string;
+  acessoId: string;
   tabelaNome: string;
   all: readonly Skill[];
 }): Promise<{ id: string; slug: string; status: string }[]> => {
@@ -150,7 +150,7 @@ const rebaixarSkillsDaTabela = async (input: {
     }
   }
   if (input.cache) {
-    await input.cache.deleteByPrefix(queryCachePrefixForAgent(input.agentId));
+    await input.cache.deleteByPrefix(queryCachePrefixForAcesso(input.acessoId));
   }
   return afetadas.map((skill) => ({
     id: skill.id,
@@ -163,7 +163,7 @@ export const aplicarDerivaEsquema = async (input: {
   grafo: GrafoRepositoryPort;
   skills: SkillRepositoryPort;
   cache?: QueryResultCachePort;
-  agentId: string;
+  acessoId: string;
   tabelaNome: string;
   assinatura: string;
 }): Promise<{
@@ -172,18 +172,18 @@ export const aplicarDerivaEsquema = async (input: {
   skillsAfetadas: { id: string; slug: string; status: string }[];
 }> => {
   const result = await input.grafo.saveSchemaSnapshot({
-    agentId: input.agentId,
+    acessoId: input.acessoId,
     tabelaNome: input.tabelaNome,
     assinatura: input.assinatura,
   });
   if (!result.drifted) {
     return { drifted: false, anterior: result.anterior, skillsAfetadas: [] };
   }
-  const all = await input.skills.listByAgent(input.agentId);
+  const all = await input.skills.listByAcesso(input.acessoId);
   const skillsAfetadas = await rebaixarSkillsDaTabela({
     skills: input.skills,
     cache: input.cache,
-    agentId: input.agentId,
+    acessoId: input.acessoId,
     tabelaNome: input.tabelaNome,
     all,
   });
@@ -198,27 +198,27 @@ export const aplicarDerivaTabelaNoGrafo = async (input: {
   grafo: GrafoRepositoryPort;
   skills: SkillRepositoryPort;
   cache?: QueryResultCachePort;
-  agentId: string;
+  acessoId: string;
   tabelaNome: string;
 }): Promise<{
   drifted: boolean;
   anterior: string | null;
   skillsAfetadas: { id: string; slug: string; status: string }[];
 }> => {
-  const tabela = await input.grafo.findTabelaByNome(input.agentId, input.tabelaNome);
+  const tabela = await input.grafo.findTabelaByNome(input.acessoId, input.tabelaNome);
   if (!tabela) {
     return { drifted: false, anterior: null, skillsAfetadas: [] };
   }
-  const cols = await input.grafo.listColunas(tabela.id);
+  const cols = await input.grafo.listColunas(input.acessoId, tabela.id);
   if (cols.every((coluna) => !coluna.tipo)) {
     return { drifted: false, anterior: null, skillsAfetadas: [] };
   }
-  const all = await input.skills.listByAgent(input.agentId);
+  const all = await input.skills.listByAcesso(input.acessoId);
   const wanted = colunasPacoteDaTabela(all, input.tabelaNome);
   const colsPacote =
     wanted.size > 0 ? cols.filter((coluna) => wanted.has(coluna.nome.toLowerCase())) : [];
-  const rels = await input.grafo.listRelacionamentos(input.agentId);
-  const tabelas = await input.grafo.listTabelas(input.agentId);
+  const rels = await input.grafo.listRelacionamentos(input.acessoId);
+  const tabelas = await input.grafo.listTabelas(input.acessoId);
   const nomeById = new Map(tabelas.map((item) => [item.id, item.nome]));
   const assinatura = assinaturaTabela({
     colunas: (wanted.size > 0 ? colsPacote : cols).map((coluna) => ({
@@ -237,7 +237,7 @@ export const aplicarDerivaTabelaNoGrafo = async (input: {
       })),
   });
   const result = await input.grafo.saveSchemaSnapshot({
-    agentId: input.agentId,
+    acessoId: input.acessoId,
     tabelaNome: input.tabelaNome,
     assinatura,
   });
@@ -257,7 +257,7 @@ export const aplicarDerivaTabelaNoGrafo = async (input: {
   const skillsAfetadas = await rebaixarSkillsDaTabela({
     skills: input.skills,
     cache: input.cache,
-    agentId: input.agentId,
+    acessoId: input.acessoId,
     tabelaNome: input.tabelaNome,
     all,
   });

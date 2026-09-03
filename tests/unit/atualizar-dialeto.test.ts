@@ -41,9 +41,9 @@ describe("AtualizarDialeto", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
-    await grafo.setDialeto(agentId, "sybase");
+    await grafo.setDialeto(created.acessoId, "sybase");
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod"],
@@ -64,7 +64,7 @@ describe("AtualizarDialeto", () => {
     expect(result.dialeto).toBe("mssql");
     expect(result.skillsRebaixadas).toBe(1);
     expect((await acessos.findById(created.acessoId))?.dialeto).toBe("mssql");
-    expect((await grafo.getDialeto(agentId))?.dialeto).toBe("mssql");
+    expect((await grafo.getDialeto(created.acessoId))?.dialeto).toBe("mssql");
     expect((await skills.findById(skill.skill.id))?.status).toBe("rascunho");
   });
 

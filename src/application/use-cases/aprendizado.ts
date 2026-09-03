@@ -41,7 +41,10 @@ export class SalvarConsulta {
     },
   ): Promise<{ success: true; consulta: ConsultaAprendida }> {
     const uid = requireUsuario(usuarioId);
-    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid, {
+      skills: this.skills,
+      skillId: input.skillId,
+    });
     if (input.confirmadoPeloUsuario !== true) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -62,7 +65,7 @@ export class SalvarConsulta {
     let paramsContrato: Skill["params"] = [];
     if (skillId) {
       const skill = await this.skills.findById(skillId);
-      if (skill?.agentId !== acesso.agentId || skill.status !== "publicada") {
+      if (skill?.acessoId !== acesso.id || skill.status !== "publicada") {
         throw new DomainError({
           code: ERROR_CODES.SKILL_NOT_PUBLISHED,
           message: "Só skill publicada recebe consulta aprendida.",
@@ -77,7 +80,7 @@ export class SalvarConsulta {
       paramsContrato = skill.params;
     }
     const consulta = await this.aprendizado.salvarConsulta({
-      agentId: acesso.agentId,
+      acessoId: acesso.id,
       skillIds: skillId ? [skillId] : [],
       pergunta,
       sql,
@@ -113,7 +116,10 @@ export class RegistrarAprendizado {
     sinonimo?: { termo: string; alvoId: string };
   }> {
     const uid = requireUsuario(usuarioId);
-    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid, {
+      skills: this.skills,
+      skillId: input.skillId,
+    });
     const tipo = (input.tipo?.trim() ? input.tipo.trim() : "uso").toLowerCase();
     const titulo = input.titulo?.trim() ?? "";
     const texto = input.texto?.trim() ?? "";
@@ -132,7 +138,7 @@ export class RegistrarAprendizado {
       });
     }
     const gravado = await persistirItensAprendizado({
-      agentId: acesso.agentId,
+      acessoId: acesso.id,
       autorUsuarioId: uid,
       grafo: this.grafo,
       anotacoes: this.anotacoes,
@@ -223,21 +229,21 @@ export class HerdarCatalogo {
     const catalogo = catalogoSe7eParaDialeto(acesso.dialeto);
     let tabelas = 0;
     let relacionamentos = 0;
-    await this.grafo.withAgentLock(acesso.agentId, async () => {
-      const locked = await this.grafo.getDialeto(acesso.agentId);
+    await this.grafo.withAcessoLock(acesso.id, async () => {
+      const locked = await this.grafo.getDialeto(acesso.id);
       if (!locked) {
-        await this.grafo.setDialeto(acesso.agentId, acesso.dialeto);
+        await this.grafo.setDialeto(acesso.id, acesso.dialeto);
       } else if (locked.dialeto !== acesso.dialeto) {
         throw new DomainError({
           code: ERROR_CODES.DIALECT_CONFLICT,
-          message: "Este agentId já foi treinado em outro dialeto.",
+          message: "Este acesso já foi treinado em outro dialeto.",
           hint: "Chame atualizar_dialeto com confirmadoPeloUsuario: true para mudar o dialeto.",
         });
       }
       const ids = new Map<string, string>();
       for (const tabela of catalogo.tabelas) {
         const merged = await this.grafo.mergeTabela({
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           nome: tabela.nome,
           descricao: tabela.descricao,
           origem: "inferido",
@@ -247,6 +253,7 @@ export class HerdarCatalogo {
         tabelas += 1;
         for (const coluna of tabela.colunas) {
           await this.grafo.mergeColuna({
+            acessoId: acesso.id,
             tabelaId: merged.tabela.id,
             nome: coluna.nome,
             tipo: coluna.tipo,
@@ -265,7 +272,7 @@ export class HerdarCatalogo {
           continue;
         }
         await this.grafo.mergeRelacionamento({
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           tabelaOrigemId: origemId,
           colunaOrigem: primeiro.colunaOrigem,
           tabelaDestinoId: destinoId,
@@ -307,8 +314,7 @@ export class ListarAuditoria {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const limite = Math.min(Math.max(1, input.limite ?? 50), 200);
-    const rows = await this.audit.listByUsuario(uid, limite * 2);
-    const doAcesso = rows.filter((row) => row.acessoId === acesso.id).slice(0, limite);
+    const doAcesso = await this.audit.listByAcesso(acesso.id, limite);
     return {
       success: true,
       entradas: doAcesso.map((row) => {
@@ -352,9 +358,7 @@ export class ListarMetricasAgente {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const limite = Math.min(Math.max(50, input.limite ?? 400), 1000);
-    const rows = (await this.audit.listByUsuario(uid, limite * 2)).filter(
-      (row) => row.acessoId === acesso.id,
-    );
+    const rows = await this.audit.listByAcesso(acesso.id, limite);
     const porTool: Record<
       string,
       { total: number; erros: number; duracaoMs: number; linhas: number }
@@ -405,7 +409,7 @@ export class RegistrarLacunaFerramenta {
         hint: "Descreva a tool que falta sem inventar SQL.",
       });
     }
-    const row = await this.aprendizado.registrarLacuna(acesso.agentId, objetivo, "ferramenta", {
+    const row = await this.aprendizado.registrarLacuna(acesso.id, objetivo, "ferramenta", {
       entradas: input.entradas ?? null,
       saidas: input.saidas ?? null,
       permissao: input.permissao ?? null,
@@ -440,7 +444,7 @@ export class ListarLacunas {
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
     const limite = Math.min(Math.max(1, input.limite ?? 20), 100);
     const status = input.status ?? "aberta";
-    const rows = await this.aprendizado.listarLacunas(acesso.agentId, limite, status);
+    const rows = await this.aprendizado.listarLacunas(acesso.id, limite, status);
     return {
       success: true,
       lacunas: rows.map((row) => ({

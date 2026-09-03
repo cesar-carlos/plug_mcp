@@ -63,7 +63,7 @@ const seed = async () => {
     remember: () => undefined,
   };
   await seedTabelaComColunas(grafo, {
-    agentId,
+      acessoId: created.acessoId,
     usuarioId: created.usuarioId,
     nome: "produto",
     colunas: ["codprod", "valor"],
@@ -243,14 +243,15 @@ describe("manutenção de skill", () => {
     expect(result.skill?.escopo.colunasPorTabela.produto).toEqual(
       expect.arrayContaining(["codprod", "obs"]),
     );
-    const tabela = await grafo.findTabelaByNome(agentId, "produto");
-    const coluna = tabela ? await grafo.findColuna(tabela.id, "obs") : null;
+    const tabela = await grafo.findTabelaByNome(created.acessoId, "produto");
+    const coluna = tabela ? await grafo.findColuna(created.acessoId, tabela.id, "obs") : null;
     expect(coluna).toMatchObject({
       sensibilidade: "pessoal",
       origem: "confirmado_usuario",
       descricao: "Observação do cadastro",
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela!.id,
       nome: "obs",
       tipo: "varchar",
@@ -259,7 +260,7 @@ describe("manutenção de skill", () => {
       autorUsuarioId: created.usuarioId,
       sensibilidade: "livre",
     });
-    const afterProfile = await grafo.findColuna(tabela!.id, "obs");
+    const afterProfile = await grafo.findColuna(created.acessoId, tabela!.id, "obs");
     expect(afterProfile?.sensibilidade).toBe("pessoal");
     expect(afterProfile?.origem).toBe("validado_execucao");
     expect(afterProfile?.tipo).toBe("varchar");
@@ -267,8 +268,9 @@ describe("manutenção de skill", () => {
 
   it("confirmar_coluna livre aplica depois de validado_execucao e perfil não rebaixa", async () => {
     const { acessos, skills, grafo, created } = await seed();
-    const tabela = await grafo.findTabelaByNome(agentId, "produto");
+    const tabela = await grafo.findTabelaByNome(created.acessoId, "produto");
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela!.id,
       nome: "nome",
       tipo: "varchar",
@@ -277,6 +279,7 @@ describe("manutenção de skill", () => {
       sensibilidade: "pessoal",
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela!.id,
       nome: "chave",
       tipo: "int",
@@ -302,11 +305,12 @@ describe("manutenção de skill", () => {
       ],
     });
     expect(result.success).toBe(true);
-    const nome = await grafo.findColuna(tabela!.id, "nome");
-    const chave = await grafo.findColuna(tabela!.id, "chave");
+    const nome = await grafo.findColuna(created.acessoId, tabela!.id, "nome");
+    const chave = await grafo.findColuna(created.acessoId, tabela!.id, "chave");
     expect(nome).toMatchObject({ sensibilidade: "livre", origem: "confirmado_usuario" });
     expect(chave).toMatchObject({ sensibilidade: "livre", origem: "confirmado_usuario" });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela!.id,
       nome: "nome",
       tipo: "varchar",
@@ -315,7 +319,7 @@ describe("manutenção de skill", () => {
       autorUsuarioId: created.usuarioId,
       sensibilidade: "pessoal",
     });
-    const afterProfile = await grafo.findColuna(tabela!.id, "nome");
+    const afterProfile = await grafo.findColuna(created.acessoId, tabela!.id, "nome");
     expect(afterProfile?.sensibilidade).toBe("livre");
   });
 
@@ -373,7 +377,7 @@ describe("manutenção de skill", () => {
   it("expandir_escopo sem JOIN no grafo lança JOIN_DESCONHECIDO com source sql", async () => {
     const { acessos, skills, grafo, created } = await seed();
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "cliente",
       colunas: ["codcli"],
@@ -417,13 +421,13 @@ describe("manutenção de skill", () => {
   it("expandir_escopo não copia JOIN só inferido de herdar_catalogo; após confirmar o validador aceita", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "cliente",
       colunas: ["codcli", "nome"],
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "receber",
       colunas: ["codcli", "valor"],
@@ -492,7 +496,7 @@ describe("manutenção de skill", () => {
   it("atualizar_skill une o sqlModelo ao pacote persistido e não puxa JOIN inferido", async () => {
     const { acessos, skills, grafo, created } = await seed();
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "cliente",
       colunas: ["codcli", "nome"],

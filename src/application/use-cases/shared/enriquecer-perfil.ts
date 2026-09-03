@@ -45,7 +45,7 @@ export interface EnriquecerPerfilDeps {
     columns: readonly string[];
     rows: readonly Record<string, unknown>[];
   }>;
-  readonly agentId: string;
+  readonly acessoId: string;
   readonly dialeto: Dialeto;
   readonly autorUsuarioId: string;
   readonly modelo: SqlModelo;
@@ -279,7 +279,7 @@ export const enriquecerPerfilCompleto = async (
     return total === distintos;
   };
 
-  const relsGrafo = await deps.grafo.listRelacionamentos(deps.agentId);
+  const relsGrafo = await deps.grafo.listRelacionamentos(deps.acessoId);
   const trabalhosCardinalidade: {
     origemId: string;
     destinoId: string;
@@ -325,8 +325,8 @@ export const enriquecerPerfilCompleto = async (
     }
     const leftCols = grouped.pares.map((par) => par.colunaOrigem);
     const rightCols = grouped.pares.map((par) => par.colunaDestino);
-    const origem = await deps.grafo.findTabelaByNome(deps.agentId, grouped.tabelaOrigem);
-    const destino = await deps.grafo.findTabelaByNome(deps.agentId, grouped.tabelaDestino);
+    const origem = await deps.grafo.findTabelaByNome(deps.acessoId, grouped.tabelaOrigem);
+    const destino = await deps.grafo.findTabelaByNome(deps.acessoId, grouped.tabelaDestino);
     if (!origem || !destino) {
       continue;
     }
@@ -400,7 +400,7 @@ export const enriquecerPerfilCompleto = async (
       });
     }
     await deps.grafo.mergeRelacionamento({
-      agentId: deps.agentId,
+      acessoId: deps.acessoId,
       tabelaOrigemId: trabalho.origemId,
       tabelaDestinoId: trabalho.destinoId,
       pares: trabalho.grouped.pares,
@@ -464,11 +464,11 @@ export const enriquecerPerfilCompleto = async (
   }
 
   const colunaJaTemCatalogo = async (tabelaNome: string, colunaNome: string): Promise<boolean> => {
-    const tabela = await deps.grafo.findTabelaByNome(deps.agentId, tabelaNome);
+    const tabela = await deps.grafo.findTabelaByNome(deps.acessoId, tabelaNome);
     if (!tabela) {
       return false;
     }
-    const coluna = await deps.grafo.findColuna(tabela.id, colunaNome);
+    const coluna = await deps.grafo.findColuna(deps.acessoId, tabela.id, colunaNome);
     return Boolean(coluna?.tipo && coluna.formato);
   };
 
@@ -476,11 +476,11 @@ export const enriquecerPerfilCompleto = async (
     tabelaNome: string,
     colunaNome: string,
   ): Promise<boolean> => {
-    const tabela = await deps.grafo.findTabelaByNome(deps.agentId, tabelaNome);
+    const tabela = await deps.grafo.findTabelaByNome(deps.acessoId, tabelaNome);
     if (!tabela) {
       return false;
     }
-    const coluna = await deps.grafo.findColuna(tabela.id, colunaNome);
+    const coluna = await deps.grafo.findColuna(deps.acessoId, tabela.id, colunaNome);
     const perfil = coluna?.perfil;
     return perfil != null && (perfil.min != null || perfil.max != null || perfil.distintos != null);
   };
@@ -533,11 +533,12 @@ export const enriquecerPerfilCompleto = async (
     if (!tipo) {
       continue;
     }
-    const tabela = await deps.grafo.findTabelaByNome(deps.agentId, item.tabela);
+    const tabela = await deps.grafo.findTabelaByNome(deps.acessoId, item.tabela);
     if (!tabela) {
       continue;
     }
     await deps.grafo.mergeColuna({
+      acessoId: deps.acessoId,
       tabelaId: tabela.id,
       nome: item.coluna,
       tipo,
@@ -656,7 +657,7 @@ export const enriquecerPerfilCompleto = async (
       fase = "perfil";
     }
     for (const merge of merges) {
-      const tabela = await deps.grafo.findTabelaByNome(deps.agentId, merge.item.tabela);
+      const tabela = await deps.grafo.findTabelaByNome(deps.acessoId, merge.item.tabela);
       if (!tabela) {
         continue;
       }
@@ -664,6 +665,7 @@ export const enriquecerPerfilCompleto = async (
         ? { ...merge.perfil, candidatosDicionario: merge.candidatos }
         : merge.perfil;
       await deps.grafo.mergeColuna({
+        acessoId: deps.acessoId,
         tabelaId: tabela.id,
         nome: merge.item.coluna,
         tipo: merge.tipo,
@@ -679,13 +681,13 @@ export const enriquecerPerfilCompleto = async (
   if (tetoAtingido) {
     const pendencias: string[] = [];
     for (const item of colunasFisicas) {
-      const tabela = await deps.grafo.findTabelaByNome(deps.agentId, item.tabela);
-      const coluna = tabela ? await deps.grafo.findColuna(tabela.id, item.coluna) : null;
+      const tabela = await deps.grafo.findTabelaByNome(deps.acessoId, item.tabela);
+      const coluna = tabela ? await deps.grafo.findColuna(deps.acessoId, tabela.id, item.coluna) : null;
       if (!coluna || (!coluna.tipo && !coluna.formato)) {
         pendencias.push(`Coluna ${item.tabela}.${item.coluna} sem tipo/formato.`);
       }
     }
-    const rels = await deps.grafo.listRelacionamentos(deps.agentId);
+    const rels = await deps.grafo.listRelacionamentos(deps.acessoId);
     for (const rel of deps.modelo.relacionamentos) {
       if (!rel.on) {
         continue;
@@ -709,8 +711,8 @@ export const enriquecerPerfilCompleto = async (
       if (!grouped) {
         continue;
       }
-      const origem = await deps.grafo.findTabelaByNome(deps.agentId, grouped.tabelaOrigem);
-      const destino = await deps.grafo.findTabelaByNome(deps.agentId, grouped.tabelaDestino);
+      const origem = await deps.grafo.findTabelaByNome(deps.acessoId, grouped.tabelaOrigem);
+      const destino = await deps.grafo.findTabelaByNome(deps.acessoId, grouped.tabelaDestino);
       const relacionamento = rels.find(
         (item) =>
           (item.tabelaOrigemId === origem?.id && item.tabelaDestinoId === destino?.id) ||

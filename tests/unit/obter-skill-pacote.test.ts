@@ -68,7 +68,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
   it("persiste escopo vazio e devolve consultasExemplo", async () => {
     const { skills, aprendizado, obter, created } = await setup();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
@@ -77,7 +77,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
     });
     expect(skill.escopo).toEqual(escopoVazio());
     await aprendizado.salvarConsulta({
-      agentId,
+      acessoId: created.acessoId,
       skillIds: [skill.id],
       pergunta: "produtos ativos",
       sql: "SELECT p.codprod FROM produto p WHERE p.codprod > 0",
@@ -97,7 +97,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
   it("validar_consulta liga placeholders a null", async () => {
     const { plug, acessos, skills, created, sessions } = await setup();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "por-codigo",
       nome: "Produto",
       descricao: "Busca",
@@ -121,7 +121,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
       throw new Error("não deve chamar o plug");
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "por-codigo-top",
       nome: "Produto",
       descricao: "Busca",
@@ -148,7 +148,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
   it("validar_consulta aceita TOP sem página e página sem TOP", async () => {
     const { plug, acessos, skills, created, sessions } = await setup();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista-corte",
       nome: "Produto",
       descricao: "Lista",
@@ -176,7 +176,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
     const { plug, acessos, skills, created, sessions } = await setup();
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista",
       nome: "Lista",
       descricao: "Produtos",
@@ -206,12 +206,13 @@ describe("obter_skill pacote e backfill de escopo", () => {
   it("pacote só autoriza colunas do escopo", async () => {
     const { skills, grafo, obter, created } = await setup();
     const { tabela } = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "produto",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela.id,
       nome: "codprod",
       tipo: "int",
@@ -219,6 +220,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela.id,
       nome: "secreto",
       tipo: "int",
@@ -226,7 +228,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
       autorUsuarioId: created.usuarioId,
     });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",

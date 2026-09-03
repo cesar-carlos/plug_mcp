@@ -51,13 +51,13 @@ describe("backfill de pacote", () => {
       parseSqlModelo("SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0"),
     );
     const id = associarAnotacaoASkill(
-      { id: "a1", agentId: "ag", tabelaId: "t1", skillId: null },
+      { id: "a1", acessoId: "ag", tabelaId: "t1", skillId: null },
       "produto",
       [{ id: "s1", escopo }],
     );
     expect(id).toBe("s1");
     expect(
-      associarAnotacaoASkill({ id: "a1", agentId: "ag", tabelaId: null, skillId: null }, null, [
+      associarAnotacaoASkill({ id: "a1", acessoId: "ag", tabelaId: null, skillId: null }, null, [
         { id: "s1", escopo },
       ]),
     ).toBeNull();

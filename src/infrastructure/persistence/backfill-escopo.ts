@@ -50,20 +50,20 @@ const run = async (): Promise<void> => {
   try {
     const skills = await client.query<{
       id: string;
-      agent_id: string;
+      acesso_id: string | null;
       sql_modelo: string;
       status: string;
       dialeto: string | null;
     }>(`
-      SELECT s.id, s.agent_id, s.sql_modelo, s.status, (
-        SELECT a.dialeto FROM acesso a WHERE a.agent_id = s.agent_id ORDER BY a.updated_at DESC LIMIT 1
-      ) AS dialeto
+      SELECT s.id, s.acesso_id, s.sql_modelo, s.status, a.dialeto
       FROM skill s
+      LEFT JOIN acesso a ON a.id = s.acesso_id
     `);
     const report: Record<string, BackfillReportAgent> = {};
     const escopos = new Map<string, EscopoSkill>();
     for (const row of skills.rows) {
-      const agent = report[row.agent_id] ?? emptyReport();
+      const chave = row.acesso_id ?? "orfao";
+      const agent = report[chave] ?? emptyReport();
       const rebuilt = reconstruirEscopoOuErro(row.sql_modelo);
       if (!rebuilt.ok) {
         agent.orfas += 1;
@@ -71,7 +71,7 @@ const run = async (): Promise<void> => {
           `UPDATE skill SET status = 'rascunho_revalidacao', motivo_revalidacao = $2, pacote_versao = $3, updated_at = now() WHERE id = $1`,
           [row.id, rebuilt.motivo, PACOTE_VERSAO_ATUAL],
         );
-        report[row.agent_id] = agent;
+        report[chave] = agent;
         continue;
       }
       escopos.set(row.id, rebuilt.escopo);
@@ -92,25 +92,25 @@ const run = async (): Promise<void> => {
       } else {
         agent.revalidadas += 1;
       }
-      report[row.agent_id] = agent;
+      report[chave] = agent;
     }
 
-    const consultas = await client.query<{ id: string; agent_id: string; sql: string }>(
-      `SELECT id, agent_id, sql FROM consulta_aprendida`,
+    const consultas = await client.query<{ id: string; acesso_id: string | null; sql: string }>(
+      `SELECT id, acesso_id, sql FROM consulta_aprendida`,
     );
     await client.query(`DELETE FROM consulta_aprendida_skill`);
     for (const consulta of consultas.rows) {
-      const doAgent = skills.rows
-        .filter((skill) => skill.agent_id === consulta.agent_id && escopos.has(skill.id))
+      const doAcesso = skills.rows
+        .filter((skill) => skill.acesso_id === consulta.acesso_id && escopos.has(skill.id))
         .map((skill) => {
           const escopo = escopos.get(skill.id);
           return escopo ? { id: skill.id, escopo } : null;
         })
         .filter((item): item is { id: string; escopo: EscopoSkill } => item !== null);
       const rawDialeto =
-        skills.rows.find((skill) => skill.agent_id === consulta.agent_id)?.dialeto ?? "sybase";
+        skills.rows.find((skill) => skill.acesso_id === consulta.acesso_id)?.dialeto ?? "sybase";
       const dialeto = isDialeto(rawDialeto) ? rawDialeto : "sybase";
-      const assoc = associarConsultaASkills(consulta.sql, dialeto, doAgent);
+      const assoc = associarConsultaASkills(consulta.sql, dialeto, doAcesso);
       if (assoc.inativa) {
         await client.query(`UPDATE consulta_aprendida SET status = 'inativa' WHERE id = $1`, [
           consulta.id,
@@ -125,20 +125,20 @@ const run = async (): Promise<void> => {
       }
     }
 
-    const tabelas = await client.query<{ id: string; agent_id: string; nome: string }>(
-      `SELECT id, agent_id, nome FROM tabela_grafo`,
+    const tabelas = await client.query<{ id: string; acesso_id: string | null; nome: string }>(
+      `SELECT id, acesso_id, nome FROM tabela_grafo`,
     );
     const tabelaNome = new Map(tabelas.rows.map((item) => [item.id, item]));
     const anotacoes = await client.query<{
       id: string;
-      agent_id: string;
+      acesso_id: string | null;
       tabela_id: string | null;
       skill_id: string | null;
-    }>(`SELECT id, agent_id, tabela_id, skill_id FROM anotacao_grafo`);
+    }>(`SELECT id, acesso_id, tabela_id, skill_id FROM anotacao_grafo`);
     for (const nota of anotacoes.rows) {
       const tabela = nota.tabela_id ? tabelaNome.get(nota.tabela_id) : undefined;
-      const doAgent = skills.rows
-        .filter((skill) => skill.agent_id === nota.agent_id && escopos.has(skill.id))
+      const doAcesso = skills.rows
+        .filter((skill) => skill.acesso_id === nota.acesso_id && escopos.has(skill.id))
         .map((skill) => {
           const escopo = escopos.get(skill.id);
           return escopo ? { id: skill.id, escopo } : null;
@@ -147,12 +147,12 @@ const run = async (): Promise<void> => {
       const skillId = associarAnotacaoASkill(
         {
           id: nota.id,
-          agentId: nota.agent_id,
+          acessoId: nota.acesso_id ?? "",
           tabelaId: nota.tabela_id,
           skillId: nota.skill_id,
         },
         tabela?.nome ?? null,
-        doAgent,
+        doAcesso,
       );
       if (skillId && skillId !== nota.skill_id) {
         await client.query(`UPDATE anotacao_grafo SET skill_id = $2 WHERE id = $1`, [

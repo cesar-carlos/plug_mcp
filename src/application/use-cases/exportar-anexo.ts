@@ -66,20 +66,27 @@ export class ExportarAnexo {
       });
     }
     const mimeDestino = rawMime;
+    const peeked = this.anexos.get(handle, uid);
+    if (!peeked) {
+      throw origemInvalida(
+        "Handle expirado, de outra sessão ou de outro usuário. Chame consultar_dados de novo e use o handle novo. Não invente bytes. Handle de inspeção não é exportável.",
+      );
+    }
+    const boundAcessoId = input.acessoId?.trim() ? input.acessoId : peeked.acessoId;
     const acesso = await refreshAndRequireAcessoAprovado(
       this.acessos,
       this.plug,
       this.sessions,
-      await requireAcesso(this.acessos, input.acessoId, uid),
+      await requireAcesso(this.acessos, boundAcessoId, uid),
       uid,
     );
-    const publicadas = (await this.skills.listByAgent(acesso.agentId)).filter(
+    const publicadas = (await this.skills.listByAcesso(acesso.id)).filter(
       (item) => item.status === "publicada",
     );
     if (publicadas.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.SKILL_NOT_PUBLISHED,
-        message: "Não há skill publicada neste agentId.",
+        message: "Não há skill publicada neste acesso.",
         hint: "Publique a skill antes. exportar_anexo usa os mesmos portões de consultar_dados.",
       });
     }
@@ -91,12 +98,7 @@ export class ExportarAnexo {
         clientToken,
       }),
     );
-    const record = this.anexos.get(handle, uid);
-    if (!record) {
-      throw origemInvalida(
-        "Handle expirado, de outra sessão ou de outro usuário. Chame consultar_dados de novo e use o handle novo. Não invente bytes. Handle de inspeção não é exportável.",
-      );
-    }
+    const record = peeked;
     if (record.acessoId !== acesso.id) {
       throw origemInvalida("O handle não pertence a este acessoId. Confira listar_acessos.");
     }

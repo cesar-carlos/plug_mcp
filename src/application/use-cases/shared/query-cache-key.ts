@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 
 export const QUERY_CACHE_PREFIX = "mcp:query:";
 
-export const queryCachePrefixForAgent = (agentId: string): string =>
-  `${QUERY_CACHE_PREFIX}${agentId}:`;
+export const queryCachePrefixForAcesso = (acessoId: string): string =>
+  `${QUERY_CACHE_PREFIX}acesso:${acessoId}:`;
 
 export const policyFingerprint = (policy: {
   allTables: boolean;
@@ -44,5 +44,5 @@ export const queryCacheKey = (input: {
     filial: input.escopoFilial ?? null,
     policy: input.policyFingerprint ?? null,
   });
-  return `${queryCachePrefixForAgent(input.agentId)}${createHash("sha256").update(payload).digest("hex")}`;
+  return `${queryCachePrefixForAcesso(input.acessoId)}${createHash("sha256").update(payload).digest("hex")}`;
 };

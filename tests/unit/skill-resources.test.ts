@@ -40,7 +40,7 @@ describe("resources skill:// e guia://", () => {
     const skills = new InMemorySkillRepository();
     const usuarioId = "u1";
     const agentId = "11111111-1111-4111-8111-111111111111";
-    await acessos.create({
+    const acesso = await acessos.create({
       usuarioId,
       agentId,
       dialeto: "mssql",
@@ -50,7 +50,7 @@ describe("resources skill:// e guia://", () => {
       statusAcesso: "approved",
     });
     await skills.create({
-      agentId,
+      acessoId: acesso.id,
       slug: "rascunho",
       nome: "Rascunho",
       descricao: "nao publicar",
@@ -61,7 +61,7 @@ describe("resources skill:// e guia://", () => {
     const published = await listPublishedSkillsForUsuario({ acessos, skills }, usuarioId);
     expect(published).toHaveLength(0);
     const pub = await skills.create({
-      agentId,
+      acessoId: acesso.id,
       slug: "ok",
       nome: "Ok",
       descricao: "sim",
@@ -77,8 +77,9 @@ describe("resources skill:// e guia://", () => {
   it("skill:// usa o dialeto do acesso e omite o guia se não houver acesso", async () => {
     const skills = new InMemorySkillRepository();
     const agentId = "11111111-1111-4111-8111-111111111111";
+    const acessoId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const skill = await skills.create({
-      agentId,
+      acessoId,
       slug: "ok",
       nome: "Ok",
       descricao: "sim",
@@ -86,8 +87,8 @@ describe("resources skill:// e guia://", () => {
       escopo: { ...escopoVazio(), pacoteVersao: PACOTE_VERSAO_ATUAL },
       autorUsuarioId: "u1",
     });
-    expect(dialetoDoAcesso([{ agentId, dialeto: "mssql" }], agentId)).toBe("mssql");
-    expect(dialetoDoAcesso([], agentId)).toBeUndefined();
+    expect(dialetoDoAcesso([{ id: acessoId, agentId, dialeto: "mssql" }], acessoId)).toBe("mssql");
+    expect(dialetoDoAcesso([], acessoId)).toBeUndefined();
 
     const comAcesso = envelopeSkillResource(skill, "postgres");
     expect(comAcesso.guiaDialeto?.dialeto).toBe("postgres");

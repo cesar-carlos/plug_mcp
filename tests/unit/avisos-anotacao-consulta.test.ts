@@ -11,7 +11,7 @@ const agora = new Date();
 const nota = (
   patch: Partial<AnotacaoGrafo> & Pick<AnotacaoGrafo, "id" | "tipo" | "titulo">,
 ): AnotacaoGrafo => ({
-  agentId: "agent",
+  acessoId: "agent",
   tabelaId: null,
   skillId: null,
   texto: "corpo",

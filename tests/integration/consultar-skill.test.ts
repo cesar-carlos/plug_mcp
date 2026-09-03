@@ -233,7 +233,7 @@ describe("consultar_dados só com skill", () => {
           jsonrpc: "2.0",
           id: 24,
           method: "resources/read",
-          params: { uri: `skill://${agentId}/produtos` },
+          params: { uri: `skill://${registered.json.acessoId as string}/produtos` },
         },
         authed.sessionId,
       );
@@ -257,7 +257,7 @@ describe("consultar_dados só com skill", () => {
           jsonrpc: "2.0",
           id: 25,
           method: "resources/read",
-          params: { uri: `skill://${agentId}/produtos` },
+          params: { uri: `skill://${registered.json.acessoId as string}/produtos` },
         });
       expect(skillLeak.status).toBeLessThan(500);
       const skillLeakPayload = parseMcpPayload(skillLeak);

@@ -66,7 +66,9 @@ export const acesso = pgTable(
 );
 
 export const grafoDialeto = pgTable("grafo_dialeto", {
-  agentId: uuid("agent_id").primaryKey(),
+  acessoId: uuid("acesso_id")
+    .primaryKey()
+    .references(() => acesso.id, { onDelete: "cascade" }),
   dialeto: text("dialeto").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -75,7 +77,7 @@ export const tabelaGrafo = pgTable(
   "tabela_grafo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
     descricao: text("descricao"),
     origem: text("origem").notNull(),
@@ -84,8 +86,8 @@ export const tabelaGrafo = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex("tabela_grafo_agent_nome_uidx").on(t.agentId, t.nome),
-    index("tabela_grafo_agent_idx").on(t.agentId),
+    uniqueIndex("tabela_grafo_acesso_nome_uidx").on(t.acessoId, t.nome),
+    index("tabela_grafo_acesso_idx").on(t.acessoId),
   ],
 );
 
@@ -117,7 +119,7 @@ export const relacionamentoGrafo = pgTable(
   "relacionamento_grafo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     tabelaOrigemId: uuid("tabela_origem_id")
       .notNull()
       .references(() => tabelaGrafo.id, { onDelete: "cascade" }),
@@ -138,12 +140,12 @@ export const relacionamentoGrafo = pgTable(
   },
   (t) => [
     uniqueIndex("rel_grafo_pares_uidx").on(
-      t.agentId,
+      t.acessoId,
       t.tabelaOrigemId,
       t.tabelaDestinoId,
       t.paresFingerprint,
     ),
-    index("rel_grafo_agent_idx").on(t.agentId),
+    index("rel_grafo_acesso_idx").on(t.acessoId),
   ],
 );
 
@@ -164,19 +166,19 @@ export const schemaSnapshot = pgTable(
   "schema_snapshot",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     tabelaNome: text("tabela_nome").notNull(),
     assinatura: text("assinatura").notNull(),
     ...timestamps,
   },
-  (t) => [uniqueIndex("schema_snapshot_agent_tabela_uidx").on(t.agentId, t.tabelaNome)],
+  (t) => [uniqueIndex("schema_snapshot_acesso_tabela_uidx").on(t.acessoId, t.tabelaNome)],
 );
 
 export const skill = pgTable(
   "skill",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     slug: text("slug").notNull(),
     nome: text("nome").notNull(),
     descricao: text("descricao").notNull(),
@@ -201,10 +203,10 @@ export const skill = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex("skill_agent_slug_uidx").on(t.agentId, t.slug),
-    index("skill_agent_idx").on(t.agentId),
+    uniqueIndex("skill_acesso_slug_uidx").on(t.acessoId, t.slug),
+    index("skill_acesso_idx").on(t.acessoId),
     // search_tsv GENERATED ALWAYS — drizzle/0016_conhecimento_fts.sql (não mapear no insert)
-    // GIN composto (agent_id, search_tsv) — drizzle/0017_fts_hardening.sql
+    // GIN composto (acesso_id, search_tsv) — drizzle/0022_catalogo_por_acesso.sql
     // pesos A/B/C + pg_trgm — drizzle/0018_fts_rank_trgm.sql
   ],
 );
@@ -213,7 +215,7 @@ export const anotacaoGrafo = pgTable(
   "anotacao_grafo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     tabelaId: uuid("tabela_id").references(() => tabelaGrafo.id, { onDelete: "set null" }),
     skillId: uuid("skill_id").references(() => skill.id, { onDelete: "set null" }),
     tipo: text("tipo").notNull(),
@@ -223,7 +225,7 @@ export const anotacaoGrafo = pgTable(
     ...timestamps,
   },
   (t) => [
-    index("anotacao_grafo_agent_idx").on(t.agentId),
+    index("anotacao_grafo_acesso_idx").on(t.acessoId),
     index("anotacao_grafo_skill_idx").on(t.skillId),
   ],
 );
@@ -249,14 +251,16 @@ export const auditLog = pgTable(
 );
 
 export const grafoLock = pgTable("grafo_lock", {
-  agentId: uuid("agent_id").primaryKey(),
+  acessoId: uuid("acesso_id")
+    .primaryKey()
+    .references(() => acesso.id, { onDelete: "cascade" }),
 });
 
 export const consultaAprendida = pgTable(
   "consulta_aprendida",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     pergunta: text("pergunta").notNull(),
     sql: text("sql").notNull(),
     paramsContrato: jsonb("params_contrato").$type<ParametroSkill[]>().notNull().default([]),
@@ -266,7 +270,7 @@ export const consultaAprendida = pgTable(
     autorUsuarioId: uuid("autor_usuario_id"),
     ...timestamps,
   },
-  (t) => [index("consulta_aprendida_agent_idx").on(t.agentId)],
+  (t) => [index("consulta_aprendida_acesso_idx").on(t.acessoId)],
 );
 
 export const consultaAprendidaSkill = pgTable(
@@ -289,20 +293,20 @@ export const sinonimo = pgTable(
   "sinonimo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     termo: text("termo").notNull(),
     alvoTipo: text("alvo_tipo").notNull(),
     alvoId: text("alvo_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("sinonimo_agent_idx").on(t.agentId)],
+  (t) => [index("sinonimo_acesso_idx").on(t.acessoId)],
 );
 
 export const lacunaConsulta = pgTable(
   "lacuna_consulta",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     pergunta: text("pergunta").notNull(),
     perguntaChave: text("pergunta_chave").notNull(),
     tipo: text("tipo").notNull().default("skill_gap"),
@@ -312,7 +316,7 @@ export const lacunaConsulta = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("lacuna_consulta_agent_idx").on(t.agentId),
-    uniqueIndex("lacuna_consulta_agent_tipo_chave_uidx").on(t.agentId, t.tipo, t.perguntaChave),
+    index("lacuna_consulta_acesso_idx").on(t.acessoId),
+    uniqueIndex("lacuna_consulta_acesso_tipo_chave_uidx").on(t.acessoId, t.tipo, t.perguntaChave),
   ],
 );

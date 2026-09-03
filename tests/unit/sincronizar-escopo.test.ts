@@ -43,7 +43,7 @@ describe("uniaoEscopos e overlay de cardinalidade", () => {
     const grafoRels: RelacionamentoGrafo[] = [
       {
         id: "r1",
-        agentId: "a",
+        acessoId: "a",
         tabelaOrigemId: "t1",
         colunaOrigem: "codcli",
         tabelaDestinoId: "t2",

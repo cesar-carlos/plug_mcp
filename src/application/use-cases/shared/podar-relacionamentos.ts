@@ -3,11 +3,11 @@ import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository
 
 export const podarRelacionamentosSubsetNoGrafo = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
 ): Promise<void> => {
-  const tabelas = await grafo.listTabelas(agentId);
+  const tabelas = await grafo.listTabelas(acessoId);
   const nomeById = new Map(tabelas.map((tabela) => [tabela.id, tabela.nome]));
-  const rels = await grafo.listRelacionamentos(agentId);
+  const rels = await grafo.listRelacionamentos(acessoId);
   const mapped = rels.map((rel) => ({
     id: rel.id,
     tabelaOrigem: nomeById.get(rel.tabelaOrigemId) ?? "",
@@ -17,7 +17,7 @@ export const podarRelacionamentosSubsetNoGrafo = async (
   const keep = new Set(relacoesSemSubconjuntos(mapped).map((rel) => rel.id));
   for (const rel of mapped) {
     if (!keep.has(rel.id) && rel.tabelaOrigem && rel.tabelaDestino) {
-      await grafo.deleteRelacionamento(rel.id);
+      await grafo.deleteRelacionamento(acessoId, rel.id);
     }
   }
 };

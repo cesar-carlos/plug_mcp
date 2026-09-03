@@ -48,13 +48,14 @@ describe("ValidarSkill", () => {
       clientToken: "tok-sql-123456",
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod"],
     });
-    const produto = await grafo.findTabelaByNome(agentId, "produto");
+    const produto = await grafo.findTabelaByNome(created.acessoId, "produto");
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: produto!.id,
       nome: "dtcad",
       origem: "validado_execucao",
@@ -117,7 +118,7 @@ describe("ValidarSkill", () => {
       clientToken: "tok-sql-123456",
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod", "dtcad"],
@@ -178,7 +179,7 @@ describe("ValidarSkill", () => {
       clientToken: "tok-sql-123456",
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod", "dtcad"],
@@ -229,13 +230,14 @@ describe("ValidarSkill", () => {
       clientToken: "tok-sql-123456",
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod"],
     });
-    const produto = await grafo.findTabelaByNome(agentId, "produto");
+    const produto = await grafo.findTabelaByNome(created.acessoId, "produto");
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: produto!.id,
       nome: "dtcad",
       origem: "validado_execucao",
@@ -279,8 +281,8 @@ describe("ValidarSkill", () => {
       enriquecer: "completo",
     });
     expect(result.skill.status).toBe("validada");
-    const tabela = await grafo.findTabelaByNome(agentId, "produto");
-    const cols = tabela ? await grafo.listColunas(tabela.id) : [];
+    const tabela = await grafo.findTabelaByNome(created.acessoId, "produto");
+    const cols = tabela ? await grafo.listColunas(created.acessoId, tabela.id) : [];
     expect(
       cols.some((coluna) => coluna.nome.toLowerCase() === "codprod" && coluna.tipo === "int"),
     ).toBe(true);
@@ -313,13 +315,13 @@ describe("ValidarSkill", () => {
       clientToken: "tok-sql-123456",
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod", "nome"],
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "anexo",
       colunas: ["codprod", "imagem"],
@@ -401,21 +403,21 @@ describe("ValidarSkill", () => {
       clientToken: "tok-sql-123456",
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod"],
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "transportadora",
       colunas: ["codprod"],
     });
-    const produto = await grafo.findTabelaByNome(agentId, "produto");
-    const transportadora = await grafo.findTabelaByNome(agentId, "transportadora");
+    const produto = await grafo.findTabelaByNome(created.acessoId, "produto");
+    const transportadora = await grafo.findTabelaByNome(created.acessoId, "transportadora");
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: created.acessoId,
       tabelaOrigemId: produto!.id,
       tabelaDestinoId: transportadora!.id,
       pares: [{ colunaOrigem: "codprod", colunaDestino: "codprod" }],
@@ -467,13 +469,14 @@ describe("ValidarSkill", () => {
       clientToken: "tok-sql-123456",
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod", "nome"],
     });
-    const produto = await grafo.findTabelaByNome(agentId, "produto");
+    const produto = await grafo.findTabelaByNome(created.acessoId, "produto");
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: produto!.id,
       nome: "nome",
       origem: "inferido",
@@ -522,7 +525,7 @@ describe("ValidarSkill", () => {
       created.usuarioId,
       { acessoId: created.acessoId, skillId: skill.skill.id, enriquecer: "completo" },
     );
-    const coluna = await grafo.findColuna(produto!.id, "nome");
+    const coluna = await grafo.findColuna(created.acessoId, produto!.id, "nome");
     expect(coluna?.sensibilidade).toBe("livre");
   });
 });

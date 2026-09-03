@@ -14,7 +14,7 @@ Regras de prioridade mais alta (segurança, arquitetura, camada de domínio) pre
 - Mantenha arquivos focados em uma responsabilidade. Quebre use-cases grandes (`consultar`, `skills`) extraindo helpers em `use-cases/shared/`, não inchando o arquivo.
 - Use nomes descritivos do domínio: `consultarDados`, `agentId`, `acessoId`, `dialeto`, `escopo`, `pacoteVersao`.
 - Siga o padrão de nomenclatura do projeto; prefira nomes que revelem feature + responsabilidade.
-- Substitua literais com significado de negócio por constantes nomeadas (timeouts, limites, `GROUP_BY_MAX_EXPRESSIONS`, tetos de perfil, prefixo `mcp:query:{agentId}:`).
+- Substitua literais com significado de negócio por constantes nomeadas (timeouts, limites, `GROUP_BY_MAX_EXPRESSIONS`, tetos de perfil, prefixo `mcp:query:acesso:{acessoId}:`).
 
 ## Comentários
 

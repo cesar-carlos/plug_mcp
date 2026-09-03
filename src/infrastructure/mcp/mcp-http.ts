@@ -27,6 +27,11 @@ interface Session {
 
 const MAX_SWEEP_INTERVAL_MS = 5 * 60_000;
 
+export const sessaoDeveReceberSkillsChanged = (
+  session: { bootstrap: boolean; usuarioId: string | null },
+  publisherUsuarioId: string,
+): boolean => !session.bootstrap && session.usuarioId === publisherUsuarioId;
+
 const rpcName = (body: unknown): { method?: string; tool?: string } => {
   if (typeof body !== "object" || body === null) {
     return {};
@@ -78,23 +83,9 @@ export const createMcpHttpHandler = (input: {
   };
 
   const notifyUsuario = async (usuarioId: string): Promise<void> => {
-    const publisherAcessos = await input.catalog.acessos.listByUsuario(usuarioId);
-    const agentIds = new Set(publisherAcessos.map((acesso) => acesso.agentId));
-    const matchingUsuarios = new Set<string>();
-    const checked = new Set<string>();
     for (const session of sessions.values()) {
-      if (session.bootstrap || !session.usuarioId || checked.has(session.usuarioId)) {
-        continue;
-      }
-      checked.add(session.usuarioId);
-      const sessionAcessos = await input.catalog.acessos.listByUsuario(session.usuarioId);
-      if (sessionAcessos.some((acesso) => agentIds.has(acesso.agentId))) {
-        matchingUsuarios.add(session.usuarioId);
-      }
-    }
-    for (const session of sessions.values()) {
-      if (session.usuarioId && matchingUsuarios.has(session.usuarioId) && !session.bootstrap) {
-        await refreshSkillTools(session, session.usuarioId);
+      if (sessaoDeveReceberSkillsChanged(session, usuarioId)) {
+        await refreshSkillTools(session, usuarioId);
       }
     }
   };

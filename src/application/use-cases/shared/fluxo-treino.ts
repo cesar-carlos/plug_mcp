@@ -101,17 +101,17 @@ export const paramsHaystack = (params: readonly ParametroSkill[]): string =>
 
 export const countConflitosGrafo = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
-): Promise<number> => grafo.countConflitos(agentId);
+  acessoId: string,
+): Promise<number> => grafo.countConflitos(acessoId);
 
 export const missingGraphTables = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   nomes: readonly string[],
 ): Promise<string[]> => {
   const missing: string[] = [];
   for (const nome of nomes) {
-    const tabela = await grafo.findTabelaByNome(agentId, nome);
+    const tabela = await grafo.findTabelaByNome(acessoId, nome);
     if (!tabela) {
       missing.push(nome);
     }
@@ -313,7 +313,7 @@ export const buildFluxoTreino = (input: {
 
 const fluxoComConflitos = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   skill: Skill | null,
   conflitosPendentes: number,
 ): Promise<FluxoSkillResult> => {
@@ -322,18 +322,18 @@ const fluxoComConflitos = async (
     const modelo = parseSqlModelo(skill.sqlModelo);
     const missing = await missingGraphTables(
       grafo,
-      agentId,
+      acessoId,
       modelo.tabelas.map((tabela) => tabela.nome),
     );
     treinado = missing.length === 0;
   } else {
-    const tabelas = await grafo.listTabelas(agentId);
+    const tabelas = await grafo.listTabelas(acessoId);
     treinado = tabelas.length > 0;
   }
   let faltas: readonly FatoIncompleto[] = [];
   let perfilCompleto = true;
   if (skill && skill.escopo.tabelas.length > 0) {
-    faltas = await listarFatosIncompletos(grafo, agentId, skill.escopo, {
+    faltas = await listarFatosIncompletos(grafo, acessoId, skill.escopo, {
       exigirCardinalidade: skill.escopo.relacionamentos.length > 0,
       exigirTipoColuna: escopoTemMedida(skill.escopo),
     });
@@ -381,33 +381,33 @@ const fluxoComConflitos = async (
   };
 };
 
-export const fluxoForAgentSkill = async (
+export const fluxoForAcessoSkill = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   skill: Skill | null,
 ): Promise<FluxoTreino> => {
-  const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
-  return (await fluxoComConflitos(grafo, agentId, skill, conflitosPendentes)).fluxo;
+  const conflitosPendentes = await countConflitosGrafo(grafo, acessoId);
+  return (await fluxoComConflitos(grafo, acessoId, skill, conflitosPendentes)).fluxo;
 };
 
-export const fluxoEFaltasForAgentSkill = async (
+export const fluxoEFaltasForAcessoSkill = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   skill: Skill | null,
 ): Promise<FluxoSkillResult> => {
-  const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
-  return fluxoComConflitos(grafo, agentId, skill, conflitosPendentes);
+  const conflitosPendentes = await countConflitosGrafo(grafo, acessoId);
+  return fluxoComConflitos(grafo, acessoId, skill, conflitosPendentes);
 };
 
-export const fluxoForAgentSkills = async (
+export const fluxoForAcessoSkills = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   skills: readonly Skill[],
 ): Promise<readonly FluxoSkillResult[]> => {
-  const conflitosPendentes = await countConflitosGrafo(grafo, agentId);
+  const conflitosPendentes = await countConflitosGrafo(grafo, acessoId);
   const out: FluxoSkillResult[] = [];
   for (const skill of skills) {
-    out.push(await fluxoComConflitos(grafo, agentId, skill, conflitosPendentes));
+    out.push(await fluxoComConflitos(grafo, acessoId, skill, conflitosPendentes));
   }
   return out;
 };

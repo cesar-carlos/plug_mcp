@@ -30,7 +30,7 @@ import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
 import type { QueryResultCachePort } from "../../domain/ports/query-result-cache.port.js";
 import { aplicarDerivaTabelaNoGrafo } from "./shared/schema-drift.js";
 import { sincronizarEscopoComGrafo } from "./shared/sincronizar-escopo.js";
-import { fluxoForAgentSkill, pickSkillInProgress } from "./shared/fluxo-treino.js";
+import { fluxoForAcessoSkill, pickSkillInProgress } from "./shared/fluxo-treino.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
 import { podarRelacionamentosSubsetNoGrafo } from "./shared/podar-relacionamentos.js";
@@ -73,7 +73,7 @@ export class TreinarComSql {
     colunas: string[];
     relacionamentos: number;
     conflitos: number;
-    fluxoTreino: Awaited<ReturnType<typeof fluxoForAgentSkill>>;
+    fluxoTreino: Awaited<ReturnType<typeof fluxoForAcessoSkill>>;
     avisos: AvisoPerfil[];
     hint: string;
     progresso?: { operacaoId: string; fase: string; queriesUsadas: number; queriesLimite: number };
@@ -135,14 +135,14 @@ export class TreinarComSql {
       throw error;
     }
 
-    const merged = await this.grafo.withAgentLock(acesso.agentId, async () => {
-      const locked = await this.grafo.getDialeto(acesso.agentId);
+    const merged = await this.grafo.withAcessoLock(acesso.id, async () => {
+      const locked = await this.grafo.getDialeto(acesso.id);
       if (!locked) {
-        await this.grafo.setDialeto(acesso.agentId, acesso.dialeto);
+        await this.grafo.setDialeto(acesso.id, acesso.dialeto);
       } else if (locked.dialeto !== acesso.dialeto) {
         throw new DomainError({
           code: ERROR_CODES.DIALECT_CONFLICT,
-          message: "Este agentId já foi treinado em outro dialeto.",
+          message: "Este acesso já foi treinado em outro dialeto.",
           hint: `Grafo travado em ${locked.dialeto}. Chame atualizar_dialeto com confirmadoPeloUsuario: true para mudar o dialeto (skills voltam a rascunho).`,
         });
       }
@@ -150,7 +150,7 @@ export class TreinarComSql {
       const tabelaIds = new Map<string, string>();
       for (const tabela of modelo.tabelas) {
         const result = await this.grafo.mergeTabela({
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           nome: tabela.nome,
           origem,
           autorUsuarioId: uid,
@@ -170,6 +170,7 @@ export class TreinarComSql {
             continue;
           }
           const result = await this.grafo.mergeColuna({
+            acessoId: acesso.id,
             tabelaId,
             nome: colunaNome,
             papel: inferirPapelColuna(colunaNome, null),
@@ -191,6 +192,7 @@ export class TreinarComSql {
         const pares = paresDoRelacionamento(rel);
         for (const par of pares) {
           const leftCol = await this.grafo.mergeColuna({
+            acessoId: acesso.id,
             tabelaId: origemId,
             nome: par.colunaOrigem,
             origem,
@@ -200,6 +202,7 @@ export class TreinarComSql {
             conflitos += 1;
           }
           const rightCol = await this.grafo.mergeColuna({
+            acessoId: acesso.id,
             tabelaId: destinoId,
             nome: par.colunaDestino,
             origem,
@@ -214,7 +217,7 @@ export class TreinarComSql {
           continue;
         }
         const result = await this.grafo.mergeRelacionamento({
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           tabelaOrigemId: origemId,
           colunaOrigem: first.colunaOrigem,
           tabelaDestinoId: destinoId,
@@ -229,7 +232,7 @@ export class TreinarComSql {
           conflitos += 1;
         }
       }
-      await podarRelacionamentosSubsetNoGrafo(this.grafo, acesso.agentId);
+      await podarRelacionamentosSubsetNoGrafo(this.grafo, acesso.id);
       return { conflitos, rels };
     });
 
@@ -257,7 +260,7 @@ export class TreinarComSql {
                 options: { maxRows: 300 },
               }),
             ),
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           dialeto: acesso.dialeto,
           autorUsuarioId: uid,
           modelo,
@@ -275,7 +278,7 @@ export class TreinarComSql {
       } finally {
         registroOperacoesGlobal.finalizar(op.operacaoId);
       }
-      await sincronizarEscopoComGrafo(this.skills, this.grafo, acesso.agentId, {
+      await sincronizarEscopoComGrafo(this.skills, this.grafo, acesso.id, {
         tabelas: modelo.tabelas.map((tabela) => tabela.nome),
       });
     }
@@ -297,7 +300,7 @@ export class TreinarComSql {
           grafo: this.grafo,
           skills: this.skills,
           cache: this.extras.cache,
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           tabelaNome: tabela.nome,
         });
         if (deriva.drifted) {
@@ -309,9 +312,9 @@ export class TreinarComSql {
       }
     }
 
-    const catalog = await this.skills.listByAgent(acesso.agentId);
+    const catalog = await this.skills.listByAcesso(acesso.id);
     const emAndamento = pickSkillInProgress(catalog, modelo.sql);
-    const fluxoTreino = await fluxoForAgentSkill(this.grafo, acesso.agentId, emAndamento);
+    const fluxoTreino = await fluxoForAcessoSkill(this.grafo, acesso.id, emAndamento);
     const hintBase =
       merged.conflitos > 0
         ? "Há conflitos no grafo. Chame resolver_conflito antes de publicar skills."

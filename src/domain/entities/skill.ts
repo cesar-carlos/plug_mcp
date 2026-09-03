@@ -56,7 +56,7 @@ export const parseParametroSkillList = (value: unknown): ParametroSkill[] => {
 
 export interface Skill {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly slug: string;
   readonly nome: string;
   readonly descricao: string;
@@ -75,7 +75,7 @@ export interface Skill {
 }
 
 export interface NovaSkill {
-  readonly agentId: string;
+  readonly acessoId: string;
   readonly slug: string;
   readonly nome: string;
   readonly descricao: string;
@@ -91,7 +91,7 @@ export interface NovaSkill {
 
 export interface AnotacaoGrafo {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly tabelaId: string | null;
   readonly skillId: string | null;
   readonly tipo: string;

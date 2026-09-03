@@ -162,19 +162,19 @@ describe("tipoJoin no merge do grafo", () => {
   it("LEFT confirmado não vira inner quando herdar_catalogo chega com origem inferido", async () => {
     const grafo = new InMemoryGrafoRepository();
     const pedido = await grafo.mergeTabela({
-      agentId: "agent-1",
+      acessoId: "agent-1",
       nome: "pedido",
       origem: "validado_execucao",
       autorUsuarioId: "u1",
     });
     const cliente = await grafo.mergeTabela({
-      agentId: "agent-1",
+      acessoId: "agent-1",
       nome: "cliente",
       origem: "validado_execucao",
       autorUsuarioId: "u1",
     });
     await grafo.mergeRelacionamento({
-      agentId: "agent-1",
+      acessoId: "agent-1",
       tabelaOrigemId: pedido.tabela.id,
       tabelaDestinoId: cliente.tabela.id,
       pares: [{ colunaOrigem: "codcliente", colunaDestino: "codcliente" }],
@@ -184,7 +184,7 @@ describe("tipoJoin no merge do grafo", () => {
       autorUsuarioId: "u1",
     });
     await grafo.mergeRelacionamento({
-      agentId: "agent-1",
+      acessoId: "agent-1",
       tabelaOrigemId: pedido.tabela.id,
       tabelaDestinoId: cliente.tabela.id,
       pares: [{ colunaOrigem: "codcliente", colunaDestino: "codcliente" }],

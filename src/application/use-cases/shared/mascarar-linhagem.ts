@@ -193,16 +193,16 @@ export const mascararLinhas = (input: {
 
 export const lookupSensibilidadeGrafo = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   tabelas: readonly string[],
 ): Promise<(tabela: string | null, coluna: string) => SensibilidadeColuna | null> => {
   const map = new Map<string, SensibilidadeColuna>();
   for (const nome of tabelas) {
-    const tabela = await grafo.findTabelaByNome(agentId, nome);
+    const tabela = await grafo.findTabelaByNome(acessoId, nome);
     if (!tabela) {
       continue;
     }
-    const cols = await grafo.listColunas(tabela.id);
+    const cols = await grafo.listColunas(acessoId, tabela.id);
     for (const coluna of cols) {
       map.set(`${tabela.nome.toLowerCase()}.${coluna.nome.toLowerCase()}`, coluna.sensibilidade);
       map.set(coluna.nome.toLowerCase(), coluna.sensibilidade);

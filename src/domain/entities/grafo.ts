@@ -6,13 +6,13 @@ export type OrigemFato = "inferido" | "confirmado_usuario" | "validado_execucao"
 export type StatusFato = "vigente" | "conflito";
 
 export interface GrafoDialeto {
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly dialeto: string;
 }
 
 export interface TabelaGrafo {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly nome: string;
   readonly descricao: string | null;
   readonly origem: OrigemFato;
@@ -44,7 +44,7 @@ export interface EscopoValidacaoRel {
 
 export interface RelacionamentoGrafo {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly tabelaOrigemId: string;
   readonly colunaOrigem: string;
   readonly tabelaDestinoId: string;
@@ -61,7 +61,7 @@ export interface RelacionamentoGrafo {
 }
 
 export interface SchemaSnapshotGrafo {
-  readonly agentId: string;
+  readonly acessoId: string | null;
   readonly tabelaNome: string;
   readonly assinatura: string;
 }

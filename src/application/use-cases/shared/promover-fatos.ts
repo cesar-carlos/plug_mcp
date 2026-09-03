@@ -8,16 +8,16 @@ const ORIGEM: OrigemFato = "validado_execucao";
 
 export const promoverFatosDaExecucao = async (input: {
   grafo: GrafoRepositoryPort;
-  agentId: string;
+  acessoId: string;
   autorUsuarioId: string;
   modelo: SqlModelo;
 }): Promise<void> => {
   const escopo = escopoFromSqlModelo(input.modelo);
-  await input.grafo.withAgentLock(input.agentId, async () => {
+  await input.grafo.withAcessoLock(input.acessoId, async () => {
     const tabelaIds = new Map<string, string>();
     for (const nome of escopo.tabelas) {
       const merged = await input.grafo.mergeTabela({
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         nome,
         origem: ORIGEM,
         autorUsuarioId: input.autorUsuarioId,
@@ -31,6 +31,7 @@ export const promoverFatosDaExecucao = async (input: {
       }
       for (const coluna of colunas) {
         await input.grafo.mergeColuna({
+          acessoId: input.acessoId,
           tabelaId,
           nome: coluna,
           origem: ORIGEM,
@@ -47,12 +48,14 @@ export const promoverFatosDaExecucao = async (input: {
       const pares = paresDoRelacionamento(rel);
       for (const par of pares) {
         await input.grafo.mergeColuna({
+          acessoId: input.acessoId,
           tabelaId: origemId,
           nome: par.colunaOrigem,
           origem: ORIGEM,
           autorUsuarioId: input.autorUsuarioId,
         });
         await input.grafo.mergeColuna({
+          acessoId: input.acessoId,
           tabelaId: destinoId,
           nome: par.colunaDestino,
           origem: ORIGEM,
@@ -64,7 +67,7 @@ export const promoverFatosDaExecucao = async (input: {
         continue;
       }
       await input.grafo.mergeRelacionamento({
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         tabelaOrigemId: origemId,
         colunaOrigem: first.colunaOrigem,
         tabelaDestinoId: destinoId,

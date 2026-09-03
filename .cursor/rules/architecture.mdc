@@ -10,7 +10,7 @@ Ports & Adapters. Dependências apontam para dentro.
 
 - `src/domain`: entidades, ports, `DomainError`. Sem Express, Drizzle, MCP SDK, `fetch`.
 - `src/application/use-cases`: um caso de uso por tool (`cofre`, `treinar-com-sql`, `consultar`, `inspecionar`, `exportar-anexo`, `skills`, `aprendizado`). SQL compartilhado em `use-cases/shared/` (`sql-ast`, `sql-scan`, `validar-escopo`, `gates-skill`, `query-cache-key`). Só ports.
-- `src/infrastructure`: HTTP, MCP, Drizzle, adapter REST, crypto, Pino, cache de resultado (`mcp:query:{agentId}:`), handles de anexo em memória (`infrastructure/anexo`).
+- `src/infrastructure`: HTTP, MCP, Drizzle, adapter REST, crypto, Pino, cache de resultado (`mcp:query:acesso:{acessoId}:`), handles de anexo em memória (`infrastructure/anexo`).
 - `src/composition/compose.ts`: único composition root.
 - `src/config/env.ts`: env via Zod. Nenhum `process.env` fora daqui (exceção: `tests/helpers/live-env.ts`).
 
@@ -18,4 +18,4 @@ Identidade: Bearer opaco → SHA-256 → `usuario_mcp`. ALS só na borda MCP. Ca
 
 Plug-server: `PlugServerGatewayPort` (login/refresh/getClientTokenPolicy/executeSql). JWT do hub por usuário (`UsuarioTokenManager`). Cache de policy em memória e Redis. Canal do MCP: só REST (`POST /agents/commands`). Socket `/agents` é do `plug_agente`. Socket/relay de consumer fora de escopo.
 
-Grafo por `agentId` com lock. Leitura filtrada pela policy do `client_token`. Consulta autorizada pelo **pacote publicado**, não pelo grafo. Cache de query isolado por usuário, acesso, fingerprint da policy e versões da skill — nunca só `agentId`.
+Grafo por `acesso_id` com lock. Leitura filtrada pela policy do `client_token` daquele acesso. Consulta autorizada pelo **pacote publicado**, não pelo grafo. Cache de query isolado por usuário, acesso, fingerprint da policy e versões da skill — nunca só `agentId`.

@@ -88,7 +88,7 @@ describe("BuscarContexto", () => {
   it("com rascunho oriente a continuar o fluxo em vez de recomeçar", async () => {
     const { buscar, created, skills } = await setup();
     await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "rascunho-produtos",
       nome: "Lista de produtos",
       descricao: "Ainda em treino",
@@ -109,7 +109,7 @@ describe("BuscarContexto", () => {
   it("casa pergunta certificada (nome/descrição/params, não o SQL)", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "saldo-aberto",
       nome: "Contas",
       descricao: "Títulos",
@@ -129,7 +129,7 @@ describe("BuscarContexto", () => {
   it("com skill publicada lista só publicadas e permite consulta", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista de produtos",
@@ -138,7 +138,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "rascunho-produtos",
       nome: "Rascunho produtos",
       descricao: "Ainda não publica",
@@ -157,7 +157,7 @@ describe("BuscarContexto", () => {
   it("casa pergunta em linguagem natural com skill publicada", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "faturamento-cliente",
       nome: "Faturamento por cliente",
       descricao: "Total faturado no mês por cliente",
@@ -167,7 +167,7 @@ describe("BuscarContexto", () => {
     await skills.setStatus(published.id, "publicada");
     for (let i = 0; i < 8; i += 1) {
       await skills.create({
-        agentId,
+      acessoId: created.acessoId,
         slug: `rascunho-${String(i)}`,
         nome: `Rascunho ${String(i)}`,
         descricao: "Ainda não publica",
@@ -187,7 +187,7 @@ describe("BuscarContexto", () => {
   it("escolhe rascunho mais relevante da query, não o primeiro inserido", async () => {
     const { buscar, created, skills } = await setup();
     await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "lista-xyz",
       nome: "Lista xyz",
       descricao: "Rascunho genérico",
@@ -195,7 +195,7 @@ describe("BuscarContexto", () => {
       autorUsuarioId: created.usuarioId,
     });
     const relevant = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "faturamento-cliente",
       nome: "Faturamento por cliente",
       descricao: "Total faturado no mês por cliente",
@@ -215,7 +215,7 @@ describe("BuscarContexto", () => {
   it("CTX-04 faturamento não casa receber/pagar em treino", async () => {
     const { buscar, created, skills } = await setup();
     await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-receber",
       nome: "Títulos a receber",
       descricao: "Saldo em aberto de clientes",
@@ -223,7 +223,7 @@ describe("BuscarContexto", () => {
       autorUsuarioId: created.usuarioId,
     });
     await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-pagar",
       nome: "Títulos a pagar",
       descricao: "Saldo a pagar a fornecedores",
@@ -244,7 +244,7 @@ describe("BuscarContexto", () => {
   it("CTX-03 pagar em treino é SKILL_NOT_PUBLISHED", async () => {
     const { buscar, created, skills } = await setup();
     const pagar = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-pagar",
       nome: "Títulos a pagar",
       descricao: "Quanto tenho para pagar",
@@ -263,7 +263,7 @@ describe("BuscarContexto", () => {
   it("em pergunta de período pede para reutilizar consultasAprendidas com params ou OVER", async () => {
     const { buscar, created, skills, aprendizado } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "faturamento",
       nome: "Faturamento",
       descricao: "Total faturado",
@@ -272,7 +272,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await aprendizado.salvarConsulta({
-      agentId,
+      acessoId: created.acessoId,
       skillIds: [published.id],
       pergunta: "faturamento no período",
       sql: "SELECT SUM(p.valor) AS total FROM produto p WHERE p.data >= :dataInicio",
@@ -296,7 +296,7 @@ describe("BuscarContexto", () => {
   it("corpo de regra longo não completa cobertura certificada", async () => {
     const { buscar, created, skills, anotacoes } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos",
       nome: "Títulos",
       descricao: "Saldo financeiro",
@@ -305,7 +305,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: null,
       skillId: published.id,
       tipo: "regra",
@@ -324,7 +324,7 @@ describe("BuscarContexto", () => {
   it("SQL de consulta aprendida não ranqueia nem completa cobertura", async () => {
     const { buscar, created, skills, aprendizado } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "itens",
       nome: "Itens",
       descricao: "Cadastro de itens",
@@ -333,14 +333,14 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await aprendizado.salvarConsulta({
-      agentId,
+      acessoId: created.acessoId,
       skillIds: [published.id],
       pergunta: "lista de itens do catalogo",
       sql: "SELECT p.codprodunico FROM produto p WHERE p.codprodunico > 0",
       paramsContrato: [],
       autorUsuarioId: created.usuarioId,
     });
-    const bySql = await aprendizado.buscarConsultas(agentId, "codprodunico", 5);
+    const bySql = await aprendizado.buscarConsultas(created.acessoId, "codprodunico", 5);
     expect(bySql).toHaveLength(0);
     const result = await buscar.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -353,7 +353,7 @@ describe("BuscarContexto", () => {
   it("nota com skillId inclui a skill em candidatos mesmo se nome não bate", async () => {
     const { buscar, created, skills, anotacoes } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "contas-abertas",
       nome: "Contas",
       descricao: "Títulos em aberto",
@@ -362,7 +362,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: null,
       skillId: published.id,
       tipo: "regra",
@@ -388,7 +388,7 @@ describe("BuscarContexto", () => {
     const { buscar, created, anotacoes } = await setup();
     const otherAgent = "22222222-2222-4222-8222-222222222222";
     await anotacoes.create({
-      agentId: otherAgent,
+      acessoId: otherAgent,
       tabelaId: null,
       skillId: null,
       tipo: "regra",
@@ -406,7 +406,7 @@ describe("BuscarContexto", () => {
   it("com consultaPermitida não inclui tabela fora do pacote em conhecimentos", async () => {
     const { buscar, created, skills, grafo } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista de produtos",
@@ -424,7 +424,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "auditoria_produtos",
       descricao: "produtos fora do pacote",
       origem: "inferido",
@@ -445,7 +445,7 @@ describe("BuscarContexto", () => {
   it("grafoParaTreino.anotacoes omite nota com tabelaId irresolvível", async () => {
     const { buscar, created, anotacoes } = await setup();
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: "99999999-9999-4999-8999-999999999999",
       skillId: null,
       tipo: "regra",
@@ -472,14 +472,14 @@ describe("BuscarContexto", () => {
     const { buscar, created, anotacoes, grafo, plug } = await setup();
     plug.policy = { allTables: false, tables: ["produto"] };
     const { tabela } = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "segredo_interno",
       descricao: "tabela recortada",
       origem: "inferido",
       autorUsuarioId: created.usuarioId,
     });
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: tabela.id,
       skillId: null,
       tipo: "regra",
@@ -501,7 +501,7 @@ describe("BuscarContexto", () => {
   it("sinônimo entra no haystack de evidência da skill", async () => {
     const { buscar, created, skills, aprendizado } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "vendas",
       nome: "Vendas",
       descricao: "Totais do período",
@@ -510,7 +510,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await aprendizado.registrarSinonimo({
-      agentId,
+      acessoId: created.acessoId,
       termo: "faturamentoabc",
       alvoTipo: "skill",
       alvoId: published.id,
@@ -529,7 +529,7 @@ describe("BuscarContexto", () => {
   it("sinônimo por slug ainda resolve a skill", async () => {
     const { buscar, created, skills, aprendizado } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "vendas",
       nome: "Vendas",
       descricao: "Totais do período",
@@ -538,7 +538,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await aprendizado.registrarSinonimo({
-      agentId,
+      acessoId: created.acessoId,
       termo: "faturamentoabc",
       alvoTipo: "skill",
       alvoId: "vendas",
@@ -555,7 +555,7 @@ describe("BuscarContexto", () => {
   it("hint de regra sobrevive quando o teto está cheio de tabelas", async () => {
     const { buscar, created, skills, anotacoes, grafo } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "contas-teto",
       nome: "Contas",
       descricao: "Titulos",
@@ -564,7 +564,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: null,
       skillId: published.id,
       tipo: "regra",
@@ -574,7 +574,7 @@ describe("BuscarContexto", () => {
     });
     for (let i = 0; i < 8; i += 1) {
       await grafo.mergeTabela({
-        agentId,
+      acessoId: created.acessoId,
         nome: `alpha_teto_${i}`,
         descricao: "alphateto volume",
         origem: "inferido",
@@ -593,7 +593,7 @@ describe("BuscarContexto", () => {
   it("consulta inativa não entra em consultasAprendidas nem conhecimentos", async () => {
     const { buscar, created, skills, aprendizado } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "itens-inativa",
       nome: "Itens",
       descricao: "Cadastro de itens",
@@ -602,7 +602,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     const saved = await aprendizado.salvarConsulta({
-      agentId,
+      acessoId: created.acessoId,
       skillIds: [published.id],
       pergunta: "lista de itens do catalogo inativo",
       sql: "SELECT 1",
@@ -621,7 +621,7 @@ describe("BuscarContexto", () => {
   it("omite nota sem tabela de skill que não está nos candidatos", async () => {
     const { buscar, created, anotacoes } = await setup();
     await anotacoes.create({
-      agentId,
+      acessoId: created.acessoId,
       tabelaId: null,
       skillId: "99999999-9999-4999-8999-999999999999",
       tipo: "regra",
@@ -653,13 +653,13 @@ describe("BuscarContexto", () => {
   it("com KPI e cobertura completa devolve consultaSemanticaSugerida", async () => {
     const { buscar, created, skills, grafo } = await setup();
     await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "produto",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
     });
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista de produtos",
@@ -705,7 +705,7 @@ describe("BuscarContexto", () => {
   it("com duas skills capazes escolhe o KPI cujo haystack overlap mais a pergunta", async () => {
     const { buscar, created, skills } = await setup();
     const produtos = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista de produtos",
@@ -721,7 +721,7 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(produtos.id, "publicada");
     const vendas = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "vendas-produtos",
       nome: "Vendas de produtos",
       descricao: "Lista de produtos vendidos",
@@ -747,7 +747,7 @@ describe("BuscarContexto", () => {
   it("cobertura parcial com KPI não devolve esqueleto e pede sinônimo", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos",
       nome: "Títulos",
       descricao: "Saldo financeiro",
@@ -780,7 +780,7 @@ describe("BuscarContexto", () => {
     const query = "Qual meu faturamento mensal?";
     await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
     await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
-    const abertas = await aprendizado.listarLacunas(agentId, 20, "aberta");
+    const abertas = await aprendizado.listarLacunas(created.acessoId, 20, "aberta");
     expect(abertas).toHaveLength(1);
     expect(abertas[0]?.tipo).toBe("skill_gap");
     expect(abertas[0]?.pergunta).toBe(query);
@@ -790,9 +790,9 @@ describe("BuscarContexto", () => {
     const { buscar, created, skills, aprendizado } = await setup();
     const query = "quanto tenho para receber agora";
     await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
-    expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(1);
+    expect(await aprendizado.listarLacunas(created.acessoId, 20, "aberta")).toHaveLength(1);
     await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-receber",
       nome: "Títulos a receber",
       descricao: "quanto tenho para receber agora",
@@ -802,8 +802,8 @@ describe("BuscarContexto", () => {
     const result = await buscar.execute(created.usuarioId, { acessoId: created.acessoId, query });
     expect(result.blockingReason).toBe("SKILL_NOT_PUBLISHED");
     expect(result.gap).toBeUndefined();
-    expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(0);
-    const arquivadas = await aprendizado.listarLacunas(agentId, 20, "arquivada");
+    expect(await aprendizado.listarLacunas(created.acessoId, 20, "aberta")).toHaveLength(0);
+    const arquivadas = await aprendizado.listarLacunas(created.acessoId, 20, "arquivada");
     expect(arquivadas).toHaveLength(1);
     expect(arquivadas[0]?.pergunta).toBe(query);
   });
@@ -811,7 +811,7 @@ describe("BuscarContexto", () => {
   it("skill publicada irrelevante devolve SKILL_GAP sem gravar lacuna", async () => {
     const { buscar, created, skills, aprendizado } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "itens",
       nome: "Itens",
       descricao: "Cadastro de itens",
@@ -830,13 +830,13 @@ describe("BuscarContexto", () => {
     expect(result.gap?.hint).not.toMatch(/Não cruze skills/);
     expect(result.gap?.hint).not.toMatch(/sinonimo/);
     expect(result.hint ?? "").not.toMatch(/sinonimo/);
-    expect(await aprendizado.listarLacunas(agentId, 20, "aberta")).toHaveLength(0);
+    expect(await aprendizado.listarLacunas(created.acessoId, 20, "aberta")).toHaveLength(0);
   });
 
   it("inflexão titulos casa cobertura completa no pacote com titulo", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-abertos",
       nome: "Títulos",
       descricao: "Saldo de titulo comercial",
@@ -855,7 +855,7 @@ describe("BuscarContexto", () => {
   it("SKILL_GAP de cruzamento não pede sinônimo nem criar_skill", async () => {
     const { buscar, created, skills } = await setup();
     const receber = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-receber",
       nome: "Títulos a receber",
       descricao: "Saldo em aberto",
@@ -863,7 +863,7 @@ describe("BuscarContexto", () => {
       autorUsuarioId: created.usuarioId,
     });
     const pagar = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-pagar",
       nome: "Títulos a pagar",
       descricao: "Saldo em aberto",
@@ -886,7 +886,7 @@ describe("BuscarContexto", () => {
   it("CAST de data no pacote não vira consultaSemanticaSugerida em pergunta de saldo", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "titulos-a-receber",
       nome: "Títulos a receber",
       descricao: "Quanto tenho para receber",
@@ -914,7 +914,7 @@ describe("BuscarContexto", () => {
     const { buscar, created, skills } = await setup();
     const criar = async (slug: string, nome: string, descricao: string): Promise<void> => {
       const row = await skills.create({
-        agentId,
+      acessoId: created.acessoId,
         slug,
         nome,
         descricao,
@@ -944,7 +944,7 @@ describe("BuscarContexto", () => {
   it("estoque do mês sem skill de estoque continua SKILL_GAP", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "listagem-de-produtos",
       nome: "Listagem de produtos",
       descricao: "Listar produtos ativos. Não agrega estoque.",
@@ -972,7 +972,7 @@ describe("BuscarContexto", () => {
   it("estoque mínimo do produto não pede sinônimo nem marca estoqu encontrado", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "listagem-de-produtos",
       nome: "Listagem de produtos",
       descricao: "Listar produtos ativos. Não agrega estoque e não autoriza cruzar vendas.",
@@ -1001,7 +1001,7 @@ describe("BuscarContexto", () => {
     const { buscar, created, skills } = await setup();
     const criar = async (slug: string, nome: string, descricao: string): Promise<void> => {
       const row = await skills.create({
-        agentId,
+      acessoId: created.acessoId,
         slug,
         nome,
         descricao,
@@ -1045,7 +1045,7 @@ describe("BuscarContexto", () => {
   it("listagem certificada sugere IR de dimensões/filtros sem inventar overlay", async () => {
     const { buscar, created, skills } = await setup();
     const published = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "listagem-de-produtos",
       nome: "Listagem de produtos",
       descricao: "Listar produtos ativos",

@@ -45,7 +45,7 @@ const setup = async () => {
     clientToken: "tok-sql-123456",
   });
   await seedTabelaComColunas(grafo, {
-    agentId,
+      acessoId: created.acessoId,
     usuarioId: created.usuarioId,
     nome: "produto",
     colunas: ["codprod", "dtcad"],
@@ -95,7 +95,7 @@ describe("RemoverSkill", () => {
   it("apaga rascunho, libera o slug, desvincula consultas e deixa o grafo", async () => {
     const { remover, criar, created, skill, skills, grafo, aprendizado } = await setup();
     await aprendizado.salvarConsulta({
-      agentId,
+      acessoId: created.acessoId,
       skillIds: [skill.id],
       pergunta: "faturamento no período",
       sql: skill.sqlModelo,
@@ -103,7 +103,7 @@ describe("RemoverSkill", () => {
       autorUsuarioId: created.usuarioId,
     });
     await aprendizado.registrarSinonimo({
-      agentId,
+      acessoId: created.acessoId,
       termo: "faturamento",
       alvoTipo: "skill",
       alvoId: skill.id,
@@ -120,12 +120,12 @@ describe("RemoverSkill", () => {
       statusAnterior: "rascunho",
     });
     expect(await skills.findById(skill.id)).toBeNull();
-    expect(await skills.listByAgent(agentId)).toEqual([]);
-    const consultas = await aprendizado.listarConsultas(agentId, 10);
+    expect(await skills.listByAcesso(created.acessoId)).toEqual([]);
+    const consultas = await aprendizado.listarConsultas(created.acessoId, 10);
     expect(consultas).toHaveLength(1);
     expect(consultas[0]?.skillIds).toEqual([]);
-    expect(await aprendizado.listarSinonimos(agentId)).toEqual([]);
-    expect((await grafo.listTabelas(agentId)).map((tabela) => tabela.nome)).toEqual(["produto"]);
+    expect(await aprendizado.listarSinonimos(created.acessoId)).toEqual([]);
+    expect((await grafo.listTabelas(created.acessoId)).map((tabela) => tabela.nome)).toEqual(["produto"]);
     const again = await criar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       slug: "faturamento-periodo",
@@ -146,7 +146,7 @@ describe("RemoverSkill", () => {
       confirmadoPeloUsuario: true,
     });
     expect(result.statusAnterior).toBe("publicada");
-    expect(await skills.listByAgent(agentId)).toEqual([]);
+    expect(await skills.listByAcesso(created.acessoId)).toEqual([]);
   });
 
   it("recusa skill de outro agentId", async () => {

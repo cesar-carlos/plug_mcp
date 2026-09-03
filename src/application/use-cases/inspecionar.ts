@@ -67,7 +67,7 @@ const escopoDaSkill = (skill: Skill): EscopoSkill =>
 
 const persistirColunasInspecao = async (input: {
   grafo: GrafoRepositoryPort;
-  agentId: string;
+  acessoId: string;
   autorUsuarioId: string;
   ast: SqlAstSelect | null;
   columns: readonly string[];
@@ -84,14 +84,14 @@ const persistirColunasInspecao = async (input: {
     (input.metadata ?? []).map((item) => [item.name.trim().toLowerCase(), item]),
   );
   const novas: string[] = [];
-  await input.grafo.withAgentLock(input.agentId, async () => {
+  await input.grafo.withAcessoLock(input.acessoId, async () => {
     const merged = await input.grafo.mergeTabela({
-      agentId: input.agentId,
+      acessoId: input.acessoId,
       nome: unica.nome,
       origem: "inferido",
       autorUsuarioId: input.autorUsuarioId,
     });
-    const jaNoGrafo = await input.grafo.listColunas(merged.tabela.id);
+    const jaNoGrafo = await input.grafo.listColunas(input.acessoId, merged.tabela.id);
     const conhecidas = new Set(jaNoGrafo.map((coluna) => coluna.nome.trim().toLowerCase()));
     for (const nome of input.columns) {
       const trimmed = nome.trim();
@@ -100,6 +100,7 @@ const persistirColunasInspecao = async (input: {
       }
       const meta = byMeta.get(trimmed.toLowerCase());
       await input.grafo.mergeColuna({
+        acessoId: input.acessoId,
         tabelaId: merged.tabela.id,
         nome: trimmed,
         tipo: meta?.type ?? null,
@@ -169,7 +170,11 @@ export class InspecionarConsulta {
       this.acessos,
       this.plug,
       this.sessions,
-      await requireAcesso(this.acessos, input.acessoId, uid),
+      await requireAcesso(this.acessos, input.acessoId, uid, {
+        skills: this.skills,
+        skillId: input.skillId,
+        skillIds: input.skillIds,
+      }),
       uid,
     );
     const ids = [
@@ -182,10 +187,10 @@ export class InspecionarConsulta {
     const skillsPassadas: Skill[] = [];
     for (const id of ids) {
       const found = await this.skills.findById(id);
-      if (found?.agentId !== acesso.agentId) {
+      if (found?.acessoId !== acesso.id) {
         throw new DomainError({
           code: ERROR_CODES.SKILL_NOT_FOUND,
-          message: "Skill não encontrada neste agentId.",
+          message: "Skill não encontrada neste acesso.",
           hint: "Use listar_skills.",
         });
       }
@@ -205,7 +210,7 @@ export class InspecionarConsulta {
       }
       skillsPassadas.push(await persistirEscopoSeVazio(this.skills, found));
     }
-    const elegiveis = (await this.skills.listByAgent(acesso.agentId)).filter((item) =>
+    const elegiveis = (await this.skills.listByAcesso(acesso.id)).filter((item) =>
       STATUS_INSPECAO.has(item.status),
     );
     if (elegiveis.length === 0) {
@@ -251,11 +256,11 @@ export class InspecionarConsulta {
       : parseSqlModelo(sql).tabelas.map((tabela) => tabela.nome);
     const columnHints = new Map<string, ColumnMetadataHint>();
     for (const tabelaNome of tabelasSql) {
-      const found = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
+      const found = await this.grafo.findTabelaByNome(acesso.id, tabelaNome);
       if (!found) {
         continue;
       }
-      const cols = await this.grafo.listColunas(found.id);
+      const cols = await this.grafo.listColunas(acesso.id, found.id);
       mergeColumnHints(columnHints, cols);
     }
     if (ast) {
@@ -295,7 +300,7 @@ export class InspecionarConsulta {
       const columnTypes = new Map<string, string | null>(
         columnsMetadata.map((item) => [item.name.toLowerCase(), item.type]),
       );
-      const lookup = await lookupSensibilidadeGrafo(this.grafo, acesso.agentId, tabelasSql);
+      const lookup = await lookupSensibilidadeGrafo(this.grafo, acesso.id, tabelasSql);
       const sanitizadas = sanitizarLinhasConsulta({
         rows,
         columnTypes,
@@ -309,7 +314,7 @@ export class InspecionarConsulta {
       const avisoAnexo = avisoAnexos(sanitizadas.anexos, "inspecionar_consulta");
       const colunasNovasNoGrafo = await persistirColunasInspecao({
         grafo: this.grafo,
-        agentId: acesso.agentId,
+        acessoId: acesso.id,
         autorUsuarioId: uid,
         ast,
         columns,
@@ -419,7 +424,7 @@ export class DescobrirTabela {
         hint: "descobrir_tabela lista só estruturas de skills publicadas, sem linhas.",
       });
     }
-    const publicadas = (await this.skills.listByAgent(acesso.agentId)).filter(
+    const publicadas = (await this.skills.listByAcesso(acesso.id)).filter(
       (skill) => skill.status === "publicada",
     );
     const noEscopo = publicadas.some((skill) =>
@@ -464,7 +469,7 @@ export class DescobrirTabela {
       );
       return (entry?.[1] ?? []).some((item) => item.toLowerCase() === coluna.toLowerCase());
     };
-    const tabela = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
+    const tabela = await this.grafo.findTabelaByNome(acesso.id, tabelaNome);
     if (!tabela) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -472,9 +477,9 @@ export class DescobrirTabela {
         hint: "Treine com mapear_tabela / treinar_com_sql.",
       });
     }
-    const colunas = await this.grafo.listColunas(tabela.id);
-    const rels = await this.grafo.listRelacionamentos(acesso.agentId);
-    const tabelas = await this.grafo.listTabelas(acesso.agentId);
+    const colunas = await this.grafo.listColunas(acesso.id, tabela.id);
+    const rels = await this.grafo.listRelacionamentos(acesso.id);
+    const tabelas = await this.grafo.listTabelas(acesso.id);
     const nomeById = new Map(tabelas.map((item) => [item.id, item.nome]));
     return {
       success: true,
@@ -545,7 +550,7 @@ export class DetectarDerivaEsquema {
         hint: "Detecta deriva da assinatura mapeada. O servidor não repara schema automaticamente.",
       });
     }
-    const tabela = await this.grafo.findTabelaByNome(acesso.agentId, tabelaNome);
+    const tabela = await this.grafo.findTabelaByNome(acesso.id, tabelaNome);
     if (!tabela) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -553,9 +558,9 @@ export class DetectarDerivaEsquema {
         hint: "Mapeie a tabela antes de comparar a assinatura.",
       });
     }
-    const cols = await this.grafo.listColunas(tabela.id);
-    const rels = await this.grafo.listRelacionamentos(acesso.agentId);
-    const tabelas = await this.grafo.listTabelas(acesso.agentId);
+    const cols = await this.grafo.listColunas(acesso.id, tabela.id);
+    const rels = await this.grafo.listRelacionamentos(acesso.id);
+    const tabelas = await this.grafo.listTabelas(acesso.id);
     const nomeById = new Map(tabelas.map((item) => [item.id, item.nome]));
     const assinatura = assinaturaTabela({
       colunas: cols.map((coluna) => ({
@@ -577,7 +582,7 @@ export class DetectarDerivaEsquema {
       grafo: this.grafo,
       skills: this.skills,
       cache: this.cache,
-      agentId: acesso.agentId,
+      acessoId: acesso.id,
       tabelaNome: tabela.nome,
       assinatura,
     });

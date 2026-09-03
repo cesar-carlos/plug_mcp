@@ -9,18 +9,19 @@ import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { InMemoryGrafoRepository } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
 
-const agentId = "11111111-1111-4111-8111-111111111111";
+const acessoId = "11111111-1111-4111-8111-111111111111";
 
 describe("gate de publicação", () => {
   it("PERFIL_AUSENTE quando métrica existe e a coluna não tem tipo", async () => {
     const grafo = new InMemoryGrafoRepository();
     const { tabela } = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "receber",
       origem: "validado_execucao",
       autorUsuarioId: null,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: tabela.id,
       nome: "valor",
       origem: "validado_execucao",
@@ -34,7 +35,7 @@ describe("gate de publicação", () => {
     await expect(
       exigirPacotePublicavel(
         grafo,
-        agentId,
+        acessoId,
         escopo,
         "SELECT SUM(r.valor) AS total FROM receber r WHERE r.valor > 0",
       ),
@@ -48,7 +49,7 @@ describe("gate de publicação", () => {
   it("agregação em uma tabela com tipo publica (pacote mínimo)", async () => {
     const grafo = new InMemoryGrafoRepository();
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: acessoId,
       usuarioId: "u1",
       nome: "receber",
       colunas: ["valor"],
@@ -61,7 +62,7 @@ describe("gate de publicação", () => {
     await expect(
       exigirPacotePublicavel(
         grafo,
-        agentId,
+        acessoId,
         escopo,
         "SELECT SUM(r.valor) AS total FROM receber r WHERE r.valor > 0",
       ),
@@ -71,18 +72,19 @@ describe("gate de publicação", () => {
   it("JOIN sem cardinalidade bloqueia publicação", async () => {
     const grafo = new InMemoryGrafoRepository();
     const { tabela: receber } = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "receber",
       origem: "validado_execucao",
       autorUsuarioId: "u1",
     });
     const { tabela: cliente } = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "cliente",
       origem: "validado_execucao",
       autorUsuarioId: "u1",
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.id,
       nome: "valor",
       tipo: "numeric",
@@ -90,6 +92,7 @@ describe("gate de publicação", () => {
       autorUsuarioId: "u1",
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: receber.id,
       nome: "codcli",
       tipo: "int",
@@ -97,6 +100,7 @@ describe("gate de publicação", () => {
       autorUsuarioId: "u1",
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: cliente.id,
       nome: "codcli",
       tipo: "int",
@@ -104,7 +108,7 @@ describe("gate de publicação", () => {
       autorUsuarioId: "u1",
     });
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: acessoId,
       tabelaOrigemId: receber.id,
       colunaOrigem: "codcli",
       tabelaDestinoId: cliente.id,
@@ -127,7 +131,7 @@ describe("gate de publicação", () => {
     await expect(
       exigirPacotePublicavel(
         grafo,
-        agentId,
+        acessoId,
         escopo,
         "SELECT SUM(r.valor) AS total FROM receber r INNER JOIN cliente c ON r.codcli = c.codcli WHERE r.valor > 0",
       ),
@@ -137,13 +141,13 @@ describe("gate de publicação", () => {
   it("PACOTE_INCOMPLETO nextAction é a primeira falta bloqueante", async () => {
     const grafo = new InMemoryGrafoRepository();
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: acessoId,
       usuarioId: "u1",
       nome: "receber",
       colunas: ["valor", "codcli"],
     });
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: acessoId,
       usuarioId: "u1",
       nome: "cliente",
       colunas: ["codcli"],
@@ -160,7 +164,7 @@ describe("gate de publicação", () => {
       ],
     });
     try {
-      await exigirEscopoNoGrafo(grafo, agentId, escopo);
+      await exigirEscopoNoGrafo(grafo, acessoId, escopo);
       expect.fail("esperava PACOTE_INCOMPLETO");
     } catch (error) {
       expect(error).toBeInstanceOf(DomainError);

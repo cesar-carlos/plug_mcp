@@ -12,7 +12,7 @@ const agora = new Date();
 
 const skillOf = (extra: Partial<Skill> = {}): Skill => ({
   id: "s1",
-  agentId: "agent",
+  acessoId: "agent",
   slug: "titulos",
   nome: "Títulos",
   descricao: "Saldo de titulo comercial",

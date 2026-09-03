@@ -1,7 +1,7 @@
 import type { AnotacaoGrafo, ParametroSkill } from "../../../domain/entities/skill.js";
 import type { ConsultaAprendida } from "../../../domain/entities/aprendizado.js";
 import { overlayMetricasSaida } from "../../../domain/entities/escopo.js";
-import { DomainError, isDomainError } from "../../../domain/errors/domain-error.js";
+import { isDomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
 import type {
@@ -10,6 +10,7 @@ import type {
 } from "../../../domain/ports/skill-repository.port.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import { isIdentificadorSql } from "./schema-introspection.js";
+import { requireSkillDoAcesso } from "./skill-do-acesso.js";
 
 export const TIPOS_APRENDIZADO = new Set([
   "regra",
@@ -30,7 +31,7 @@ export interface ItemAprendizadoInput {
 
 export const persistirConsultaExecutada = async (input: {
   aprendizado: AprendizadoRepositoryPort;
-  agentId: string;
+  acessoId: string;
   skillIds: readonly string[];
   pergunta: string;
   sql: string;
@@ -38,7 +39,7 @@ export const persistirConsultaExecutada = async (input: {
   autorUsuarioId: string;
 }): Promise<ConsultaAprendida> =>
   input.aprendizado.salvarConsulta({
-    agentId: input.agentId,
+    acessoId: input.acessoId,
     skillIds: input.skillIds,
     pergunta: input.pergunta,
     sql: input.sql,
@@ -47,7 +48,7 @@ export const persistirConsultaExecutada = async (input: {
   });
 
 export const persistirItensAprendizado = async (input: {
-  agentId: string;
+  acessoId: string;
   autorUsuarioId: string;
   itens: readonly ItemAprendizadoInput[];
   grafo: GrafoRepositoryPort;
@@ -81,20 +82,22 @@ export const persistirItensAprendizado = async (input: {
       });
       continue;
     }
+    const skillId: string | null = item.skillId?.trim() ? item.skillId.trim() : null;
+    const skill =
+      skillId === null ? null : await requireSkillDoAcesso(input.skills, skillId, input.acessoId);
     if (tipo === "sinonimo") {
       await input.aprendizado.registrarSinonimo({
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         termo: titulo,
-        alvoTipo: item.skillId ? "skill" : "termo",
-        alvoId: item.skillId?.trim() ? item.skillId.trim() : texto,
+        alvoTipo: skillId ? "skill" : "termo",
+        alvoId: skillId ?? texto,
       });
       sinonimos += 1;
       continue;
     }
     let tabelaId: string | null = null;
-    const skillId: string | null = item.skillId?.trim() ? item.skillId.trim() : null;
     if (item.tabela?.trim()) {
-      const tabela = await input.grafo.findTabelaByNome(input.agentId, item.tabela.trim());
+      const tabela = await input.grafo.findTabelaByNome(input.acessoId, item.tabela.trim());
       if (!tabela) {
         avisos.push({
           code: "APRENDIZADO_IGNORADO",
@@ -121,6 +124,7 @@ export const persistirItensAprendizado = async (input: {
         });
       } else {
         await input.grafo.mergeColuna({
+          acessoId: input.acessoId,
           tabelaId,
           nome: colunaNome,
           dicionario: texto,
@@ -129,42 +133,27 @@ export const persistirItensAprendizado = async (input: {
         });
       }
     }
-    if (tipo === "metrica" && skillId && input.skills) {
-      const skill = await input.skills.findById(skillId);
-      if (skill?.agentId !== input.agentId) {
-        if (input.strictMetricas !== false) {
-          throw new DomainError({
-            code: ERROR_CODES.SKILL_NOT_FOUND,
-            message: "Skill não encontrada neste agentId.",
-            hint: "Métrica no pacote exige skillId do mesmo acesso.",
+    if (tipo === "metrica" && skill && input.skills) {
+      try {
+        const next = overlayMetricasSaida(skill.escopo, [{ alias: titulo, definicao: texto }]);
+        await input.skills.update(skill.id, { escopo: next, status: skill.status });
+      } catch (err) {
+        if (
+          input.strictMetricas === false &&
+          isDomainError(err) &&
+          err.code === ERROR_CODES.COLUNA_FORA_DO_ESCOPO
+        ) {
+          avisos.push({
+            code: "APRENDIZADO_IGNORADO",
+            message: err.message,
           });
-        }
-        avisos.push({
-          code: "APRENDIZADO_IGNORADO",
-          message: "Métrica não overlayada: skillId ausente ou de outro agentId.",
-        });
-      } else {
-        try {
-          const next = overlayMetricasSaida(skill.escopo, [{ alias: titulo, definicao: texto }]);
-          await input.skills.update(skill.id, { escopo: next, status: skill.status });
-        } catch (err) {
-          if (
-            input.strictMetricas === false &&
-            isDomainError(err) &&
-            err.code === ERROR_CODES.COLUNA_FORA_DO_ESCOPO
-          ) {
-            avisos.push({
-              code: "APRENDIZADO_IGNORADO",
-              message: err.message,
-            });
-          } else {
-            throw err;
-          }
+        } else {
+          throw err;
         }
       }
     }
     const anotacao = await input.anotacoes.create({
-      agentId: input.agentId,
+      acessoId: input.acessoId,
       tabelaId,
       skillId,
       tipo,

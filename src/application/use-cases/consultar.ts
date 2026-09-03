@@ -87,7 +87,7 @@ import {
   type ItemAprendizadoInput,
 } from "./shared/persistir-aprendizado.js";
 import {
-  fluxoForAgentSkill,
+  fluxoForAcessoSkill,
   pickSkillInProgress,
   type FluxoTreino,
 } from "./shared/fluxo-treino.js";
@@ -250,7 +250,7 @@ const gravarAprendizadoDaConsulta = async (input: {
     anotacoes?: AnotacaoGrafoRepositoryPort;
     skills?: SkillRepositoryPort;
   };
-  agentId: string;
+  acessoId: string;
   skillIds: readonly string[];
   pergunta: string;
   sql: string;
@@ -264,7 +264,7 @@ const gravarAprendizadoDaConsulta = async (input: {
   }
   const consulta = await persistirConsultaExecutada({
     aprendizado: input.extras.aprendizado,
-    agentId: input.agentId,
+    acessoId: input.acessoId,
     skillIds: input.skillIds,
     pergunta: input.pergunta,
     sql: input.sql,
@@ -274,7 +274,7 @@ const gravarAprendizadoDaConsulta = async (input: {
   let itens = 0;
   if (input.itens.length > 0 && input.extras.anotacoes && input.extras.grafo) {
     const extra = await persistirItensAprendizado({
-      agentId: input.agentId,
+      acessoId: input.acessoId,
       autorUsuarioId: input.autorUsuarioId,
       itens: input.itens,
       grafo: input.extras.grafo,
@@ -388,7 +388,11 @@ export class ConsultarDados {
       this.acessos,
       this.plug,
       this.sessions,
-      await requireAcesso(this.acessos, input.acessoId, uid),
+      await requireAcesso(this.acessos, input.acessoId, uid, {
+        skills: this.skills,
+        skillId: input.skillId,
+        skillIds: input.skillIds,
+      }),
       uid,
     );
     const ids = idsSkillDaChamada(input);
@@ -407,7 +411,7 @@ export class ConsultarDados {
         hint: "consultaAprendidaId reusa o SELECT gravado. Não misture com sql nem IR.",
       });
     }
-    const allowlist = await resolverSkillsConsulta(this.skills, acesso.agentId, ids);
+    const allowlist = await resolverSkillsConsulta(this.skills, acesso.id, ids);
     let aprendida: ConsultaAprendida | null = null;
     if (consultaAprendidaId) {
       if (!this.extras.aprendizado) {
@@ -417,7 +421,7 @@ export class ConsultarDados {
           hint: "Passe sql ou consultaSemantica. Em Postgres o cofre precisa estar ligado.",
         });
       }
-      aprendida = await this.extras.aprendizado.obterConsulta(acesso.agentId, consultaAprendidaId);
+      aprendida = await this.extras.aprendizado.obterConsulta(acesso.id, consultaAprendidaId);
       if (aprendida?.status !== "ativa") {
         throw new DomainError({
           code: ERROR_CODES.VALIDATION_ERROR,
@@ -533,11 +537,11 @@ export class ConsultarDados {
     let lookupAnexo: ((coluna: string) => SensibilidadeColuna | null) | undefined;
     if (this.extras.grafo) {
       for (const tabela of modelo.tabelas) {
-        const found = await this.extras.grafo.findTabelaByNome(acesso.agentId, tabela.nome);
+        const found = await this.extras.grafo.findTabelaByNome(acesso.id, tabela.nome);
         if (!found) {
           continue;
         }
-        const cols = await this.extras.grafo.listColunas(found.id);
+        const cols = await this.extras.grafo.listColunas(acesso.id, found.id);
         colunasDasTabelas[tabela.nome] = cols.map((coluna) => coluna.nome);
         mergeColumnHints(columnHints, cols);
       }
@@ -546,7 +550,7 @@ export class ConsultarDados {
         applySelectAliasHints(columnHints, astPriv.colunas);
         const lookup = await lookupSensibilidadeGrafo(
           this.extras.grafo,
-          acesso.agentId,
+          acesso.id,
           astPriv.tabelas.map((item) => item.nome),
         );
         assertPrivacidadeAntesDoHub({ ast: astPriv, lookup, negar: ["segredo", "pessoal"] });
@@ -567,7 +571,7 @@ export class ConsultarDados {
       }),
     );
     if (this.extras.anotacoes) {
-      const notas = await this.extras.anotacoes.list(acesso.agentId);
+      const notas = await this.extras.anotacoes.list(acesso.id);
       const tabelasSql = new Set(modelo.tabelas.map((tabela) => tabela.nome.toLowerCase()));
       const aliasesSql = [
         ...modelo.tabelas.flatMap((tabela) => (tabela.alias ? [tabela.alias] : [])),
@@ -576,7 +580,7 @@ export class ConsultarDados {
       const skillIds = new Set(atribuidas.map((item) => item.id));
       const tabelaNomePorId = new Map<string, string>();
       if (this.extras.grafo && notas.some((nota) => Boolean(nota.tabelaId))) {
-        const todasTabelas = await this.extras.grafo.listTabelas(acesso.agentId);
+        const todasTabelas = await this.extras.grafo.listTabelas(acesso.id);
         for (const tabela of todasTabelas) {
           tabelaNomePorId.set(tabela.id, tabela.nome);
         }
@@ -676,7 +680,7 @@ export class ConsultarDados {
           if (parsed) {
             const loop = await gravarAprendizadoDaConsulta({
               extras: { ...this.extras, skills: this.skills },
-              agentId: acesso.agentId,
+              acessoId: acesso.id,
               skillIds: atribuidas.map((item) => item.id),
               pergunta: perguntaUsada,
               sql: sqlNoFio,
@@ -793,7 +797,7 @@ export class ConsultarDados {
       if (this.extras.grafo) {
         await promoverFatosDaExecucao({
           grafo: this.extras.grafo,
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           autorUsuarioId: uid,
           modelo,
         });
@@ -817,7 +821,7 @@ export class ConsultarDados {
       }
       const loop = await gravarAprendizadoDaConsulta({
         extras: { ...this.extras, skills: this.skills },
-        agentId: acesso.agentId,
+        acessoId: acesso.id,
         skillIds: atribuidas.map((item) => item.id),
         pergunta: perguntaUsada,
         sql: sqlNoFio,
@@ -907,7 +911,11 @@ export class ValidarConsulta {
       this.acessos,
       this.plug,
       this.sessions,
-      await requireAcesso(this.acessos, input.acessoId, uid),
+      await requireAcesso(this.acessos, input.acessoId, uid, {
+        skills: this.skills,
+        skillId: input.skillId,
+        skillIds: input.skillIds,
+      }),
       uid,
     );
     const ids = idsSkillDaChamada(input);
@@ -916,13 +924,13 @@ export class ValidarConsulta {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "sql é obrigatório.",
-        hint: "Passe o SELECT a validar. skillId é opcional: omitido usa todas as publicadas do agentId.",
+        hint: "Passe o SELECT a validar. skillId é opcional: omitido usa todas as publicadas deste acesso.",
       });
     }
     if (acesso.dialeto === "firebird") {
       recusarSqlLivreFirebird();
     }
-    const allowlist = await resolverSkillsConsulta(this.skills, acesso.agentId, ids);
+    const allowlist = await resolverSkillsConsulta(this.skills, acesso.id, ids);
     const escopo = uniaoEscoposPublicados(allowlist);
     const ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo, {
       page: input.options?.page,
@@ -1079,19 +1087,19 @@ export class MapearTabela {
             "O catálogo devolveu vários tipos por coluna. Se a base for SQL Server, chame atualizar_dialeto para mssql e mapeie de novo. Não grave geometry/xml como tipo da coluna.",
         });
       }
-      await this.grafo.withAgentLock(acesso.agentId, async () => {
-        const locked = await this.grafo.getDialeto(acesso.agentId);
+      await this.grafo.withAcessoLock(acesso.id, async () => {
+        const locked = await this.grafo.getDialeto(acesso.id);
         if (!locked) {
-          await this.grafo.setDialeto(acesso.agentId, acesso.dialeto);
+          await this.grafo.setDialeto(acesso.id, acesso.dialeto);
         } else if (locked.dialeto !== acesso.dialeto) {
           throw new DomainError({
             code: ERROR_CODES.DIALECT_CONFLICT,
-            message: "Este agentId já foi treinado em outro dialeto.",
+            message: "Este acesso já foi treinado em outro dialeto.",
             hint: `Grafo travado em ${locked.dialeto}. Chame atualizar_dialeto com confirmadoPeloUsuario: true para mudar o dialeto (skills voltam a rascunho).`,
           });
         }
         const tabela = await this.grafo.mergeTabela({
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           nome: ident.tabela,
           origem: "inferido",
           autorUsuarioId: uid,
@@ -1102,6 +1110,7 @@ export class MapearTabela {
           }
           const tipo = coluna.tipo || null;
           await this.grafo.mergeColuna({
+            acessoId: acesso.id,
             tabelaId: tabela.tabela.id,
             nome: coluna.nome,
             tipo,
@@ -1114,7 +1123,7 @@ export class MapearTabela {
         }
       });
       if (this.extras.skills) {
-        await sincronizarEscopoComGrafo(this.extras.skills, this.grafo, acesso.agentId, {
+        await sincronizarEscopoComGrafo(this.extras.skills, this.grafo, acesso.id, {
           tabelas: [ident.tabela],
         });
       }
@@ -1123,7 +1132,7 @@ export class MapearTabela {
           grafo: this.grafo,
           skills: this.extras.skills,
           cache: this.extras.cache,
-          agentId: acesso.agentId,
+          acessoId: acesso.id,
           tabelaNome: ident.tabela,
         });
         if (deriva.drifted) {
@@ -1273,9 +1282,7 @@ export class BuscarContexto {
         hint: "Descreva o assunto de negócio (ex.: pedido de venda, saldo em aberto).",
       });
     }
-    const sinonimos = this.aprendizado
-      ? await this.aprendizado.listarSinonimos(acesso.agentId)
-      : [];
+    const sinonimos = this.aprendizado ? await this.aprendizado.listarSinonimos(acesso.id) : [];
     const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.getClientTokenPolicy({
         accessToken,
@@ -1291,18 +1298,14 @@ export class BuscarContexto {
       consultasHits,
       todas,
     ] = await Promise.all([
-      this.grafo.buscar(acesso.agentId, query, 12),
-      this.skills.buscar(acesso.agentId, query, 8, "publicada"),
-      this.skills.buscar(acesso.agentId, query, 8, [
-        "rascunho",
-        "validada",
-        "rascunho_revalidacao",
-      ]),
-      this.anotacoes.buscar(acesso.agentId, query, 8),
+      this.grafo.buscar(acesso.id, query, 12),
+      this.skills.buscar(acesso.id, query, 8, "publicada"),
+      this.skills.buscar(acesso.id, query, 8, ["rascunho", "validada", "rascunho_revalidacao"]),
+      this.anotacoes.buscar(acesso.id, query, 8),
       this.aprendizado
-        ? this.aprendizado.buscarConsultas(acesso.agentId, query, 5)
+        ? this.aprendizado.buscarConsultas(acesso.id, query, 5)
         : Promise.resolve([]),
-      this.skills.listByAgent(acesso.agentId),
+      this.skills.listByAcesso(acesso.id),
     ]);
     const tabelas = tabelasHits.map((hit) => hit.item);
     const notas = notasHits.map((hit) => hit.item);
@@ -1377,7 +1380,7 @@ export class BuscarContexto {
           ? null
           : emAndamento;
     const fluxoTreino = skillFluxo
-      ? await fluxoForAgentSkill(this.grafo, acesso.agentId, skillFluxo)
+      ? await fluxoForAcessoSkill(this.grafo, acesso.id, skillFluxo)
       : undefined;
     const precisaListar =
       !consultaPermitida && coberturaGeral !== "composta" && publicadasNoAgent.length > 0;
@@ -1397,9 +1400,9 @@ export class BuscarContexto {
     const skillNaoPublicada = !consultaPermitida && capazesTreino.length > 0;
     if (this.aprendizado) {
       if (consultaPermitida || skillNaoPublicada) {
-        await this.aprendizado.arquivarLacunaSkillGap(acesso.agentId, query);
+        await this.aprendizado.arquivarLacunaSkillGap(acesso.id, query);
       } else if (!precisaListar && lacunaElegivel) {
-        await this.aprendizado.registrarLacuna(acesso.agentId, query);
+        await this.aprendizado.registrarLacuna(acesso.id, query);
       }
     }
     const tabelasPolicy = tabelas.filter((tabela) => allowedByPolicy(tabela.nome, policy));
@@ -1428,7 +1431,7 @@ export class BuscarContexto {
     const tabelaNomePorId = new Map(tabelas.map((tabela) => [tabela.id, tabela.nome]));
     const notasComTabela = notas.some((nota) => Boolean(nota.tabelaId));
     if (notasComTabela) {
-      const todasTabelas = await this.grafo.listTabelas(acesso.agentId);
+      const todasTabelas = await this.grafo.listTabelas(acesso.id);
       for (const tabela of todasTabelas) {
         tabelaNomePorId.set(tabela.id, tabela.nome);
       }
@@ -1583,6 +1586,54 @@ export class BuscarContexto {
   }
 }
 
+const conflitoForaDesteAcesso = (): DomainError =>
+  new DomainError({
+    code: ERROR_CODES.VALIDATION_ERROR,
+    message: "Conflito não encontrado neste acesso.",
+    hint: "Use listar_conflitos no mesmo acessoId. Ids de outro catálogo não se aplicam.",
+  });
+
+const assertConflitoPertenceAoAcesso = async (
+  grafo: GrafoRepositoryPort,
+  acessoId: string,
+  input: { tabelaId?: string; colunaId?: string; relacionamentoId?: string },
+): Promise<void> => {
+  const tabelaId = input.tabelaId?.trim() ?? "";
+  const colunaId = input.colunaId?.trim() ?? "";
+  const relacionamentoId = input.relacionamentoId?.trim() ?? "";
+  if (!tabelaId && !colunaId && !relacionamentoId) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "Informe tabelaId, colunaId ou relacionamentoId.",
+      hint: "Chame listar_conflitos neste acesso e passe um dos ids.",
+    });
+  }
+  const tabelas = await grafo.listTabelas(acessoId);
+  const idsTabela = new Set(tabelas.map((item) => item.id));
+  if (tabelaId && !idsTabela.has(tabelaId)) {
+    throw conflitoForaDesteAcesso();
+  }
+  if (relacionamentoId) {
+    const rels = await grafo.listRelacionamentos(acessoId);
+    if (!rels.some((item) => item.id === relacionamentoId)) {
+      throw conflitoForaDesteAcesso();
+    }
+  }
+  if (colunaId) {
+    let encontrada = false;
+    for (const tabela of tabelas) {
+      const colunas = await grafo.listColunas(acessoId, tabela.id);
+      if (colunas.some((item) => item.id === colunaId)) {
+        encontrada = true;
+        break;
+      }
+    }
+    if (!encontrada) {
+      throw conflitoForaDesteAcesso();
+    }
+  }
+};
+
 export class ResolverConflito {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -1601,7 +1652,9 @@ export class ResolverConflito {
   ): Promise<{ success: true; fluxoTreino: FluxoTreino }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    await assertConflitoPertenceAoAcesso(this.grafo, acesso.id, input);
     await this.grafo.resolverConflito({
+      acessoId: acesso.id,
       tabelaId: input.tabelaId,
       colunaId: input.colunaId,
       relacionamentoId: input.relacionamentoId,
@@ -1611,7 +1664,7 @@ export class ResolverConflito {
     });
     return {
       success: true,
-      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
+      fluxoTreino: await fluxoForAcessoSkill(this.grafo, acesso.id, null),
     };
   }
 }
@@ -1632,11 +1685,11 @@ export class ListarConflitos {
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
-    const conflitos = await this.grafo.listConflitos(acesso.agentId);
+    const conflitos = await this.grafo.listConflitos(acesso.id);
     return {
       success: true,
       conflitos,
-      fluxoTreino: await fluxoForAgentSkill(this.grafo, acesso.agentId, null),
+      fluxoTreino: await fluxoForAcessoSkill(this.grafo, acesso.id, null),
     };
   }
 }

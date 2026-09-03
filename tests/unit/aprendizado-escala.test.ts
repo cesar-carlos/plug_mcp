@@ -80,7 +80,7 @@ describe("aprendizado e escala", () => {
   it("salvar_consulta exige confirmação e reusa SQL", async () => {
     const { acessos, skills, aprendizado, created } = await setup();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
@@ -111,7 +111,7 @@ describe("aprendizado e escala", () => {
     const { acessos, grafo, skills, anotacoes, aprendizado, plug, sessions, created } =
       await setup();
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "receber",
       nome: "Carteira",
       descricao: "Títulos a receber",
@@ -120,7 +120,7 @@ describe("aprendizado e escala", () => {
     });
     await skills.setStatus(skill.id, "publicada");
     await aprendizado.salvarConsulta({
-      agentId,
+      acessoId: created.acessoId,
       skillIds: [skill.id],
       pergunta: "duplicatas da carteira",
       sql: "SELECT SUM(r.valor) AS total FROM receber r WHERE r.vencimento < :hoje",
@@ -128,7 +128,7 @@ describe("aprendizado e escala", () => {
       autorUsuarioId: created.usuarioId,
     });
     await aprendizado.registrarSinonimo({
-      agentId,
+      acessoId: created.acessoId,
       termo: "duplicatas",
       alvoTipo: "skill",
       alvoId: "carteira",
@@ -181,16 +181,16 @@ describe("aprendizado e escala", () => {
     expect(copied.tabelas).toBeGreaterThan(0);
     expect(copied.origem).toBe("inferido");
     expect(copied.publicaSkill).toBe(false);
-    expect(await grafo.findTabelaByNome(agentId, "receber")).not.toBeNull();
-    expect(await grafo.findTabelaByNome(agentId, "pagar")).not.toBeNull();
-    const rels = await grafo.listRelacionamentos(agentId);
+    expect(await grafo.findTabelaByNome(created.acessoId, "receber")).not.toBeNull();
+    expect(await grafo.findTabelaByNome(created.acessoId, "pagar")).not.toBeNull();
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels.some((rel) => rel.pares.length > 1)).toBe(true);
   });
 
   it("dicionário com título de anotação não cria coluna física", async () => {
     const { acessos, grafo, anotacoes, aprendizado, created } = await setup();
     const tabela = await grafo.mergeTabela({
-      agentId,
+      acessoId: created.acessoId,
       nome: "ContaPagar",
       origem: "validado_execucao",
       autorUsuarioId: created.usuarioId,
@@ -204,7 +204,7 @@ describe("aprendizado e escala", () => {
       tabela: "ContaPagar",
     });
     expect(result.anotacao?.titulo).toBe("Status / Situacao pagar");
-    const cols = await grafo.listColunas(tabela.tabela.id);
+    const cols = await grafo.listColunas(created.acessoId, tabela.tabela.id);
     expect(cols.some((coluna) => coluna.nome.includes("/"))).toBe(false);
   });
 
@@ -250,7 +250,7 @@ describe("aprendizado e escala", () => {
       return { columns: ["total"], rows: [{ total: 10 }] };
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
@@ -275,7 +275,7 @@ describe("aprendizado e escala", () => {
       pergunta: "consulta agregada",
       skillId: skill.id,
     });
-    const tabela = await grafo.findTabelaByNome(agentId, "produto");
+    const tabela = await grafo.findTabelaByNome(created.acessoId, "produto");
     expect(tabela?.origem).toBe("validado_execucao");
 
     await consultar.execute(created.usuarioId, {
@@ -314,7 +314,7 @@ describe("aprendizado e escala", () => {
       return { columns: ["total"], rows: [{ total: 10 }] };
     };
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "agg",
       nome: "Agg",
       descricao: "Soma",
@@ -356,6 +356,15 @@ describe("aprendizado e escala", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-other-99",
     });
+    const otherSkill = await skills.create({
+      acessoId: other.acessoId,
+      slug: "agg",
+      nome: "Agg",
+      descricao: "Soma",
+      sqlModelo: sql,
+      autorUsuarioId: other.usuarioId,
+    });
+    await skills.setStatus(otherSkill.id, "publicada");
     const otherConsultar = new ConsultarDados(
       acessos,
       skills,
@@ -370,7 +379,7 @@ describe("aprendizado e escala", () => {
     await otherConsultar.execute(other.usuarioId, {
       acessoId: other.acessoId,
       pergunta: "total",
-      skillId: skill.id,
+      skillId: otherSkill.id,
       sql,
     });
     expect(calls).toBe(2);
@@ -381,7 +390,7 @@ describe("aprendizado e escala", () => {
       await setup();
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });
     const skill = await skills.create({
-      agentId,
+      acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
@@ -416,9 +425,9 @@ describe("aprendizado e escala", () => {
     expect(result.aprendizadoGravado?.nova).toBe(true);
     expect(result.aprendizadoGravado?.perguntaUsada).toBe("quais produtos existem");
     expect(result.aprendizadoGravado?.itens).toBe(1);
-    const learned = await aprendizado.buscarConsultas(agentId, "quais produtos", 5);
+    const learned = await aprendizado.buscarConsultas(created.acessoId, "quais produtos", 5);
     expect(learned).toHaveLength(1);
-    const notas = await anotacoes.list(agentId);
+    const notas = await anotacoes.list(created.acessoId);
     expect(notas.some((nota) => nota.tipo === "regra" && nota.titulo === "Produto ativo")).toBe(
       true,
     );

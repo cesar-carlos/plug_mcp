@@ -106,7 +106,7 @@ describe("cofre e treino", () => {
       sql: "SELECT p.codprod AS codigo, p.descricao FROM produto p",
     });
     expect(trained.tabelas.map((t) => t.toLowerCase())).toContain("produto");
-    const tabelas = await grafo.listTabelas(agentId);
+    const tabelas = await grafo.listTabelas(created.acessoId);
     expect(tabelas.some((t) => t.nome.toLowerCase() === "produto")).toBe(true);
   });
 
@@ -156,7 +156,7 @@ describe("cofre e treino", () => {
     ).rejects.toMatchObject({ code: "PERMISSION_DENIED", source: "client_token_rpc" });
   });
 
-  it("dois usuarios no mesmo agentId acumulam o grafo", async () => {
+  it("dois usuarios no mesmo agentId isolam o grafo por acesso", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
     const acessos = new InMemoryAcessoRepository();
@@ -215,11 +215,14 @@ describe("cofre e treino", () => {
       acessoId: b.acessoId,
       sql: "SELECT c.codcli FROM cliente c",
     });
-    const tabelas = await grafo.listTabelas(agentId);
-    expect(tabelas.map((t) => t.nome.toLowerCase()).sort()).toEqual(["cliente", "produto"]);
+    const tabelasA = await grafo.listTabelas(a.acessoId);
+    const tabelasB = await grafo.listTabelas(b.acessoId);
+    expect(tabelasA.map((t) => t.nome.toLowerCase()).sort()).toEqual(["produto"]);
+    expect(tabelasB.map((t) => t.nome.toLowerCase()).sort()).toEqual(["cliente"]);
+    expect(tabelasA[0]?.id).not.toBe(tabelasB[0]?.id);
   });
 
-  it("dialeto divergente no mesmo agentId gera DIALECT_CONFLICT", async () => {
+  it("dialetos de acessos distintos no mesmo agentId nao conflitam", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
     const acessos = new InMemoryAcessoRepository();
@@ -266,20 +269,23 @@ describe("cofre e treino", () => {
       acessoId: a.acessoId,
       sql: "SELECT p.codprod FROM produto p",
     });
+    const treinarB = new TreinarComSql(
+      acessos,
+      grafo,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      new InMemorySkillRepository(),
+    );
     await expect(
-      new TreinarComSql(
-        acessos,
-        grafo,
-        plug,
-        sessions,
-        crypto,
-        audit,
-        new InMemorySkillRepository(),
-      ).execute(b.usuarioId, {
+      treinarB.execute(b.usuarioId, {
         acessoId: b.acessoId,
         sql: "SELECT p.codprod FROM produto p",
       }),
-    ).rejects.toMatchObject({ code: "DIALECT_CONFLICT" });
+    ).resolves.toMatchObject({ success: true, dialeto: "postgres" });
+    expect(await grafo.getDialeto(a.acessoId)).toEqual({ acessoId: a.acessoId, dialeto: "sybase" });
+    expect(await grafo.getDialeto(b.acessoId)).toEqual({ acessoId: b.acessoId, dialeto: "postgres" });
   });
 
   it("liga coluna ao alias dono e grava chaves reais do JOIN", async () => {
@@ -323,19 +329,19 @@ describe("cofre e treino", () => {
       acessoId: created.acessoId,
       sql: "SELECT p.codprod, c.nome FROM produto p INNER JOIN cliente c ON c.codcli = p.codcli",
     });
-    const tabelas = await grafo.listTabelas(agentId);
+    const tabelas = await grafo.listTabelas(created.acessoId);
     const produto = tabelas.find((t) => t.nome.toLowerCase() === "produto");
     const cliente = tabelas.find((t) => t.nome.toLowerCase() === "cliente");
     expect(produto).toBeDefined();
     expect(cliente).toBeDefined();
-    const colsProduto = await grafo.listColunas(produto!.id);
-    const colsCliente = await grafo.listColunas(cliente!.id);
+    const colsProduto = await grafo.listColunas(created.acessoId, produto!.id);
+    const colsCliente = await grafo.listColunas(created.acessoId, cliente!.id);
     expect(colsProduto.some((c) => c.nome.toLowerCase() === "codprod")).toBe(true);
     expect(colsProduto.some((c) => c.nome.toLowerCase() === "codcli")).toBe(true);
     expect(colsProduto.some((c) => c.nome.toLowerCase() === "nome")).toBe(false);
     expect(colsCliente.some((c) => c.nome.toLowerCase() === "nome")).toBe(true);
     expect(colsCliente.some((c) => c.nome.toLowerCase() === "codcli")).toBe(true);
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels).toHaveLength(1);
     expect(rels[0]?.colunaOrigem.toLowerCase()).toBe("codcli");
     expect(rels[0]?.colunaDestino.toLowerCase()).toBe("codcli");
@@ -386,7 +392,7 @@ describe("cofre e treino", () => {
       acessoId: created.acessoId,
       sql: "SELECT f.empresa FROM filial f INNER JOIN receber r ON f.empresa = r.empresa AND f.filial = r.filial WHERE r.valor > 0",
     });
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels).toHaveLength(1);
     expect(rels[0]?.pares).toHaveLength(2);
   });
@@ -477,7 +483,7 @@ describe("cofre e treino", () => {
       acessoId: created.acessoId,
       sql: "SELECT p.codprod, c.nome FROM produto p CROSS JOIN cliente c",
     });
-    const rels = await grafo.listRelacionamentos(agentId);
+    const rels = await grafo.listRelacionamentos(created.acessoId);
     expect(rels).toHaveLength(0);
   });
 

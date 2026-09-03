@@ -54,13 +54,13 @@ const seed = async () => {
     remember: () => undefined,
   };
   await seedTabelaComColunas(grafo, {
-    agentId,
+      acessoId: created.acessoId,
     usuarioId: created.usuarioId,
     nome: "ContaReceber",
     colunas: ["CodEmpresa", "CodFilial", "Valor"],
   });
   await seedTabelaComColunas(grafo, {
-    agentId,
+      acessoId: created.acessoId,
     usuarioId: created.usuarioId,
     nome: "Filial",
     colunas: ["CodEmpresa", "CodFilial"],
@@ -71,10 +71,10 @@ const seed = async () => {
 describe("ciclo de treino e publicação", () => {
   it("skill validada com JOIN sem cardinalidade aponta confirmar_relacionamento", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
-    const origem = await grafo.findTabelaByNome(agentId, "Filial");
-    const destino = await grafo.findTabelaByNome(agentId, "ContaReceber");
+    const origem = await grafo.findTabelaByNome(created.acessoId, "Filial");
+    const destino = await grafo.findTabelaByNome(created.acessoId, "ContaReceber");
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: created.acessoId,
       tabelaOrigemId: origem!.id,
       tabelaDestinoId: destino!.id,
       pares: [
@@ -113,10 +113,10 @@ describe("ciclo de treino e publicação", () => {
 
   it("confirmar composto remove pares isolados; remover_relacionamento apaga só o fingerprint", async () => {
     const { acessos, skills, grafo, created } = await seed();
-    const origem = await grafo.findTabelaByNome(agentId, "Filial");
-    const destino = await grafo.findTabelaByNome(agentId, "ContaReceber");
+    const origem = await grafo.findTabelaByNome(created.acessoId, "Filial");
+    const destino = await grafo.findTabelaByNome(created.acessoId, "ContaReceber");
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: created.acessoId,
       tabelaOrigemId: origem!.id,
       tabelaDestinoId: destino!.id,
       pares: [{ colunaOrigem: "CodEmpresa", colunaDestino: "CodEmpresa" }],
@@ -125,7 +125,7 @@ describe("ciclo de treino e publicação", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: created.acessoId,
       tabelaOrigemId: origem!.id,
       tabelaDestinoId: destino!.id,
       pares: [{ colunaOrigem: "CodFilial", colunaDestino: "CodFilial" }],
@@ -134,7 +134,7 @@ describe("ciclo de treino e publicação", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeRelacionamento({
-      agentId,
+      acessoId: created.acessoId,
       tabelaOrigemId: origem!.id,
       tabelaDestinoId: destino!.id,
       pares: [
@@ -183,7 +183,7 @@ describe("ciclo de treino e publicação", () => {
     });
     expect(composed.skill?.escopo.relacionamentos).toHaveLength(1);
     expect(composed.skill?.escopo.relacionamentos[0]?.pares).toHaveLength(2);
-    const grafoRels = await grafo.listRelacionamentos(agentId);
+    const grafoRels = await grafo.listRelacionamentos(created.acessoId);
     expect(grafoRels).toHaveLength(1);
     expect(grafoRels[0]?.pares).toHaveLength(2);
 
@@ -212,13 +212,14 @@ describe("ciclo de treino e publicação", () => {
       confirmadoPeloUsuario: true,
     });
     expect(removed.skill?.escopo.relacionamentos).toHaveLength(0);
-    expect(await grafo.listRelacionamentos(agentId)).toHaveLength(0);
+    expect(await grafo.listRelacionamentos(created.acessoId)).toHaveLength(0);
   });
 
   it("listar_conflitos devolve colunaId usável", async () => {
     const { acessos, grafo, created } = await seed();
-    const tabela = await grafo.findTabelaByNome(agentId, "ContaReceber");
+    const tabela = await grafo.findTabelaByNome(created.acessoId, "ContaReceber");
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela!.id,
       nome: "Historico",
       descricao: "saldo",
@@ -226,6 +227,7 @@ describe("ciclo de treino e publicação", () => {
       autorUsuarioId: created.usuarioId,
     });
     await grafo.mergeColuna({
+      acessoId: created.acessoId,
       tabelaId: tabela!.id,
       nome: "Historico",
       descricao: "outro significado",
@@ -241,7 +243,7 @@ describe("ciclo de treino e publicação", () => {
   it("publicar_skill sem confirmação não grava publicada", async () => {
     const { plug, acessos, skills, grafo, created, sessions } = await seed();
     await seedTabelaComColunas(grafo, {
-      agentId,
+      acessoId: created.acessoId,
       usuarioId: created.usuarioId,
       nome: "produto",
       colunas: ["codprod"],

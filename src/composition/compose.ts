@@ -214,7 +214,12 @@ export const compose = async (
     adicionarAcesso: new AdicionarAcesso(acessos, plug, sessions, crypto, logger),
     listarAcessos: new ListarAcessos(acessos),
     verificarAcesso: new VerificarAcesso(acessos, plug, sessions, crypto, logger),
-    removerAcesso: new RemoverAcesso(acessos),
+    removerAcesso: new RemoverAcesso(acessos, {
+      grafo,
+      skills,
+      anotacoes,
+      aprendizado,
+    }),
     atualizarCredencialPlug: new AtualizarCredencialPlug(usuarios, sessions, plug, crypto),
     rotacionarTokenMcp: new RotacionarTokenMcp(
       usuarios,
@@ -290,7 +295,7 @@ export const compose = async (
     confirmarRelacionamento: new ConfirmarRelacionamento(acessos, grafo, skills),
     removerRelacionamento: new RemoverRelacionamento(acessos, grafo, skills),
     confirmarColuna: new ConfirmarColuna(acessos, grafo, skills),
-    anotarGrafo: new AnotarGrafo(acessos, grafo, anotacoes),
+    anotarGrafo: new AnotarGrafo(acessos, grafo, anotacoes, skills),
     listarAnotacoes: new ListarAnotacoes(acessos, anotacoes),
     removerAnotacao: new RemoverAnotacao(acessos, anotacoes),
     salvarConsulta: new SalvarConsulta(acessos, skills, aprendizado),

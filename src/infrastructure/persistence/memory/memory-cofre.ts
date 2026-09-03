@@ -52,10 +52,28 @@ import type {
 import type { AuditLogPort } from "../../../domain/ports/audit-log.port.js";
 import { rankByTermsHits, tokenizeQuery } from "../busca-termos.js";
 import type { AuditLogEntry, NewAuditLog } from "../../../domain/entities/audit-log.js";
+import { mesmoAcessoCatalogo } from "../as-acesso-id.js";
 
 const now = (): Date => new Date();
 const id = (): string => randomUUID();
 const lower = (value: string): string => value.trim().toLowerCase();
+
+const colunaNaoPersistida = (input: MergeColunaInput): ColunaGrafo => ({
+  id: input.tabelaId,
+  tabelaId: input.tabelaId,
+  nome: input.nome,
+  tipo: input.tipo ?? null,
+  nullable: input.nullable ?? null,
+  descricao: input.descricao ?? null,
+  dicionario: input.dicionario ?? null,
+  papel: input.papel ?? null,
+  formato: input.formato ?? null,
+  perfil: input.perfil ?? null,
+  sensibilidade: parseSensibilidadeColuna(input.sensibilidade ?? "livre"),
+  origem: input.origem,
+  status: "vigente",
+  autorUsuarioId: input.autorUsuarioId,
+});
 
 export class InMemoryUsuarioRepository implements UsuarioRepositoryPort {
   private readonly rows = new Map<string, UsuarioMcp>();
@@ -219,14 +237,14 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   private readonly snapshots = new Map<string, SchemaSnapshotGrafo>();
   private readonly locks = new Map<string, Promise<void>>();
 
-  async withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
-    const previous = this.locks.get(agentId) ?? Promise.resolve();
+  async withAcessoLock<T>(acessoId: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.locks.get(acessoId) ?? Promise.resolve();
     let release: () => void = () => undefined;
     const current = new Promise<void>((resolve) => {
       release = resolve;
     });
     this.locks.set(
-      agentId,
+      acessoId,
       previous.then(() => current),
     );
     await previous;
@@ -237,22 +255,56 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     }
   }
 
-  async getDialeto(agentId: string): Promise<GrafoDialeto | null> {
-    return this.dialetos.get(agentId) ?? null;
+  async getDialeto(acessoId: string): Promise<GrafoDialeto | null> {
+    return this.dialetos.get(acessoId) ?? null;
   }
 
-  async setDialeto(agentId: string, dialeto: string): Promise<void> {
-    this.dialetos.set(agentId, { agentId, dialeto });
+  async setDialeto(acessoId: string, dialeto: string): Promise<void> {
+    this.dialetos.set(acessoId, { acessoId, dialeto });
+  }
+
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    const tabelaIds = new Set(
+      [...this.tabelas.values()]
+        .filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId))
+        .map((row) => row.id),
+    );
+    for (const tabelaId of tabelaIds) {
+      this.tabelas.delete(tabelaId);
+    }
+    for (const [colunaId, coluna] of this.colunas) {
+      if (tabelaIds.has(coluna.tabelaId)) {
+        this.colunas.delete(colunaId);
+      }
+    }
+    for (const [relId, rel] of this.rels) {
+      if (mesmoAcessoCatalogo(rel.acessoId, acessoId)) {
+        this.rels.delete(relId);
+      }
+    }
+    for (const [key, snap] of this.snapshots) {
+      if (mesmoAcessoCatalogo(snap.acessoId, acessoId)) {
+        this.snapshots.delete(key);
+      }
+    }
+    this.dialetos.delete(acessoId);
+    this.locks.delete(acessoId);
+  }
+
+  private tabelaDoAcesso(acessoId: string, tabelaId: string): TabelaGrafo | undefined {
+    const tabela = this.tabelas.get(tabelaId);
+    return tabela && mesmoAcessoCatalogo(tabela.acessoId, acessoId) ? tabela : undefined;
   }
 
   async mergeTabela(input: MergeTabelaInput): Promise<{ tabela: TabelaGrafo; conflito: boolean }> {
     const existing = [...this.tabelas.values()].find(
-      (row) => row.agentId === input.agentId && lower(row.nome) === lower(input.nome),
+      (row) =>
+        mesmoAcessoCatalogo(row.acessoId, input.acessoId) && lower(row.nome) === lower(input.nome),
     );
     if (!existing) {
       const tabela: TabelaGrafo = {
         id: id(),
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         nome: input.nome,
         descricao: input.descricao ?? null,
         origem: input.origem,
@@ -289,6 +341,9 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   }
 
   async mergeColuna(input: MergeColunaInput): Promise<{ coluna: ColunaGrafo; conflito: boolean }> {
+    if (!this.tabelaDoAcesso(input.acessoId, input.tabelaId)) {
+      return { coluna: colunaNaoPersistida(input), conflito: false };
+    }
     const existing = [...this.colunas.values()].find(
       (row) => row.tabelaId === input.tabelaId && lower(row.nome) === lower(input.nome),
     );
@@ -332,10 +387,35 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     if (pares.length === 0) {
       throw new Error("relacionamento exige ao menos um par de colunas");
     }
+    const origemOk = this.tabelaDoAcesso(input.acessoId, input.tabelaOrigemId);
+    const destinoOk = this.tabelaDoAcesso(input.acessoId, input.tabelaDestinoId);
+    if (!origemOk || !destinoOk) {
+      const first = pares[0]!;
+      return {
+        relacionamento: {
+          id: input.tabelaOrigemId,
+          acessoId: input.acessoId,
+          tabelaOrigemId: input.tabelaOrigemId,
+          colunaOrigem: first.colunaOrigem,
+          tabelaDestinoId: input.tabelaDestinoId,
+          colunaDestino: first.colunaDestino,
+          pares,
+          paresFingerprint: fingerprintPares(pares),
+          tipoJoin: input.tipoJoin,
+          cardinalidade: input.cardinalidade ?? null,
+          descricao: input.descricao ?? null,
+          escopoValidacao: input.escopoValidacao ?? null,
+          origem: input.origem,
+          status: "vigente",
+          autorUsuarioId: input.autorUsuarioId,
+        },
+        conflito: false,
+      };
+    }
     const fp = fingerprintPares(pares);
     const fpInv = fingerprintParesInvertidos(pares);
     const existing = [...this.rels.values()].find((row) => {
-      if (row.agentId !== input.agentId) {
+      if (!mesmoAcessoCatalogo(row.acessoId, input.acessoId)) {
         return false;
       }
       const direto =
@@ -352,7 +432,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     if (!existing) {
       const relacionamento: RelacionamentoGrafo = {
         id: id(),
-        agentId: input.agentId,
+        acessoId: input.acessoId,
         tabelaOrigemId: input.tabelaOrigemId,
         colunaOrigem: first.colunaOrigem,
         tabelaDestinoId: input.tabelaDestinoId,
@@ -401,52 +481,68 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     return { relacionamento, conflito: merge.conflito };
   }
 
-  async deleteRelacionamento(id: string): Promise<boolean> {
+  async deleteRelacionamento(acessoId: string, id: string): Promise<boolean> {
+    const row = this.rels.get(id);
+    if (!row || !mesmoAcessoCatalogo(row.acessoId, acessoId)) {
+      return false;
+    }
     return this.rels.delete(id);
   }
 
-  async listTabelas(agentId: string): Promise<readonly TabelaGrafo[]> {
-    return [...this.tabelas.values()].filter((row) => row.agentId === agentId);
+  async listTabelas(acessoId: string): Promise<readonly TabelaGrafo[]> {
+    return [...this.tabelas.values()].filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId));
   }
 
-  async listColunas(tabelaId: string): Promise<readonly ColunaGrafo[]> {
+  async listColunas(acessoId: string, tabelaId: string): Promise<readonly ColunaGrafo[]> {
+    if (!this.tabelaDoAcesso(acessoId, tabelaId)) {
+      return [];
+    }
     return [...this.colunas.values()].filter((row) => row.tabelaId === tabelaId);
   }
 
-  async listRelacionamentos(agentId: string): Promise<readonly RelacionamentoGrafo[]> {
-    return [...this.rels.values()].filter((row) => row.agentId === agentId);
+  async listRelacionamentos(acessoId: string): Promise<readonly RelacionamentoGrafo[]> {
+    return [...this.rels.values()].filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId));
   }
 
-  async countConflitos(agentId: string): Promise<number> {
-    const tabelas = [...this.tabelas.values()].filter((row) => row.agentId === agentId);
+  async countConflitos(acessoId: string): Promise<number> {
+    const tabelas = [...this.tabelas.values()].filter((row) =>
+      mesmoAcessoCatalogo(row.acessoId, acessoId),
+    );
     let n = tabelas.filter((tabela) => tabela.status === "conflito").length;
     const tabelaIds = new Set(tabelas.map((tabela) => tabela.id));
     n += [...this.colunas.values()].filter(
       (coluna) => tabelaIds.has(coluna.tabelaId) && coluna.status === "conflito",
     ).length;
     n += [...this.rels.values()].filter(
-      (rel) => rel.agentId === agentId && rel.status === "conflito",
+      (rel) => mesmoAcessoCatalogo(rel.acessoId, acessoId) && rel.status === "conflito",
     ).length;
     return n;
   }
 
-  async listConflitos(agentId: string): Promise<readonly ConflitoGrafo[]> {
-    const tabelas = [...this.tabelas.values()].filter((row) => row.agentId === agentId);
+  async listConflitos(acessoId: string): Promise<readonly ConflitoGrafo[]> {
+    const tabelas = [...this.tabelas.values()].filter((row) =>
+      mesmoAcessoCatalogo(row.acessoId, acessoId),
+    );
     const tabelaIds = new Set(tabelas.map((tabela) => tabela.id));
     const colunas = [...this.colunas.values()].filter((coluna) => tabelaIds.has(coluna.tabelaId));
-    const rels = [...this.rels.values()].filter((rel) => rel.agentId === agentId);
+    const rels = [...this.rels.values()].filter((rel) =>
+      mesmoAcessoCatalogo(rel.acessoId, acessoId),
+    );
     return montarListaConflitos(tabelas, colunas, rels);
   }
 
-  async findTabelaByNome(agentId: string, nome: string): Promise<TabelaGrafo | null> {
+  async findTabelaByNome(acessoId: string, nome: string): Promise<TabelaGrafo | null> {
     return (
       [...this.tabelas.values()].find(
-        (row) => row.agentId === agentId && lower(row.nome) === lower(nome),
+        (row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && lower(row.nome) === lower(nome),
       ) ?? null
     );
   }
 
-  async findColuna(tabelaId: string, nome: string): Promise<ColunaGrafo | null> {
+  async findColuna(acessoId: string, tabelaId: string, nome: string): Promise<ColunaGrafo | null> {
+    if (!this.tabelaDoAcesso(acessoId, tabelaId)) {
+      return null;
+    }
     return (
       [...this.colunas.values()].find(
         (row) => row.tabelaId === tabelaId && lower(row.nome) === lower(nome),
@@ -455,27 +551,30 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   }
 
   async saveSchemaSnapshot(input: {
-    agentId: string;
+    acessoId: string;
     tabelaNome: string;
     assinatura: string;
   }): Promise<{ drifted: boolean; anterior: string | null }> {
-    const key = `${input.agentId}:${input.tabelaNome.toLowerCase()}`;
+    const key = `${input.acessoId}:${input.tabelaNome.toLowerCase()}`;
     const existing = this.snapshots.get(key);
     const anterior = existing?.assinatura ?? null;
     const drifted = anterior !== null && anterior !== input.assinatura;
     this.snapshots.set(key, {
-      agentId: input.agentId,
+      acessoId: input.acessoId,
       tabelaNome: input.tabelaNome,
       assinatura: input.assinatura,
     });
     return { drifted, anterior };
   }
 
-  async listSchemaSnapshots(agentId: string): Promise<readonly SchemaSnapshotGrafo[]> {
-    return [...this.snapshots.values()].filter((row) => row.agentId === agentId);
+  async listSchemaSnapshots(acessoId: string): Promise<readonly SchemaSnapshotGrafo[]> {
+    return [...this.snapshots.values()].filter((row) =>
+      mesmoAcessoCatalogo(row.acessoId, acessoId),
+    );
   }
 
   async resolverConflito(input: {
+    acessoId: string;
     tabelaId?: string;
     colunaId?: string;
     relacionamentoId?: string;
@@ -486,7 +585,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   }): Promise<void> {
     if (input.tabelaId) {
       const row = this.tabelas.get(input.tabelaId);
-      if (row) {
+      if (row && mesmoAcessoCatalogo(row.acessoId, input.acessoId)) {
         this.tabelas.set(input.tabelaId, {
           ...row,
           origem: input.origem,
@@ -498,7 +597,8 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     }
     if (input.colunaId) {
       const row = this.colunas.get(input.colunaId);
-      if (row) {
+      const tabela = row ? this.tabelas.get(row.tabelaId) : undefined;
+      if (row && tabela && mesmoAcessoCatalogo(tabela.acessoId, input.acessoId)) {
         this.colunas.set(input.colunaId, {
           ...row,
           origem: input.origem,
@@ -511,7 +611,7 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
     }
     if (input.relacionamentoId) {
       const row = this.rels.get(input.relacionamentoId);
-      if (row) {
+      if (row && mesmoAcessoCatalogo(row.acessoId, input.acessoId)) {
         this.rels.set(input.relacionamentoId, {
           ...row,
           origem: input.origem,
@@ -524,12 +624,12 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
   }
 
   async buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<TabelaGrafo>[]> {
     return rankByTermsHits(
-      [...this.tabelas.values()].filter((row) => row.agentId === agentId),
+      [...this.tabelas.values()].filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId)),
       tokenizeQuery(query),
       (row) => `${row.nome} ${row.descricao ?? ""}`,
       limite,
@@ -543,7 +643,7 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
   async create(input: NovaSkill): Promise<Skill> {
     const row: Skill = {
       id: id(),
-      agentId: input.agentId,
+      acessoId: input.acessoId,
       slug: input.slug,
       nome: input.nome,
       descricao: input.descricao,
@@ -611,14 +711,24 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
     return this.rows.get(skillId) ?? null;
   }
 
-  async findBySlug(agentId: string, slug: string): Promise<Skill | null> {
+  async findBySlug(acessoId: string, slug: string): Promise<Skill | null> {
     return (
-      [...this.rows.values()].find((row) => row.agentId === agentId && row.slug === slug) ?? null
+      [...this.rows.values()].find(
+        (row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.slug === slug,
+      ) ?? null
     );
   }
 
-  async listByAgent(agentId: string): Promise<readonly Skill[]> {
-    return [...this.rows.values()].filter((row) => row.agentId === agentId);
+  async listByAcesso(acessoId: string): Promise<readonly Skill[]> {
+    return [...this.rows.values()].filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId));
+  }
+
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    for (const [id, row] of this.rows) {
+      if (mesmoAcessoCatalogo(row.acessoId, acessoId)) {
+        this.rows.delete(id);
+      }
+    }
   }
 
   async deleteById(id: string): Promise<boolean> {
@@ -626,7 +736,7 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
   }
 
   async buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
     status?: StatusSkill | readonly StatusSkill[],
@@ -635,7 +745,9 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
       status === undefined ? null : new Set(typeof status === "string" ? [status] : status);
     return rankByTermsHits(
       [...this.rows.values()].filter(
-        (row) => row.agentId === agentId && (allowed === null || allowed.has(row.status)),
+        (row) =>
+          mesmoAcessoCatalogo(row.acessoId, acessoId) &&
+          (allowed === null || allowed.has(row.status)),
       ),
       tokenizeQuery(query),
       (row) =>
@@ -653,7 +765,7 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
   private readonly rows = new Map<string, AnotacaoGrafo>();
 
   async create(input: {
-    agentId: string;
+    acessoId: string;
     tabelaId: string | null;
     skillId?: string | null;
     tipo: string;
@@ -663,7 +775,7 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
   }): Promise<AnotacaoGrafo> {
     const row: AnotacaoGrafo = {
       id: id(),
-      agentId: input.agentId,
+      acessoId: input.acessoId,
       tabelaId: input.tabelaId,
       skillId: input.skillId ?? null,
       tipo: input.tipo,
@@ -678,13 +790,13 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
   }
 
   async list(
-    agentId: string,
+    acessoId: string,
     tabelaId?: string | null,
     skillId?: string | null,
   ): Promise<readonly AnotacaoGrafo[]> {
     return [...this.rows.values()].filter(
       (row) =>
-        row.agentId === agentId &&
+        mesmoAcessoCatalogo(row.acessoId, acessoId) &&
         (tabelaId === undefined || row.tabelaId === tabelaId) &&
         (skillId === undefined || row.skillId === skillId),
     );
@@ -694,17 +806,25 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
     return this.rows.get(anotacaoId) ?? null;
   }
 
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    for (const [id, row] of this.rows) {
+      if (mesmoAcessoCatalogo(row.acessoId, acessoId)) {
+        this.rows.delete(id);
+      }
+    }
+  }
+
   async deleteById(anotacaoId: string): Promise<boolean> {
     return this.rows.delete(anotacaoId);
   }
 
   async buscar(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<AnotacaoGrafo>[]> {
     return rankByTermsHits(
-      [...this.rows.values()].filter((row) => row.agentId === agentId),
+      [...this.rows.values()].filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId)),
       tokenizeQuery(query),
       (row) => `${row.titulo} ${row.texto}`,
       limite,
@@ -735,6 +855,13 @@ export class InMemoryAuditLog implements AuditLogPort {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limite);
   }
+
+  async listByAcesso(acessoId: string, limite: number): Promise<readonly AuditLogEntry[]> {
+    return this.entries
+      .filter((row) => row.acessoId === acessoId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limite);
+  }
 }
 
 export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort {
@@ -743,7 +870,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   private readonly lacunas: LacunaConsulta[] = [];
 
   async salvarConsulta(input: {
-    agentId: string;
+    acessoId: string;
     skillIds: readonly string[];
     pergunta: string;
     sql: string;
@@ -751,7 +878,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     autorUsuarioId: string | null;
   }): Promise<ConsultaAprendida> {
     const existing = this.consultas.find(
-      (row) => row.agentId === input.agentId && row.sql === input.sql,
+      (row) => mesmoAcessoCatalogo(row.acessoId, input.acessoId) && row.sql === input.sql,
     );
     const mergedIds = [...new Set([...(existing?.skillIds ?? []), ...input.skillIds])];
     if (existing) {
@@ -771,7 +898,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     }
     const row: ConsultaAprendida = {
       id: id(),
-      agentId: input.agentId,
+      acessoId: input.acessoId,
       skillIds: [...input.skillIds],
       pergunta: input.pergunta,
       sql: input.sql,
@@ -785,36 +912,43 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     return row;
   }
 
-  async listarConsultas(agentId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
+  async listarConsultas(acessoId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
     return this.consultas
-      .filter((row) => row.agentId === agentId)
+      .filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId))
       .sort((a, b) => b.execucoes - a.execucoes)
       .slice(0, limite);
   }
 
   async listarConsultasDaSkill(
-    agentId: string,
+    acessoId: string,
     skillId: string,
     limite: number,
   ): Promise<readonly ConsultaAprendida[]> {
     return this.consultas
-      .filter((row) => row.agentId === agentId && row.skillIds.includes(skillId))
+      .filter(
+        (row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.skillIds.includes(skillId),
+      )
       .sort((a, b) => b.execucoes - a.execucoes)
       .slice(0, limite);
   }
 
-  async obterConsulta(agentId: string, id: string): Promise<ConsultaAprendida | null> {
-    return this.consultas.find((row) => row.agentId === agentId && row.id === id) ?? null;
+  async obterConsulta(acessoId: string, id: string): Promise<ConsultaAprendida | null> {
+    return (
+      this.consultas.find((row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.id === id) ??
+      null
+    );
   }
 
   async buscarConsultas(
-    agentId: string,
+    acessoId: string,
     query: string,
     limite: number,
   ): Promise<readonly HitBusca<ConsultaAprendida>[]> {
     const terms = tokenizeQuery(query);
     return rankByTermsHits(
-      this.consultas.filter((row) => row.agentId === agentId && row.status === "ativa"),
+      this.consultas.filter(
+        (row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.status === "ativa",
+      ),
       terms,
       (row) => row.pergunta,
       limite,
@@ -831,7 +965,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   }
 
   async registrarSinonimo(input: {
-    agentId: string;
+    acessoId: string;
     termo: string;
     alvoTipo: string;
     alvoId: string;
@@ -841,18 +975,18 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     return row;
   }
 
-  async listarSinonimos(agentId: string): Promise<readonly Sinonimo[]> {
-    return this.sinonimos.filter((row) => row.agentId === agentId);
+  async listarSinonimos(acessoId: string): Promise<readonly Sinonimo[]> {
+    return this.sinonimos.filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId));
   }
 
   async desvincularSkill(
-    agentId: string,
+    acessoId: string,
     skillId: string,
   ): Promise<{ consultas: number; sinonimos: number }> {
     let consultas = 0;
     for (let i = 0; i < this.consultas.length; i += 1) {
       const row = this.consultas[i];
-      if (row?.agentId === agentId && row.skillIds.includes(skillId)) {
+      if (row && mesmoAcessoCatalogo(row.acessoId, acessoId) && row.skillIds.includes(skillId)) {
         this.consultas[i] = {
           ...row,
           skillIds: row.skillIds.filter((id) => id !== skillId),
@@ -862,7 +996,12 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     }
     const before = this.sinonimos.length;
     const kept = this.sinonimos.filter(
-      (row) => !(row.agentId === agentId && row.alvoTipo === "skill" && row.alvoId === skillId),
+      (row) =>
+        !(
+          mesmoAcessoCatalogo(row.acessoId, acessoId) &&
+          row.alvoTipo === "skill" &&
+          row.alvoId === skillId
+        ),
     );
     this.sinonimos.length = 0;
     this.sinonimos.push(...kept);
@@ -870,7 +1009,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   }
 
   async registrarLacuna(
-    agentId: string,
+    acessoId: string,
     pergunta: string,
     tipo: TipoLacuna = "skill_gap",
     contrato: Record<string, unknown> | null = null,
@@ -878,7 +1017,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     const perguntaChave = chavePerguntaLacuna(pergunta);
     const existing = this.lacunas.find(
       (row) =>
-        row.agentId === agentId &&
+        mesmoAcessoCatalogo(row.acessoId, acessoId) &&
         row.tipo === tipo &&
         chavePerguntaLacuna(row.pergunta) === perguntaChave,
     );
@@ -895,7 +1034,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     }
     const row: LacunaConsulta = {
       id: id(),
-      agentId,
+      acessoId,
       pergunta,
       tipo,
       status: "aberta",
@@ -906,7 +1045,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     return row;
   }
 
-  async arquivarLacunaSkillGap(agentId: string, pergunta: string): Promise<number> {
+  async arquivarLacunaSkillGap(acessoId: string, pergunta: string): Promise<number> {
     const perguntaChave = chavePerguntaLacuna(pergunta);
     if (!perguntaChave) {
       return 0;
@@ -915,7 +1054,8 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     for (let i = 0; i < this.lacunas.length; i += 1) {
       const row = this.lacunas[i];
       if (
-        row?.agentId === agentId &&
+        row &&
+        mesmoAcessoCatalogo(row.acessoId, acessoId) &&
         row.tipo === "skill_gap" &&
         row.status === "aberta" &&
         chavePerguntaLacuna(row.pergunta) === perguntaChave
@@ -928,13 +1068,29 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   }
 
   async listarLacunas(
-    agentId: string,
+    acessoId: string,
     limite: number,
     status: StatusLacuna = "aberta",
   ): Promise<readonly LacunaConsulta[]> {
     return this.lacunas
-      .filter((row) => row.agentId === agentId && row.status === status)
+      .filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.status === status)
       .slice(-limite)
       .reverse();
+  }
+
+  async deleteByAcesso(acessoId: string): Promise<void> {
+    const keepConsultas = this.consultas.filter(
+      (row) => !mesmoAcessoCatalogo(row.acessoId, acessoId),
+    );
+    this.consultas.length = 0;
+    this.consultas.push(...keepConsultas);
+    const keepSinonimos = this.sinonimos.filter(
+      (row) => !mesmoAcessoCatalogo(row.acessoId, acessoId),
+    );
+    this.sinonimos.length = 0;
+    this.sinonimos.push(...keepSinonimos);
+    const keepLacunas = this.lacunas.filter((row) => !mesmoAcessoCatalogo(row.acessoId, acessoId));
+    this.lacunas.length = 0;
+    this.lacunas.push(...keepLacunas);
   }
 }

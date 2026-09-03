@@ -23,28 +23,23 @@ export const listPublishedSkillsForUsuario = async (
   usuarioId: string,
 ): Promise<readonly Skill[]> => {
   const acessos = await ports.acessos.listByUsuario(usuarioId);
-  const byId = new Map<string, Skill>();
-  const seenAgents = new Set<string>();
+  const out: Skill[] = [];
   for (const acesso of acessos) {
-    if (seenAgents.has(acesso.agentId)) {
-      continue;
-    }
-    seenAgents.add(acesso.agentId);
-    const list = await ports.skills.listByAgent(acesso.agentId);
+    const list = await ports.skills.listByAcesso(acesso.id);
     for (const skill of list) {
       if (skill.status === "publicada") {
-        byId.set(skill.id, skill);
+        out.push(skill);
       }
     }
   }
-  return [...byId.values()];
+  return out;
 };
 
 export const skillToolName = (skill: Skill, all: readonly Skill[]): string => {
   const slug = skill.slug.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
   const clash = all.filter((item) => item.slug === skill.slug).length > 1;
   if (clash) {
-    return `skill_${slug}_${skill.agentId.replace(/-/g, "").slice(0, 8)}`;
+    return `skill_${slug}_${(skill.acessoId ?? skill.id).replace(/-/g, "").slice(0, 8)}`;
   }
   return `skill_${slug}`;
 };
@@ -104,7 +99,7 @@ export const syncSkillTools = async (input: {
       {
         title: skill.nome,
         description:
-          `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados.`.trim(),
+          `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados. N=1 omita acessoId; N>1 o skillId desta tool amarra o acesso.`.trim(),
         inputSchema: shape,
         annotations: queryAnnotations,
       },
@@ -141,7 +136,7 @@ export const syncSkillTools = async (input: {
 };
 
 export const PRE_TREINO_PROMPT_DESCRIPTION =
-  "Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR daquele agentId (sybase/mssql/postgres/firebird; identifique o GDBR e emita SQL compatível — treino+IA, o hub não reescreve dialeto; resources guia://paginacao, guia://dialeto/{dialeto}, skill://). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e, com Bearer, da persona do acesso (chapéu depois do SQL; não concatenar; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
+  "Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR deste acesso (sybase/mssql/postgres/firebird; identifique o GDBR e emita SQL compatível — treino+IA, o hub não reescreve dialeto; resources guia://paginacao, guia://dialeto/{dialeto}, skill://{acessoId}/{slug}). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e do grafo deste acesso e, com Bearer, da persona do acesso (chapéu depois do SQL; não concatenar; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
 
 export const CONSULTAR_COM_SKILL_PROMPT_DESCRIPTION =
   "Fluxo de consulta via plug-server: ler obter_skill / skill:// e guia://dialeto do acesso; SQL no pacote publicado (fail-closed). Firebird: só consulta exemplo. Não invente tabela, coluna nem JOIN.";
@@ -188,7 +183,8 @@ export interface AvisoSkillResource {
 
 export interface EnvelopeSkillResource {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string | null;
+  readonly agentId?: string;
   readonly slug: string;
   readonly nome: string;
   readonly descricao: string;
@@ -205,13 +201,14 @@ export interface EnvelopeSkillResource {
 }
 
 export const dialetoDoAcesso = (
-  acessos: readonly Pick<Acesso, "agentId" | "dialeto">[],
-  agentId: string,
-): Dialeto | undefined => acessos.find((acesso) => acesso.agentId === agentId)?.dialeto;
+  acessos: readonly Pick<Acesso, "id" | "agentId" | "dialeto">[],
+  acessoId: string,
+): Dialeto | undefined => acessos.find((acesso) => acesso.id === acessoId)?.dialeto;
 
 export const envelopeSkillResource = (
   skill: Skill,
   dialeto: Dialeto | undefined,
+  agentId?: string,
 ): EnvelopeSkillResource => {
   const avisos: AvisoSkillResource[] = [];
   if (skill.escopo.relacionamentos.some((rel) => rel.cardinalidade == null)) {
@@ -224,12 +221,13 @@ export const envelopeSkillResource = (
     avisos.push({
       code: "DIALETO_AUSENTE",
       message:
-        "Sem acesso para este agentId; guia de dialeto omitido. Não assuma sybase nem mssql. Leia listar_acessos e guia://dialeto/{dialeto} do acesso real.",
+        "Sem acesso para este acessoId; guia de dialeto omitido. Não assuma sybase nem mssql. Leia listar_acessos e guia://dialeto/{dialeto} do acesso real.",
     });
   }
   return {
     id: skill.id,
-    agentId: skill.agentId,
+    acessoId: skill.acessoId,
+    ...(agentId != null ? { agentId } : {}),
     slug: skill.slug,
     nome: skill.nome,
     descricao: skill.descricao,
@@ -374,7 +372,7 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
 export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts): void => {
   server.registerResource(
     "skill",
-    new ResourceTemplate("skill://{agentId}/{slug}", {
+    new ResourceTemplate("skill://{acessoId}/{slug}", {
       list: async () => {
         const uid = currentAccountId();
         if (!uid) {
@@ -382,12 +380,14 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
         }
         const published = await listPublishedSkillsForUsuario(ports, uid);
         return {
-          resources: published.map((skill) => ({
-            uri: `skill://${skill.agentId}/${skill.slug}`,
-            name: skill.nome,
-            description: skill.descricao,
-            mimeType: "application/json",
-          })),
+          resources: published
+            .filter((skill) => skill.acessoId)
+            .map((skill) => ({
+              uri: `skill://${skill.acessoId}/${skill.slug}`,
+              name: skill.nome,
+              description: skill.descricao,
+              mimeType: "application/json",
+            })),
         };
       },
     }),
@@ -401,21 +401,22 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
       if (!uid) {
         return { contents: [] };
       }
-      const agentId = String(variables.agentId ?? "");
+      const acessoId = String(variables.acessoId ?? "");
       const slug = String(variables.slug ?? "");
       const published = await listPublishedSkillsForUsuario(ports, uid);
-      const skill = published.find((item) => item.agentId === agentId && item.slug === slug);
+      const skill = published.find((item) => item.acessoId === acessoId && item.slug === slug);
       if (!skill) {
         return { contents: [] };
       }
       const acessos = await ports.acessos.listByUsuario(uid);
-      const dialeto = dialetoDoAcesso(acessos, skill.agentId);
+      const dono = acessos.find((item) => item.id === acessoId);
+      const dialeto = dono?.dialeto ?? dialetoDoAcesso(acessos, acessoId);
       return {
         contents: [
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify(envelopeSkillResource(skill, dialeto)),
+            text: JSON.stringify(envelopeSkillResource(skill, dialeto, dono?.agentId)),
           },
         ],
       };

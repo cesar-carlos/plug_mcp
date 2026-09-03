@@ -7,20 +7,20 @@ import { validarSqlNoEscopo } from "./validar-escopo.js";
 
 export interface BackfillSkillRow {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string;
   readonly sqlModelo: string;
   readonly status: string;
 }
 
 export interface BackfillConsultaRow {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string;
   readonly sql: string;
 }
 
 export interface BackfillAnotacaoRow {
   readonly id: string;
-  readonly agentId: string;
+  readonly acessoId: string;
   readonly tabelaId: string | null;
   readonly skillId: string | null;
 }

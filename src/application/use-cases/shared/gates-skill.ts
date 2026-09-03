@@ -57,13 +57,13 @@ const falta = (
 
 export const listarFatosIncompletos = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   escopo: EscopoSkill,
   opts: { exigirCardinalidade: boolean; exigirTipoColuna: boolean },
 ): Promise<FatoIncompleto[]> => {
   const out: FatoIncompleto[] = [];
   for (const nome of escopo.tabelas) {
-    const tabela = await grafo.findTabelaByNome(agentId, nome);
+    const tabela = await grafo.findTabelaByNome(acessoId, nome);
     if (!tabela) {
       out.push(falta("tabela", nome, `Tabela ${nome} ausente no grafo.`, "treinar_sql"));
       continue;
@@ -81,7 +81,7 @@ export const listarFatosIncompletos = async (
         ),
       );
     }
-    const cols = await grafo.listColunas(tabela.id);
+    const cols = await grafo.listColunas(acessoId, tabela.id);
     const wanted = escopo.colunasPorTabela[nome] ?? [];
     for (const colunaNome of wanted) {
       const alvo = `${nome}.${colunaNome}`;
@@ -138,7 +138,7 @@ export const listarFatosIncompletos = async (
       }
     }
   }
-  const rels = await grafo.listRelacionamentos(agentId);
+  const rels = await grafo.listRelacionamentos(acessoId);
   const relsComPares = escopo.relacionamentos.map((rel) => ({
     ...rel,
     pares: paresDoRelacionamento(rel),
@@ -160,8 +160,8 @@ export const listarFatosIncompletos = async (
       );
       continue;
     }
-    const origemTabela = await grafo.findTabelaByNome(agentId, rel.tabelaOrigem);
-    const destinoTabela = await grafo.findTabelaByNome(agentId, rel.tabelaDestino);
+    const origemTabela = await grafo.findTabelaByNome(acessoId, rel.tabelaOrigem);
+    const destinoTabela = await grafo.findTabelaByNome(acessoId, rel.tabelaDestino);
     if (!origemTabela || !destinoTabela) {
       out.push(
         falta("join", label, `JOIN ${label} não confirmado no grafo.`, "confirmar_relacionamento"),
@@ -227,10 +227,10 @@ export const listarFatosIncompletos = async (
 
 export const exigirEscopoNoGrafo = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   escopo: EscopoSkill,
 ): Promise<void> => {
-  const faltas = await listarFatosIncompletos(grafo, agentId, escopo, {
+  const faltas = await listarFatosIncompletos(grafo, acessoId, escopo, {
     exigirCardinalidade: false,
     exigirTipoColuna: false,
   });
@@ -252,11 +252,11 @@ export const exigirEscopoNoGrafo = async (
 
 export const exigirPacotePublicavel = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   escopo: EscopoSkill,
   sqlModelo: string,
 ): Promise<void> => {
-  const faltas = await listarFatosIncompletos(grafo, agentId, escopo, {
+  const faltas = await listarFatosIncompletos(grafo, acessoId, escopo, {
     exigirCardinalidade: escopo.relacionamentos.length > 0,
     exigirTipoColuna: escopoTemMedida(escopo),
   });
@@ -292,10 +292,10 @@ export const exigirPacotePublicavel = async (
 
 export const countConflitosNoEscopo = async (
   grafo: GrafoRepositoryPort,
-  agentId: string,
+  acessoId: string,
   escopo: EscopoSkill,
 ): Promise<number> => {
-  const faltas = await listarFatosIncompletos(grafo, agentId, escopo, {
+  const faltas = await listarFatosIncompletos(grafo, acessoId, escopo, {
     exigirCardinalidade: false,
     exigirTipoColuna: false,
   });

@@ -11,17 +11,17 @@ import {
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { MemoryQueryResultCache } from "../../src/infrastructure/cache/query-result-cache.js";
 
-const agentId = "11111111-1111-4111-8111-111111111111";
+const acessoId = "11111111-1111-4111-8111-111111111111";
 
 describe("deriva de esquema", () => {
   it("rebaixa só skills da tabela e invalida cache", async () => {
     const grafo = new InMemoryGrafoRepository();
     const skills = new InMemorySkillRepository();
     const cache = new MemoryQueryResultCache();
-    await cache.set(`mcp:query:${agentId}:abc`, "{}", 60_000);
-    await cache.set("mcp:query:other-agent:xyz", "{}", 60_000);
+    await cache.set(`mcp:query:acesso:${acessoId}:abc`, "{}", 60_000);
+    await cache.set("mcp:query:acesso:other-acesso:xyz", "{}", 60_000);
     const receber = await skills.create({
-      agentId,
+      acessoId: acessoId,
       slug: "receber",
       nome: "Receber",
       descricao: "t",
@@ -39,7 +39,7 @@ describe("deriva de esquema", () => {
     });
     await skills.setStatus(receber.id, "publicada");
     const outra = await skills.create({
-      agentId,
+      acessoId: acessoId,
       slug: "produto",
       nome: "Produto",
       descricao: "t",
@@ -64,7 +64,7 @@ describe("deriva de esquema", () => {
       grafo,
       skills,
       cache,
-      agentId,
+      acessoId: acessoId,
       tabelaNome: "receber",
       assinatura: primeira,
     });
@@ -77,15 +77,15 @@ describe("deriva de esquema", () => {
       grafo,
       skills,
       cache,
-      agentId,
+      acessoId: acessoId,
       tabelaNome: "receber",
       assinatura: segunda,
     });
     expect(result.drifted).toBe(true);
     expect((await skills.findById(receber.id))?.status).toBe("rascunho_revalidacao");
     expect((await skills.findById(outra.id))?.status).toBe("publicada");
-    expect(await cache.get(`mcp:query:${agentId}:abc`)).toBeNull();
-    expect(await cache.get("mcp:query:other-agent:xyz")).not.toBeNull();
+    expect(await cache.get(`mcp:query:acesso:${acessoId}:abc`)).toBeNull();
+    expect(await cache.get("mcp:query:acesso:other-acesso:xyz")).not.toBeNull();
   });
 
   it("tipo uuid→date com papel data não quebra o pacote; remoção sim", () => {
@@ -124,12 +124,13 @@ describe("deriva de esquema", () => {
     const grafo = new InMemoryGrafoRepository();
     const skills = new InMemorySkillRepository();
     const { tabela } = await grafo.mergeTabela({
-      agentId,
+      acessoId: acessoId,
       nome: "ContaReceber",
       origem: "validado_execucao",
       autorUsuarioId: null,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: tabela.id,
       nome: "DataLancamento",
       tipo: "uniqueidentifier",
@@ -138,6 +139,7 @@ describe("deriva de esquema", () => {
       autorUsuarioId: null,
     });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: tabela.id,
       nome: "CatalogoLargo",
       tipo: "varchar",
@@ -145,7 +147,7 @@ describe("deriva de esquema", () => {
       autorUsuarioId: null,
     });
     const skill = await skills.create({
-      agentId,
+      acessoId: acessoId,
       slug: "receber",
       nome: "Receber",
       descricao: "t",
@@ -162,8 +164,9 @@ describe("deriva de esquema", () => {
       autorUsuarioId: null,
     });
     await skills.setStatus(skill.id, "validada");
-    await aplicarDerivaTabelaNoGrafo({ grafo, skills, agentId, tabelaNome: "ContaReceber" });
+    await aplicarDerivaTabelaNoGrafo({ grafo, skills, acessoId: acessoId, tabelaNome: "ContaReceber" });
     await grafo.mergeColuna({
+      acessoId: acessoId,
       tabelaId: tabela.id,
       nome: "DataLancamento",
       tipo: "date",
@@ -174,7 +177,7 @@ describe("deriva de esquema", () => {
     const result = await aplicarDerivaTabelaNoGrafo({
       grafo,
       skills,
-      agentId,
+      acessoId: acessoId,
       tabelaNome: "ContaReceber",
     });
     expect(result.drifted).toBe(false);
