@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mapPlugServerFailure } from "../../src/infrastructure/plug-server/map-plug-error.js";
+import {
+  mapPlugServerFailure,
+  mapPlugServerNetworkError,
+} from "../../src/infrastructure/plug-server/map-plug-error.js";
 
 describe("mapPlugServerFailure", () => {
   it("maps JSON-RPC -32001 missing_client_token to MISSING_CLIENT_TOKEN", () => {
@@ -589,5 +592,213 @@ describe("mapPlugServerFailure", () => {
     });
     expect(err.code).toBe("ACCESS_REVOKED");
     expect(err.source).toBe("client_token_rpc");
+  });
+
+  it("mapeia Firebird Column unknown para INVALID_SQL + mapear_tabela", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32102,
+              message: "SQL execution failed",
+              data: {
+                reason: "sql_execution_failed",
+                category: "sql",
+                technical_message: "Dynamic SQL Error. SQL error code = -206. Column unknown FOO.",
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.source).toBe("sql_engine");
+    expect(err.nextAction).toBe("mapear_tabela");
+    expect(err.hint).toMatch(/Column unknown FOO/i);
+    expect(err.details).toEqual(
+      expect.objectContaining({
+        rpcCode: -32102,
+        engineMessage: expect.stringMatching(/Column unknown FOO/i),
+      }),
+    );
+  });
+
+  it("mapeia Sybase column not found para mapear_tabela", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32102,
+              message: "fail",
+              data: {
+                reason: "sql_execution_failed",
+                technical_message: "ASA Error: Column 'bar' not found",
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.source).toBe("sql_engine");
+    expect(err.nextAction).toBe("mapear_tabela");
+    expect(err.hint).toMatch(/Column 'bar' not found/i);
+  });
+
+  it("mapeia JSON-RPC -32602 para PLUG_SERVER_ERROR sem pedir rewrite de SQL", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: { code: -32602, message: "Invalid params", data: { reason: "invalid_params" } },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("PLUG_SERVER_ERROR");
+    expect(err.source).toBe("plug_server_http");
+    expect(err.hint).toMatch(/Não reescreva o SQL/);
+    expect(err.hint).not.toMatch(/sqlModelo de obter_skill/);
+  });
+
+  it("mapeia HTTP 400 do hub para transporte, não INVALID_SQL", () => {
+    const err = mapPlugServerFailure({
+      status: 400,
+      body: { code: "BAD_REQUEST", message: "Invalid body" },
+    });
+    expect(err.code).toBe("PLUG_SERVER_ERROR");
+    expect(err.source).toBe("plug_server_http");
+    expect(err.retryable).toBe(false);
+    expect(err.message).toMatch(/HTTP 400/);
+    expect(err.hint).toMatch(/Não reescreva o SQL/);
+  });
+
+  it("RPC sem mapa com data.category sql vira sql_engine + Motor", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32999,
+              message: "SQL failed",
+              data: {
+                category: "sql",
+                technical_message: "Invalid column name 'baz'.",
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.source).toBe("sql_engine");
+    expect(err.hint).toMatch(/Invalid column name 'baz'/);
+    expect(err.details).toEqual(
+      expect.objectContaining({ hubCategory: "sql", engineMessage: expect.stringMatching(/baz/) }),
+    );
+  });
+
+  it("prefere mensagem específica quando technical_message é wrap genérico do driver", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32102,
+              message: "Invalid column name 'q'.",
+              data: {
+                reason: "sql_execution_failed",
+                user_message: "Nao foi possivel executar a consulta.",
+                technical_message: "Database driver returned an execution error.",
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(err.source).toBe("sql_engine");
+    expect(err.hint).toMatch(/Invalid column name 'q'/);
+    expect(err.hint).not.toMatch(/Database driver returned/i);
+  });
+
+  it("engineMessage só com wrap genérico aponta mapear_tabela sem pedir rewrite de transporte", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32102,
+              message: "Nao foi possivel executar a consulta.",
+              data: {
+                reason: "sql_execution_failed",
+                technical_message: "Database driver returned an execution error.",
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.source).toBe("sql_engine");
+    expect(err.hint).toMatch(/Motor sem detalhe ODBC/);
+    expect(err.hint).toMatch(/mapear_tabela/);
+    expect(err.hint).toMatch(/obter_skill/);
+    expect(err.hint).toMatch(/Não reescreva o SQL por transporte/);
+    expect(err.hint).not.toMatch(/sqlModelo de obter_skill/);
+    expect(err.nextAction).toBe("mapear_tabela");
+  });
+
+  it("SQLSTATE 42703/42P01 entra no hint quando o motor já mapeia identificador Postgres", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32102,
+              message: "SQL execution failed",
+              data: {
+                reason: "sql_execution_failed",
+                sqlstate: "42703",
+                technical_message: 'column "foo" does not exist',
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(err.code).toBe("INVALID_SQL");
+    expect(err.source).toBe("sql_engine");
+    expect(err.nextAction).toBe("mapear_tabela");
+    expect(err.hint).toMatch(/SQLSTATE 42703/);
+    expect(err.hint).toMatch(/mapear_tabela/);
+    expect(err.details).toEqual(expect.objectContaining({ sqlstate: "42703" }));
+  });
+
+  it("mapPlugServerNetworkError é plug_server_http retryable, não INTERNAL_ERROR", () => {
+    const err = mapPlugServerNetworkError(
+      Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:9"), {
+          code: "ECONNREFUSED",
+        }),
+      }),
+      "sql.execute",
+    );
+    expect(err.code).toBe("PLUG_SERVER_ERROR");
+    expect(err.source).toBe("plug_server_http");
+    expect(err.retryable).toBe(true);
+    expect(err.stage).toBe("sql.execute");
+    expect(err.hint).toMatch(/Não altere o SELECT/);
+    expect(err.hint).toMatch(/ECONNREFUSED/);
+    expect(err.message).not.toMatch(/Erro interno/);
+    expect(err.details).toEqual({ errno: "ECONNREFUSED" });
   });
 });

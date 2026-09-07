@@ -29,9 +29,16 @@ import type {
 import { requireAcesso, requireUsuario, statusFromHub } from "./shared/guards.js";
 import { currentAcessoId } from "../session-context.js";
 import { tryPutClientToken, withHubAuth } from "./shared/hub-auth.js";
+import {
+  MCP_SETUP_TTL_DAYS,
+  MCP_SETUP_TTL_MS,
+  type McpSetupRepositoryPort,
+} from "../../domain/ports/mcp-setup-repository.port.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export { MCP_SETUP_TTL_DAYS, MCP_SETUP_TTL_MS };
 
 export const expiryFromTtlDays = (ttlDays: number, now = new Date()): Date | null => {
   if (ttlDays <= 0) {
@@ -41,27 +48,63 @@ export const expiryFromTtlDays = (ttlDays: number, now = new Date()): Date | nul
 };
 
 export interface SetupCodeStore {
-  issue(token: string): { code: string; expiresAt: Date };
+  issue(token: string, ttlMs?: number): { code: string; expiresAt: Date };
 }
 
-export const mintMcpSetup = (
+export const mintMcpToken = (
+  crypto: CryptoPort,
+  tokenTtlDays: number,
+): { token: string; tokenHash: string; tokenExpiresAt: Date | null } => {
+  const token = crypto.randomToken(32);
+  return {
+    token,
+    tokenHash: crypto.sha256Hex(token),
+    tokenExpiresAt: expiryFromTtlDays(tokenTtlDays),
+  };
+};
+
+export const persistMintedSetup = async (
+  token: string,
+  setup: SetupCodeStore,
+  publicBaseUrl: string,
+  persistent: McpSetupRepositoryPort | undefined,
+  acessoId: string | null,
+): Promise<{ setupCode: string; setupUrl: string }> => {
+  const issued = setup.issue(token, MCP_SETUP_TTL_MS);
+  if (persistent) {
+    await persistent.issue({
+      code: issued.code,
+      token,
+      expiresAt: issued.expiresAt,
+      acessoId,
+    });
+  }
+  return {
+    setupCode: issued.code,
+    setupUrl: `${publicBaseUrl}/setup/${issued.code}`,
+  };
+};
+
+export const mintMcpSetup = async (
   crypto: CryptoPort,
   setup: SetupCodeStore,
   publicBaseUrl: string,
   tokenTtlDays: number,
-): {
+  persistent?: McpSetupRepositoryPort,
+  acessoId: string | null = null,
+): Promise<{
   tokenHash: string;
   tokenExpiresAt: Date | null;
   setupCode: string;
   setupUrl: string;
-} => {
-  const token = crypto.randomToken(32);
-  const issued = setup.issue(token);
+}> => {
+  const minted = mintMcpToken(crypto, tokenTtlDays);
+  const codes = await persistMintedSetup(minted.token, setup, publicBaseUrl, persistent, acessoId);
   return {
-    tokenHash: crypto.sha256Hex(token),
-    tokenExpiresAt: expiryFromTtlDays(tokenTtlDays),
-    setupCode: issued.code,
-    setupUrl: `${publicBaseUrl}/setup/${issued.code}`,
+    tokenHash: minted.tokenHash,
+    tokenExpiresAt: minted.tokenExpiresAt,
+    setupCode: codes.setupCode,
+    setupUrl: codes.setupUrl,
   };
 };
 
@@ -82,6 +125,7 @@ export class RegistrarAcesso {
     private readonly tokenTtlDays: number,
     private readonly sessions?: UsuarioPlugSessionPort,
     private readonly logger?: LoggerPort,
+    private readonly setupPersistent?: McpSetupRepositoryPort,
   ) {}
 
   async execute(input: {
@@ -148,7 +192,11 @@ export class RegistrarAcesso {
     const clientTokenHash = this.crypto.sha256Hex(clientToken);
     const existing = await this.usuarios.findByEmailHash(emailHash);
 
-    const persistAcesso = async (usuarioId: string, minted: ReturnType<typeof mintMcpSetup>) => {
+    const persistAcesso = async (
+      usuarioId: string,
+      tokenHash: string,
+      tokenExpiresAt: Date | null,
+    ) => {
       const dup = await this.acessos.findByUsuarioAgentTokenHash(
         usuarioId,
         agentId,
@@ -168,28 +216,35 @@ export class RegistrarAcesso {
         nomeAmigavel: input.nomeAmigavel?.trim() ? input.nomeAmigavel.trim() : agentId,
         clientTokenEnc: this.crypto.encrypt(clientToken),
         clientTokenHash,
-        tokenHash: minted.tokenHash,
-        tokenExpiresAt: minted.tokenExpiresAt,
+        tokenHash,
+        tokenExpiresAt,
         statusAcesso,
       });
     };
 
     if (!existing) {
-      const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
+      const minted = mintMcpToken(this.crypto, this.tokenTtlDays);
       const usuario = await this.usuarios.create({
         emailEnc: this.crypto.encrypt(email),
         emailHash,
         senhaEnc: this.crypto.encrypt(senha),
       });
-      const acesso = await persistAcesso(usuario.id, minted);
+      const acesso = await persistAcesso(usuario.id, minted.tokenHash, minted.tokenExpiresAt);
+      const codes = await persistMintedSetup(
+        minted.token,
+        this.setup,
+        this.publicBaseUrl,
+        this.setupPersistent,
+        acesso.id,
+      );
       await this.afterPersist(usuario.id, hub, agentId, clientToken, statusAcesso);
       return {
         success: true,
         usuarioId: usuario.id,
         acessoId: acesso.id,
         statusAcesso,
-        setupCode: minted.setupCode,
-        setupUrl: minted.setupUrl,
+        setupCode: codes.setupCode,
+        setupUrl: codes.setupUrl,
         hint: "Abra setupUrl no navegador, copie o token MCP e coloque em Authorization: Bearer. Não peça o token de volta no chat. Não ecoe senha nem client_token na resposta.",
       };
     }
@@ -202,16 +257,23 @@ export class RegistrarAcesso {
         hint: "Use o token MCP dessa conta e chame atualizar_credencial_plug, ou adicionar_acesso.",
       });
     }
-    const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
-    const acesso = await persistAcesso(existing.id, minted);
+    const minted = mintMcpToken(this.crypto, this.tokenTtlDays);
+    const acesso = await persistAcesso(existing.id, minted.tokenHash, minted.tokenExpiresAt);
+    const codes = await persistMintedSetup(
+      minted.token,
+      this.setup,
+      this.publicBaseUrl,
+      this.setupPersistent,
+      acesso.id,
+    );
     await this.afterPersist(existing.id, hub, agentId, clientToken, statusAcesso);
     return {
       success: true,
       usuarioId: existing.id,
       acessoId: acesso.id,
       statusAcesso,
-      setupCode: minted.setupCode,
-      setupUrl: minted.setupUrl,
+      setupCode: codes.setupCode,
+      setupUrl: codes.setupUrl,
       hint: "Novo acesso gravado com token MCP próprio. Abra setupUrl, copie o Bearer desta persona e configure um servidor MCP separado. O token anterior continua só na persona antiga.",
     };
   }
@@ -245,6 +307,7 @@ export class AdicionarAcesso {
     private readonly publicBaseUrl: string,
     private readonly tokenTtlDays: number,
     private readonly logger?: LoggerPort,
+    private readonly setupPersistent?: McpSetupRepositoryPort,
   ) {}
 
   async execute(
@@ -282,7 +345,7 @@ export class AdicionarAcesso {
       return this.plug.getAgentAccessStatus(accessToken, agentId);
     });
     const statusAcesso = statusFromHub(status.state);
-    const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
+    const minted = mintMcpToken(this.crypto, this.tokenTtlDays);
     const acesso = await this.acessos.create({
       usuarioId: uid,
       agentId,
@@ -294,6 +357,13 @@ export class AdicionarAcesso {
       tokenExpiresAt: minted.tokenExpiresAt,
       statusAcesso,
     });
+    const codes = await persistMintedSetup(
+      minted.token,
+      this.setup,
+      this.publicBaseUrl,
+      this.setupPersistent,
+      acesso.id,
+    );
     await withHubAuth(this.sessions, uid, async (accessToken) => {
       await tryPutClientToken(
         this.plug,
@@ -307,8 +377,8 @@ export class AdicionarAcesso {
     return {
       success: true,
       acesso: toAcessoPublico(acesso, clientToken),
-      setupCode: minted.setupCode,
-      setupUrl: minted.setupUrl,
+      setupCode: codes.setupCode,
+      setupUrl: codes.setupUrl,
       hint: "Persona nova com catálogo vazio e token MCP próprio. Abra setupUrl e configure outro servidor MCP com esse Bearer. Esta sessão continua só na persona atual.",
     };
   }
@@ -322,19 +392,22 @@ export class ListarAcessos {
   ): Promise<{ success: true; acessos: AcessoPublico[] }> {
     const uid = requireUsuario(usuarioId);
     const bound = currentAcessoId()?.trim();
-    if (bound) {
-      const acesso = await this.acessos.findByIdForUsuario(bound, uid);
-      if (!acesso) {
-        throw new DomainError({
-          code: ERROR_CODES.ACESSO_NOT_FOUND,
-          message: "Acesso não encontrado para este token MCP.",
-          hint: "Este Bearer autentica só a persona atual. Outra persona usa o token MCP dela.",
-        });
-      }
-      return { success: true, acessos: [toAcessoPublico(acesso)] };
+    if (!bound) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Sessão MCP sem acesso vinculado.",
+        hint: "Este Bearer autentica um único acesso. Reconecte com o token MCP desta persona. Sem sessão, listar_acessos não lista todos os chapéus.",
+      });
     }
-    const lista = await this.acessos.listByUsuario(uid);
-    return { success: true, acessos: lista.map((item) => toAcessoPublico(item)) };
+    const acesso = await this.acessos.findByIdForUsuario(bound, uid);
+    if (!acesso) {
+      throw new DomainError({
+        code: ERROR_CODES.ACESSO_NOT_FOUND,
+        message: "Acesso não encontrado para este token MCP.",
+        hint: "Este Bearer autentica só a persona atual. Outra persona usa o token MCP dela.",
+      });
+    }
+    return { success: true, acessos: [toAcessoPublico(acesso)] };
   }
 }
 
@@ -621,21 +694,31 @@ export class RotacionarTokenMcp {
     private readonly setup: SetupCodeStore,
     private readonly publicBaseUrl: string,
     private readonly tokenTtlDays: number,
+    private readonly setupPersistent?: McpSetupRepositoryPort,
   ) {}
 
   async execute(usuarioId: string | undefined): Promise<{
     success: true;
     setupCode: string;
     setupUrl: string;
+    hint: string;
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, undefined, uid);
-    const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
+    const minted = await mintMcpSetup(
+      this.crypto,
+      this.setup,
+      this.publicBaseUrl,
+      this.tokenTtlDays,
+      this.setupPersistent,
+      acesso.id,
+    );
     await this.acessos.updateTokenHash(acesso.id, minted.tokenHash, minted.tokenExpiresAt);
     return {
       success: true,
       setupCode: minted.setupCode,
       setupUrl: minted.setupUrl,
+      hint: `Abra setupUrl no navegador e copie o Bearer antes de reiniciar o processo. O código one-shot vale ${String(MCP_SETUP_TTL_DAYS)} dias (memória e mcp_setup). O Bearer anterior desta persona já é inválido.`,
     };
   }
 }

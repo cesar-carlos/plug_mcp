@@ -12,7 +12,7 @@ Três segredos distintos — nunca misturar:
 2. `client_token` por acesso (AES-256-GCM). Autoridade SQL. Nunca em tool/log/modelo.
 3. Token MCP opaco (hash SHA-256 em `acesso.token_hash`, `timingSafeEqual`). Um por acesso. Nunca na resposta de tool.
 
-`registrar_acesso` devolve `setupCode`/`setupUrl`. O token só aparece em `GET /setup/:code` (HTML, one-shot). Persona do acesso não pode trazer senha, `client_token` ou JWT no texto (`atualizar_persona` recusa).
+`registrar_acesso` devolve `setupCode`/`setupUrl`. O token só aparece em `GET /setup/:code` (HTML, one-shot; dual-write memória + `mcp_setup`, TTL 7 dias). Persona do acesso não pode trazer senha, `client_token` ou JWT no texto (`atualizar_persona` recusa).
 
 Não há Authorization Server, JWT de conta MCP, cookie de sessão, nem Client de serviço no `.env`.
 

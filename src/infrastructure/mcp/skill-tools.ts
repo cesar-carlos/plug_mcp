@@ -23,26 +23,14 @@ export const listPublishedSkillsForUsuario = async (
   usuarioId: string,
   acessoId?: string,
 ): Promise<readonly Skill[]> => {
-  if (acessoId) {
-    const acesso = await ports.acessos.findByIdForUsuario(acessoId, usuarioId);
-    if (!acesso) {
-      return [];
-    }
-    return (await ports.skills.listByAcesso(acesso.id)).filter(
-      (item) => item.status === "publicada",
-    );
+  if (!acessoId) {
+    return [];
   }
-  const acessos = await ports.acessos.listByUsuario(usuarioId);
-  const out: Skill[] = [];
-  for (const acesso of acessos) {
-    const list = await ports.skills.listByAcesso(acesso.id);
-    for (const skill of list) {
-      if (skill.status === "publicada") {
-        out.push(skill);
-      }
-    }
+  const acesso = await ports.acessos.findByIdForUsuario(acessoId, usuarioId);
+  if (!acesso) {
+    return [];
   }
-  return out;
+  return (await ports.skills.listByAcesso(acesso.id)).filter((item) => item.status === "publicada");
 };
 
 export const skillToolName = (skill: Skill, all: readonly Skill[]): string => {
@@ -172,13 +160,9 @@ export const registerPreTreinoPrompt = (
       const uid = currentAccountId();
       const bound = currentAcessoId();
       let lista: Awaited<ReturnType<NonNullable<typeof acessos>["listByUsuario"]>> = [];
-      if (uid && acessos) {
-        if (bound) {
-          const acesso = await acessos.findByIdForUsuario(bound, uid);
-          lista = acesso ? [acesso] : [];
-        } else {
-          lista = await acessos.listByUsuario(uid);
-        }
+      if (uid && acessos && bound) {
+        const acesso = await acessos.findByIdForUsuario(bound, uid);
+        lista = acesso ? [acesso] : [];
       }
       return {
         messages: [
@@ -478,9 +462,7 @@ export const registerPersonaCatalog = (server: McpServer, acessos: AcessoReposit
         if (!uid) {
           return { resources: [] };
         }
-        const acesso = bound
-          ? await acessos.findByIdForUsuario(bound, uid)
-          : (await acessos.listByUsuario(uid))[0];
+        const acesso = bound ? await acessos.findByIdForUsuario(bound, uid) : undefined;
         const lista = acesso ? [acesso] : [];
         return {
           resources: lista.map((item) => ({

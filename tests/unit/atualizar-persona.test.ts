@@ -20,6 +20,7 @@ import {
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
 import { newAdicionarAcesso } from "../helpers/adicionar-acesso.js";
+import { withBound } from "../helpers/session-bound.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -63,7 +64,9 @@ describe("atualizar_persona", () => {
     expect(JSON.stringify(result)).not.toMatch(/secret-pass/);
     expect(JSON.stringify(result)).not.toMatch(/tok-sql/);
 
-    const listed = await new ListarAcessos(acessos).execute(created.usuarioId);
+    const listed = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
     expect(listed.acessos[0]?.nomePersona).toBe("Atendimento financeiro");
     expect(listed.acessos[0]?.instrucoesPersona).toBe("Fale em tom formal. Não invente JOIN.");
     expect(listed.acessos[0]?.clientTokenMasked).toBe("••••");
@@ -124,7 +127,9 @@ describe("atualizar_persona", () => {
         confirmadoPeloUsuario: true,
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
-    const listed = await new ListarAcessos(acessos).execute(created.usuarioId);
+    const listed = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
     expect(listed.acessos[0]?.instrucoesPersona).toBeNull();
   });
 
@@ -155,7 +160,9 @@ describe("atualizar_persona", () => {
       nomePersona: "Consultor",
       confirmadoPeloUsuario: true,
     });
-    const listed = await new ListarAcessos(acessos).execute(created.usuarioId);
+    const listed = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
     expect(listed.acessos[0]?.nomePersona).toBe("Consultor");
     expect(listed.acessos[0]?.instrucoesPersona).toBe("Foque em KPI do pacote.");
   });
@@ -174,7 +181,9 @@ describe("atualizar_persona", () => {
       instrucoesPersona: "  ",
       confirmadoPeloUsuario: true,
     });
-    const listed = await new ListarAcessos(acessos).execute(created.usuarioId);
+    const listed = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
     expect(listed.acessos[0]?.nomePersona).toBeNull();
     expect(listed.acessos[0]?.instrucoesPersona).toBeNull();
 
@@ -190,12 +199,14 @@ describe("atualizar_persona", () => {
       instrucoesPersona: null,
       confirmadoPeloUsuario: true,
     });
-    const listedNull = await new ListarAcessos(acessos).execute(created.usuarioId);
+    const listedNull = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
     expect(listedNull.acessos[0]?.nomePersona).toBeNull();
     expect(listedNull.acessos[0]?.instrucoesPersona).toBeNull();
   });
 
-  it("várias personas são vários acessos; sem Bearer de sessão listar_acessos devolve os dois chapéus", async () => {
+  it("várias personas são vários acessos; sem ALS listar_acessos recusa e com Bearer só vê o chapéu atual", async () => {
     const { plug, acessos, created } = await seed();
     const agent2 = "22222222-2222-4222-8222-222222222222";
     plug.approve(agent2);
@@ -216,13 +227,22 @@ describe("atualizar_persona", () => {
       instrucoesPersona: "Foque em KPI do pacote.",
       confirmadoPeloUsuario: true,
     });
-    const listed = await new ListarAcessos(acessos).execute(created.usuarioId);
-    expect(listed.acessos).toHaveLength(2);
-    const byId = new Map(listed.acessos.map((item) => [item.id, item]));
-    expect(byId.get(created.acessoId)?.nomePersona).toBe("Vendedor");
-    expect(byId.get(created.acessoId)?.instrucoesPersona).toBe("Priorize pedidos em aberto.");
-    expect(byId.get(added.acesso.id)?.nomePersona).toBe("Gestor");
-    expect(byId.get(added.acesso.id)?.instrucoesPersona).toBe("Foque em KPI do pacote.");
+    await expect(new ListarAcessos(acessos).execute(created.usuarioId)).rejects.toMatchObject({
+      code: ERROR_CODES.VALIDATION_ERROR,
+    });
+    const listed = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
+    expect(listed.acessos).toHaveLength(1);
+    expect(listed.acessos[0]?.id).toBe(created.acessoId);
+    expect(listed.acessos[0]?.nomePersona).toBe("Vendedor");
+    expect(listed.acessos[0]?.instrucoesPersona).toBe("Priorize pedidos em aberto.");
+    const listedB = await withBound(created.usuarioId, added.acesso.id, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
+    expect(listedB.acessos).toHaveLength(1);
+    expect(listedB.acessos[0]?.nomePersona).toBe("Gestor");
+    expect(listedB.acessos[0]?.instrucoesPersona).toBe("Foque em KPI do pacote.");
   });
 
   it("mesmo agentId em usuários MCP diferentes tem personas independentes", async () => {
@@ -265,8 +285,12 @@ describe("atualizar_persona", () => {
       instrucoesPersona: "Tom formal.",
       confirmadoPeloUsuario: true,
     });
-    const listedA = await new ListarAcessos(acessos).execute(primeiro.usuarioId);
-    const listedB = await new ListarAcessos(acessos).execute(segundo.usuarioId);
+    const listedA = await withBound(primeiro.usuarioId, primeiro.acessoId, () =>
+      new ListarAcessos(acessos).execute(primeiro.usuarioId),
+    );
+    const listedB = await withBound(segundo.usuarioId, segundo.acessoId, () =>
+      new ListarAcessos(acessos).execute(segundo.usuarioId),
+    );
     expect(listedA.acessos).toHaveLength(1);
     expect(listedB.acessos).toHaveLength(1);
     expect(listedA.acessos[0]?.nomePersona).toBe("Vendedor");
@@ -310,7 +334,9 @@ describe("atualizar_persona", () => {
         confirmadoPeloUsuario: true,
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.ACESSO_NOT_FOUND });
-    const listedDono = await new ListarAcessos(acessos).execute(dono.usuarioId);
+    const listedDono = await withBound(dono.usuarioId, dono.acessoId, () =>
+      new ListarAcessos(acessos).execute(dono.usuarioId),
+    );
     expect(listedDono.acessos[0]?.nomePersona).toBeNull();
   });
 });

@@ -95,24 +95,28 @@ Dois envelopes possíveis no mesmo POST:
 
 Códigos RPC que o MCP mapeia:
 
-| RPC                                                                           | Situação típica                         | `code` MCP                               | `source`           |
-| ----------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------- | ------------------ |
-| `-32001` `missing_client_token`                                               | `client_token` ausente                  | `MISSING_CLIENT_TOKEN`                   | `client_token_rpc` |
-| `-32001` `invalid_signature` / `authentication_failed`                        | credencial/assinatura inválida          | `ACCESS_REVOKED`                         | `client_token_rpc` |
-| `-32002`                                                                      | classificação SQL                       | `INVALID_SQL`                            | `sql_engine`       |
-| `-32002`                                                                      | política / token                        | `ACCESS_REVOKED`                         | `client_token_rpc` |
-| `-32008` / `-32107`                                                           | timeout no agente / motor               | `QUERY_TIMEOUT`                          | `sql_engine`       |
-| `-32009` `reason: invalid_payload`                                            | frame / PayloadFrame / batch            | `PLUG_SERVER_ERROR`                      | `plug_server_http` |
-| `-32009` haystack de motor (reason ≠ `invalid_payload`) / `-32101` / `-32102` | SQL inválido / execução no dialeto      | `INVALID_SQL` + `details.engineMessage`  | `sql_engine`       |
-| `-32103`                                                                      | transação (MCP só SELECT)               | `INVALID_SQL`                            | `sql_engine`       |
-| `-32105`                                                                      | resultado grande demais                 | `CONSULTA_ORCAMENTO`                     | `sql_engine`       |
-| 1033 / `ORDER BY` em derived table (mssql, wrap `managed`)                    | Paginação gerenciada                    | `INVALID_SQL`                            | `sql_engine`       |
-| `-32013`                                                                      | rate limit no agente                    | `RATE_LIMITED`                           | `client_token_rpc` |
-| `-32000`                                                                      | agente conhecido, socket down           | `AGENT_UNAVAILABLE`                      | `plug_server_http` |
-| `-32014`                                                                      | replay do mesmo `command.id`            | `PLUG_SERVER_ERROR`                      | `plug_server_http` |
-| `-32104` / `-32106`                                                           | pool / conexão com o ERP                | `AGENT_UNAVAILABLE`                      | `plug_server_http` |
-| HTTP 404                                                                      | `agentId` nunca registado nesta réplica | `AGENT_UNAVAILABLE` (`retryable: false`) | `plug_server_http` |
-| HTTP 429 / 503                                                                | quota do hub / fila / Nginx             | `RATE_LIMITED` / `AGENT_UNAVAILABLE`     | `plug_server_http` |
+| RPC                                                                           | Situação típica                         | `code` MCP                                  | `source`           |
+| ----------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------- | ------------------ |
+| `-32001` `missing_client_token`                                               | `client_token` ausente                  | `MISSING_CLIENT_TOKEN`                      | `client_token_rpc` |
+| `-32001` `invalid_signature` / `authentication_failed`                        | credencial/assinatura inválida          | `ACCESS_REVOKED`                            | `client_token_rpc` |
+| `-32002`                                                                      | classificação SQL                       | `INVALID_SQL`                               | `sql_engine`       |
+| `-32002`                                                                      | política / token                        | `ACCESS_REVOKED`                            | `client_token_rpc` |
+| `-32008` / `-32107`                                                           | timeout no agente / motor               | `QUERY_TIMEOUT`                             | `sql_engine`       |
+| `-32009` `reason: invalid_payload`                                            | frame / PayloadFrame / batch            | `PLUG_SERVER_ERROR`                         | `plug_server_http` |
+| `-32009` haystack de motor (reason ≠ `invalid_payload`) / `-32101` / `-32102` | SQL inválido / execução no dialeto      | `INVALID_SQL` + `details.engineMessage`     | `sql_engine`       |
+| Firebird `Column unknown` / Sybase `Column … not found` (em `-32102`)         | Identificador recusado no GDBR          | `INVALID_SQL` (`nextAction: mapear_tabela`) | `sql_engine`       |
+| JSON-RPC `-32700` / `-32600`–`-32603`                                         | parse / invalid request / params        | `PLUG_SERVER_ERROR`                         | `plug_server_http` |
+| Falha TCP/`fetch` até o hub (`ECONNREFUSED`)                                  | Hub inacessível                         | `PLUG_SERVER_ERROR` (retryable)             | `plug_server_http` |
+| HTTP 400                                                                      | Body/schema Zod no hub                  | `PLUG_SERVER_ERROR`                         | `plug_server_http` |
+| `-32103`                                                                      | transação (MCP só SELECT)               | `INVALID_SQL`                               | `sql_engine`       |
+| `-32105`                                                                      | resultado grande demais                 | `CONSULTA_ORCAMENTO`                        | `sql_engine`       |
+| 1033 / `ORDER BY` em derived table (mssql, wrap `managed`)                    | Paginação gerenciada                    | `INVALID_SQL`                               | `sql_engine`       |
+| `-32013`                                                                      | rate limit no agente                    | `RATE_LIMITED`                              | `client_token_rpc` |
+| `-32000`                                                                      | agente conhecido, socket down           | `AGENT_UNAVAILABLE`                         | `plug_server_http` |
+| `-32014`                                                                      | replay do mesmo `command.id`            | `PLUG_SERVER_ERROR`                         | `plug_server_http` |
+| `-32104` / `-32106`                                                           | pool / conexão com o ERP                | `AGENT_UNAVAILABLE`                         | `plug_server_http` |
+| HTTP 404                                                                      | `agentId` nunca registado nesta réplica | `AGENT_UNAVAILABLE` (`retryable: false`)    | `plug_server_http` |
+| HTTP 429 / 503                                                                | quota do hub / fila / Nginx             | `RATE_LIMITED` / `AGENT_UNAVAILABLE`        | `plug_server_http` |
 
 HTTP 200 + JSON-RPC de motor (`-32102`, `-32101`, `-32009` com haystack de motor **e** reason ≠ `invalid_payload`) **não** vira `PLUG_SERVER_ERROR`: a IA lê `INVALID_SQL` + `source: sql_engine` e distingue do validador do pacote (`source: sql`). `-32009` `reason: invalid_payload` **é** transporte (`PLUG_SERVER_ERROR` + `plug_server_http`) mesmo se o haystack parecer motor — **não** reescreva o SQL. HTTP 5xx com texto `denied`/`permission` e sem RPC de policy também **não** vira `PERMISSION_DENIED`. SQL recusado **não** persiste. Tabela completa e hints: [`../mcp/error-mapping.md`](../mcp/error-mapping.md).
 

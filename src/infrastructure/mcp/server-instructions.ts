@@ -40,6 +40,7 @@ Erro de consultar_dados / validar_consulta (success: false):
 - Leia error.code, error.message, error.hint e error.source (e nextAction, details, details.engineMessage, details.reason). Não trate todo erro como SQL a reescrever.
 - source sql ou sql_engine: corrija o SQL **dentro do pacote** e no dialeto do GDBR; não invente tabela, coluna nem JOIN. sql = validador do pacote; sql_engine = motor/GDBR via plug_agente (INVALID_SQL → details.engineMessage) — o hub não é camada de dialeto.
 - source plug_server_http com code PLUG_SERVER_ERROR ou reason invalid_payload: transporte (frame/batch/PayloadFrame) — **não reescreva o SQL**. invalid_payload não é recusa do motor nem do pacote.
+- Falha de rede até o hub (ECONNREFUSED / fetch failed): PLUG_SERVER_ERROR source plug_server_http, retryable — **não reescreva o SQL**. INTERNAL_ERROR (source mcp) também não é recusa de SQL.
 - client_token_rpc = policy do token. HTTP 429/503 (RATE_LIMITED / AGENT_UNAVAILABLE, source plug_server_http) ≠ policy — não trate como PERMISSION_DENIED e não reescreva o SQL.
 - HTTP 404 AGENT_UNAVAILABLE: chame verificar_acesso; não finja socket down. SQL recusado não persiste (sql / sql_engine); não registre o SELECT falho.
 - Não repita o mesmo JOIN, tabela, coluna ou padrão recusado quando a origem for sql / sql_engine.

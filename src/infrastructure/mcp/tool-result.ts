@@ -1,4 +1,4 @@
-import { DomainError, isDomainError } from "../../domain/errors/domain-error.js";
+import { DomainError, ERROR_SOURCE, isDomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import { isAnexoExportPayload } from "../../domain/entities/anexo.js";
 import { absoluteErrorMappingUrl } from "../../domain/errors/error-next-action.js";
@@ -102,8 +102,9 @@ export const errorResult = (
         return new DomainError({
           code: ERROR_CODES.INTERNAL_ERROR,
           message: "Erro interno.",
-          hint: "Tente de novo. Se persistir, reporte o code INTERNAL_ERROR ao suporte Se7e.",
+          hint: "Tente de novo. Se persistir, reporte o code INTERNAL_ERROR ao suporte Se7e. Não reescreva o SQL por causa deste code.",
           retryable: true,
+          source: ERROR_SOURCE.mcp,
         });
       })();
   const json = domain.toJson();
@@ -122,6 +123,7 @@ export const errorResult = (
   return {
     content: [{ type: "text", text: JSON.stringify(payload) }],
     isError: true,
+    structuredContent: payload as Record<string, unknown>,
     _meta: Object.keys(meta).length ? meta : undefined,
   };
 };

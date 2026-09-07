@@ -231,7 +231,10 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
 }
 
 export class InMemoryMcpSetupRepository implements McpSetupRepositoryPort {
-  private readonly rows = new Map<string, { token: string; expiresAt: number }>();
+  private readonly rows = new Map<
+    string,
+    { token: string; expiresAt: number; acessoId: string | null }
+  >();
 
   async issue(input: {
     code: string;
@@ -239,7 +242,12 @@ export class InMemoryMcpSetupRepository implements McpSetupRepositoryPort {
     expiresAt: Date;
     acessoId: string | null;
   }): Promise<void> {
-    this.rows.set(input.code, { token: input.token, expiresAt: input.expiresAt.getTime() });
+    await this.purgeExpired();
+    this.rows.set(input.code, {
+      token: input.token,
+      expiresAt: input.expiresAt.getTime(),
+      acessoId: input.acessoId,
+    });
   }
 
   async consume(code: string): Promise<string | null> {
@@ -249,6 +257,18 @@ export class InMemoryMcpSetupRepository implements McpSetupRepositoryPort {
       return null;
     }
     return row.token;
+  }
+
+  async purgeExpired(now = new Date()): Promise<number> {
+    const ts = now.getTime();
+    let removed = 0;
+    for (const [key, row] of this.rows) {
+      if (row.expiresAt <= ts) {
+        this.rows.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 }
 

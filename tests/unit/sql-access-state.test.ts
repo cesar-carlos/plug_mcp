@@ -14,6 +14,7 @@ import {
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
+import { withBound } from "../helpers/session-bound.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -46,7 +47,9 @@ const seed = async () => {
 describe("sqlAccessState", () => {
   it("listar_acessos deriva só do cofre: approved → unknown/vault", async () => {
     const { acessos, created } = await seed();
-    const result = await new ListarAcessos(acessos).execute(created.usuarioId);
+    const result = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
     expect(result.acessos[0]?.statusAcesso).toBe("approved");
     expect(result.acessos[0]?.sqlAccessState).toBe("unknown");
     expect(result.acessos[0]?.sqlAccessSource).toBe("vault");

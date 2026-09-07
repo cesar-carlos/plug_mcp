@@ -39,7 +39,7 @@ export const isAbortError = (error: unknown): boolean =>
   ((error as { name: string }).name === "AbortError" ||
     (error as { name: string }).name === "TimeoutError");
 
-export const mapPlugServerAbort = (): DomainError =>
+export const mapPlugServerAbort = (stage = "rpc"): DomainError =>
   new DomainError({
     code: ERROR_CODES.PLUG_SERVER_TIMEOUT,
     message: "A chamada HTTP ao plug-server excedeu o tempo limite.",
@@ -47,7 +47,7 @@ export const mapPlugServerAbort = (): DomainError =>
     retryable: true,
     retryAfterMs: 3000,
     source: HUB_ERROR_SOURCE.http,
-    stage: "rpc",
+    stage,
   });
 
 export const extractRpcError = (
@@ -60,6 +60,8 @@ export const extractRpcError = (
   technicalMessage?: string;
   userMessage?: string;
   hubRetryable?: boolean;
+  hubCategory?: string;
+  sqlstate?: string;
 } => {
   const root = asRecord(body);
   const response = asRecord(root?.response) ?? asRecord(root?.data) ?? root;
@@ -74,6 +76,8 @@ export const extractRpcError = (
   const technicalMessage = readString(data?.technical_message);
   const userMessage = readString(data?.user_message);
   const hubRetryable = typeof data?.retryable === "boolean" ? data.retryable : undefined;
+  const hubCategory = readString(data?.category);
+  const sqlstate = readString(data?.sqlstate, data?.sql_state, data?.sqlState);
   const retryAfterMs =
     readNumber(data?.retry_after_ms) ??
     (typeof data?.reset_at === "string"
@@ -87,11 +91,13 @@ export const extractRpcError = (
     technicalMessage,
     userMessage,
     hubRetryable,
+    hubCategory,
+    sqlstate,
   };
 };
 
 const rpcHaystackOf = (rpc: ReturnType<typeof extractRpcError>): string =>
-  [rpc.message, rpc.reason, rpc.technicalMessage, rpc.userMessage]
+  [rpc.message, rpc.reason, rpc.technicalMessage, rpc.userMessage, rpc.sqlstate]
     .filter((item): item is string => Boolean(item))
     .join(" ");
 
@@ -120,7 +126,7 @@ export const isSqlServerOrderByWrap = (blob: string): boolean =>
   (/multi-part identifier/i.test(blob) && /could not be bound/i.test(blob));
 
 const looksLikeEngineSql = (blob: string): boolean =>
-  /\b(sql state|odbc|invalid column|invalid object|unknown column|syntax error|conversion failed|does not exist|undefined column|42P01|42703|\b1033\b|\b4104\b|\b207\b|\b208\b)\b/i.test(
+  /\b(sql state|sqlstate|odbc|invalid column|invalid object|unknown column|column unknown|table unknown|dynamic sql error|sql error code|syntax error|conversion failed|does not exist|undefined column|column \S+ not found|table \S+ not found|asa[- ]error|42P01|42703|\b1033\b|\b4104\b|\b207\b|\b208\b)\b/i.test(
     blob,
   );
 
@@ -128,10 +134,15 @@ const isInvalidIdentificadorMotor = (blob: string): boolean =>
   /invalid column name/i.test(blob) ||
   /invalid object name/i.test(blob) ||
   /unknown column/i.test(blob) ||
+  /column unknown/i.test(blob) ||
+  /table unknown/i.test(blob) ||
   /coluna .*(inv[aá]lida|n[aã]o existe)/i.test(blob) ||
   /objeto .*(inv[aá]lido|n[aã]o existe)/i.test(blob) ||
   /does not exist/i.test(blob) ||
   /undefined column/i.test(blob) ||
+  /column \S+ not found/i.test(blob) ||
+  /table \S+ not found/i.test(blob) ||
+  /sql error code\s*=\s*-20[46]\b/i.test(blob) ||
   /\b42703\b/.test(blob) ||
   /\b42P01\b/.test(blob);
 
@@ -148,6 +159,46 @@ const sanitizeEngineMessage = (raw: string): string => {
   return text;
 };
 
+const nodeErrnoOf = (error: unknown, depth = 0): string | undefined => {
+  if (depth > 4) {
+    return undefined;
+  }
+  const rec = asRecord(error);
+  if (!rec) {
+    return undefined;
+  }
+  const code = readString(rec.code);
+  if (code && /^[A-Z][A-Z0-9_]+$/.test(code)) {
+    return code;
+  }
+  return nodeErrnoOf(rec.cause, depth + 1);
+};
+
+/** Falha TCP/TLS/`fetch` até o hub — não é recusa de SQL nem INTERNAL_ERROR opaco. */
+export const mapPlugServerNetworkError = (error: unknown, stage = "rpc"): DomainError => {
+  const errno = nodeErrnoOf(error);
+  const cause = asRecord(asRecord(error)?.cause);
+  const raw = [
+    error instanceof Error ? error.message : String(error),
+    readString(cause?.message),
+    errno,
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join(" ");
+  const detail = sanitizeEngineMessage(raw);
+  const errnoHint = errno ? ` (${errno})` : "";
+  return new DomainError({
+    code: ERROR_CODES.PLUG_SERVER_ERROR,
+    message: "Não foi possível conectar ao plug-server.",
+    hint: `Falha de rede até o hub${errnoHint}, não recusa de SQL nem de policy. Não altere o SELECT. Tente de novo; se persistir, o hub ou a rede está inacessível.${detail ? ` Detalhe: ${detail}` : ""}`,
+    retryable: true,
+    retryAfterMs: 3000,
+    source: HUB_ERROR_SOURCE.http,
+    stage,
+    ...(errno ? { details: { errno } } : {}),
+  });
+};
+
 const HUB_SQL_LEARN =
   " Não persista este SQL. Não é o validador do pacote MCP (TABELA_FORA_DO_ESCOPO / SELECT *); leia Motor/details.engineMessage e não repita o identificador/padrão recusado.";
 
@@ -158,14 +209,30 @@ const nextActionFromEngine = (blob: string): string => {
   return "validar_consulta";
 };
 
+const GENERIC_DRIVER_WRAP =
+  /database driver returned an execution error|nao foi possivel executar a consulta|n[aã]o foi poss[ií]vel executar a consulta/i;
+
+const pickEngineRaw = (rpc: ReturnType<typeof extractRpcError>, haystack: string): string => {
+  const technical = rpc.technicalMessage?.trim() ?? "";
+  const fallback = (rpc.message ?? rpc.userMessage ?? haystack).trim();
+  if (technical && !GENERIC_DRIVER_WRAP.test(technical)) {
+    return technical;
+  }
+  if (fallback && !GENERIC_DRIVER_WRAP.test(fallback)) {
+    return fallback;
+  }
+  return technical || fallback;
+};
+
 const engineDetails = (
   rpc: ReturnType<typeof extractRpcError>,
   haystack: string,
 ): {
   hintSuffix: string;
-  details: { rpcCode: number | undefined; engineMessage: string };
+  genericOnly: boolean;
+  details: { rpcCode: number | undefined; engineMessage: string; sqlstate?: string };
 } | null => {
-  const raw = rpc.technicalMessage ?? rpc.message ?? rpc.userMessage ?? haystack;
+  const raw = pickEngineRaw(rpc, haystack);
   if (!raw.trim()) {
     return null;
   }
@@ -173,9 +240,26 @@ const engineDetails = (
   if (!engineMessage) {
     return null;
   }
+  const genericOnly = GENERIC_DRIVER_WRAP.test(engineMessage);
+  let hintSuffix = genericOnly
+    ? "Motor sem detalhe ODBC: não invente colunas; use mapear_tabela / obter_skill. Não reescreva o SQL por transporte (plug_server_http)."
+    : ` Motor: ${engineMessage}`;
+  const sqlstate = rpc.sqlstate?.trim();
+  if (
+    sqlstate &&
+    (sqlstate === "42703" || sqlstate === "42P01") &&
+    isInvalidIdentificadorMotor(`${engineMessage} ${haystack} ${sqlstate}`)
+  ) {
+    hintSuffix += ` SQLSTATE ${sqlstate}: identificador Postgres inexistente; não invente coluna — mapear_tabela / obter_skill.`;
+  }
   return {
-    hintSuffix: ` Motor: ${engineMessage}`,
-    details: { rpcCode: rpc.code, engineMessage },
+    hintSuffix,
+    genericOnly,
+    details: {
+      rpcCode: rpc.code,
+      engineMessage,
+      ...(sqlstate ? { sqlstate } : {}),
+    },
   };
 };
 
@@ -213,6 +297,14 @@ const mappingInvalidPayload: RpcMapping = {
   source: HUB_ERROR_SOURCE.http,
 };
 
+const mappingJsonRpcProtocol = (label: string, retryable = false): RpcMapping => ({
+  code: ERROR_CODES.PLUG_SERVER_ERROR,
+  message: `O hub recusou o JSON-RPC (${label}), não o SQL.`,
+  hint: "Não reescreva o SQL. Erro de protocolo/params no hop hub↔agente, não do motor nem do pacote MCP. Tente de novo; se persistir, reporte details.rpcCode.",
+  retryable,
+  source: HUB_ERROR_SOURCE.http,
+});
+
 const mappingSqlEngineInvalid: RpcMapping = {
   code: ERROR_CODES.INVALID_SQL,
   message: "O motor SQL no agente recusou o SQL (não foi o validador do pacote MCP).",
@@ -241,6 +333,11 @@ const mappingFor32001 = (reason: string | undefined, haystack: string): RpcMappi
 };
 
 const rpcMap: Record<number, RpcMapping> = {
+  [-32700]: mappingJsonRpcProtocol("parse error"),
+  [-32600]: mappingJsonRpcProtocol("invalid request"),
+  [-32601]: mappingJsonRpcProtocol("method not found"),
+  [-32602]: mappingJsonRpcProtocol("invalid params"),
+  [-32603]: mappingJsonRpcProtocol("internal error", true),
   [-32001]: mappingMissingClientToken,
   [-32002]: {
     code: ERROR_CODES.ACCESS_REVOKED,
@@ -396,6 +493,8 @@ const rpcDetails = (
 ): Record<string, unknown> => ({
   ...(typeof rpc.code === "number" ? { rpcCode: rpc.code } : {}),
   ...(rpc.reason ? { reason: rpc.reason } : {}),
+  ...(rpc.hubCategory ? { hubCategory: rpc.hubCategory } : {}),
+  ...(rpc.sqlstate ? { sqlstate: rpc.sqlstate } : {}),
   ...extra,
 });
 
@@ -428,6 +527,8 @@ export const mapPlugServerFailure = (
       mapped = mappingFor32001(rpc.reason, rpcHaystack);
     } else if (rpc.code === -32009 && !isInvalidPayload && looksLikeEngineSql(rpcHaystack)) {
       mapped = mappingSqlEngineInvalid;
+    } else if (!mapped && !isInvalidPayload && (rpc.hubCategory ?? "").toLowerCase() === "sql") {
+      mapped = mappingSqlEngineInvalid;
     }
     if (mapped) {
       const unclassifiableSql = isUnclassifiableSqlDenial(
@@ -454,9 +555,11 @@ export const mapPlugServerFailure = (
         /disconnected/i.test(`${rpc.reason ?? ""} ${rpcHaystack}`);
       const hint = disconnected
         ? "O plug_agente desconectou no dispatch (agent_disconnected_at_dispatch). Não altere o SQL. Peça para religar o agente e tente de novo. Distinto de HTTP 404 (agentId nunca registado nesta réplica)."
-        : engine
-          ? `${mapped.hint}${engine.hintSuffix}`
-          : mapped.hint;
+        : engine?.genericOnly
+          ? engine.hintSuffix
+          : engine
+            ? `${mapped.hint}${engine.hintSuffix}`
+            : mapped.hint;
       return new DomainError({
         code: mapped.code,
         message: mapped.message,
@@ -468,7 +571,11 @@ export const mapPlugServerFailure = (
         ...(mapped.nextAction
           ? { nextAction: mapped.nextAction }
           : engine && mapped.code === ERROR_CODES.INVALID_SQL
-            ? { nextAction: nextActionFromEngine(rpcHaystack) }
+            ? {
+                nextAction: engine.genericOnly
+                  ? "mapear_tabela"
+                  : nextActionFromEngine(rpcHaystack),
+              }
             : {}),
         details: rpcDetails(rpc, engine?.details),
       });
@@ -477,6 +584,18 @@ export const mapPlugServerFailure = (
 
   logPlugDetail(logger, failure, rpc);
 
+  if (failure.status === 400) {
+    return new DomainError({
+      code: ERROR_CODES.PLUG_SERVER_ERROR,
+      message: "O hub recusou o pedido (validação HTTP 400), não o SQL.",
+      hint: "Não reescreva o SQL. Body/schema recusado no plug-server (Zod), não o motor nem o pacote MCP. Se persistir, reporte details.rpcCode.",
+      retryable: false,
+      retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
+      source: HUB_ERROR_SOURCE.http,
+      stage,
+      details: rpcDetails(rpc),
+    });
+  }
   if (failure.status === 401) {
     return new DomainError({
       code: ERROR_CODES.USER_AUTH_EXPIRED,
@@ -561,8 +680,11 @@ export const mapPlugServerFailure = (
     });
   }
 
-  const fallbackHaystack = `${raw} ${rpc.reason ?? ""} ${rpc.technicalMessage ?? ""}`;
-  const engine = looksLikeEngineSql(fallbackHaystack) ? engineDetails(rpc, fallbackHaystack) : null;
+  const fallbackHaystack = `${raw} ${rpc.reason ?? ""} ${rpc.technicalMessage ?? ""} ${rpc.sqlstate ?? ""}`;
+  const engine =
+    looksLikeEngineSql(fallbackHaystack) || (rpc.hubCategory ?? "").toLowerCase() === "sql"
+      ? engineDetails(rpc, fallbackHaystack)
+      : null;
   const rpcLabel = typeof rpc.code === "number" ? ` JSON-RPC ${String(rpc.code)}.` : "";
   const hintBase =
     failure.status >= 500

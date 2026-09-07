@@ -2,6 +2,7 @@ import { AdicionarAcesso } from "../../src/application/use-cases/cofre.js";
 import type { CryptoPort } from "../../src/domain/ports/crypto.port.js";
 import type { LoggerPort } from "../../src/domain/ports/logger.port.js";
 import type { AcessoRepositoryPort } from "../../src/domain/ports/acesso-repository.port.js";
+import type { McpSetupRepositoryPort } from "../../src/domain/ports/mcp-setup-repository.port.js";
 import type { PlugServerGatewayPort } from "../../src/domain/ports/plug-server-gateway.port.js";
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
 import { stubSessions } from "./stub-sessions.js";
@@ -13,5 +14,16 @@ export const newAdicionarAcesso = (
   sessions = stubSessions(),
   setup = new SetupCodeStore(),
   logger?: LoggerPort,
+  setupPersistent?: McpSetupRepositoryPort,
 ): AdicionarAcesso =>
-  new AdicionarAcesso(acessos, plug, sessions, crypto, setup, "http://localhost", 0, logger);
+  new AdicionarAcesso(
+    acessos,
+    plug,
+    sessions,
+    crypto,
+    setup,
+    "http://localhost",
+    0,
+    logger,
+    setupPersistent,
+  );

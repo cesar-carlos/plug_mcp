@@ -14,6 +14,7 @@ import type {
 import {
   mapPlugServerFailure,
   mapPlugServerAbort,
+  mapPlugServerNetworkError,
   isAbortError,
   parseRetryAfterMs,
 } from "./map-plug-error.js";
@@ -263,6 +264,13 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     abortMs = this.httpTimeoutMs,
     pool: HubHttpPool = "auth",
   ): Promise<unknown> {
+    const commandMethod = asRecord(asRecord(body)?.command)?.method;
+    const stage =
+      commandMethod === "client_token.getPolicy"
+        ? "getPolicy"
+        : commandMethod === "sql.execute"
+          ? "sql.execute"
+          : "rpc";
     let response: Response;
     try {
       const fetchImpl = pool === "sql" ? this.sqlFetch : this.authFetch;
@@ -278,9 +286,9 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
       });
     } catch (error) {
       if (isAbortError(error)) {
-        throw mapPlugServerAbort();
+        throw mapPlugServerAbort(stage);
       }
-      throw error;
+      throw mapPlugServerNetworkError(error, stage);
     }
 
     const json: unknown = await response.json().catch(() => ({}));
@@ -288,13 +296,6 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
       response.headers.get("retry-after"),
       response.headers.get("ratelimit-reset"),
     );
-    const commandMethod = asRecord(asRecord(body)?.command)?.method;
-    const stage =
-      commandMethod === "client_token.getPolicy"
-        ? "getPolicy"
-        : commandMethod === "sql.execute"
-          ? "sql.execute"
-          : "rpc";
     if (!response.ok) {
       this.logger.warn("plug-server http error", { method, path, status: response.status });
       throw mapPlugServerFailure(

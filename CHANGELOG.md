@@ -14,6 +14,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 ### Added
 
 - Token MCP **por acesso** (`acesso.token_hash`): cada `CLIENT_TOKEN` ganha um Bearer distinto. `registrar_acesso` com e-mail existente + senha correta + token novo emite outro setup; `adicionar_acesso` devolve `setupUrl` da persona nova **sem** trocar a sessão atual. Migration `0023_token_por_acesso.sql`: o acesso mais antigo herda o Bearer; extras ganham `mcp_setup` (TTL 7 dias).
+- `registrar_acesso` / `adicionar_acesso` / `rotacionar_token_mcp` gravam o código one-shot em memória **e** em `mcp_setup` (TTL 7 dias). Restart antes de `GET /setup/{code}` não trava a persona — o hash já está em `acesso.token_hash`. `listar_acessos` sem sessão ALS recusa (`VALIDATION_ERROR`) em vez de listar todos os chapéus.
 
 ### Changed
 
@@ -25,6 +26,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 - `notifications/tools/list_changed` só acorda sessões **deste** `usuarioId` **e** `acessoId` (não quem só compartilha `agentId` nem persona irmã).
 - Escritas do grafo chaveadas por UUID (`listColunas` / `mergeColuna` / `deleteRelacionamento`) recusam mutar linha de outro `acesso_id` mesmo com UUID furtado.
+- Falha de rede até o hub (`ECONNREFUSED` / `fetch failed`) deixa de virar `INTERNAL_ERROR` opaco: a IA recebe `PLUG_SERVER_ERROR` + `source: plug_server_http` (retryable, **não** reescrever SQL). HTTP 400 e JSON-RPC `-326xx` também são transporte. Firebird/Sybase `Column unknown` / `not found` apontam `mapear_tabela` com o texto do motor.
+- Envelope de erro da tool também preenche `structuredContent` com o mesmo JSON de `content[0].text` (`domain.toJson()`), sem vazar segredos.
+- `GET /setup/{code}` consome memória e `mcp_setup` (one-shot). `DrizzleMcpSetup.consume` usa `DELETE … RETURNING`. Troca de Bearer no mesmo `mcp-session-id` refresca tools `skill_*`.
+- Wrap genérico do driver (sem detalhe ODBC) no `engineMessage` pede `mapear_tabela` / `obter_skill` e **não** reescrever SQL por `plug_server_http`. `SQLSTATE` `42703`/`42P01` entra no hint quando o motor já mapeia identificador Postgres.
 
 ### Added
 

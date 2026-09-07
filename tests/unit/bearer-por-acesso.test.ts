@@ -22,6 +22,7 @@ import {
   InMemoryAprendizadoRepository,
   InMemoryAuditLog,
   InMemoryGrafoRepository,
+  InMemoryMcpSetupRepository,
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
@@ -51,6 +52,7 @@ describe("Bearer 1:1 com acesso", () => {
       aprendizado: new InMemoryAprendizadoRepository(),
       audit: new InMemoryAuditLog(),
       setup: new SetupCodeStore(),
+      setupPersistent: new InMemoryMcpSetupRepository(),
     };
   };
 
@@ -72,6 +74,9 @@ describe("Bearer 1:1 com acesso", () => {
       ctx.setup,
       "http://localhost",
       0,
+      undefined,
+      undefined,
+      ctx.setupPersistent,
     ).execute({
       email,
       senha: "secret-pass",
@@ -170,6 +175,8 @@ describe("Bearer 1:1 com acesso", () => {
         ctx.setup,
         "http://localhost",
         0,
+        undefined,
+        ctx.setupPersistent,
       ).execute(a.usuarioId, { agentId, dialeto: "mssql", clientToken: "tok-add-b-2222" }),
     );
     expect(added.setupCode).toBeTruthy();
@@ -194,11 +201,18 @@ describe("Bearer 1:1 com acesso", () => {
     const hashA = (await ctx.acessos.findById(a.acessoId))!.tokenHash;
     const hashB = (await ctx.acessos.findById(b.acessoId))!.tokenHash;
     const rotated = await withBound(a.usuarioId, a.acessoId, () =>
-      new RotacionarTokenMcp(ctx.acessos, crypto, ctx.setup, "http://localhost", 0).execute(
-        a.usuarioId,
-      ),
+      new RotacionarTokenMcp(
+        ctx.acessos,
+        crypto,
+        ctx.setup,
+        "http://localhost",
+        0,
+        ctx.setupPersistent,
+      ).execute(a.usuarioId),
     );
     expect(rotated.setupCode).toBeTruthy();
+    expect(rotated.hint).toMatch(/antes de reiniciar/);
+    expect(rotated.hint).toMatch(/7 dias/);
     const novo = ctx.setup.consume(rotated.setupCode);
     expect(novo).toBeTruthy();
     expect((await ctx.acessos.findById(a.acessoId))!.tokenHash).not.toBe(hashA);
@@ -243,5 +257,62 @@ describe("Bearer 1:1 com acesso", () => {
         }),
       ).rejects.toBeInstanceOf(DomainError);
     });
+  });
+
+  it("registrar_acesso e adicionar_acesso recusam o mesmo trio com CONFLICT", async () => {
+    const ctx = repos();
+    const primeiro = await registrar(ctx, "dup@b.com", "tok-dup-a-1111");
+    await expect(registrar(ctx, "dup@b.com", "tok-dup-a-1111")).rejects.toMatchObject({
+      code: ERROR_CODES.CONFLICT,
+    });
+    await withBound(primeiro.usuarioId, primeiro.acessoId, async () => {
+      await expect(
+        new AdicionarAcesso(
+          ctx.acessos,
+          ctx.plug,
+          stubSessions(),
+          crypto,
+          ctx.setup,
+          "http://localhost",
+          0,
+          undefined,
+          ctx.setupPersistent,
+        ).execute(primeiro.usuarioId, {
+          agentId,
+          dialeto: "mssql",
+          clientToken: "tok-dup-a-1111",
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODES.CONFLICT });
+    });
+  });
+
+  it("setup persistido sobrevive memória vazia; rotate consome one-shot do mcp_setup", async () => {
+    const ctx = repos();
+    const created = await registrar(ctx, "persist@b.com", "tok-persist-111");
+    const emptyMem = new SetupCodeStore();
+    expect(emptyMem.consume(created.setupCode!)).toBeNull();
+    const token = await ctx.setupPersistent.consume(created.setupCode!);
+    expect(token).toBeTruthy();
+    expect(await ctx.setupPersistent.consume(created.setupCode!)).toBeNull();
+    expect((await ctx.acessos.findByTokenHash(crypto.sha256Hex(token!)))?.id).toBe(
+      created.acessoId,
+    );
+
+    const rotated = await withBound(created.usuarioId, created.acessoId, () =>
+      new RotacionarTokenMcp(
+        ctx.acessos,
+        crypto,
+        ctx.setup,
+        "http://localhost",
+        0,
+        ctx.setupPersistent,
+      ).execute(created.usuarioId),
+    );
+    const afterRestart = new SetupCodeStore();
+    expect(afterRestart.consume(rotated.setupCode)).toBeNull();
+    const novo = await ctx.setupPersistent.consume(rotated.setupCode);
+    expect(novo).toBeTruthy();
+    expect((await ctx.acessos.findById(created.acessoId))!.tokenHash).toBe(crypto.sha256Hex(novo!));
+    expect(await ctx.setupPersistent.consume(rotated.setupCode)).toBeNull();
   });
 });

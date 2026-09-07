@@ -35,6 +35,7 @@ import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
 import { newAdicionarAcesso } from "../helpers/adicionar-acesso.js";
+import { withBound } from "../helpers/session-bound.js";
 import { asAcessoId } from "../../src/infrastructure/persistence/as-acesso-id.js";
 import { listPublishedSkillsForUsuario } from "../../src/infrastructure/mcp/skill-tools.js";
 import { requireSkillDoAcesso } from "../../src/application/use-cases/shared/skill-do-acesso.js";
@@ -147,6 +148,7 @@ describe("catálogo isolado por acesso (client_token)", () => {
     const publishedB = await listPublishedSkillsForUsuario(
       { acessos: ctx.acessos, skills: ctx.skills },
       b.usuarioId,
+      b.acessoId,
     );
     expect(publishedB).toHaveLength(0);
   });
@@ -197,9 +199,15 @@ describe("catálogo isolado por acesso (client_token)", () => {
     const published = await listPublishedSkillsForUsuario(
       { acessos: ctx.acessos, skills: ctx.skills },
       a.usuarioId,
+      a.acessoId,
     );
     expect(published.map((item) => item.acessoId)).toEqual([a.acessoId]);
     expect(published[0]?.slug).toBe("produtos-a");
+    const unbound = await listPublishedSkillsForUsuario(
+      { acessos: ctx.acessos, skills: ctx.skills },
+      a.usuarioId,
+    );
+    expect(unbound).toHaveLength(0);
   });
 
   it("N=1: tool de treino sem acessoId amarra no único acesso", async () => {
@@ -340,6 +348,14 @@ describe("catálogo isolado por acesso (client_token)", () => {
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.ANOTACAO_NOT_FOUND });
     expect(await ctx.anotacoes.findById(nota.id)).not.toBeNull();
+    await withBound(a.usuarioId, acessoB, async () => {
+      await expect(
+        new RemoverAnotacao(ctx.acessos, ctx.anotacoes).execute(a.usuarioId, {
+          anotacaoId: nota.id,
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODES.ANOTACAO_NOT_FOUND });
+    });
+    expect(await ctx.anotacoes.findById(nota.id)).not.toBeNull();
   });
 
   it("órfão (acesso_id NULL) não colapsa no tenant vazio", async () => {
@@ -388,6 +404,28 @@ describe("catálogo isolado por acesso (client_token)", () => {
         texto: "Não aponte para a skill do outro token",
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.SKILL_NOT_FOUND });
+    expect(await ctx.anotacoes.list(acessoB)).toHaveLength(0);
+    await withBound(a.usuarioId, acessoB, async () => {
+      await expect(
+        anotar.execute(a.usuarioId, {
+          skillId,
+          tipo: "regra",
+          titulo: "Regra B ALS",
+          texto: "Não aponte para a skill do outro token",
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODES.SKILL_NOT_FOUND });
+      await expect(
+        new ObterSkill(
+          ctx.acessos,
+          ctx.skills,
+          ctx.grafo,
+          ctx.anotacoes,
+          ctx.plug,
+          stubSessions(),
+          crypto,
+        ).execute(a.usuarioId, { skillId }),
+      ).rejects.toMatchObject({ code: ERROR_CODES.SKILL_NOT_FOUND });
+    });
     expect(await ctx.anotacoes.list(acessoB)).toHaveLength(0);
   });
 

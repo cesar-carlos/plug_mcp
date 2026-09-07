@@ -6,6 +6,7 @@ import { compose } from "../../src/composition/compose.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { mcpRpc, parseMcpPayload, readToolResult } from "../helpers/mcp-rpc.js";
 import { PRE_TREINO_SESSAO } from "../../src/infrastructure/mcp/server-instructions.js";
+import { withBound } from "../helpers/session-bound.js";
 
 const initialize = async (app: Awaited<ReturnType<typeof compose>>["app"], token?: string) => {
   const req = request(app)
@@ -131,7 +132,9 @@ describe("persona no initialize autenticado", () => {
       expect(authed.instructions).toMatch(/n[aã]o override do SQL/i);
       expect(authed.instructions).not.toContain("Há vários acessos neste token");
 
-      const listed = await useCases.listarAcessos.execute(usuarioId);
+      const listed = await withBound(usuarioId, acessoId, () =>
+        useCases.listarAcessos.execute(usuarioId),
+      );
       expect(listed.acessos).toHaveLength(1);
       expect(listed.acessos[0]?.nomePersona).toBe("Atendimento financeiro");
       expect(listed.acessos[0]?.instrucoesPersona).toBe("Tom formal. Nunca invente JOIN.");

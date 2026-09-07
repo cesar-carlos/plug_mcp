@@ -135,6 +135,7 @@ describe("envelope de erro", () => {
     expect(payload.error.documentationUrl).toBe(
       `${testConfig().PUBLIC_BASE_URL}${ERROR_MAPPING_DOC_PATH}#privacidade_negada`,
     );
+    expect(result.structuredContent).toEqual(payload);
   });
 
   it("TABELA_FORA_DO_ESCOPO do treino aponta explorar_tabelas", () => {
@@ -263,5 +264,43 @@ describe("envelope de erro", () => {
     }).toJson().error;
     expect(skill.source).toBe("sql");
     expect(skill.nextAction).toBe("agregar_ou_reduzir");
+  });
+
+  it("errorResult de sql_engine inclui hint, source e details.engineMessage", () => {
+    const err = mapPlugServerFailure({
+      status: 200,
+      body: {
+        response: {
+          item: {
+            error: {
+              code: -32102,
+              message: "SQL execution failed",
+              data: {
+                reason: "sql_execution_failed",
+                technical_message: "Invalid column name 'foo'.",
+              },
+            },
+          },
+        },
+      },
+    });
+    const result = errorResult(err, testConfig());
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(textoDoContent(result.content[0])) as {
+      success: false;
+      error: {
+        code: string;
+        message: string;
+        hint: string;
+        source?: string;
+        details?: { engineMessage?: string };
+      };
+    };
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe(ERROR_CODES.INVALID_SQL);
+    expect(payload.error.source).toBe("sql_engine");
+    expect(payload.error.hint).toMatch(/Invalid column name 'foo'/);
+    expect(payload.error.details?.engineMessage).toMatch(/Invalid column name 'foo'/);
+    expect(result.structuredContent).toEqual(payload);
   });
 });

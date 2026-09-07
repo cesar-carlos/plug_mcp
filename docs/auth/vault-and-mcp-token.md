@@ -18,9 +18,11 @@ O MCP não tem tela de login nem OAuth 2.1 próprio. Identidade:
 
 `adicionar_acesso` (já autenticado) cria outro acesso vazio, emite outro Bearer via `setupCode`/`setupUrl` e **não** troca a sessão atual.
 
-Rotação: `rotacionar_token_mcp` invalida **só** o hash desta persona e emite outro `setupCode`.
+Rotação: `rotacionar_token_mcp` invalida **só** o hash desta persona e emite outro `setupCode`. Abra `setupUrl` **antes** de reiniciar o processo — o Bearer anterior já não autentica. O código one-shot vale **7 dias** (memória e `mcp_setup`).
 
-TTL: `MCP_TOKEN_TTL_DAYS` (0 = não expira). `registrar_acesso` / `adicionar_acesso` / `rotacionar_token_mcp` gravam `acesso.token_expires_at`. Bearer expirado → 401 + `WWW-Authenticate` RFC 6750 (`error="invalid_token"`, description apontando `GET /setup/{code}`). `GET /.well-known/oauth-protected-resource` descreve o recurso **sem** `authorization_servers` (token só no setup; não há AS).
+TTL do **Bearer**: `MCP_TOKEN_TTL_DAYS` (0 = não expira). `registrar_acesso` / `adicionar_acesso` / `rotacionar_token_mcp` gravam `acesso.token_expires_at`. Bearer expirado → 401 + `WWW-Authenticate` RFC 6750 (`error="invalid_token"`, description apontando `GET /setup/{code}`). `GET /.well-known/oauth-protected-resource` descreve o recurso **sem** `authorization_servers` (token só no setup; não há AS).
+
+TTL do **código de setup** (`GET /setup/{code}`): **7 dias** (`MCP_SETUP_TTL_MS` / `MCP_SETUP_TTL_DAYS`), alinhado na memória e em `mcp_setup`. Não é o TTL de 10 minutos antigo. Cada mint faz dual-write (memória + `McpSetupRepositoryPort.issue`). `GET /setup/{code}` tenta a memória e, se vazia (restart), consome a linha persistida — **one-shot** nos dois. Linhas vencidas são apagadas no `issue`. Duplicata do trio e-mail+`agentId`+`client_token` → `CONFLICT`, sem mint.
 
 Origin: se `MCP_ALLOWED_ORIGINS` não for vazio e o header `Origin` vier com valor fora da lista → **403**. CORS sozinho não basta (spec Streamable HTTP).
 

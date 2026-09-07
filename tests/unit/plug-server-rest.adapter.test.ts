@@ -249,3 +249,29 @@ describe("normalizeSqlResult", () => {
     expect(named.columnsMetadata).toEqual([{ name: "SaldoReceber" }]);
   });
 });
+
+describe("PlugServerRestAdapter network errors", () => {
+  it("mapeia ECONNREFUSED para PLUG_SERVER_ERROR, não erro cru", async () => {
+    const fetchImpl: typeof fetch = async () => {
+      throw Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:9"), {
+          code: "ECONNREFUSED",
+        }),
+      });
+    };
+    const adapter = new PlugServerRestAdapter("http://hub.test", new SilentTestLogger(), fetchImpl);
+    await expect(
+      adapter.executeSql({
+        accessToken: "tok",
+        agentId: "11111111-1111-4111-8111-111111111111",
+        clientToken: "client",
+        sql: "SELECT 1 FROM produto",
+      }),
+    ).rejects.toMatchObject({
+      code: "PLUG_SERVER_ERROR",
+      source: "plug_server_http",
+      retryable: true,
+      stage: "sql.execute",
+    });
+  });
+});

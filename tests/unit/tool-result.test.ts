@@ -27,11 +27,12 @@ describe("tool-result", () => {
     });
     expect(result.isError).toBe(true);
     const payload = JSON.parse(textoDoContent(result.content[0])) as {
-      error: { code: string; message: string };
+      error: { code: string; message: string; source?: string };
     };
     expect(payload.error.code).toBe(ERROR_CODES.INTERNAL_ERROR);
     expect(payload.error.message).toBe("Erro interno.");
     expect(payload.error.message).not.toContain("encrypted");
+    expect(payload.error.source).toBe("mcp");
     expect(logger.error).toHaveBeenCalled();
   });
 
@@ -50,6 +51,7 @@ describe("tool-result", () => {
     expect(logger.error).not.toHaveBeenCalled();
     const payload = JSON.parse(textoDoContent(result.content[0])) as { error: { code: string } };
     expect(payload.error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+    expect(result.structuredContent).toEqual(payload);
   });
 });
 
@@ -57,9 +59,10 @@ describe("mapPlugServerAbort", () => {
   it("mapeia AbortError para PLUG_SERVER_TIMEOUT retryable", () => {
     const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
     expect(isAbortError(abort)).toBe(true);
-    const err = mapPlugServerAbort();
+    const err = mapPlugServerAbort("sql.execute");
     expect(err.code).toBe(ERROR_CODES.PLUG_SERVER_TIMEOUT);
     expect(err.retryable).toBe(true);
     expect(err.source).toBe("plug_server_http");
+    expect(err.stage).toBe("sql.execute");
   });
 });

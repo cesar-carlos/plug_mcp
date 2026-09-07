@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { tokenizeQuery } from "../busca-termos.js";
 import type { Db } from "./db.js";
 import {
@@ -283,6 +283,7 @@ export class DrizzleMcpSetupRepository implements McpSetupRepositoryPort {
     expiresAt: Date;
     acessoId: string | null;
   }): Promise<void> {
+    await this.purgeExpired();
     await this.db.insert(schema.mcpSetup).values({
       code: input.code,
       token: input.token,
@@ -292,19 +293,26 @@ export class DrizzleMcpSetupRepository implements McpSetupRepositoryPort {
   }
 
   async consume(code: string): Promise<string | null> {
-    const [row] = await this.db
-      .select()
-      .from(schema.mcpSetup)
+    const deleted = await this.db
+      .delete(schema.mcpSetup)
       .where(eq(schema.mcpSetup.code, code))
-      .limit(1);
+      .returning();
+    const row = deleted[0];
     if (!row) {
       return null;
     }
-    await this.db.delete(schema.mcpSetup).where(eq(schema.mcpSetup.code, code));
     if (row.expiresAt.getTime() <= Date.now()) {
       return null;
     }
     return row.token;
+  }
+
+  async purgeExpired(now = new Date()): Promise<number> {
+    const deleted = await this.db
+      .delete(schema.mcpSetup)
+      .where(lte(schema.mcpSetup.expiresAt, now))
+      .returning({ code: schema.mcpSetup.code });
+    return deleted.length;
   }
 }
 

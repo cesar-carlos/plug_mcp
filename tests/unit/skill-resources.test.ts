@@ -61,7 +61,11 @@ describe("resources skill:// e guia://", () => {
       escopo: escopoVazio(),
       autorUsuarioId: usuarioId,
     });
-    const published = await listPublishedSkillsForUsuario({ acessos, skills }, usuarioId);
+    const published = await listPublishedSkillsForUsuario(
+      { acessos, skills },
+      usuarioId,
+      acesso.id,
+    );
     expect(published).toHaveLength(0);
     const pub = await skills.create({
       acessoId: acesso.id,
@@ -73,7 +77,7 @@ describe("resources skill:// e guia://", () => {
       autorUsuarioId: usuarioId,
     });
     await skills.setStatus(pub.id, "publicada");
-    const listed = await listPublishedSkillsForUsuario({ acessos, skills }, usuarioId);
+    const listed = await listPublishedSkillsForUsuario({ acessos, skills }, usuarioId, acesso.id);
     expect(listed.map((item) => item.slug)).toEqual(["ok"]);
   });
 

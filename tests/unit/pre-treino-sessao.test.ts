@@ -101,6 +101,7 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(PRE_TREINO_SESSAO).toContain("sql_engine");
     expect(PRE_TREINO_SESSAO).toContain("invalid_payload");
     expect(PRE_TREINO_SESSAO).toContain("PLUG_SERVER_ERROR");
+    expect(PRE_TREINO_SESSAO).toContain("ECONNREFUSED");
     expect(PRE_TREINO_SESSAO).toMatch(/n[aã]o reescreva o SQL/i);
     expect(PRE_TREINO_SESSAO).toMatch(/429\/503/);
     expect(PRE_TREINO_SESSAO).toContain("AGENT_UNAVAILABLE");

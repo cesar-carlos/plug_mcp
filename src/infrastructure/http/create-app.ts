@@ -19,6 +19,31 @@ import { createRateLimiter, mcpRateLimitKey, type RateLimitStore } from "./rate-
 import { readErrorMappingMarkdown } from "./error-mapping-doc.js";
 import type { SetupCodeStore } from "./setup-code-store.js";
 
+export const consumeSetupToken = async (
+  memory: SetupCodeStore,
+  persistent: McpSetupRepositoryPort | undefined,
+  code: string,
+): Promise<string | null> => {
+  const trimmed = code.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const fromMem = memory.consume(trimmed);
+  if (fromMem) {
+    if (persistent) {
+      await persistent.consume(trimmed);
+    }
+    return fromMem;
+  }
+  if (!persistent) {
+    return null;
+  }
+  return persistent.consume(trimmed);
+};
+
+const setupTokenHtml = (token: string): string =>
+  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${token}</pre></body></html>`;
+
 export const createExpressApp = (input: {
   config: AppConfig;
   logger: LoggerPort;
@@ -148,32 +173,13 @@ export const createExpressApp = (input: {
   });
 
   app.get("/setup/:code", (req, res) => {
-    const fromMem = input.setup.consume(req.params.code ?? "");
-    if (fromMem) {
-      res
-        .type("html")
-        .send(
-          `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${fromMem}</pre></body></html>`,
-        );
-      return;
-    }
-    const persist = input.setupPersistent;
-    if (!persist) {
-      res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
-      return;
-    }
-    void persist
-      .consume(req.params.code ?? "")
+    void consumeSetupToken(input.setup, input.setupPersistent, req.params.code ?? "")
       .then((token) => {
         if (!token) {
           res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
           return;
         }
-        res
-          .type("html")
-          .send(
-            `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${token}</pre></body></html>`,
-          );
+        res.type("html").send(setupTokenHtml(token));
       })
       .catch(() => {
         res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");

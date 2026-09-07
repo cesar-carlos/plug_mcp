@@ -306,7 +306,7 @@ export const registerTools = (
 
   server.tool(
     "listar_acessos",
-    "Lista só o acesso deste Bearer (client_token mascarado; nomePersona e instrucoesPersona). sqlAccessState vem só do cofre (approved → unknown). Outras personas usam o token MCP delas. Persona não licencia SQL.",
+    "Lista só o acesso deste Bearer (client_token mascarado; nomePersona e instrucoesPersona). Sem sessão ALS recusa (VALIDATION_ERROR) — não lista todos os chapéus. sqlAccessState vem só do cofre (approved → unknown). Outras personas usam o token MCP delas. Persona não licencia SQL.",
     emptyShape,
     readList,
     async () => run("listar_acessos", () => useCases.listarAcessos.execute(currentAccountId())),
@@ -343,7 +343,7 @@ export const registerTools = (
 
   server.tool(
     "rotacionar_token_mcp",
-    "Invalida o token MCP **desta** persona (o Bearer em Authorization) e emite um setupCode para copiar o novo. Outras personas continuam com o token delas.",
+    "Invalida o token MCP **desta** persona (o Bearer em Authorization) e emite um setupCode para copiar o novo. Abra setupUrl antes de reiniciar o processo — o código one-shot vale 7 dias (memória e mcp_setup). O Bearer anterior já é inválido. Outras personas continuam com o token delas.",
     emptyShape,
     destroyLocal,
     async () =>

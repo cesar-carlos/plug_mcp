@@ -224,11 +224,20 @@ export const createMcpHttpHandler = (input: {
 
     const run = async (session: Session): Promise<void> => {
       session.lastActivityAt = Date.now();
+      const previousUsuarioId = session.usuarioId;
+      const previousAcessoId = session.acessoId;
       if (usuarioId) {
         session.usuarioId = usuarioId;
       }
       if (acessoId) {
         session.acessoId = acessoId;
+      }
+      const swapped =
+        !session.bootstrap &&
+        Boolean(usuarioId && acessoId) &&
+        (usuarioId !== previousUsuarioId || acessoId !== previousAcessoId);
+      if (swapped && usuarioId && acessoId) {
+        await refreshSkillTools(session, usuarioId, acessoId);
       }
       await accountContext.run(
         {

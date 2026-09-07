@@ -215,6 +215,7 @@ export const compose = async (
       config.MCP_TOKEN_TTL_DAYS,
       sessions,
       logger,
+      setupPersistent,
     ),
     adicionarAcesso: new AdicionarAcesso(
       acessos,
@@ -225,6 +226,7 @@ export const compose = async (
       config.PUBLIC_BASE_URL,
       config.MCP_TOKEN_TTL_DAYS,
       logger,
+      setupPersistent,
     ),
     listarAcessos: new ListarAcessos(acessos),
     verificarAcesso: new VerificarAcesso(acessos, plug, sessions, crypto, logger),
@@ -241,6 +243,7 @@ export const compose = async (
       setup,
       config.PUBLIC_BASE_URL,
       config.MCP_TOKEN_TTL_DAYS,
+      setupPersistent,
     ),
     atualizarDialeto: new AtualizarDialeto(acessos, grafo, skills),
     atualizarPersona: new AtualizarPersona(acessos),
