@@ -2,9 +2,9 @@
 
 O cliente MCP usa `Authorization: Bearer <token_mcp>`. Este servidor não publica metadados de Authorization Server.
 
-No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (SQL no **escopo da skill publicada**, depois a persona). Sem Bearer: só o SQL comum. Com Bearer e um acesso: SQL inalterado + persona depois. Com vários acessos: SQL comum + “depois de escolher o acesso, adote a persona desse `acessoId`” — **várias personas = vários acessos** (`adicionar_acesso`); um acesso = um chapéu; não concatena chapéus; leia `listar_acessos` / `persona://{acessoId}`. O protocolo só reenvia isso no `initialize`. Sessão que começa com 1 acesso e ganha o 2º (`adicionar_acesso`) **mantém o chapéu 1** em `initialize.instructions` até reconectar. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos; **releitura viva** da persona no banco; com N acessos não concatena) se o host não reinsere `instructions`. Após deploy, reconecte o cliente: o catálogo `tools/list` pode estar cacheado. O servidor envia `notifications/tools/list_changed` no `initialize` autenticado se SHA/versão do processo mudou. Resources: `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}` já no bootstrap (sem Bearer) e após Bearer — leia o guia do dialeto do acesso, não assuma mssql. Identificar o GDBR e emitir SQL compatível é treino + IA; o `plug_server` não reescreve dialeto ([objective.md](../product/objective.md)). `skill://{acessoId}/{slug}` é o pacote da skill publicada (URI com `acessoId` para não colidir quando dois acessos compartilham `agentId`) e exige Bearer. `persona://{acessoId}` (Bearer) é a persona do acesso (tom/uso; **não** recorta skills **dentro** do acesso). N=1: a sessão cai nesse acesso; tools omitem `acessoId`. N>1: passe `acessoId` **ou** infira (`skillId`/slug único; `exportar_anexo` pelo handle) — catálogos **não** se unem. Dois `client_token` no mesmo e-mail/`agentId` são catálogos distintos. Hub SQL continua `agentId` + `client_token` daquele acesso.
+No `initialize`, o servidor envia `instructions` com o pre-treino de sessão (SQL no **escopo da skill publicada**, depois a persona). Sem Bearer: só o SQL comum. Com Bearer: SQL inalterado + persona **deste** acesso depois — o Bearer autentica exatamente um acesso. **Várias personas = vários acessos = vários Bearers** (`adicionar_acesso` / `registrar_acesso`); um Bearer = um chapéu; não concatena chapéus. O protocolo só reenvia isso no `initialize`. `adicionar_acesso` **não** troca o chapéu desta sessão (devolve `setupUrl` da persona nova — conecte outro servidor MCP no host). Este Bearer nunca ganhou um segundo chapéu; o host pode manter `instructions` do chapéu 1 até reconectar. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos; **releitura viva** da persona no banco) se o host não reinsere `instructions`. Após deploy, reconecte o cliente: o catálogo `tools/list` pode estar cacheado. O servidor envia `notifications/tools/list_changed` no `initialize` autenticado se SHA/versão do processo mudou. Resources: `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}` já no bootstrap (sem Bearer) e após Bearer — leia o guia do dialeto do acesso, não assuma mssql. Identificar o GDBR e emitir SQL compatível é treino + IA; o `plug_server` não reescreve dialeto ([objective.md](../product/objective.md)). `skill://{acessoId}/{slug}` é o pacote da skill publicada (URI com `acessoId`; leitura só se for desta sessão) e exige Bearer. `persona://{acessoId}` (Bearer) é a persona do acesso (tom/uso; **não** recorta skills **dentro** do acesso). Tools omitem `acessoId`. Dois `client_token` no mesmo e-mail/`agentId` são catálogos distintos, cada um com o próprio Bearer. Hub SQL continua `agentId` + `client_token` daquele acesso.
 
-O host (Cursor e similares) copia `initialize.instructions` no system prompt **na conexão** e **não** atualiza no meio da sessão. Se a sessão começou com um acesso e o usuário chama `adicionar_acesso`, o host continua com o chapéu 1 até reconectar; `pre_treino` relê o banco. Após rebuild/deploy, **reconecte** o MCP; senão a IA continua com `instructions` antigas (chapéu fixo, dialeto assumido) mesmo com o código novo no disco.
+O host (Cursor e similares) copia `initialize.instructions` no system prompt **na conexão**. Cada persona precisa de **uma entrada de servidor MCP** (um Bearer). Após rebuild/deploy, **reconecte** o MCP; senão a IA continua com `instructions` antigas (chapéu fixo, dialeto assumido) mesmo com o código novo no disco.
 
 ## Fluxo
 
@@ -17,15 +17,23 @@ O host (Cursor e similares) copia `initialize.instructions` no system prompt **n
 ```json
 {
   "mcpServers": {
-    "se7e": {
+    "se7e-vendedor": {
       "url": "http://127.0.0.1:3333/mcp",
       "headers": {
-        "Authorization": "Bearer <cole-o-token-da-pagina-setup>"
+        "Authorization": "Bearer <token-da-pagina-setup-desta-persona>"
+      }
+    },
+    "se7e-gestor": {
+      "url": "http://127.0.0.1:3333/mcp",
+      "headers": {
+        "Authorization": "Bearer <token-da-outra-persona>"
       }
     }
   }
 }
 ```
+
+Uma entrada Cursor **por persona** (por Bearer). Não compartilhe o mesmo token MCP entre catálogos.
 
 Conectores que **exigem** Authorization Server de terceiros (alguns custom connectors ChatGPT) ficam fora de escopo. TTL do token, Origin e `/.well-known/oauth-protected-resource`: [vault-and-mcp-token.md](../auth/vault-and-mcp-token.md).
 

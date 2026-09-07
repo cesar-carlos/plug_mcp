@@ -61,8 +61,6 @@ const seedUsuario = async (usuarios: InMemoryUsuarioRepository) => {
     emailEnc: crypto.encrypt(email),
     emailHash: crypto.sha256Hex(email),
     senhaEnc: crypto.encrypt("secret-pass"),
-    tokenHash: crypto.sha256Hex("mcp-token"),
-    tokenExpiresAt: null,
   });
 };
 

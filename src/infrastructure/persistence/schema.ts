@@ -29,14 +29,9 @@ export const usuarioMcp = pgTable(
     emailEnc: text("email_enc").notNull(),
     emailHash: text("email_hash").notNull(),
     senhaEnc: text("senha_enc").notNull(),
-    tokenHash: text("token_hash").notNull(),
-    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [
-    uniqueIndex("usuario_mcp_email_hash_uidx").on(t.emailHash),
-    uniqueIndex("usuario_mcp_token_hash_uidx").on(t.tokenHash),
-  ],
+  (t) => [uniqueIndex("usuario_mcp_email_hash_uidx").on(t.emailHash)],
 );
 
 export const acesso = pgTable(
@@ -51,6 +46,8 @@ export const acesso = pgTable(
     nomeAmigavel: text("nome_amigavel").notNull(),
     clientTokenEnc: text("client_token_enc").notNull(),
     clientTokenHash: text("client_token_hash").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
     statusAcesso: text("status_acesso").notNull().default("pending"),
     escopoPadrao: jsonb("escopo_padrao"),
     timezone: text("timezone"),
@@ -60,9 +57,21 @@ export const acesso = pgTable(
   },
   (t) => [
     uniqueIndex("acesso_usuario_agent_token_uidx").on(t.usuarioId, t.agentId, t.clientTokenHash),
+    uniqueIndex("acesso_token_hash_uidx").on(t.tokenHash),
     index("acesso_usuario_idx").on(t.usuarioId),
     index("acesso_agent_idx").on(t.agentId),
   ],
+);
+
+export const mcpSetup = pgTable(
+  "mcp_setup",
+  {
+    code: text("code").primaryKey(),
+    token: text("token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("mcp_setup_expires_idx").on(t.expiresAt)],
 );
 
 export const grafoDialeto = pgTable("grafo_dialeto", {

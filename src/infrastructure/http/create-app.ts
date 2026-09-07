@@ -7,10 +7,10 @@ import type { Logger as PinoLogger } from "pino";
 import type { AppConfig } from "../../config/env.js";
 import { buildInfo } from "../../config/build-info.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
-import type { UsuarioRepositoryPort } from "../../domain/ports/usuario-repository.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
+import type { McpSetupRepositoryPort } from "../../domain/ports/mcp-setup-repository.port.js";
 import { createMcpHttpHandler } from "../mcp/mcp-http.js";
 import type { ToolUseCases } from "../mcp/register-tools.js";
 import { isMcpTokenExpired } from "../mcp/mcp-auth.js";
@@ -23,11 +23,11 @@ export const createExpressApp = (input: {
   config: AppConfig;
   logger: LoggerPort;
   useCases: ToolUseCases;
-  usuarios: UsuarioRepositoryPort;
   acessos: AcessoRepositoryPort;
   skills: SkillRepositoryPort;
   crypto: CryptoPort;
   setup: SetupCodeStore;
+  setupPersistent?: McpSetupRepositoryPort;
   pino?: PinoLogger;
   mcpRateLimitStore?: RateLimitStore;
   readinessCheck?: () => Promise<boolean>;
@@ -148,16 +148,36 @@ export const createExpressApp = (input: {
   });
 
   app.get("/setup/:code", (req, res) => {
-    const token = input.setup.consume(req.params.code ?? "");
-    if (!token) {
+    const fromMem = input.setup.consume(req.params.code ?? "");
+    if (fromMem) {
+      res
+        .type("html")
+        .send(
+          `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${fromMem}</pre></body></html>`,
+        );
+      return;
+    }
+    const persist = input.setupPersistent;
+    if (!persist) {
       res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
       return;
     }
-    res
-      .type("html")
-      .send(
-        `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${token}</pre></body></html>`,
-      );
+    void persist
+      .consume(req.params.code ?? "")
+      .then((token) => {
+        if (!token) {
+          res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
+          return;
+        }
+        res
+          .type("html")
+          .send(
+            `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${token}</pre></body></html>`,
+          );
+      })
+      .catch(() => {
+        res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
+      });
   });
 
   const mcp = createMcpHttpHandler({
@@ -166,12 +186,12 @@ export const createExpressApp = (input: {
     logger: input.logger,
     catalog: { acessos: input.acessos, skills: input.skills },
     rateLimit: input.mcpRateLimitStore,
-    resolveUsuarioId: async (token) => {
-      const usuario = await input.usuarios.findByTokenHash(input.crypto.sha256Hex(token));
-      if (!usuario || isMcpTokenExpired(usuario)) {
+    resolveBearer: async (token) => {
+      const acesso = await input.acessos.findByTokenHash(input.crypto.sha256Hex(token));
+      if (!acesso || isMcpTokenExpired(acesso)) {
         return null;
       }
-      return usuario.id;
+      return { usuarioId: acesso.usuarioId, acessoId: acesso.id };
     },
   });
 

@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { ExportarAnexo } from "../../src/application/use-cases/exportar-anexo.js";
 import { ConsultarDados } from "../../src/application/use-cases/consultar.js";
 import { InspecionarConsulta } from "../../src/application/use-cases/inspecionar.js";
-import { AdicionarAcesso, RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
+import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
 import {
   isErroTetoConversao,
   SharpPdfkitAnexoConverter,
@@ -35,6 +35,7 @@ import { parseSqlModelo } from "../../src/application/use-cases/shared/sql-model
 import { MemoryQueryResultCache } from "../../src/infrastructure/cache/query-result-cache.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
+import { newAdicionarAcesso } from "../helpers/adicionar-acesso.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -578,10 +579,11 @@ describe("exportar_anexo", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
-    const added = await new AdicionarAcesso(acessos, plug, stubSessions(), crypto).execute(
-      created.usuarioId,
-      { agentId, dialeto: "sybase", clientToken: "tok-sql-654321" },
-    );
+    const added = await newAdicionarAcesso(acessos, plug, crypto).execute(created.usuarioId, {
+      agentId,
+      dialeto: "sybase",
+      clientToken: "tok-sql-654321",
+    });
     const acessoB = added.acesso.id;
     const sqlModelo = "SELECT p.foto FROM produto p WHERE p.codprod = 1";
     const skillA = await skills.create({

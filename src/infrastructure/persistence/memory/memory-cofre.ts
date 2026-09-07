@@ -37,6 +37,7 @@ import type {
 import { decidirMerge, mergeCamposColuna } from "../../../domain/entities/merge-fato.js";
 import type { AcessoRepositoryPort } from "../../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../../domain/ports/usuario-repository.port.js";
+import type { McpSetupRepositoryPort } from "../../../domain/ports/mcp-setup-repository.port.js";
 import type {
   GrafoRepositoryPort,
   MergeColunaInput,
@@ -88,29 +89,8 @@ export class InMemoryUsuarioRepository implements UsuarioRepositoryPort {
     return this.rows.get(usuarioId) ?? null;
   }
 
-  async findByTokenHash(tokenHash: string): Promise<UsuarioMcp | null> {
-    return [...this.rows.values()].find((row) => row.tokenHash === tokenHash) ?? null;
-  }
-
   async findByEmailHash(emailHash: string): Promise<UsuarioMcp | null> {
     return [...this.rows.values()].find((row) => row.emailHash === emailHash) ?? null;
-  }
-
-  async updateTokenHash(
-    usuarioId: string,
-    tokenHash: string,
-    tokenExpiresAt?: Date | null,
-  ): Promise<void> {
-    const row = this.rows.get(usuarioId);
-    if (!row) {
-      return;
-    }
-    this.rows.set(usuarioId, {
-      ...row,
-      tokenHash,
-      ...(tokenExpiresAt !== undefined ? { tokenExpiresAt } : {}),
-      updatedAt: now(),
-    });
   }
 
   async updateCredenciais(usuarioId: string, emailEnc: string, senhaEnc: string): Promise<void> {
@@ -153,6 +133,10 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
     return row?.usuarioId === usuarioId ? row : null;
   }
 
+  async findByTokenHash(tokenHash: string): Promise<Acesso | null> {
+    return [...this.rows.values()].find((row) => row.tokenHash === tokenHash) ?? null;
+  }
+
   async listByUsuario(usuarioId: string): Promise<readonly Acesso[]> {
     return [...this.rows.values()].filter((row) => row.usuarioId === usuarioId);
   }
@@ -170,6 +154,23 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
           row.clientTokenHash === clientTokenHash,
       ) ?? null
     );
+  }
+
+  async updateTokenHash(
+    acessoId: string,
+    tokenHash: string,
+    tokenExpiresAt?: Date | null,
+  ): Promise<void> {
+    const row = this.rows.get(acessoId);
+    if (!row) {
+      return;
+    }
+    this.rows.set(acessoId, {
+      ...row,
+      tokenHash,
+      ...(tokenExpiresAt !== undefined ? { tokenExpiresAt } : {}),
+      updatedAt: now(),
+    });
   }
 
   async updateStatus(acessoId: string, status: StatusAcesso): Promise<void> {
@@ -226,6 +227,28 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
 
   async deleteById(acessoId: string): Promise<void> {
     this.rows.delete(acessoId);
+  }
+}
+
+export class InMemoryMcpSetupRepository implements McpSetupRepositoryPort {
+  private readonly rows = new Map<string, { token: string; expiresAt: number }>();
+
+  async issue(input: {
+    code: string;
+    token: string;
+    expiresAt: Date;
+    acessoId: string | null;
+  }): Promise<void> {
+    this.rows.set(input.code, { token: input.token, expiresAt: input.expiresAt.getTime() });
+  }
+
+  async consume(code: string): Promise<string | null> {
+    const row = this.rows.get(code);
+    this.rows.delete(code);
+    if (!row || row.expiresAt <= Date.now()) {
+      return null;
+    }
+    return row.token;
   }
 }
 

@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "se7e": {
+    "se7e-persona": {
       "url": "http://127.0.0.1:3333/mcp",
       "headers": {
-        "Authorization": "Bearer <cole-o-token-da-pagina-setup>"
+        "Authorization": "Bearer <cole-o-token-da-pagina-setup-desta-persona>"
       }
     }
   }

@@ -34,15 +34,14 @@ documentação de produto e os testes correspondentes.
   skills **neste acesso** (outro token = outro catálogo) nem licencia consulta.
   Senha autentica, não particiona. Hub SQL continua `agentId` + `client_token`.
   **1 client_token = 1 persona = 1 catálogo** (`acesso_id`). Mesmo e-mail/`agentId`
-  + outro token (`adicionar_acesso`) começa vazio. **Várias personas = vários
-  acessos**; um acesso = um chapéu — não concatenar nem unir pacotes. N=1: omita
-  `acessoId`. N>1: passe `acessoId` **ou** infira (`skillId`/slug único; handle
-  em `exportar_anexo`). `listar_auditoria` N>1 exige `acessoId`.
-  Resource `skill://{acessoId}/{slug}`. Sessão que começa com 1 acesso e ganha
-  o 2º (`adicionar_acesso`) mantém o chapéu 1 em `initialize.instructions` até
-  reconectar; `pre_treino` relê o banco. O mesmo `agentId` entre usuários MCP
-  diferentes pode ter textos e skills diferentes; o trio usuário+agentId+token
-  tem uma persona.
+  - outro token (`adicionar_acesso` / `registrar_acesso`) começa vazio e ganha um
+    **Bearer próprio**. **Várias personas = vários acessos = vários tokens MCP**; um
+    Bearer = um chapéu — não concatenar nem unir pacotes. O Bearer autentica
+    exatamente um acesso: omita `acessoId`. `acessoId` de outra persona →
+    `VALIDATION_ERROR`. Resource `skill://{acessoId}/{slug}` só se for desta sessão.
+    `adicionar_acesso` devolve `setupUrl` da persona nova e **não** troca esta sessão.
+    O mesmo `agentId` entre usuários MCP diferentes pode ter textos e skills
+    diferentes; o trio usuário+agentId+token tem uma persona.
 - Só o **pacote** de skill publicada autoriza `consultar_dados`. Grafo não
   licencia tabela nem JOIN. `obter_skill` / `skill://` não despejam o grafo.
 - A IA executa SQL customizado somente no escopo publicado (validador

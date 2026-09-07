@@ -546,11 +546,7 @@ describe("fluxo guiado de treino", () => {
       skillId: createdSkill.skill.id,
     });
     const persisted = await skills.findById(createdSkill.skill.id);
-    const { fluxo, faltas } = await fluxoEFaltasForAcessoSkill(
-      grafo,
-      created.acessoId,
-      persisted,
-    );
+    const { fluxo, faltas } = await fluxoEFaltasForAcessoSkill(grafo, created.acessoId, persisted);
     expect(
       faltas.some((falta) => falta.kind === "param" && falta.nextAction === "atualizar_skill"),
     ).toBe(true);

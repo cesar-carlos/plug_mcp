@@ -16,20 +16,18 @@ if ((process.env.CI === "true" || process.env.CI === "1") && !dbUrl) {
   throw new Error("CI=true exige DATABASE_URL para o teste FTS (conhecimento-fts).");
 }
 
-const seedAcessoFts = async (
-  pool: Pool,
-): Promise<{ acessoId: string; usuarioId: string }> => {
+const seedAcessoFts = async (pool: Pool): Promise<{ acessoId: string; usuarioId: string }> => {
   const usuarioId = randomUUID();
   const acessoId = randomUUID();
   await pool.query(
-    `INSERT INTO usuario_mcp (id, email_enc, email_hash, senha_enc, token_hash)
-     VALUES ($1, 'e', $2, 's', $3)`,
-    [usuarioId, randomUUID(), randomUUID()],
+    `INSERT INTO usuario_mcp (id, email_enc, email_hash, senha_enc)
+     VALUES ($1, 'e', $2, 's')`,
+    [usuarioId, randomUUID()],
   );
   await pool.query(
-    `INSERT INTO acesso (id, usuario_id, agent_id, dialeto, nome_amigavel, client_token_enc, client_token_hash, status_acesso)
-     VALUES ($1, $2, $3, 'mssql', 't', 'enc', $4, 'approved')`,
-    [acessoId, usuarioId, randomUUID(), randomUUID()],
+    `INSERT INTO acesso (id, usuario_id, agent_id, dialeto, nome_amigavel, client_token_enc, client_token_hash, token_hash, status_acesso)
+     VALUES ($1, $2, $3, 'mssql', 't', 'enc', $4, $5, 'approved')`,
+    [acessoId, usuarioId, randomUUID(), randomUUID(), randomUUID()],
   );
   return { acessoId, usuarioId };
 };

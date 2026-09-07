@@ -167,7 +167,7 @@ describe("BuscarContexto", () => {
     await skills.setStatus(published.id, "publicada");
     for (let i = 0; i < 8; i += 1) {
       await skills.create({
-      acessoId: created.acessoId,
+        acessoId: created.acessoId,
         slug: `rascunho-${String(i)}`,
         nome: `Rascunho ${String(i)}`,
         descricao: "Ainda não publica",
@@ -574,7 +574,7 @@ describe("BuscarContexto", () => {
     });
     for (let i = 0; i < 8; i += 1) {
       await grafo.mergeTabela({
-      acessoId: created.acessoId,
+        acessoId: created.acessoId,
         nome: `alpha_teto_${i}`,
         descricao: "alphateto volume",
         origem: "inferido",
@@ -914,7 +914,7 @@ describe("BuscarContexto", () => {
     const { buscar, created, skills } = await setup();
     const criar = async (slug: string, nome: string, descricao: string): Promise<void> => {
       const row = await skills.create({
-      acessoId: created.acessoId,
+        acessoId: created.acessoId,
         slug,
         nome,
         descricao,
@@ -1001,7 +1001,7 @@ describe("BuscarContexto", () => {
     const { buscar, created, skills } = await setup();
     const criar = async (slug: string, nome: string, descricao: string): Promise<void> => {
       const row = await skills.create({
-      acessoId: created.acessoId,
+        acessoId: created.acessoId,
         slug,
         nome,
         descricao,

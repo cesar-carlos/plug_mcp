@@ -27,6 +27,7 @@ import type {
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import { requireAcesso, requireUsuario, statusFromHub } from "./shared/guards.js";
+import { currentAcessoId } from "../session-context.js";
 import { tryPutClientToken, withHubAuth } from "./shared/hub-auth.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -42,6 +43,27 @@ export const expiryFromTtlDays = (ttlDays: number, now = new Date()): Date | nul
 export interface SetupCodeStore {
   issue(token: string): { code: string; expiresAt: Date };
 }
+
+export const mintMcpSetup = (
+  crypto: CryptoPort,
+  setup: SetupCodeStore,
+  publicBaseUrl: string,
+  tokenTtlDays: number,
+): {
+  tokenHash: string;
+  tokenExpiresAt: Date | null;
+  setupCode: string;
+  setupUrl: string;
+} => {
+  const token = crypto.randomToken(32);
+  const issued = setup.issue(token);
+  return {
+    tokenHash: crypto.sha256Hex(token),
+    tokenExpiresAt: expiryFromTtlDays(tokenTtlDays),
+    setupCode: issued.code,
+    setupUrl: `${publicBaseUrl}/setup/${issued.code}`,
+  };
+};
 
 const equalText = (left: string, right: string): boolean => {
   const a = Buffer.from(left);
@@ -126,7 +148,7 @@ export class RegistrarAcesso {
     const clientTokenHash = this.crypto.sha256Hex(clientToken);
     const existing = await this.usuarios.findByEmailHash(emailHash);
 
-    const persistAcesso = async (usuarioId: string) => {
+    const persistAcesso = async (usuarioId: string, minted: ReturnType<typeof mintMcpSetup>) => {
       const dup = await this.acessos.findByUsuarioAgentTokenHash(
         usuarioId,
         agentId,
@@ -136,7 +158,7 @@ export class RegistrarAcesso {
         throw new DomainError({
           code: ERROR_CODES.CONFLICT,
           message: "Este acesso já está no cofre.",
-          hint: "Autentique com o token MCP e chame listar_acessos.",
+          hint: "Use o token MCP desta persona. Não geramos outro Bearer para o mesmo trio e-mail+agentId+client_token.",
         });
       }
       return this.acessos.create({
@@ -146,29 +168,28 @@ export class RegistrarAcesso {
         nomeAmigavel: input.nomeAmigavel?.trim() ? input.nomeAmigavel.trim() : agentId,
         clientTokenEnc: this.crypto.encrypt(clientToken),
         clientTokenHash,
+        tokenHash: minted.tokenHash,
+        tokenExpiresAt: minted.tokenExpiresAt,
         statusAcesso,
       });
     };
 
     if (!existing) {
-      const token = this.crypto.randomToken(32);
+      const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
       const usuario = await this.usuarios.create({
         emailEnc: this.crypto.encrypt(email),
         emailHash,
         senhaEnc: this.crypto.encrypt(senha),
-        tokenHash: this.crypto.sha256Hex(token),
-        tokenExpiresAt: expiryFromTtlDays(this.tokenTtlDays),
       });
-      const acesso = await persistAcesso(usuario.id);
+      const acesso = await persistAcesso(usuario.id, minted);
       await this.afterPersist(usuario.id, hub, agentId, clientToken, statusAcesso);
-      const setup = this.setup.issue(token);
       return {
         success: true,
         usuarioId: usuario.id,
         acessoId: acesso.id,
         statusAcesso,
-        setupCode: setup.code,
-        setupUrl: `${this.publicBaseUrl}/setup/${setup.code}`,
+        setupCode: minted.setupCode,
+        setupUrl: minted.setupUrl,
         hint: "Abra setupUrl no navegador, copie o token MCP e coloque em Authorization: Bearer. Não peça o token de volta no chat. Não ecoe senha nem client_token na resposta.",
       };
     }
@@ -181,14 +202,17 @@ export class RegistrarAcesso {
         hint: "Use o token MCP dessa conta e chame atualizar_credencial_plug, ou adicionar_acesso.",
       });
     }
-    const acesso = await persistAcesso(existing.id);
+    const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
+    const acesso = await persistAcesso(existing.id, minted);
     await this.afterPersist(existing.id, hub, agentId, clientToken, statusAcesso);
     return {
       success: true,
       usuarioId: existing.id,
       acessoId: acesso.id,
       statusAcesso,
-      hint: "Acesso extra gravado. Continue com o token MCP já configurado. Não geramos um segundo token.",
+      setupCode: minted.setupCode,
+      setupUrl: minted.setupUrl,
+      hint: "Novo acesso gravado com token MCP próprio. Abra setupUrl, copie o Bearer desta persona e configure um servidor MCP separado. O token anterior continua só na persona antiga.",
     };
   }
 
@@ -217,13 +241,22 @@ export class AdicionarAcesso {
     private readonly plug: PlugServerGatewayPort,
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
+    private readonly setup: SetupCodeStore,
+    private readonly publicBaseUrl: string,
+    private readonly tokenTtlDays: number,
     private readonly logger?: LoggerPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
     input: { agentId?: string; dialeto?: string; clientToken?: string; nomeAmigavel?: string },
-  ): Promise<{ success: true; acesso: AcessoPublico }> {
+  ): Promise<{
+    success: true;
+    acesso: AcessoPublico;
+    setupCode: string;
+    setupUrl: string;
+    hint: string;
+  }> {
     const uid = requireUsuario(usuarioId);
     const agentId = input.agentId?.trim() ?? "";
     const clientToken = input.clientToken?.trim() ?? "";
@@ -241,7 +274,7 @@ export class AdicionarAcesso {
       throw new DomainError({
         code: ERROR_CODES.CONFLICT,
         message: "Acesso duplicado.",
-        hint: "Este trio usuário+agentId+client_token já existe. Use listar_acessos.",
+        hint: "Este trio usuário+agentId+client_token já existe. Use o token MCP dessa persona.",
       });
     }
     const status = await withHubAuth(this.sessions, uid, async (accessToken) => {
@@ -249,6 +282,7 @@ export class AdicionarAcesso {
       return this.plug.getAgentAccessStatus(accessToken, agentId);
     });
     const statusAcesso = statusFromHub(status.state);
+    const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
     const acesso = await this.acessos.create({
       usuarioId: uid,
       agentId,
@@ -256,6 +290,8 @@ export class AdicionarAcesso {
       nomeAmigavel: input.nomeAmigavel?.trim() ? input.nomeAmigavel.trim() : agentId,
       clientTokenEnc: this.crypto.encrypt(clientToken),
       clientTokenHash: tokenHash,
+      tokenHash: minted.tokenHash,
+      tokenExpiresAt: minted.tokenExpiresAt,
       statusAcesso,
     });
     await withHubAuth(this.sessions, uid, async (accessToken) => {
@@ -268,7 +304,13 @@ export class AdicionarAcesso {
         statusAcesso === "pending",
       );
     });
-    return { success: true, acesso: toAcessoPublico(acesso, clientToken) };
+    return {
+      success: true,
+      acesso: toAcessoPublico(acesso, clientToken),
+      setupCode: minted.setupCode,
+      setupUrl: minted.setupUrl,
+      hint: "Persona nova com catálogo vazio e token MCP próprio. Abra setupUrl e configure outro servidor MCP com esse Bearer. Esta sessão continua só na persona atual.",
+    };
   }
 }
 
@@ -279,6 +321,18 @@ export class ListarAcessos {
     usuarioId: string | undefined,
   ): Promise<{ success: true; acessos: AcessoPublico[] }> {
     const uid = requireUsuario(usuarioId);
+    const bound = currentAcessoId()?.trim();
+    if (bound) {
+      const acesso = await this.acessos.findByIdForUsuario(bound, uid);
+      if (!acesso) {
+        throw new DomainError({
+          code: ERROR_CODES.ACESSO_NOT_FOUND,
+          message: "Acesso não encontrado para este token MCP.",
+          hint: "Este Bearer autentica só a persona atual. Outra persona usa o token MCP dela.",
+        });
+      }
+      return { success: true, acessos: [toAcessoPublico(acesso)] };
+    }
     const lista = await this.acessos.listByUsuario(uid);
     return { success: true, acessos: lista.map((item) => toAcessoPublico(item)) };
   }
@@ -562,7 +616,7 @@ export class AtualizarPersona {
 
 export class RotacionarTokenMcp {
   constructor(
-    private readonly usuarios: UsuarioRepositoryPort,
+    private readonly acessos: AcessoRepositoryPort,
     private readonly crypto: CryptoPort,
     private readonly setup: SetupCodeStore,
     private readonly publicBaseUrl: string,
@@ -575,17 +629,13 @@ export class RotacionarTokenMcp {
     setupUrl: string;
   }> {
     const uid = requireUsuario(usuarioId);
-    const token = this.crypto.randomToken(32);
-    await this.usuarios.updateTokenHash(
-      uid,
-      this.crypto.sha256Hex(token),
-      expiryFromTtlDays(this.tokenTtlDays),
-    );
-    const setup = this.setup.issue(token);
+    const acesso = await requireAcesso(this.acessos, undefined, uid);
+    const minted = mintMcpSetup(this.crypto, this.setup, this.publicBaseUrl, this.tokenTtlDays);
+    await this.acessos.updateTokenHash(acesso.id, minted.tokenHash, minted.tokenExpiresAt);
     return {
       success: true,
-      setupCode: setup.code,
-      setupUrl: `${this.publicBaseUrl}/setup/${setup.code}`,
+      setupCode: minted.setupCode,
+      setupUrl: minted.setupUrl,
     };
   }
 }

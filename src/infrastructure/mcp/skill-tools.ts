@@ -8,7 +8,7 @@ import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.
 import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import { extractNamedParams } from "../../application/use-cases/shared/sql-modelo.js";
 import { guiaDialeto, type GuiaDialeto } from "../../application/use-cases/shared/guia-dialeto.js";
-import { currentAccountId } from "./account-context.js";
+import { currentAccountId, currentAcessoId } from "./account-context.js";
 import { montarPreTreinoSessao } from "./server-instructions.js";
 import type { ToolRunner } from "./tool-result.js";
 import type { ConsultarDados } from "../../application/use-cases/consultar.js";
@@ -21,7 +21,17 @@ export interface SkillCatalogPorts {
 export const listPublishedSkillsForUsuario = async (
   ports: SkillCatalogPorts,
   usuarioId: string,
+  acessoId?: string,
 ): Promise<readonly Skill[]> => {
+  if (acessoId) {
+    const acesso = await ports.acessos.findByIdForUsuario(acessoId, usuarioId);
+    if (!acesso) {
+      return [];
+    }
+    return (await ports.skills.listByAcesso(acesso.id)).filter(
+      (item) => item.status === "publicada",
+    );
+  }
   const acessos = await ports.acessos.listByUsuario(usuarioId);
   const out: Skill[] = [];
   for (const acesso of acessos) {
@@ -37,12 +47,8 @@ export const listPublishedSkillsForUsuario = async (
 
 export const skillToolName = (skill: Skill, all: readonly Skill[]): string => {
   const slug = skill.slug.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
-  const acessoIds = new Set(
-    all.map((item) => item.acessoId).filter((id): id is string => Boolean(id)),
-  );
   const clash = all.filter((item) => item.slug === skill.slug).length > 1;
-  const variosAcessos = acessoIds.size > 1;
-  if (clash || variosAcessos) {
+  if (clash) {
     return `skill_${slug}_${(skill.acessoId ?? skill.id).replace(/-/g, "").slice(0, 8)}`;
   }
   return `skill_${slug}`;
@@ -78,9 +84,14 @@ export const syncSkillTools = async (input: {
   consultarDados: ConsultarDados;
   run: ToolRunner;
   usuarioId: string;
+  acessoId: string;
   registered: Map<string, { remove: () => void }>;
 }): Promise<void> => {
-  const published = await listPublishedSkillsForUsuario(input.ports, input.usuarioId);
+  const published = await listPublishedSkillsForUsuario(
+    input.ports,
+    input.usuarioId,
+    input.acessoId,
+  );
   const wanted = new Set<string>();
   for (const skill of published) {
     const name = skillToolName(skill, published);
@@ -103,13 +114,13 @@ export const syncSkillTools = async (input: {
       {
         title: skill.nome,
         description:
-          `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados. N=1 omita acessoId; N>1 o nome inclui sufixo do acesso e o skillId desta tool amarra o catálogo.`.trim(),
+          `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados. Omita acessoId — o Bearer já amarra esta persona.`.trim(),
         inputSchema: shape,
         annotations: queryAnnotations,
       },
       async (args: Record<string, unknown>) => {
         const pergunta = typeof args.pergunta === "string" ? args.pergunta : "";
-        const acessoId = typeof args.acessoId === "string" ? args.acessoId : undefined;
+        const requestedAcessoId = typeof args.acessoId === "string" ? args.acessoId : undefined;
         const bound: Record<string, unknown> = {};
         for (const param of params) {
           if (Object.prototype.hasOwnProperty.call(args, param)) {
@@ -118,7 +129,7 @@ export const syncSkillTools = async (input: {
         }
         return input.run(name, () =>
           input.consultarDados.execute(currentAccountId(), {
-            acessoId,
+            acessoId: requestedAcessoId,
             skillId: skill.id,
             pergunta,
             params: bound,
@@ -140,7 +151,7 @@ export const syncSkillTools = async (input: {
 };
 
 export const PRE_TREINO_PROMPT_DESCRIPTION =
-  "Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR deste acesso (sybase/mssql/postgres/firebird; identifique o GDBR e emita SQL compatível — treino+IA, o hub não reescreve dialeto; resources guia://paginacao, guia://dialeto/{dialeto}, skill://{acessoId}/{slug}). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e do grafo deste acesso e, com Bearer, da persona do acesso (chapéu depois do SQL; não concatenar; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
+  "Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR deste acesso (sybase/mssql/postgres/firebird; identifique o GDBR e emita SQL compatível — treino+IA, o hub não reescreve dialeto; resources guia://paginacao, guia://dialeto/{dialeto}, skill://{acessoId}/{slug}). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e do grafo deste acesso e, com Bearer, da persona deste acesso (chapéu depois do SQL; o Bearer já amarra um acesso; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
 
 export const CONSULTAR_COM_SKILL_PROMPT_DESCRIPTION =
   "Fluxo de consulta via plug-server: ler obter_skill / skill:// e guia://dialeto do acesso; SQL no pacote publicado (fail-closed). Firebird: só consulta exemplo. Não invente tabela, coluna nem JOIN.";
@@ -159,7 +170,16 @@ export const registerPreTreinoPrompt = (
     },
     async () => {
       const uid = currentAccountId();
-      const lista = uid && acessos ? await acessos.listByUsuario(uid) : [];
+      const bound = currentAcessoId();
+      let lista: Awaited<ReturnType<NonNullable<typeof acessos>["listByUsuario"]>> = [];
+      if (uid && acessos) {
+        if (bound) {
+          const acesso = await acessos.findByIdForUsuario(bound, uid);
+          lista = acesso ? [acesso] : [];
+        } else {
+          lista = await acessos.listByUsuario(uid);
+        }
+      }
       return {
         messages: [
           {
@@ -326,7 +346,7 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
               "Siga o pre-treino de sessão (prompt pre_treino / initialize.instructions).",
               "Consulte o ERP via plug-server só com skill publicada, no dialeto do acesso (guia://dialeto/{dialeto}; não assuma mssql).",
               `Pergunta: ${pergunta}`,
-              acessoId ? `acessoId: ${acessoId}` : "Use listar_acessos se precisar do acessoId.",
+              acessoId ? `acessoId: ${acessoId}` : "O Bearer já amarra o acesso; omita acessoId.",
               "Estrutura: obter_skill ou skill:// (pacote = autoridade). Firebird: consultar_dados sem sql.",
               "Passos: resources guia://paginacao / guia://dialeto → buscar_contexto (reuse consultasAprendidas[].id em obter_skill.consultasExemplo; se houver consultaSemanticaSugerida, prefira consultar_dados.consultaSemantica) → listar_skills / obter_skill → validar_consulta se o SQL for novo → consultar_dados(skillIds, sql, params, pergunta). Se o usuário ensinou regra/dicionário, envie aprendizado[] ou chame registrar_aprendizado.",
               "Se consultaPermitida for false ou gap.code SKILL_GAP, não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.",
@@ -379,10 +399,11 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
     new ResourceTemplate("skill://{acessoId}/{slug}", {
       list: async () => {
         const uid = currentAccountId();
+        const bound = currentAcessoId();
         if (!uid) {
           return { resources: [] };
         }
-        const published = await listPublishedSkillsForUsuario(ports, uid);
+        const published = await listPublishedSkillsForUsuario(ports, uid, bound);
         return {
           resources: published
             .filter((skill) => skill.acessoId)
@@ -405,16 +426,19 @@ export const registerSkillCatalog = (server: McpServer, ports: SkillCatalogPorts
       if (!uid) {
         return { contents: [] };
       }
+      const bound = currentAcessoId();
       const acessoId = String(variables.acessoId ?? "");
       const slug = String(variables.slug ?? "");
-      const published = await listPublishedSkillsForUsuario(ports, uid);
+      if (bound && acessoId !== bound) {
+        return { contents: [] };
+      }
+      const published = await listPublishedSkillsForUsuario(ports, uid, bound ?? acessoId);
       const skill = published.find((item) => item.acessoId === acessoId && item.slug === slug);
       if (!skill) {
         return { contents: [] };
       }
-      const acessos = await ports.acessos.listByUsuario(uid);
-      const dono = acessos.find((item) => item.id === acessoId);
-      const dialeto = dono?.dialeto ?? dialetoDoAcesso(acessos, acessoId);
+      const dono = await ports.acessos.findByIdForUsuario(acessoId, uid);
+      const dialeto = dono?.dialeto;
       return {
         contents: [
           {
@@ -450,10 +474,14 @@ export const registerPersonaCatalog = (server: McpServer, acessos: AcessoReposit
     new ResourceTemplate("persona://{acessoId}", {
       list: async () => {
         const uid = currentAccountId();
+        const bound = currentAcessoId();
         if (!uid) {
           return { resources: [] };
         }
-        const lista = await acessos.listByUsuario(uid);
+        const acesso = bound
+          ? await acessos.findByIdForUsuario(bound, uid)
+          : (await acessos.listByUsuario(uid))[0];
+        const lista = acesso ? [acesso] : [];
         return {
           resources: lista.map((item) => ({
             uri: uriPersona(item.id),
@@ -476,7 +504,11 @@ export const registerPersonaCatalog = (server: McpServer, acessos: AcessoReposit
       if (!uid) {
         return { contents: [] };
       }
+      const bound = currentAcessoId();
       const acessoId = String(variables.acessoId ?? "");
+      if (bound && acessoId !== bound) {
+        return { contents: [] };
+      }
       const acesso = await acessos.findByIdForUsuario(acessoId, uid);
       if (!acesso) {
         return { contents: [] };

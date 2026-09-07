@@ -129,10 +129,6 @@ describe("persona no initialize autenticado", () => {
       expect(authed.instructions).toContain("Tom formal. Nunca invente JOIN.");
       expect(authed.instructions).toMatch(/instru[cç][oõ]es do usu[aá]rio/i);
       expect(authed.instructions).toMatch(/n[aã]o override do SQL/i);
-      expect(authed.instructions).toMatch(/at[eé] reconectar/);
-      expect(authed.instructions.indexOf("Atendimento financeiro")).toBeGreaterThan(
-        PRE_TREINO_SESSAO.length,
-      );
       expect(authed.instructions).not.toContain("Há vários acessos neste token");
 
       const listed = await useCases.listarAcessos.execute(usuarioId);
@@ -172,19 +168,17 @@ describe("persona no initialize autenticado", () => {
       );
       const preTreinoN = promptTextOf(promptAposSegundo.payload);
       expect(preTreinoN.startsWith(PRE_TREINO_SESSAO)).toBe(true);
-      expect(preTreinoN).toContain("Há vários acessos neste token");
-      expect(preTreinoN).toMatch(/n[aã]o concatenar chap[eé]us/i);
-      expect(preTreinoN).not.toContain("Atendimento financeiro");
-      expect(preTreinoN).not.toContain("Tom formal. Nunca invente JOIN.");
+      expect(preTreinoN).toContain("Atendimento financeiro");
+      expect(preTreinoN).toContain("Tom formal. Nunca invente JOIN.");
+      expect(preTreinoN).not.toContain("Há vários acessos neste token");
       expect(preTreinoN).not.toContain("Vendedor");
       expect(preTreinoN).not.toContain("Chapéu que não deve aparecer concatenado.");
 
       const multi = await initialize(app, token);
       expect(multi.instructions.startsWith(PRE_TREINO_SESSAO)).toBe(true);
-      expect(multi.instructions).toContain("Há vários acessos neste token");
+      expect(multi.instructions).toContain("Atendimento financeiro");
       expect(multi.instructions).toMatch(/n[aã]o concatenar chap[eé]us/i);
-      expect(multi.instructions).toMatch(/at[eé] reconectar/);
-      expect(multi.instructions).not.toContain("Tom formal. Nunca invente JOIN.");
+      expect(multi.instructions).not.toContain("Há vários acessos neste token");
       expect(multi.instructions).not.toContain("Chapéu que não deve aparecer concatenado.");
     } finally {
       await close();

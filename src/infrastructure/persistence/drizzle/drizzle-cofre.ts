@@ -45,6 +45,7 @@ import { parseConsultaSemantica } from "../../../domain/entities/consulta-semant
 import { parsePoliticaConsulta } from "../../../domain/entities/politica-consulta.js";
 import type { AcessoRepositoryPort } from "../../../domain/ports/acesso-repository.port.js";
 import type { UsuarioRepositoryPort } from "../../../domain/ports/usuario-repository.port.js";
+import type { McpSetupRepositoryPort } from "../../../domain/ports/mcp-setup-repository.port.js";
 import type {
   GrafoRepositoryPort,
   MergeColunaInput,
@@ -76,8 +77,6 @@ const toUsuario = (row: typeof schema.usuarioMcp.$inferSelect): UsuarioMcp => ({
   emailEnc: row.emailEnc,
   emailHash: row.emailHash,
   senhaEnc: row.senhaEnc,
-  tokenHash: row.tokenHash,
-  tokenExpiresAt: row.tokenExpiresAt ?? null,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -90,6 +89,8 @@ const toAcesso = (row: typeof schema.acesso.$inferSelect): Acesso => ({
   nomeAmigavel: row.nomeAmigavel,
   clientTokenEnc: row.clientTokenEnc,
   clientTokenHash: row.clientTokenHash,
+  tokenHash: row.tokenHash,
+  tokenExpiresAt: row.tokenExpiresAt ?? null,
   statusAcesso: row.statusAcesso as StatusAcesso,
   escopoPadrao: parseEscopoPadrao(row.escopoPadrao),
   timezone: row.timezone,
@@ -116,15 +117,6 @@ export class DrizzleUsuarioRepository implements UsuarioRepositoryPort {
     return row ? toUsuario(row) : null;
   }
 
-  async findByTokenHash(tokenHash: string): Promise<UsuarioMcp | null> {
-    const [row] = await this.db
-      .select()
-      .from(schema.usuarioMcp)
-      .where(eq(schema.usuarioMcp.tokenHash, tokenHash))
-      .limit(1);
-    return row ? toUsuario(row) : null;
-  }
-
   async findByEmailHash(emailHash: string): Promise<UsuarioMcp | null> {
     const [row] = await this.db
       .select()
@@ -132,21 +124,6 @@ export class DrizzleUsuarioRepository implements UsuarioRepositoryPort {
       .where(eq(schema.usuarioMcp.emailHash, emailHash))
       .limit(1);
     return row ? toUsuario(row) : null;
-  }
-
-  async updateTokenHash(
-    id: string,
-    tokenHash: string,
-    tokenExpiresAt?: Date | null,
-  ): Promise<void> {
-    await this.db
-      .update(schema.usuarioMcp)
-      .set({
-        tokenHash,
-        ...(tokenExpiresAt !== undefined ? { tokenExpiresAt } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.usuarioMcp.id, id));
   }
 
   async updateCredenciais(id: string, emailEnc: string, senhaEnc: string): Promise<void> {
@@ -194,6 +171,15 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
     return row ? toAcesso(row) : null;
   }
 
+  async findByTokenHash(tokenHash: string): Promise<Acesso | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.acesso)
+      .where(eq(schema.acesso.tokenHash, tokenHash))
+      .limit(1);
+    return row ? toAcesso(row) : null;
+  }
+
   async listByUsuario(usuarioId: string): Promise<readonly Acesso[]> {
     const rows = await this.db
       .select()
@@ -219,6 +205,21 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
       )
       .limit(1);
     return row ? toAcesso(row) : null;
+  }
+
+  async updateTokenHash(
+    id: string,
+    tokenHash: string,
+    tokenExpiresAt?: Date | null,
+  ): Promise<void> {
+    await this.db
+      .update(schema.acesso)
+      .set({
+        tokenHash,
+        ...(tokenExpiresAt !== undefined ? { tokenExpiresAt } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.acesso.id, id));
   }
 
   async updateStatus(id: string, status: StatusAcesso): Promise<void> {
@@ -270,6 +271,40 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
 
   async deleteById(id: string): Promise<void> {
     await this.db.delete(schema.acesso).where(eq(schema.acesso.id, id));
+  }
+}
+
+export class DrizzleMcpSetupRepository implements McpSetupRepositoryPort {
+  constructor(private readonly db: Db) {}
+
+  async issue(input: {
+    code: string;
+    token: string;
+    expiresAt: Date;
+    acessoId: string | null;
+  }): Promise<void> {
+    await this.db.insert(schema.mcpSetup).values({
+      code: input.code,
+      token: input.token,
+      expiresAt: input.expiresAt,
+      acessoId: input.acessoId,
+    });
+  }
+
+  async consume(code: string): Promise<string | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.mcpSetup)
+      .where(eq(schema.mcpSetup.code, code))
+      .limit(1);
+    if (!row) {
+      return null;
+    }
+    await this.db.delete(schema.mcpSetup).where(eq(schema.mcpSetup.code, code));
+    if (row.expiresAt.getTime() <= Date.now()) {
+      return null;
+    }
+    return row.token;
   }
 }
 

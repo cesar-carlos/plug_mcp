@@ -1,6 +1,6 @@
 # Se7e MCP Server
 
-Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + base de conhecimento**: guarda e-mail/senha (só autenticação — **não** particiona o catálogo), `agentId` e `client_token`, emite **um** token MCP opaco, e dá à IA o pacote da skill publicada **daquele acesso**. **1 `client_token` = 1 persona = 1 catálogo isolado.** Mesmo e-mail/`agentId` + outro token (`adicionar_acesso`) começa vazio. N=1: omita `acessoId`. N>1: passe `acessoId` **ou** infira (`skillId`/slug único; `exportar_anexo` pelo handle). Resource `skill://{acessoId}/{slug}`. Cache `mcp:query:acesso:{acessoId}:`. Hub SQL continua `agentId` + `client_token` daquele acesso. A **base comum** de todo consumidor: SQL no plug_server, dialeto do acesso, resources (`guia://`, `skill://`, `persona://`) e estrutura pelas skills publicadas (consultas dinâmicas no pacote, fail-closed). Sem embeddings. Persona no acesso oriente tom/uso e **não** recorta skills **neste acesso** (outro token = outro catálogo) nem licencia SQL. O domínio (atendimento, pagamentos, KPI/gestão, etc.) é o que o usuário treinou e publicou neste acesso, mais o chapéu da persona.
+Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + base de conhecimento**: guarda e-mail/senha (só autenticação — **não** particiona o catálogo), `agentId` e `client_token`, emite **um token MCP opaco por acesso**, e dá à IA o pacote da skill publicada **daquele acesso**. **1 `client_token` = 1 persona = 1 catálogo isolado = 1 Bearer.** Mesmo e-mail/`agentId` + outro token (`adicionar_acesso` / `registrar_acesso`) começa vazio e ganha outro Bearer. Tools omitem `acessoId`. Resource `skill://{acessoId}/{slug}`. Cache `mcp:query:acesso:{acessoId}:`. Hub SQL continua `agentId` + `client_token` daquele acesso. A **base comum** de todo consumidor: SQL no plug_server, dialeto do acesso, resources (`guia://`, `skill://`, `persona://`) e estrutura pelas skills publicadas (consultas dinâmicas no pacote, fail-closed). Sem embeddings. Persona no acesso oriente tom/uso e **não** recorta skills **neste acesso** (outro token = outro catálogo) nem licencia SQL. O domínio (atendimento, pagamentos, KPI/gestão, etc.) é o que o usuário treinou e publicou neste acesso, mais o chapéu da persona.
 
 Não há login próprio, Authorization Server, catálogo pronto com seed, nem Client de serviço no `.env`.
 
@@ -55,7 +55,7 @@ Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a con
 1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
 2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**
 3. A tool devolve `setupCode` + `setupUrl`. O usuário abre a URL, copia o token e cola em `Authorization: Bearer`.
-4. Demais tools exigem Bearer. Novos acessos: `adicionar_acesso` (sem senha de novo).
+4. Demais tools exigem Bearer. Novos acessos: `adicionar_acesso` (sem senha de novo; emite outro Bearer via `setupUrl` e **não** troca esta sessão).
 
 ## Scripts
 

@@ -17,7 +17,7 @@ use-cases  →  ports  ←  adapters (Drizzle, REST plug-server, crypto)
 
 ## Identidade
 
-Bearer MCP → hash SHA-256 → `usuario_mcp`. ALS só na borda (`currentAccountId()`). Casos de uso recebem `usuarioId`. Cofre: [vault-and-mcp-token.md](../auth/vault-and-mcp-token.md).
+Bearer MCP → hash SHA-256 → `acesso.token_hash` (não `usuario_mcp`). ALS na borda com `(usuarioId, acessoId)`. Casos de uso recebem `usuarioId`; `requireAcesso` usa o acesso ligado à sessão. Cofre: [vault-and-mcp-token.md](../auth/vault-and-mcp-token.md).
 
 ## Plug-server
 

@@ -8,7 +8,7 @@ import type { AppConfig } from "../../config/env.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
-import { currentAccountId } from "./account-context.js";
+import { currentAccountId, currentAcessoId } from "./account-context.js";
 import { createToolRunner } from "./tool-result.js";
 import { columnMetadataItemSchema } from "../../application/use-cases/shared/columns-metadata.js";
 import type {
@@ -226,13 +226,13 @@ const politicaConsultaShape = z.object({
 });
 
 export const EXPORTAR_ANEXO_TOOL_DESCRIPTION =
-  "Rebusca/converte um anexo (foto, PDF) a partir do handle do stub kind=anexo de consultar_dados. Handle de inspecionar_consulta não é exportável. Não invente bytes. mimeDestino: image/jpeg, image/png ou application/pdf. Mesmos portões de consultar_dados. Foto pessoal: PRIVACIDADE_NEGADA — não use inspeção como segunda via. N=1 omita acessoId; N>1 o handle amarra o acesso se for deste usuário (acessoId de outro acesso → MIDIA_ORIGEM_INVALIDA).";
+  "Rebusca/converte um anexo (foto, PDF) a partir do handle do stub kind=anexo de consultar_dados. Handle de inspecionar_consulta não é exportável. Não invente bytes. mimeDestino: image/jpeg, image/png ou application/pdf. Mesmos portões de consultar_dados. Foto pessoal: PRIVACIDADE_NEGADA — não use inspeção como segunda via. Omita acessoId — o Bearer já amarra a persona; handle de outro acesso → MIDIA_ORIGEM_INVALIDA.";
 
 export const CONSULTAR_DADOS_TOOL_DESCRIPTION =
-  "Consulta o ERP via plug-server no escopo publicado e no dialeto do acesso. pergunta obrigatória. skillIds opcional (omitido = união das publicadas deste acesso/persona; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist (fail-closed), consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Firebird: só consulta exemplo, sem SQL livre. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT. N=1 omita acessoId; N>1 passe acessoId ou skillId/slug único (não una catálogos).";
+  "Consulta o ERP via plug-server no escopo publicado e no dialeto do acesso. pergunta obrigatória. skillIds opcional (omitido = união das publicadas desta persona; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist (fail-closed), consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Firebird: só consulta exemplo, sem SQL livre. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT. Omita acessoId — o Bearer autentica um único acesso.";
 
 export const OBTER_SKILL_TOOL_DESCRIPTION =
-  "Obtém o pacote da skill (mesmo conteúdo que skill://): escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios. Não invente schema — leia daqui. N=1 omita acessoId; N>1 passe acessoId ou skillId/slug único nos seus catálogos.";
+  "Obtém o pacote da skill (mesmo conteúdo que skill://): escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios. Não invente schema — leia daqui. Omita acessoId — o Bearer já amarra esta persona.";
 
 export const VALIDAR_CONSULTA_TOOL_DESCRIPTION =
   "Dry-run: valida o SQL contra o escopo publicado (fail-closed; skillIds opcional = união das publicadas deste acesso) e executa envelope vazio no ERP via plug-server (sem ler dado). options.page + page_size aplicam a mesma regra de consultar_dados (ORDER BY externo, sem TOP/LIMIT/FETCH/FIRST). Placeholders ausentes ligam-se a null. Firebird: recusa SQL livre.";
@@ -241,7 +241,7 @@ export const ATUALIZAR_PERSONA_TOOL_DESCRIPTION =
   "Grava nomePersona (curto) e instrucoesPersona no acesso (usuário+agentId+token). Orienta tom/uso; não recorta skills nem licencia tabela, coluna, JOIN ou consultaPermitida. Em conflito vale o pacote. Exige confirmadoPeloUsuario: true. Recusa texto que pareça senha, token ou JWT. String vazia ou null limpa o campo.";
 
 export const TREINAR_COM_SQL_TOOL_DESCRIPTION =
-  "Treina o grafo deste acesso/persona com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no SQL (amostra FIRST é wrap do servidor). Aviso PAGINACAO_MODELO se o SQL já declara TOP/LIMIT/FIRST. Depois de publicar: só consultar_dados / inspecionar_consulta sem sql. Com um único acesso, acessoId pode ser omitido.";
+  "Treina o grafo deste acesso/persona com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no SQL (amostra FIRST é wrap do servidor). Aviso PAGINACAO_MODELO se o SQL já declara TOP/LIMIT/FIRST. Depois de publicar: só consultar_dados / inspecionar_consulta sem sql. Omita acessoId — o Bearer já amarra esta persona.";
 
 export const VALIDAR_SKILL_TOOL_DESCRIPTION =
   "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo. Une o sqlModelo ao escopo persistido. Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no sqlModelo (amostra é wrap do servidor). Aviso PAGINACAO_MODELO se o modelo já declara TOP/LIMIT/FIRST. SQL livre depois de publicar continua DIALECT_UNSUPPORTED.";
@@ -259,7 +259,7 @@ export const registerTools = (
     catalog?: SkillCatalogPorts;
     rateLimit?: RateLimitStore;
     clientIp?: () => string | undefined;
-    onSkillsChanged?: (usuarioId: string) => Promise<void>;
+    onSkillsChanged?: (usuarioId: string, acessoId: string) => Promise<void>;
   },
 ): void => {
   const run = createToolRunner(config, logger, {
@@ -292,7 +292,7 @@ export const registerTools = (
 
   server.tool(
     "adicionar_acesso",
-    "Com token MCP, adiciona outro agentId/client_token sem pedir senha de novo. O novo acesso começa com catálogo vazio (não herda skills/grafo do outro acesso). Não ecoe o client_token no chat.",
+    "Com token MCP, cria outra persona (agentId/client_token) sem pedir senha de novo. Catálogo vazio — não herda skills/grafo. Devolve setupCode/setupUrl do Bearer **novo** (nunca o token na resposta). Esta sessão continua só na persona atual. Não ecoe o client_token no chat.",
     {
       agentId: z.string().optional(),
       dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
@@ -306,7 +306,7 @@ export const registerTools = (
 
   server.tool(
     "listar_acessos",
-    "Lista acessos do usuário autenticado (client_token mascarado; nomePersona e instrucoesPersona). sqlAccessState vem só do cofre (approved → unknown). Persona não licencia SQL.",
+    "Lista só o acesso deste Bearer (client_token mascarado; nomePersona e instrucoesPersona). sqlAccessState vem só do cofre (approved → unknown). Outras personas usam o token MCP delas. Persona não licencia SQL.",
     emptyShape,
     readList,
     async () => run("listar_acessos", () => useCases.listarAcessos.execute(currentAccountId())),
@@ -323,7 +323,7 @@ export const registerTools = (
 
   server.tool(
     "remover_acesso",
-    "Remove o acesso do cofre. O catálogo (skills/grafo) deste acesso é apagado com ele; outros acessos do mesmo agentId ficam intactos.",
+    "Remove o acesso **deste** Bearer do cofre. O catálogo (skills/grafo) desta persona é apagado; o token atual deixa de valer. Não apaga outra persona por id.",
     { acessoId: z.string().optional() },
     destroyLocal,
     async (args) =>
@@ -343,7 +343,7 @@ export const registerTools = (
 
   server.tool(
     "rotacionar_token_mcp",
-    "Invalida o token MCP atual e emite um setupCode para o usuário copiar o novo.",
+    "Invalida o token MCP **desta** persona (o Bearer em Authorization) e emite um setupCode para copiar o novo. Outras personas continuam com o token delas.",
     emptyShape,
     destroyLocal,
     async () =>
@@ -578,8 +578,9 @@ export const registerTools = (
       run("atualizar_skill", async () => {
         const result = await useCases.atualizarSkill.execute(currentAccountId(), args);
         const uid = currentAccountId();
-        if (uid && options?.onSkillsChanged) {
-          await options.onSkillsChanged(uid);
+        const acessoId = currentAcessoId();
+        if (uid && acessoId && options?.onSkillsChanged) {
+          await options.onSkillsChanged(uid, acessoId);
         }
         return result;
       }),
@@ -612,8 +613,9 @@ export const registerTools = (
       run("publicar_skill", async () => {
         const result = await useCases.publicarSkill.execute(currentAccountId(), args);
         const uid = currentAccountId();
-        if (uid && options?.onSkillsChanged) {
-          await options.onSkillsChanged(uid);
+        const acessoId = currentAcessoId();
+        if (uid && acessoId && options?.onSkillsChanged) {
+          await options.onSkillsChanged(uid, acessoId);
         }
         return result;
       }),
@@ -632,8 +634,9 @@ export const registerTools = (
       run("despublicar_skill", async () => {
         const result = await useCases.despublicarSkill.execute(currentAccountId(), args);
         const uid = currentAccountId();
-        if (uid && options?.onSkillsChanged) {
-          await options.onSkillsChanged(uid);
+        const acessoId = currentAcessoId();
+        if (uid && acessoId && options?.onSkillsChanged) {
+          await options.onSkillsChanged(uid, acessoId);
         }
         return result;
       }),
@@ -653,8 +656,9 @@ export const registerTools = (
       run("remover_skill", async () => {
         const result = await useCases.removerSkill.execute(currentAccountId(), args);
         const uid = currentAccountId();
-        if (uid && options?.onSkillsChanged) {
-          await options.onSkillsChanged(uid);
+        const acessoId = currentAcessoId();
+        if (uid && acessoId && options?.onSkillsChanged) {
+          await options.onSkillsChanged(uid, acessoId);
         }
         return result;
       }),
@@ -662,7 +666,7 @@ export const registerTools = (
 
   server.tool(
     "listar_skills",
-    "Lista skills deste acesso/persona (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote. Com vários acessos, passe acessoId (não infere de slug); catálogos não se misturam mesmo com o mesmo agentId.",
+    "Lista skills desta persona (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote. Omita acessoId — o Bearer já amarra o catálogo.",
     { acessoId: z.string().optional() },
     readList,
     async (args) =>
@@ -883,7 +887,7 @@ export const registerTools = (
 
   server.tool(
     "listar_auditoria",
-    "Lista as últimas execuções de tools deste acesso (sem SQL completo nem segredos). N=1 omita acessoId; N>1 passe acessoId — não mistura o histórico da outra persona. buscar_contexto inclui telemetria (counts/enums, sem a pergunta).",
+    "Lista as últimas execuções de tools desta persona (sem SQL completo nem segredos). Omita acessoId — o Bearer já recorta. buscar_contexto inclui telemetria (counts/enums, sem a pergunta).",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>
@@ -892,7 +896,7 @@ export const registerTools = (
 
   server.tool(
     "listar_metricas_agente",
-    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, SKILL_NOT_PUBLISHED, slot narrativo). Sem SQL, params ou linhas de ERP. N=1 omita acessoId; N>1 passe acessoId.",
+    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, SKILL_NOT_PUBLISHED, slot narrativo). Sem SQL, params ou linhas de ERP. Omita acessoId — o Bearer já recorta.",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AdicionarAcesso,
-  RegistrarAcesso,
-  VerificarAcesso,
-} from "../../src/application/use-cases/cofre.js";
+import { RegistrarAcesso, VerificarAcesso } from "../../src/application/use-cases/cofre.js";
 import { TreinarComSql } from "../../src/application/use-cases/treinar-com-sql.js";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
 import { SetupCodeStore } from "../../src/infrastructure/http/setup-code-store.js";
@@ -16,6 +12,7 @@ import {
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
+import { newAdicionarAcesso } from "../helpers/adicionar-acesso.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 
@@ -285,7 +282,10 @@ describe("cofre e treino", () => {
       }),
     ).resolves.toMatchObject({ success: true, dialeto: "postgres" });
     expect(await grafo.getDialeto(a.acessoId)).toEqual({ acessoId: a.acessoId, dialeto: "sybase" });
-    expect(await grafo.getDialeto(b.acessoId)).toEqual({ acessoId: b.acessoId, dialeto: "postgres" });
+    expect(await grafo.getDialeto(b.acessoId)).toEqual({
+      acessoId: b.acessoId,
+      dialeto: "postgres",
+    });
   });
 
   it("liga coluna ao alias dono e grava chaves reais do JOIN", async () => {
@@ -531,7 +531,7 @@ describe("cofre e treino", () => {
       clientToken: "tok-sql-123456",
     });
     plug.lastPut = null;
-    await new AdicionarAcesso(acessos, plug, stubSessions(), crypto).execute(created.usuarioId, {
+    await newAdicionarAcesso(acessos, plug, crypto).execute(created.usuarioId, {
       agentId: agent2,
       dialeto: "sybase",
       clientToken: "tok-other-999",

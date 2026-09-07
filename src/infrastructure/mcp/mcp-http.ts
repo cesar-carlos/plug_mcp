@@ -21,6 +21,7 @@ interface Session {
   lastActivityAt: number;
   bootstrap: boolean;
   usuarioId: string | null;
+  acessoId: string | null;
   skillTools: Map<string, { remove: () => void }>;
   advertisedBuild: string | null;
 }
@@ -28,9 +29,13 @@ interface Session {
 const MAX_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 export const sessaoDeveReceberSkillsChanged = (
-  session: { bootstrap: boolean; usuarioId: string | null },
+  session: { bootstrap: boolean; usuarioId: string | null; acessoId: string | null },
   publisherUsuarioId: string,
-): boolean => !session.bootstrap && session.usuarioId === publisherUsuarioId;
+  publisherAcessoId: string,
+): boolean =>
+  !session.bootstrap &&
+  session.usuarioId === publisherUsuarioId &&
+  session.acessoId === publisherAcessoId;
 
 const rpcName = (body: unknown): { method?: string; tool?: string } => {
   if (typeof body !== "object" || body === null) {
@@ -47,7 +52,7 @@ export const createMcpHttpHandler = (input: {
   config: AppConfig;
   useCases: ToolUseCases;
   logger: LoggerPort;
-  resolveUsuarioId: (token: string) => Promise<string | null>;
+  resolveBearer: (token: string) => Promise<{ usuarioId: string; acessoId: string } | null>;
   catalog: SkillCatalogPorts;
   rateLimit?: RateLimitStore;
 }): {
@@ -64,7 +69,11 @@ export const createMcpHttpHandler = (input: {
       clientIp: () => currentClientIp(),
     });
 
-  const refreshSkillTools = async (session: Session, usuarioId: string): Promise<void> => {
+  const refreshSkillTools = async (
+    session: Session,
+    usuarioId: string,
+    acessoId: string,
+  ): Promise<void> => {
     if (!input.config.MCP_SKILL_TOOLS_ENABLED) {
       for (const handle of session.skillTools.values()) {
         handle.remove();
@@ -78,25 +87,29 @@ export const createMcpHttpHandler = (input: {
       consultarDados: input.useCases.consultarDados,
       run: runner(),
       usuarioId,
+      acessoId,
       registered: session.skillTools,
     });
   };
 
-  const notifyUsuario = async (usuarioId: string): Promise<void> => {
+  const notifyAcesso = async (usuarioId: string, acessoId: string): Promise<void> => {
     for (const session of sessions.values()) {
-      if (sessaoDeveReceberSkillsChanged(session, usuarioId)) {
-        await refreshSkillTools(session, usuarioId);
+      if (sessaoDeveReceberSkillsChanged(session, usuarioId, acessoId)) {
+        await refreshSkillTools(session, usuarioId, acessoId);
       }
     }
   };
 
-  const loadPersonaSessao = async (usuarioId: string | null): Promise<readonly PersonaSessao[]> => {
-    if (!usuarioId) {
+  const loadPersonaSessao = async (
+    usuarioId: string | null,
+    acessoId: string | null,
+  ): Promise<readonly PersonaSessao[]> => {
+    if (!usuarioId || !acessoId) {
       return [];
     }
     try {
-      const lista = await input.catalog.acessos.listByUsuario(usuarioId);
-      return lista.map(personaSessaoDeAcesso);
+      const acesso = await input.catalog.acessos.findByIdForUsuario(acessoId, usuarioId);
+      return acesso ? [personaSessaoDeAcesso(acesso)] : [];
     } catch (error: unknown) {
       input.logger.warn("failed to load acesso personas for initialize", {
         error: error instanceof Error ? error.message : String(error),
@@ -105,8 +118,12 @@ export const createMcpHttpHandler = (input: {
     }
   };
 
-  const createSession = async (bootstrap: boolean, usuarioId: string | null): Promise<Session> => {
-    const personas = await loadPersonaSessao(usuarioId);
+  const createSession = async (
+    bootstrap: boolean,
+    usuarioId: string | null,
+    acessoId: string | null,
+  ): Promise<Session> => {
+    const personas = await loadPersonaSessao(usuarioId, acessoId);
     const server = new McpServer(
       { name: "se7e-mcp-server", version: buildInfo().version },
       {
@@ -124,6 +141,7 @@ export const createMcpHttpHandler = (input: {
       lastActivityAt: Date.now(),
       bootstrap,
       usuarioId,
+      acessoId,
       skillTools: new Map(),
       advertisedBuild: null,
     };
@@ -132,7 +150,7 @@ export const createMcpHttpHandler = (input: {
       catalog: bootstrap ? undefined : input.catalog,
       rateLimit: input.rateLimit,
       clientIp: () => currentClientIp(),
-      onSkillsChanged: notifyUsuario,
+      onSkillsChanged: notifyAcesso,
     });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
@@ -171,13 +189,16 @@ export const createMcpHttpHandler = (input: {
   const handle = async (req: Request, res: Response): Promise<void> => {
     const bearer = readBearer(req);
     let usuarioId: string | null = null;
+    let acessoId: string | null = null;
     if (bearer) {
-      usuarioId = await input.resolveUsuarioId(bearer);
-      if (!usuarioId) {
+      const resolved = await input.resolveBearer(bearer);
+      if (!resolved) {
         res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));
         res.status(401).json({ error: "invalid_token" });
         return;
       }
+      usuarioId = resolved.usuarioId;
+      acessoId = resolved.acessoId;
     } else {
       const { method, tool } = rpcName(req.body);
       const allowed =
@@ -206,14 +227,21 @@ export const createMcpHttpHandler = (input: {
       if (usuarioId) {
         session.usuarioId = usuarioId;
       }
+      if (acessoId) {
+        session.acessoId = acessoId;
+      }
       await accountContext.run(
-        { usuarioId: usuarioId ?? undefined, clientIp: req.ip },
+        {
+          usuarioId: usuarioId ?? undefined,
+          acessoId: acessoId ?? session.acessoId ?? undefined,
+          clientIp: req.ip,
+        },
         async () => {
           await session.transport.handleRequest(req, res, req.body);
         },
       );
-      if (usuarioId && !session.bootstrap && isInitializeRequest(req.body)) {
-        await refreshSkillTools(session, usuarioId);
+      if (usuarioId && acessoId && !session.bootstrap && isInitializeRequest(req.body)) {
+        await refreshSkillTools(session, usuarioId, acessoId);
         const buildKey = `${buildInfo().version}:${buildInfo().sha}`;
         if (session.advertisedBuild !== buildKey) {
           session.server.sendToolListChanged();
@@ -228,7 +256,7 @@ export const createMcpHttpHandler = (input: {
     }
 
     if (req.method === "POST" && isInitializeRequest(req.body)) {
-      const session = await createSession(!usuarioId, usuarioId);
+      const session = await createSession(!usuarioId, usuarioId, acessoId);
       await session.server.connect(session.transport);
       await run(session);
       return;

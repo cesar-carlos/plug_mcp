@@ -21,6 +21,8 @@ export interface Acesso {
   readonly nomeAmigavel: string;
   readonly clientTokenEnc: string;
   readonly clientTokenHash: string;
+  readonly tokenHash: string;
+  readonly tokenExpiresAt: Date | null;
   readonly statusAcesso: StatusAcesso;
   readonly escopoPadrao: EscopoPadraoAcesso | null;
   readonly timezone: string | null;
@@ -37,6 +39,8 @@ export interface NovoAcesso {
   readonly nomeAmigavel: string;
   readonly clientTokenEnc: string;
   readonly clientTokenHash: string;
+  readonly tokenHash: string;
+  readonly tokenExpiresAt: Date | null;
   readonly statusAcesso: StatusAcesso;
   readonly escopoPadrao?: EscopoPadraoAcesso | null;
   readonly timezone?: string | null;

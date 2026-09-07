@@ -48,6 +48,8 @@ describe("resources skill:// e guia://", () => {
       nomeAmigavel: "t",
       clientTokenEnc: "x",
       clientTokenHash: "y",
+      tokenHash: "th-skill-resources",
+      tokenExpiresAt: null,
       statusAcesso: "approved",
     });
     await skills.create({
@@ -112,6 +114,8 @@ describe("resources skill:// e guia://", () => {
       nomeAmigavel: "t",
       clientTokenEnc: "x",
       clientTokenHash: "y",
+      tokenHash: "th-skill-resources",
+      tokenExpiresAt: null,
       statusAcesso: "approved",
       nomePersona: "Gestor",
       instrucoesPersona: "Tom executivo.",
@@ -126,7 +130,7 @@ describe("resources skill:// e guia://", () => {
     expect(JSON.stringify(envelopePersonaResource(acesso))).not.toContain("clientToken");
   });
 
-  it("skill_* N=1 usa só o slug; N>1 sempre sufixa o acessoId", async () => {
+  it("skill_* usa o slug; sufixo só em clash de slug no mesmo Bearer", async () => {
     const skills = new InMemorySkillRepository();
     const acessoA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const acessoB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -149,7 +153,7 @@ describe("resources skill:// e guia://", () => {
       autorUsuarioId: "u1",
     });
     expect(skillToolName(vendas, [vendas])).toBe("skill_vendas");
-    expect(skillToolName(vendas, [vendas, estoque])).toBe("skill_vendas_aaaaaaaa");
-    expect(skillToolName(estoque, [vendas, estoque])).toBe("skill_estoque_bbbbbbbb");
+    expect(skillToolName(vendas, [vendas, estoque])).toBe("skill_vendas");
+    expect(skillToolName(estoque, [vendas, estoque])).toBe("skill_estoque");
   });
 });

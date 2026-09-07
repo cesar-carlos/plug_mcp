@@ -71,6 +71,7 @@ import {
   DrizzleAnotacaoGrafoRepository,
   DrizzleAuditLog,
   DrizzleGrafoRepository,
+  DrizzleMcpSetupRepository,
   DrizzleSkillRepository,
   DrizzleUsuarioRepository,
 } from "../infrastructure/persistence/drizzle/drizzle-cofre.js";
@@ -80,6 +81,7 @@ import {
   InMemoryAnotacaoGrafoRepository,
   InMemoryAuditLog,
   InMemoryGrafoRepository,
+  InMemoryMcpSetupRepository,
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../infrastructure/persistence/memory/memory-cofre.js";
@@ -130,6 +132,7 @@ export const compose = async (
   let anotacoes: InMemoryAnotacaoGrafoRepository | DrizzleAnotacaoGrafoRepository;
   let audit: InMemoryAuditLog | DrizzleAuditLog;
   let aprendizado: InMemoryAprendizadoRepository | DrizzleAprendizadoRepository;
+  let setupPersistent: InMemoryMcpSetupRepository | DrizzleMcpSetupRepository;
   let readinessCheck: (() => Promise<boolean>) | undefined;
   let dbPool: { query: (sql: string) => Promise<unknown> } | undefined;
 
@@ -143,6 +146,7 @@ export const compose = async (
     anotacoes = new DrizzleAnotacaoGrafoRepository(db);
     audit = new DrizzleAuditLog(db);
     aprendizado = new DrizzleAprendizadoRepository(db);
+    setupPersistent = new DrizzleMcpSetupRepository(db);
     disposers.push(async () => {
       await pool.end();
     });
@@ -154,6 +158,7 @@ export const compose = async (
     anotacoes = new InMemoryAnotacaoGrafoRepository();
     audit = new InMemoryAuditLog();
     aprendizado = new InMemoryAprendizadoRepository();
+    setupPersistent = new InMemoryMcpSetupRepository();
   }
 
   let mcpRateLimitStore: RateLimitStore = new MemoryRateLimitStore();
@@ -211,7 +216,16 @@ export const compose = async (
       sessions,
       logger,
     ),
-    adicionarAcesso: new AdicionarAcesso(acessos, plug, sessions, crypto, logger),
+    adicionarAcesso: new AdicionarAcesso(
+      acessos,
+      plug,
+      sessions,
+      crypto,
+      setup,
+      config.PUBLIC_BASE_URL,
+      config.MCP_TOKEN_TTL_DAYS,
+      logger,
+    ),
     listarAcessos: new ListarAcessos(acessos),
     verificarAcesso: new VerificarAcesso(acessos, plug, sessions, crypto, logger),
     removerAcesso: new RemoverAcesso(acessos, {
@@ -222,7 +236,7 @@ export const compose = async (
     }),
     atualizarCredencialPlug: new AtualizarCredencialPlug(usuarios, sessions, plug, crypto),
     rotacionarTokenMcp: new RotacionarTokenMcp(
-      usuarios,
+      acessos,
       crypto,
       setup,
       config.PUBLIC_BASE_URL,
@@ -344,11 +358,11 @@ export const compose = async (
     config,
     logger,
     useCases,
-    usuarios,
     acessos,
     skills,
     crypto,
     setup,
+    setupPersistent,
     pino,
     mcpRateLimitStore,
     readinessCheck,

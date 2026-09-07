@@ -167,10 +167,8 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(MCP_SERVER_INSTRUCTIONS).toContain("tipoJoin");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("atualizar_persona");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("persona://");
-    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/n[aã]o concatenar chap[eé]us/i);
-    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/initialize\.instructions/);
-    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/at[eé] reconectar/);
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/pre_treino rel[eê] o banco/);
+    expect(MCP_SERVER_INSTRUCTIONS).toMatch(/n[aã]o concatenar chap[eé]us/i);
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/INNER vs LEFT/);
     expect(MCP_SERVER_INSTRUCTIONS).toContain("PAGINACAO_MODELO");
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/une o AST ao pacote/);
@@ -179,7 +177,7 @@ describe("PRE_TREINO_SESSAO", () => {
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/kind=param n[aã]o bloqueia publicar/);
   });
 
-  it("Bearer com um acesso anexa persona depois do SQL; vários não concatenam chapéus", () => {
+  it("Bearer com um acesso anexa persona depois do SQL; vários no array não concatenam o segundo chapéu", () => {
     const unico = {
       acessoId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       agentId: "11111111-1111-4111-8111-111111111111",
@@ -204,12 +202,11 @@ describe("PRE_TREINO_SESSAO", () => {
     };
     const varios = montarPreTreinoSessao([unico, outro]);
     expect(varios.startsWith(PRE_TREINO_SESSAO)).toBe(true);
-    expect(varios).toContain(BLOCO_PERSONA_VARIOS_ACESSOS);
-    expect(BLOCO_PERSONA_VARIOS_ACESSOS).toMatch(/catálogo isolado/);
-    expect(varios).not.toContain("Tom formal. Nunca invente JOIN.");
+    expect(varios).toContain(blocoPersonaUnico(unico));
+    expect(varios).not.toContain(BLOCO_PERSONA_VARIOS_ACESSOS);
     expect(varios).not.toContain("Chapéu que não deve aparecer concatenado.");
-    expect(varios).not.toContain("Atendimento financeiro");
-    expect(varios).not.toContain("Vendedor");
+    expect(varios).not.toContain("Há vários acessos neste token");
+    expect(BLOCO_PERSONA_VARIOS_ACESSOS).toMatch(/catálogo isolado/);
 
     expect(montarPreTreinoSessao([])).toBe(PRE_TREINO_SESSAO);
     expect(MCP_SERVER_INSTRUCTIONS).toBe(montarInstrucoesServidor([]));

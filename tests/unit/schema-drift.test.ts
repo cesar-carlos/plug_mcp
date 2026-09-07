@@ -164,7 +164,12 @@ describe("deriva de esquema", () => {
       autorUsuarioId: null,
     });
     await skills.setStatus(skill.id, "validada");
-    await aplicarDerivaTabelaNoGrafo({ grafo, skills, acessoId: acessoId, tabelaNome: "ContaReceber" });
+    await aplicarDerivaTabelaNoGrafo({
+      grafo,
+      skills,
+      acessoId: acessoId,
+      tabelaNome: "ContaReceber",
+    });
     await grafo.mergeColuna({
       acessoId: acessoId,
       tabelaId: tabela.id,

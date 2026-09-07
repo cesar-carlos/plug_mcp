@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AdicionarAcesso,
-  RegistrarAcesso,
-  RemoverAcesso,
-} from "../../src/application/use-cases/cofre.js";
+import { RegistrarAcesso, RemoverAcesso } from "../../src/application/use-cases/cofre.js";
 import {
   BuscarContexto,
   ConsultarDados,
@@ -38,6 +34,7 @@ import {
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { seedTabelaComColunas } from "../helpers/seed-grafo.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
+import { newAdicionarAcesso } from "../helpers/adicionar-acesso.js";
 import { asAcessoId } from "../../src/infrastructure/persistence/as-acesso-id.js";
 import { listPublishedSkillsForUsuario } from "../../src/infrastructure/mcp/skill-tools.js";
 import { requireSkillDoAcesso } from "../../src/application/use-cases/shared/skill-do-acesso.js";
@@ -157,10 +154,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("mesmo usuario e agentId, dois client_tokens: skill do acesso A é invisível no B", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "mesmo@b.com", "tok-persona-a-111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-persona-b-222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-persona-b-222",
+    });
     const acessoB = added.acesso.id;
 
     await seedTabelaComColunas(ctx.grafo, {
@@ -228,7 +226,7 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("N>1: omitir acessoId recusa em vez de misturar catálogos", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "n@b.com", "tok-n1-123456");
-    await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(a.usuarioId, {
+    await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
       agentId,
       dialeto: "mssql",
       clientToken: "tok-n2-123456",
@@ -241,10 +239,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("omitir skillIds em consultar_dados / buscar_contexto não une o outro acesso", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "omit@b.com", "tok-omit-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-omit-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-omit-b-2222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,
@@ -290,10 +289,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("resolver_conflito e remover_anotacao não mutam o outro catálogo", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "idor@b.com", "tok-idor-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-idor-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-idor-b-2222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,
@@ -365,10 +365,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("anotar_grafo recusa skillId de outro acesso", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "nota@b.com", "tok-nota-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-nota-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-nota-b-2222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,
@@ -393,10 +394,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("aprendizado e sinônimo recusam skillId/alvoId de outro acesso", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "apr@b.com", "tok-apr-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-apr-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-apr-b-2222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,
@@ -516,13 +518,14 @@ describe("catálogo isolado por acesso (client_token)", () => {
     });
   });
 
-  it("N>1: skillId único amarra o acesso; slug ambíguo ou omitido recusa", async () => {
+  it("N>1 sem Bearer de sessão: skillId não infere acesso; omitir recusa", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "bind@b.com", "tok-bind-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-bind-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-bind-b-2222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,
@@ -549,10 +552,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
       stubSessions(),
       crypto,
     );
-    const boundId = await obter.execute(a.usuarioId, { skillId: skillA });
+    await expect(obter.execute(a.usuarioId, { skillId: skillA })).rejects.toMatchObject({
+      code: ERROR_CODES.VALIDATION_ERROR,
+    });
+    const boundId = await obter.execute(a.usuarioId, { acessoId: a.acessoId, skillId: skillA });
     expect(boundId.skill.acessoId).toBe(a.acessoId);
-    const boundSlug = await obter.execute(a.usuarioId, { slug: "produtos" });
-    expect(boundSlug.skill.id).toBe(skillA);
 
     const consultar = new ConsultarDados(
       ctx.acessos,
@@ -564,13 +568,19 @@ describe("catálogo isolado por acesso (client_token)", () => {
       500,
       5000,
     );
+    await expect(
+      consultar.execute(a.usuarioId, {
+        skillId: skillA,
+        pergunta: "lista de produtos",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
     const viaSkillTool = await consultar.execute(a.usuarioId, {
+      acessoId: a.acessoId,
       skillId: skillA,
       pergunta: "lista de produtos",
     });
     expect(viaSkillTool.skillId).toBe(skillA);
 
-    await treinarECriar(ctx, a.usuarioId, acessoB, "Produtos");
     await expect(obter.execute(a.usuarioId, { slug: "produtos" })).rejects.toMatchObject({
       code: ERROR_CODES.VALIDATION_ERROR,
     });
@@ -582,10 +592,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("consultaAprendidaId do acesso A não executa no B", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "aprq@b.com", "tok-aprq-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-aprq-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-aprq-b-2222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,
@@ -634,10 +645,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("UUID de coluna do acesso A não muta o grafo do B", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "uuid@b.com", "tok-uuid-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-uuid-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-uuid-b-2222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,
@@ -664,10 +676,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("listar_auditoria N>1 recorta por acessoId e não mistura SQL do outro token", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "aud@b.com", "tok-aud-a-1111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-aud-b-2222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-aud-b-2222",
+    });
     const acessoB = added.acesso.id;
     await ctx.audit.append({
       usuarioId: a.usuarioId,
@@ -708,10 +721,11 @@ describe("catálogo isolado por acesso (client_token)", () => {
   it("consultar_dados.aprendizado[] com skillId de outro acesso não falha a consulta nem grava no B", async () => {
     const ctx = repos();
     const a = await registrar(ctx, "aprq2@b.com", "tok-aprq2-a-111");
-    const added = await new AdicionarAcesso(ctx.acessos, ctx.plug, stubSessions(), crypto).execute(
-      a.usuarioId,
-      { agentId, dialeto: "mssql", clientToken: "tok-aprq2-b-222" },
-    );
+    const added = await newAdicionarAcesso(ctx.acessos, ctx.plug, crypto).execute(a.usuarioId, {
+      agentId,
+      dialeto: "mssql",
+      clientToken: "tok-aprq2-b-222",
+    });
     const acessoB = added.acesso.id;
     await seedTabelaComColunas(ctx.grafo, {
       acessoId: a.acessoId,

@@ -7,6 +7,7 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../../domain/ports/plug-server-gateway.port.js";
+import { currentAcessoId } from "../../session-context.js";
 import { withHubAuth } from "./hub-auth.js";
 
 export interface BindAcessoHint {
@@ -15,48 +16,6 @@ export interface BindAcessoHint {
   readonly skillIds?: readonly string[];
   readonly slug?: string;
 }
-
-const idsHintSkill = (hint: BindAcessoHint): readonly string[] => [
-  ...new Set(
-    [...(hint.skillIds ?? []), hint.skillId ?? ""]
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0),
-  ),
-];
-
-const inferAcessoFromHint = async (
-  lista: readonly Acesso[],
-  hint: BindAcessoHint,
-): Promise<Acesso | null> => {
-  if (!hint.skills || lista.length === 0) {
-    return null;
-  }
-  const byId = new Map(lista.map((acesso) => [acesso.id, acesso]));
-  const matched = new Set<string>();
-  const skillIds = idsHintSkill(hint);
-  if (skillIds.length > 0) {
-    for (const skillId of skillIds) {
-      const skill = await hint.skills.findById(skillId);
-      const dono = skill?.acessoId;
-      if (dono && byId.has(dono)) {
-        matched.add(dono);
-      }
-    }
-  } else if (hint.slug?.trim()) {
-    const slug = hint.slug.trim();
-    for (const acesso of lista) {
-      const found = await hint.skills.findBySlug(acesso.id, slug);
-      if (found) {
-        matched.add(acesso.id);
-      }
-    }
-  }
-  if (matched.size !== 1) {
-    return null;
-  }
-  const only = [...matched][0];
-  return only ? (byId.get(only) ?? null) : null;
-};
 
 export const requireUsuario = (usuarioId: string | undefined): string => {
   if (!usuarioId) {
@@ -69,15 +28,25 @@ export const requireAcesso = async (
   acessos: AcessoRepositoryPort,
   acessoId: string | undefined,
   usuarioId: string,
-  hint?: BindAcessoHint,
+  _hint?: BindAcessoHint,
 ): Promise<Acesso> => {
-  if (acessoId?.trim()) {
-    const acesso = await acessos.findByIdForUsuario(acessoId, usuarioId);
+  const bound = currentAcessoId()?.trim();
+  const requested = acessoId?.trim();
+  if (bound && requested && requested !== bound) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "acessoId não corresponde ao token MCP.",
+      hint: "Este Bearer autentica um único acesso. Omita acessoId. Outra persona usa o token MCP dela (setupUrl de adicionar_acesso / registrar_acesso).",
+    });
+  }
+  const effective = requested ?? bound;
+  if (effective) {
+    const acesso = await acessos.findByIdForUsuario(effective, usuarioId);
     if (!acesso) {
       throw new DomainError({
         code: ERROR_CODES.ACESSO_NOT_FOUND,
         message: "Acesso não encontrado para este token MCP.",
-        hint: "Confira o acessoId com listar_acessos. O token identifica o usuário; o acesso é o trio agentId + client_token.",
+        hint: "Este Bearer autentica só a persona atual. Confira listar_acessos ou use o token MCP da outra persona.",
       });
     }
     return acesso;
@@ -86,16 +55,10 @@ export const requireAcesso = async (
   if (lista.length === 1 && lista[0]) {
     return lista[0];
   }
-  if (hint) {
-    const inferred = await inferAcessoFromHint(lista, hint);
-    if (inferred) {
-      return inferred;
-    }
-  }
   throw new DomainError({
     code: ERROR_CODES.VALIDATION_ERROR,
     message: "acessoId é obrigatório.",
-    hint: "Chame listar_acessos e passe o id. Com um único acesso, o MCP usa esse automaticamente. Com vários, skillId ou slug único nos seus catálogos amarra o acesso — catálogos não se unem.",
+    hint: "O token MCP autentica um único acesso. Com Bearer, omita acessoId. Sem sessão, passe o id de listar_acessos.",
   });
 };
 

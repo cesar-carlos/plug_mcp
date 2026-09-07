@@ -20,6 +20,8 @@ const acesso = (statusAcesso: Acesso["statusAcesso"]): Acesso => ({
   nomeAmigavel: "t",
   clientTokenEnc: "x",
   clientTokenHash: "y",
+  tokenHash: "th-error-envelope",
+  tokenExpiresAt: null,
   statusAcesso,
   escopoPadrao: null,
   timezone: null,

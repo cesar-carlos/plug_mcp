@@ -45,7 +45,7 @@ const setup = async () => {
     clientToken: "tok-sql-123456",
   });
   await seedTabelaComColunas(grafo, {
-      acessoId: created.acessoId,
+    acessoId: created.acessoId,
     usuarioId: created.usuarioId,
     nome: "produto",
     colunas: ["codprod", "dtcad"],
@@ -125,7 +125,9 @@ describe("RemoverSkill", () => {
     expect(consultas).toHaveLength(1);
     expect(consultas[0]?.skillIds).toEqual([]);
     expect(await aprendizado.listarSinonimos(created.acessoId)).toEqual([]);
-    expect((await grafo.listTabelas(created.acessoId)).map((tabela) => tabela.nome)).toEqual(["produto"]);
+    expect((await grafo.listTabelas(created.acessoId)).map((tabela) => tabela.nome)).toEqual([
+      "produto",
+    ]);
     const again = await criar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       slug: "faturamento-periodo",

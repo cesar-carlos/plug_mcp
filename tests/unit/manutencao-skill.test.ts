@@ -63,7 +63,7 @@ const seed = async () => {
     remember: () => undefined,
   };
   await seedTabelaComColunas(grafo, {
-      acessoId: created.acessoId,
+    acessoId: created.acessoId,
     usuarioId: created.usuarioId,
     nome: "produto",
     colunas: ["codprod", "valor"],

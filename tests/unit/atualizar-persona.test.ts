@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  AdicionarAcesso,
   AtualizarPersona,
   ListarAcessos,
   RegistrarAcesso,
@@ -20,6 +19,7 @@ import {
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
+import { newAdicionarAcesso } from "../helpers/adicionar-acesso.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -195,18 +195,15 @@ describe("atualizar_persona", () => {
     expect(listedNull.acessos[0]?.instrucoesPersona).toBeNull();
   });
 
-  it("várias personas são vários acessos; listar_acessos devolve os dois chapéus", async () => {
+  it("várias personas são vários acessos; sem Bearer de sessão listar_acessos devolve os dois chapéus", async () => {
     const { plug, acessos, created } = await seed();
     const agent2 = "22222222-2222-4222-8222-222222222222";
     plug.approve(agent2);
-    const added = await new AdicionarAcesso(acessos, plug, stubSessions(), crypto).execute(
-      created.usuarioId,
-      {
-        agentId: agent2,
-        dialeto: "postgres",
-        clientToken: "tok-sql-second1",
-      },
-    );
+    const added = await newAdicionarAcesso(acessos, plug, crypto).execute(created.usuarioId, {
+      agentId: agent2,
+      dialeto: "postgres",
+      clientToken: "tok-sql-second1",
+    });
     await new AtualizarPersona(acessos).execute(created.usuarioId, {
       acessoId: created.acessoId,
       nomePersona: "Vendedor",

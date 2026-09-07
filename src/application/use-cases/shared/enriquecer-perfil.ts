@@ -682,7 +682,9 @@ export const enriquecerPerfilCompleto = async (
     const pendencias: string[] = [];
     for (const item of colunasFisicas) {
       const tabela = await deps.grafo.findTabelaByNome(deps.acessoId, item.tabela);
-      const coluna = tabela ? await deps.grafo.findColuna(deps.acessoId, tabela.id, item.coluna) : null;
+      const coluna = tabela
+        ? await deps.grafo.findColuna(deps.acessoId, tabela.id, item.coluna)
+        : null;
       if (!coluna || (!coluna.tipo && !coluna.formato)) {
         pendencias.push(`Coluna ${item.tabela}.${item.coluna} sem tipo/formato.`);
       }

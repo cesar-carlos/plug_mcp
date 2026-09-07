@@ -49,13 +49,13 @@ const setup = async () => {
     clientToken: "tok-sql-123456",
   });
   await grafo.mergeTabela({
-      acessoId: created.acessoId,
+    acessoId: created.acessoId,
     nome: "pedido",
     origem: "validado_execucao",
     autorUsuarioId: created.usuarioId,
   });
   await grafo.mergeTabela({
-      acessoId: created.acessoId,
+    acessoId: created.acessoId,
     nome: "cliente",
     origem: "validado_execucao",
     autorUsuarioId: created.usuarioId,
