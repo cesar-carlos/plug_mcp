@@ -17,6 +17,16 @@ Lista do que **já está no código**, não um backlog. Norte vivo: [objective.m
 - Adapter REST: timeout alinhado ao bridge; dois `http(s).Agent` (auth 4 / SQL 16); keepAlive = probe TCP; `compose().close()` destrói os pools.
 - Postgres obrigatório em produção. Redis opcional (rate limit, policy, cache de resultado).
 
+## Melhorias coordenadas entregues
+
+- Preflight compartilhado e `planoConsulta` para validação e execução; IR semântico v2 com agregação/listagem e compatibilidade v1; recomendações de orçamento estruturadas.
+- Diagnóstico factual de cobertura, governança temporal de anotações e `atualizar_anotacao` confirmado; vigência e agenda de revisão opcional (`revisarEm`/cadência) avaliadas no fuso do acesso, sem alterar autorização.
+- Snapshots/diff/hash SHA-256 para publicação atômica com confirmação; histórico preservado e deriva com delta/skills/consultas afetadas.
+- Auditoria JSON tipada, cache hit/retornos antecipados, timings amostrados do hub e métricas por skill/origem/erro sem conteúdo sensível; painel operacional de taxas/tendência derivado desses metadados.
+- Fixture sintética permanente e testes gerativos determinísticos do IR; gate `release:check` reúne formato, lint, tipos, testes e build.
+- Contrato REST determinístico gerado do OpenAPI no `plug_server/contracts/plug-mcp-rest-v1.json`, com `contract:generate`/`contract:check`, baseline de campos públicos e verificação cross-repo na CI.
+- Certificação de migrations em banco efêmero da CI (fresh e upgrade real desde `0023`), singleflight local/Redis para agregados idênticos, worker separado de SLO/revisão e outbox de webhook HTTPS assinado. Alertas e webhooks guardam apenas IDs e agregados, nunca se tornam conhecimento ou autorização SQL.
+
 ## Critérios de sucesso
 
 - Bootstrap sem Bearer só com `registrar_acesso`; token MCP nunca na resposta da tool (só `setupCode`/`setupUrl`). Guias `guia://` no bootstrap; `skill://` e `persona://` exigem Bearer (URI só desta sessão). Cursor: uma entrada MCP / um Bearer por persona.

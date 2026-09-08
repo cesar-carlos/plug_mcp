@@ -126,11 +126,30 @@ export class TreinarComSql {
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "treinar_com_sql",
-        sqlEnviado: modelo.sql,
+        // Keep the compatibility field as an operation tag; SQL is never telemetry.
+        sqlEnviado: `treino;dialeto:${acesso.dialeto}`,
         sucesso: false,
         codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
         linhasRetornadas: null,
         duracaoMs: Date.now() - started,
+        metadata: {
+          origem: "modelo",
+          cacheHit: false,
+          tabelas: modelo.tabelas.length,
+          stage: "hub",
+          ...(error instanceof DomainError && error.source
+            ? {
+                errorSource:
+                  error.source === ERROR_SOURCE.sql
+                    ? "sql"
+                    : error.source === ERROR_SOURCE.sqlEngine
+                      ? "sql_engine"
+                      : error.source === ERROR_SOURCE.policy
+                        ? "client_token_rpc"
+                        : "plug_server_http",
+              }
+            : {}),
+        },
       });
       throw error;
     }
@@ -287,11 +306,18 @@ export class TreinarComSql {
       usuarioId: uid,
       acessoId: acesso.id,
       tool: "treinar_com_sql",
-      sqlEnviado: modelo.sql,
+      // Keep the compatibility field as an operation tag; SQL is never telemetry.
+      sqlEnviado: `treino;dialeto:${acesso.dialeto}`,
       sucesso: true,
       codigoErro: null,
       linhasRetornadas: 1,
       duracaoMs: Date.now() - started,
+      metadata: {
+        origem: "modelo",
+        cacheHit: false,
+        tabelas: modelo.tabelas.length,
+        stage: "hub",
+      },
     });
 
     if (this.extras.schemaDriftEnabled !== false) {

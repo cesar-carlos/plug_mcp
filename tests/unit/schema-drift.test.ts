@@ -188,4 +188,55 @@ describe("deriva de esquema", () => {
     expect(result.drifted).toBe(false);
     expect((await skills.findById(skill.id))?.status).toBe("validada");
   });
+
+  it("detecta remoção de coluna licenciada mesmo ausente do catálogo novo", async () => {
+    const grafo = new InMemoryGrafoRepository();
+    const skills = new InMemorySkillRepository();
+    const { tabela } = await grafo.mergeTabela({
+      acessoId,
+      nome: "receber",
+      origem: "validado_execucao",
+      autorUsuarioId: null,
+    });
+    await grafo.mergeColuna({
+      acessoId,
+      tabelaId: tabela.id,
+      nome: "valor",
+      tipo: "numeric",
+      nullable: false,
+      origem: "validado_execucao",
+      autorUsuarioId: null,
+    });
+    const skill = await skills.create({
+      acessoId,
+      slug: "receber",
+      nome: "Receber",
+      descricao: "t",
+      sqlModelo: "SELECT r.valor FROM receber r",
+      escopo: {
+        tabelas: ["receber"],
+        colunasPorTabela: { receber: ["valor"] },
+        relacionamentos: [],
+        graoPorTabela: {},
+        graoResultado: ["valor"],
+        metricasSaida: [],
+        pacoteVersao: 2,
+      },
+      autorUsuarioId: null,
+    });
+    await skills.setStatus(skill.id, "publicada");
+    await aplicarDerivaTabelaNoGrafo({ grafo, skills, acessoId, tabelaNome: "receber" });
+
+    const result = await aplicarDerivaEsquema({
+      grafo,
+      skills,
+      acessoId,
+      tabelaNome: "receber",
+      assinatura: assinaturaTabela({ colunas: [], relacionamentos: [] }),
+    });
+
+    expect(result.drifted).toBe(true);
+    expect(result.delta.colunasRemovidas).toEqual(["valor"]);
+    expect((await skills.findById(skill.id))?.status).toBe("rascunho_revalidacao");
+  });
 });

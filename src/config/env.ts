@@ -62,6 +62,24 @@ const envSchema = z.object({
     .default("true")
     .transform((value) => !["false", "0", "no"].includes(value.toLowerCase())),
   QUERY_CACHE_TTL_MS: z.coerce.number().int().positive().default(60_000),
+  QUERY_CACHE_SINGLEFLIGHT_WAIT_MS: z.coerce.number().int().positive().max(300_000).default(35_000),
+  QUERY_CACHE_SINGLEFLIGHT_LEASE_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(305_000)
+    .default(300_000),
+  PLUG_SERVER_TIMINGS_SAMPLE_PERCENT: z.coerce.number().int().min(0).max(100).default(10),
+  OPERATIONS_WORKER_INTERVAL_MS: z.coerce.number().int().min(10_000).max(3_600_000).default(60_000),
+  OPERATIONS_SLO_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1_440).default(15),
+  OPERATIONS_SLO_MIN_OBSERVATIONS: z.coerce.number().int().min(1).max(10_000).default(20),
+  OPERATIONS_SLO_ERROR_WARNING_PERCENT: z.coerce.number().min(0).max(100).default(5),
+  OPERATIONS_SLO_ERROR_CRITICAL_PERCENT: z.coerce.number().min(0).max(100).default(20),
+  OPERATIONS_SLO_P95_WARNING_MS: z.coerce.number().int().positive().default(10_000),
+  OPERATIONS_SLO_P95_CRITICAL_MS: z.coerce.number().int().positive().default(30_000),
+  OPERATIONS_SLO_TRUNCATION_WARNING_PERCENT: z.coerce.number().min(0).max(100).default(10),
+  OPERATIONS_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(8_000),
+  OPERATIONS_WEBHOOK_LEASE_MS: z.coerce.number().int().min(10_000).max(3_600_000).default(305_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema> & {

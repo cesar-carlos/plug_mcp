@@ -157,6 +157,16 @@ export const ancoraConsultaSemantica = (
     return allowlist[0]!;
   }
   const wanted = new Set(aliases.map((alias) => alias.trim().toLowerCase()).filter(Boolean));
+  if (wanted.size === 0) {
+    if (allowlist.length === 1) {
+      return allowlist[0]!;
+    }
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "Consulta semântica de listagem vale para uma skill.",
+      hint: "Passe skillId para escolher o pacote que certifica dimensoes[].",
+    });
+  }
   const candidatas = allowlist.filter((skill) =>
     escopoDaSkillPublicada(skill).metricasSaida.some((item) =>
       wanted.has(item.alias.toLowerCase()),

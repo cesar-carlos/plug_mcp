@@ -28,15 +28,29 @@ jobs:
       MCP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       PLUG_SERVER_BASE_URL: http://plug-server.test
       GIT_SHA: ${{ github.sha }}
+      PLUG_SERVER_ROOT: ${{ github.workspace }}/plug_server_contract
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout plug_server contract
+        uses: actions/checkout@v4
+        with:
+          repository: cesar-carlos/plug_server
+          path: plug_server_contract
       - uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npx tsc -p tsconfig.json --noEmit
+      - name: Install plug_server contract dependencies
+        run: npm ci
+        working-directory: plug_server_contract
+      - name: Check plug_server contract and compatibility baseline
+        run: npm run contract:check
+        working-directory: plug_server_contract
+      - run: npm run test:migrations
+        env:
+          CI: "true"
+          NODE_ENV: test
       - run: npm run db:migrate
-      - run: npm test
+      - name: Release gate
+        run: npm run release:check

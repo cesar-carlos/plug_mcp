@@ -194,10 +194,21 @@ describe("consultar_dados só com skill", () => {
         params: { codigo: 10 },
       });
       expect(plug.lastSql).toMatch(/_validacao/i);
+      const previewPublicacao = await useCases.publicarSkill.execute(
+        registered.json.usuarioId as string,
+        {
+          acessoId: registered.json.acessoId as string,
+          skillId: created.skill.id,
+          confirmadoPeloUsuario: true,
+        },
+      );
+      expect(previewPublicacao.confirmacaoPendente).toBe(true);
+      expect(previewPublicacao.confirmacaoHash).toBeTruthy();
       await useCases.publicarSkill.execute(registered.json.usuarioId as string, {
         acessoId: registered.json.acessoId as string,
         skillId: created.skill.id,
         confirmadoPeloUsuario: true,
+        confirmacaoHash: previewPublicacao.confirmacaoHash,
       });
 
       plug.lastSql = null;

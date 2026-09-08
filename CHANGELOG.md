@@ -11,6 +11,24 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Added — operação confiável
+
+- Migrations `0027`: caixa de alertas por acesso, webhook cifrado e outbox com lease/retry/dead-letter.
+- Worker `worker:operacoes`, SLO configurável por ambiente, fila de revisão no fuso do acesso e tools de alerta/webhook confirmadas.
+- Singleflight para consultas agregadas e certificação de migrations limpa + upgrade a partir de `0023` na CI.
+- Propriedades determinísticas ampliadas para IR v1/v2 e dialetos suportados.
+
+### Added — consultas inteligentes e governança
+
+- IR semântico v2 (agregação/listagem) com compatibilidade v1, preflight compartilhado, `planoConsulta`, recomendações de orçamento e diagnóstico factual de cobertura.
+- Governança temporal de anotações (`fonteTipo`, responsável, vigência/status) e `atualizar_anotacao` com confirmação.
+- Preview/diff/hash SHA-256 e snapshots versionados para publicação atômica; deriva de schema com deltas e impactos.
+- Auditoria estruturada, métricas por skill/origem/erro/cache e timings do hub amostrados por `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT`.
+- Contrato REST do hub gerado do OpenAPI (`plug_server/contracts/plug-mcp-rest-v1.json`) e verificação cross-repo na CI.
+- Agenda opcional de revisão de conhecimento (`revisarEm`/`periodoRevisaoDias`) e fila segura em `listar_anotacoes`; não altera a vigência nem a autorização de consulta.
+- Fixture sintética de consulta, testes gerativos determinísticos do IR, painel operacional anônimo em `listar_metricas_agente` e gate `npm run release:check`.
+- Baseline de compatibilidade de campos de resposta do contrato REST: remoção silenciosa falha em `contract:check` e no teste MCP ↔ hub.
+
 ### Added
 
 - Token MCP **por acesso** (`acesso.token_hash`): cada `CLIENT_TOKEN` ganha um Bearer distinto. `registrar_acesso` com e-mail existente + senha correta + token novo emite outro setup; `adicionar_acesso` devolve `setupUrl` da persona nova **sem** trocar a sessão atual. Migration `0023_token_por_acesso.sql`: o acesso mais antigo herda o Bearer; extras ganham `mcp_setup` (TTL 7 dias).

@@ -3,9 +3,11 @@ import type { Acesso, NovoAcesso, StatusAcesso } from "../../../domain/entities/
 import type { NovoUsuarioMcp, UsuarioMcp } from "../../../domain/entities/usuario-mcp.js";
 import type {
   AnotacaoGrafo,
+  GovernancaConhecimento,
   NovaSkill,
   Skill,
   StatusSkill,
+  StatusConhecimento,
   ParametroSkill,
 } from "../../../domain/entities/skill.js";
 import { parseParametroSkillList } from "../../../domain/entities/skill.js";
@@ -139,6 +141,10 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
 
   async listByUsuario(usuarioId: string): Promise<readonly Acesso[]> {
     return [...this.rows.values()].filter((row) => row.usuarioId === usuarioId);
+  }
+
+  async listAll(): Promise<readonly Acesso[]> {
+    return [...this.rows.values()];
   }
 
   async findByUsuarioAgentTokenHash(
@@ -804,6 +810,14 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
   }
 }
 
+const anotacaoAtivaEm = (nota: AnotacaoGrafo, at: Date): boolean => {
+  if (nota.status === "obsoleta") {
+    return false;
+  }
+  const dia = at.toISOString().slice(0, 10);
+  return (!nota.vigenteDe || nota.vigenteDe <= dia) && (!nota.vigenteAte || nota.vigenteAte >= dia);
+};
+
 export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPort {
   private readonly rows = new Map<string, AnotacaoGrafo>();
 
@@ -815,6 +829,7 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
     titulo: string;
     texto: string;
     autorUsuarioId: string | null;
+    governanca?: GovernancaConhecimento;
   }): Promise<AnotacaoGrafo> {
     const row: AnotacaoGrafo = {
       id: id(),
@@ -824,6 +839,15 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
       tipo: input.tipo,
       titulo: input.titulo,
       texto: input.texto,
+      fonteTipo: input.governanca?.fonteTipo ?? "usuario",
+      fonteReferencia: input.governanca?.fonteReferencia ?? null,
+      responsavel: input.governanca?.responsavel ?? null,
+      validadoEm: input.governanca?.validadoEm ?? null,
+      vigenteDe: input.governanca?.vigenteDe ?? null,
+      vigenteAte: input.governanca?.vigenteAte ?? null,
+      revisarEm: input.governanca?.revisarEm ?? null,
+      periodoRevisaoDias: input.governanca?.periodoRevisaoDias ?? null,
+      status: input.governanca?.status ?? "vigente",
       autorUsuarioId: input.autorUsuarioId,
       createdAt: now(),
       updatedAt: now(),
@@ -832,16 +856,32 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
     return row;
   }
 
+  async update(
+    anotacaoId: string,
+    patch: Partial<Pick<AnotacaoGrafo, "tipo" | "titulo" | "texto"> & GovernancaConhecimento>,
+  ): Promise<AnotacaoGrafo> {
+    const row = this.rows.get(anotacaoId);
+    if (!row) {
+      throw new Error("annotation not found");
+    }
+    const next = { ...row, ...patch, updatedAt: now() };
+    this.rows.set(anotacaoId, next);
+    return next;
+  }
+
   async list(
     acessoId: string,
     tabelaId?: string | null,
     skillId?: string | null,
+    options?: { status?: StatusConhecimento; ativasEm?: Date },
   ): Promise<readonly AnotacaoGrafo[]> {
     return [...this.rows.values()].filter(
       (row) =>
         mesmoAcessoCatalogo(row.acessoId, acessoId) &&
         (tabelaId === undefined || row.tabelaId === tabelaId) &&
-        (skillId === undefined || row.skillId === skillId),
+        (skillId === undefined || row.skillId === skillId) &&
+        (options?.status === undefined || (row.status ?? "vigente") === options.status) &&
+        (options?.ativasEm === undefined || anotacaoAtivaEm(row, options.ativasEm)),
     );
   }
 
@@ -865,9 +905,14 @@ export class InMemoryAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryP
     acessoId: string,
     query: string,
     limite: number,
+    options?: { ativasEm?: Date },
   ): Promise<readonly HitBusca<AnotacaoGrafo>[]> {
     return rankByTermsHits(
-      [...this.rows.values()].filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId)),
+      [...this.rows.values()].filter(
+        (row) =>
+          mesmoAcessoCatalogo(row.acessoId, acessoId) &&
+          (options?.ativasEm === undefined || anotacaoAtivaEm(row, options.ativasEm)),
+      ),
       tokenizeQuery(query),
       (row) => `${row.titulo} ${row.texto}`,
       limite,

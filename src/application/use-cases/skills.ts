@@ -4,10 +4,14 @@ import type { Acesso } from "../../domain/entities/acesso.js";
 import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
 import type {
   AnotacaoGrafo,
+  FonteConhecimento,
+  GovernancaConhecimento,
   Skill,
+  StatusConhecimento,
   StatusSkill,
   TipoParametroSkill,
 } from "../../domain/entities/skill.js";
+import { pareceSegredoEmTexto } from "../../domain/entities/parece-segredo.js";
 import {
   PACOTE_VERSAO_ATUAL,
   overlayMetricasSaida,
@@ -28,6 +32,10 @@ import {
   paresDeInput,
 } from "../../domain/entities/relacionamento.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
+import type {
+  SkillPublicacao,
+  SkillPublicacaoRepositoryPort,
+} from "../../domain/ports/skill-publicacao-repository.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
@@ -95,6 +103,148 @@ import {
   matchRelacionamentoGrafo,
   resolverTipoJoinConfirmacao,
 } from "./shared/resolver-tipo-join.js";
+
+const FONTES_CONHECIMENTO = new Set<FonteConhecimento>([
+  "usuario",
+  "erp",
+  "documento",
+  "importacao",
+  "legado",
+  "outro",
+]);
+const STATUS_CONHECIMENTO = new Set<StatusConhecimento>(["vigente", "obsoleta"]);
+
+export interface GovernancaConhecimentoInput {
+  readonly fonteTipo?: string;
+  readonly fonteReferencia?: string | null;
+  readonly responsavel?: string | null;
+  readonly validadoEm?: string | null;
+  readonly vigenteDe?: string | null;
+  readonly vigenteAte?: string | null;
+  readonly revisarEm?: string | null;
+  readonly periodoRevisaoDias?: number | null;
+  readonly status?: string;
+}
+
+const textoGovernanca = (
+  value: string | null | undefined,
+  campo: string,
+): string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null || value.trim() === "") return null;
+  const text = value.trim();
+  if (text.length > 300 || pareceSegredoEmTexto(text)) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: `Campo ${campo} de governança inválido.`,
+      hint: "Não grave segredo, token, senha ou texto acima de 300 caracteres.",
+    });
+  }
+  return text;
+};
+
+const dataGovernanca = (
+  value: string | null | undefined,
+  campo: string,
+  apenasData = false,
+): Date | string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null || value.trim() === "") return null;
+  const text = value.trim();
+  if (apenasData) {
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(text) || Number.isNaN(Date.parse(`${text}T00:00:00Z`))) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `${campo} deve ser YYYY-MM-DD.`,
+        hint: "Informe uma data ISO válida.",
+      });
+    }
+    return text;
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: `${campo} deve ser data ISO válida.`,
+      hint: "Informe timestamp ISO-8601.",
+    });
+  }
+  return parsed;
+};
+
+const validarTextoConhecimento = (value: string, campo: string): string => {
+  const texto = value.trim();
+  if (pareceSegredoEmTexto(texto)) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: `${campo} parece conter um segredo e não será persistido.`,
+      hint: "Remova senha, token, JWT ou credencial antes de gravar conhecimento.",
+    });
+  }
+  return texto;
+};
+
+export const parseGovernancaConhecimento = (
+  input: GovernancaConhecimentoInput | undefined,
+): GovernancaConhecimento => {
+  if (!input) return {};
+  const fonteTipo = input.fonteTipo?.trim().toLowerCase();
+  const status = input.status?.trim().toLowerCase();
+  if (fonteTipo && !FONTES_CONHECIMENTO.has(fonteTipo as FonteConhecimento)) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "fonteTipo inválido.",
+      hint: "Use usuario, erp, documento, importacao, legado ou outro.",
+    });
+  }
+  if (status && !STATUS_CONHECIMENTO.has(status as StatusConhecimento)) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "status de conhecimento inválido.",
+      hint: "Use vigente ou obsoleta.",
+    });
+  }
+  const vigenteDe = dataGovernanca(input.vigenteDe, "vigenteDe", true) as string | null | undefined;
+  const vigenteAte = dataGovernanca(input.vigenteAte, "vigenteAte", true) as
+    string | null | undefined;
+  const revisarEm = dataGovernanca(input.revisarEm, "revisarEm", true) as string | null | undefined;
+  const periodoRevisaoDias = input.periodoRevisaoDias;
+  if (vigenteDe && vigenteAte && vigenteDe > vigenteAte) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "vigenteDe não pode ser posterior a vigenteAte.",
+      hint: "Corrija o intervalo de vigência.",
+    });
+  }
+  if (
+    periodoRevisaoDias !== undefined &&
+    periodoRevisaoDias !== null &&
+    (!Number.isInteger(periodoRevisaoDias) || periodoRevisaoDias < 1 || periodoRevisaoDias > 3650)
+  ) {
+    throw new DomainError({
+      code: ERROR_CODES.VALIDATION_ERROR,
+      message: "periodoRevisaoDias deve estar entre 1 e 3650.",
+      hint: "Use uma cadência inteira em dias ou limpe o campo.",
+    });
+  }
+  return {
+    ...(fonteTipo ? { fonteTipo: fonteTipo as FonteConhecimento } : {}),
+    ...(input.fonteReferencia !== undefined
+      ? { fonteReferencia: textoGovernanca(input.fonteReferencia, "fonteReferencia") }
+      : {}),
+    ...(input.responsavel !== undefined
+      ? { responsavel: textoGovernanca(input.responsavel, "responsavel") }
+      : {}),
+    ...(input.validadoEm !== undefined
+      ? { validadoEm: dataGovernanca(input.validadoEm, "validadoEm") as Date | null }
+      : {}),
+    ...(input.vigenteDe !== undefined ? { vigenteDe } : {}),
+    ...(input.vigenteAte !== undefined ? { vigenteAte } : {}),
+    ...(input.revisarEm !== undefined ? { revisarEm } : {}),
+    ...(input.periodoRevisaoDias !== undefined ? { periodoRevisaoDias } : {}),
+    ...(status ? { status: status as StatusConhecimento } : {}),
+  };
+};
 
 interface ParamInput {
   nome?: string;
@@ -200,6 +350,199 @@ const montarResumoPublicacao = (skill: Skill, podeLiberar: boolean): ResumoPubli
           "Skill sem politicaConsulta. Na publicação confirmada o servidor grava o default (maxRows/timeoutMs). Ajuste com atualizar_skill.politicaConsulta. O default não inventa recorte empresa/filial nem exige período.",
       }),
 });
+
+export interface DiffPublicacao {
+  readonly basePublicacaoVersao: number | null;
+  readonly novaPublicacaoVersao: number;
+  readonly primeiraPublicacao: boolean;
+  readonly mudancas: readonly {
+    readonly tipo: string;
+    readonly operacao: "adicionado" | "removido" | "alterado";
+    readonly alvo: string;
+    readonly impacto: "amplia_escopo" | "reduz_escopo" | "muda_resultado" | "operacional";
+  }[];
+}
+
+const pacotePublicavel = (skill: Skill, politica: PoliticaConsulta): Record<string, unknown> => ({
+  slug: skill.slug,
+  nome: skill.nome,
+  descricao: skill.descricao,
+  sqlModelo: skill.sqlModelo,
+  params: skill.params,
+  escopo: skill.escopo,
+  pacoteVersao: skill.pacoteVersao,
+  consultaSemantica: skill.consultaSemantica,
+  politicaConsulta: politica,
+});
+
+const jsonCanonico = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(jsonCanonico).join(",")}]`;
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    return `{${Object.keys(row)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${jsonCanonico(row[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
+
+const mapPorNome = (items: readonly string[]): Set<string> =>
+  new Set(items.map((item) => item.toLowerCase()));
+
+const relacionamentoChave = (value: unknown): string => {
+  const rel = value as Record<string, unknown>;
+  const text = (item: unknown): string => (typeof item === "string" ? item : "");
+  const pares = Array.isArray(rel.pares)
+    ? rel.pares
+        .map((item) => {
+          const par = item as Record<string, unknown>;
+          return `${text(par.colunaOrigem).toLowerCase()}=${text(par.colunaDestino).toLowerCase()}`;
+        })
+        .join("&")
+    : `${text(rel.colunaOrigem).toLowerCase()}=${text(rel.colunaDestino).toLowerCase()}`;
+  return `${text(rel.tabelaOrigem).toLowerCase()}->${text(rel.tabelaDestino).toLowerCase()}:${pares}`;
+};
+
+const objetoPorChave = (value: unknown, key: string): Map<string, Record<string, unknown>> => {
+  const rows = Array.isArray(value) ? value : [];
+  const out = new Map<string, Record<string, unknown>>();
+  for (const item of rows) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const id = typeof row[key] === "string" ? row[key].toLowerCase() : "";
+    if (id) out.set(id, row);
+  }
+  return out;
+};
+
+const diffPublicacao = (
+  pacote: Record<string, unknown>,
+  base: SkillPublicacao | null,
+): DiffPublicacao => {
+  const before = (base?.pacote ?? {}) as Record<string, unknown>;
+  const beforeEscopo = (before.escopo ?? {}) as Record<string, unknown>;
+  const afterEscopo = (pacote.escopo ?? {}) as Record<string, unknown>;
+  const tablesBefore = mapPorNome(
+    Array.isArray(beforeEscopo.tabelas)
+      ? beforeEscopo.tabelas.filter((x): x is string => typeof x === "string")
+      : [],
+  );
+  const tablesAfter = mapPorNome(
+    Array.isArray(afterEscopo.tabelas)
+      ? afterEscopo.tabelas.filter((x): x is string => typeof x === "string")
+      : [],
+  );
+  const mudancas: DiffPublicacao["mudancas"][number][] = [];
+  const pushSetDelta = (tipo: string, beforeSet: Set<string>, afterSet: Set<string>): void => {
+    for (const alvo of afterSet) {
+      if (!beforeSet.has(alvo))
+        mudancas.push({ tipo, operacao: "adicionado", alvo, impacto: "amplia_escopo" });
+    }
+    for (const alvo of beforeSet) {
+      if (!afterSet.has(alvo))
+        mudancas.push({ tipo, operacao: "removido", alvo, impacto: "reduz_escopo" });
+    }
+  };
+  pushSetDelta("tabela", tablesBefore, tablesAfter);
+
+  const colunas = (escopo: Record<string, unknown>): Set<string> => {
+    const result = new Set<string>();
+    const porTabela = escopo.colunasPorTabela;
+    if (!porTabela || typeof porTabela !== "object") return result;
+    for (const [tabela, value] of Object.entries(porTabela as Record<string, unknown>)) {
+      for (const coluna of Array.isArray(value) ? value : []) {
+        if (typeof coluna === "string") result.add(`${tabela}.${coluna}`.toLowerCase());
+      }
+    }
+    return result;
+  };
+  pushSetDelta("coluna", colunas(beforeEscopo), colunas(afterEscopo));
+
+  const relKey = (row: Record<string, unknown>): string => relacionamentoChave(row);
+  const relBeforeKeys = new Set(
+    (Array.isArray(beforeEscopo.relacionamentos) ? beforeEscopo.relacionamentos : [])
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+      .map(relKey),
+  );
+  const relAfterKeys = new Set(
+    (Array.isArray(afterEscopo.relacionamentos) ? afterEscopo.relacionamentos : [])
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+      .map(relKey),
+  );
+  pushSetDelta("join", relBeforeKeys, relAfterKeys);
+  for (const key of relAfterKeys) {
+    if (!relBeforeKeys.has(key)) continue;
+    const beforeRel = (
+      Array.isArray(beforeEscopo.relacionamentos) ? beforeEscopo.relacionamentos : []
+    ).find(
+      (item) => item && typeof item === "object" && relKey(item as Record<string, unknown>) === key,
+    ) as Record<string, unknown> | undefined;
+    const afterRel = (
+      Array.isArray(afterEscopo.relacionamentos) ? afterEscopo.relacionamentos : []
+    ).find(
+      (item) => item && typeof item === "object" && relKey(item as Record<string, unknown>) === key,
+    ) as Record<string, unknown> | undefined;
+    if (jsonCanonico(beforeRel) !== jsonCanonico(afterRel))
+      mudancas.push({ tipo: "join", operacao: "alterado", alvo: key, impacto: "muda_resultado" });
+  }
+
+  const metricasBefore = objetoPorChave(beforeEscopo.metricasSaida, "alias");
+  const metricasAfter = objetoPorChave(afterEscopo.metricasSaida, "alias");
+  pushSetDelta("metrica", new Set(metricasBefore.keys()), new Set(metricasAfter.keys()));
+  for (const [alias, item] of metricasAfter) {
+    if (metricasBefore.has(alias) && jsonCanonico(metricasBefore.get(alias)) !== jsonCanonico(item))
+      mudancas.push({
+        tipo: "metrica",
+        operacao: "alterado",
+        alvo: alias,
+        impacto: "muda_resultado",
+      });
+  }
+  const paramsBefore = objetoPorChave(before.params, "nome");
+  const paramsAfter = objetoPorChave(pacote.params, "nome");
+  pushSetDelta("parametro", new Set(paramsBefore.keys()), new Set(paramsAfter.keys()));
+  for (const [nome, item] of paramsAfter) {
+    if (paramsBefore.has(nome) && jsonCanonico(paramsBefore.get(nome)) !== jsonCanonico(item))
+      mudancas.push({
+        tipo: "parametro",
+        operacao: "alterado",
+        alvo: nome,
+        impacto: "operacional",
+      });
+  }
+  const colunasBeforeRaw = beforeEscopo.colunasPorTabela;
+  const colunasAfterRaw = afterEscopo.colunasPorTabela;
+  if (
+    colunasBeforeRaw &&
+    colunasAfterRaw &&
+    jsonCanonico(colunasBeforeRaw) !== jsonCanonico(colunasAfterRaw)
+  ) {
+    mudancas.push({
+      tipo: "privacidade",
+      operacao: "alterado",
+      alvo: "colunasPorTabela",
+      impacto: "muda_resultado",
+    });
+  }
+  const addChanged = (
+    tipo: string,
+    key: string,
+    impacto: DiffPublicacao["mudancas"][number]["impacto"],
+  ): void => {
+    if (jsonCanonico(before[key]) !== jsonCanonico(pacote[key]))
+      mudancas.push({ tipo, operacao: base ? "alterado" : "adicionado", alvo: key, impacto });
+  };
+  addChanged("politica", "politicaConsulta", "operacional");
+  addChanged("consulta_semantica", "consultaSemantica", "muda_resultado");
+  addChanged("sql_modelo", "sqlModelo", "muda_resultado");
+  return {
+    basePublicacaoVersao: base?.publicacaoVersao ?? null,
+    novaPublicacaoVersao: (base?.publicacaoVersao ?? 0) + 1,
+    primeiraPublicacao: base === null,
+    mudancas,
+  };
+};
 
 export class CriarSkill {
   constructor(
@@ -557,11 +900,18 @@ export class PublicarSkill {
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
     private readonly grafo: GrafoRepositoryPort,
+    private readonly publicacoes?: SkillPublicacaoRepositoryPort,
+    private readonly crypto?: CryptoPort,
   ) {}
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; skillId?: string; confirmadoPeloUsuario?: boolean },
+    input: {
+      acessoId?: string;
+      skillId?: string;
+      confirmadoPeloUsuario?: boolean;
+      confirmacaoHash?: string;
+    },
   ): Promise<{
     success: true;
     publicado: boolean;
@@ -569,6 +919,9 @@ export class PublicarSkill {
     fluxoTreino: FluxoTreino;
     resumoPublicacao: ResumoPublicacao;
     faltas: readonly FatoIncompleto[];
+    diffPublicacao?: DiffPublicacao;
+    confirmacaoHash?: string;
+    confirmacaoPendente?: boolean;
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid, {
@@ -585,6 +938,22 @@ export class PublicarSkill {
     }
     const { fluxo, faltas } = await fluxoEFaltasForAcessoSkill(this.grafo, acesso.id, skill);
     const resumoPublicacao = montarResumoPublicacao(skill, fluxo.podeLiberar);
+    const politica = skill.politicaConsulta ?? POLITICA_CONSULTA_DEFAULT;
+    const pacote = pacotePublicavel(skill, politica);
+    const base = this.publicacoes ? await this.publicacoes.latest(acesso.id, skill.id) : null;
+    const diff = this.publicacoes ? diffPublicacao(pacote, base) : undefined;
+    const hash =
+      this.publicacoes && this.crypto
+        ? this.crypto.sha256Hex(
+            jsonCanonico({
+              acessoId: acesso.id,
+              skillId: skill.id,
+              skillVersao: skill.versao,
+              baseHash: base?.pacoteHash ?? null,
+              pacote,
+            }),
+          )
+        : undefined;
     if (input.confirmadoPeloUsuario !== true) {
       return {
         success: true,
@@ -593,7 +962,30 @@ export class PublicarSkill {
         fluxoTreino: fluxo,
         resumoPublicacao,
         faltas,
+        ...(diff ? { diffPublicacao: diff } : {}),
+        ...(hash ? { confirmacaoHash: hash, confirmacaoPendente: true } : {}),
       };
+    }
+    if (this.publicacoes && hash && input.confirmacaoHash !== hash) {
+      if (!input.confirmacaoHash) {
+        return {
+          success: true,
+          publicado: false,
+          skill,
+          fluxoTreino: fluxo,
+          resumoPublicacao,
+          faltas,
+          diffPublicacao: diff!,
+          confirmacaoHash: hash,
+          confirmacaoPendente: true,
+        };
+      }
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "O pacote mudou desde o preview de publicação.",
+        hint: "Revise o novo diff e confirme com o confirmacaoHash devolvido.",
+        details: { diffPublicacao: diff, confirmacaoHash: hash },
+      });
     }
     if (skill.status !== "validada") {
       throw new DomainError({
@@ -619,10 +1011,26 @@ export class PublicarSkill {
       });
     }
     await exigirPacotePublicavel(this.grafo, acesso.id, skill.escopo, skill.sqlModelo);
-    const comPolitica = skill.politicaConsulta
-      ? skill
-      : await this.skills.update(skill.id, { politicaConsulta: POLITICA_CONSULTA_DEFAULT });
-    const updated = await this.skills.setStatus(comPolitica.id, "publicada", comPolitica.versao);
+    const updated =
+      this.publicacoes && hash
+        ? (
+            await this.publicacoes.publishAtomically({
+              acessoId: acesso.id,
+              skillId: skill.id,
+              expectedSkillVersion: skill.versao,
+              pacote,
+              pacoteHash: hash,
+              politicaConsulta: politica,
+              autorUsuarioId: uid,
+            })
+          ).skill
+        : await (async () => {
+            const withPolicy =
+              skill.politicaConsulta === null
+                ? await this.skills.update(skill.id, { politicaConsulta: politica })
+                : skill;
+            return this.skills.setStatus(withPolicy.id, "publicada", withPolicy.versao);
+          })();
     const after = await fluxoEFaltasForAcessoSkill(this.grafo, acesso.id, updated);
     return {
       success: true,
@@ -631,6 +1039,7 @@ export class PublicarSkill {
       fluxoTreino: after.fluxo,
       resumoPublicacao: montarResumoPublicacao(updated, after.fluxo.podeLiberar),
       faltas: after.faltas,
+      ...(diff ? { diffPublicacao: diff } : {}),
     };
   }
 }
@@ -1201,6 +1610,7 @@ export class AnotarGrafo {
       tipo?: string;
       titulo?: string;
       texto?: string;
+      governanca?: GovernancaConhecimentoInput;
     },
   ): Promise<{ success: true; anotacao: AnotacaoGrafo }> {
     const uid = requireUsuario(usuarioId);
@@ -1208,8 +1618,8 @@ export class AnotarGrafo {
       skills: this.skills,
       skillId: input.skillId,
     });
-    const titulo = input.titulo?.trim() ?? "";
-    const texto = input.texto?.trim() ?? "";
+    const titulo = validarTextoConhecimento(input.titulo ?? "", "titulo");
+    const texto = validarTextoConhecimento(input.texto ?? "", "texto");
     if (!titulo || !texto) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -1241,6 +1651,7 @@ export class AnotarGrafo {
       titulo,
       texto,
       autorUsuarioId: uid,
+      governanca: parseGovernancaConhecimento(input.governanca),
     });
     return { success: true, anotacao };
   }
@@ -1254,11 +1665,157 @@ export class ListarAnotacoes {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; tabelaId?: string | null },
-  ): Promise<{ success: true; anotacoes: readonly AnotacaoGrafo[] }> {
+    input: {
+      acessoId?: string;
+      tabelaId?: string | null;
+      status?: StatusConhecimento;
+      somenteRevisaoPendente?: boolean;
+      janelaRevisaoDias?: number;
+    },
+  ): Promise<{
+    success: true;
+    anotacoes: readonly (AnotacaoGrafo & {
+      ativaAgora: boolean;
+      revisao: { proximaEm: string | null; venceEm: string | null; pendente: boolean };
+    })[];
+  }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
-    return { success: true, anotacoes: await this.anotacoes.list(acesso.id, input.tabelaId) };
+    const janelaRevisaoDias = input.janelaRevisaoDias ?? 30;
+    if (!Number.isInteger(janelaRevisaoDias) || janelaRevisaoDias < 0 || janelaRevisaoDias > 365) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "janelaRevisaoDias deve estar entre 0 e 365.",
+        hint: "Use 0 para somente vencidas ou uma janela curta para antecipar revisões.",
+      });
+    }
+    const dataNoFuso = (data: Date): string => {
+      try {
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: acesso.timezone ?? "UTC",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(data);
+      } catch {
+        return data.toISOString().slice(0, 10);
+      }
+    };
+    const hojeNoFuso = dataNoFuso(new Date());
+    const anotacoes = await this.anotacoes.list(acesso.id, input.tabelaId, undefined, {
+      status: input.status,
+    });
+    const somarDias = (date: string, days: number): string => {
+      const base = new Date(`${date}T00:00:00Z`);
+      base.setUTCDate(base.getUTCDate() + days);
+      return base.toISOString().slice(0, 10);
+    };
+    const limiteRevisao = somarDias(hojeNoFuso, janelaRevisaoDias);
+    const revisar = (
+      nota: AnotacaoGrafo,
+    ): {
+      ativaAgora: boolean;
+      revisao: { proximaEm: string | null; venceEm: string | null; pendente: boolean };
+    } => {
+      const ativaAgora =
+        nota.status !== "obsoleta" &&
+        (!nota.vigenteDe || nota.vigenteDe <= hojeNoFuso) &&
+        (!nota.vigenteAte || nota.vigenteAte >= hojeNoFuso);
+      const base =
+        nota.revisarEm ??
+        (nota.validadoEm ? dataNoFuso(nota.validadoEm) : dataNoFuso(nota.updatedAt));
+      const proximaEm = (() => {
+        if (nota.periodoRevisaoDias && nota.periodoRevisaoDias > 0) {
+          const diff = Math.floor(
+            (Date.parse(`${hojeNoFuso}T00:00:00Z`) - Date.parse(`${base}T00:00:00Z`)) / 86_400_000,
+          );
+          const ciclos = diff <= 0 ? 0 : Math.ceil(diff / nota.periodoRevisaoDias);
+          return somarDias(base, ciclos * nota.periodoRevisaoDias);
+        }
+        return nota.revisarEm ?? null;
+      })();
+      const revisaoNaJanela = proximaEm !== null && proximaEm <= limiteRevisao;
+      const vencimentoNaJanela =
+        nota.vigenteAte !== null &&
+        nota.vigenteAte !== undefined &&
+        nota.vigenteAte <= limiteRevisao;
+      return {
+        ativaAgora,
+        revisao: {
+          proximaEm,
+          venceEm: nota.vigenteAte ?? null,
+          pendente: ativaAgora && (revisaoNaJanela || vencimentoNaJanela),
+        },
+      };
+    };
+    const decoradas = anotacoes.map((nota) => ({ ...nota, ...revisar(nota) }));
+    return {
+      success: true,
+      anotacoes: input.somenteRevisaoPendente
+        ? decoradas.filter((nota) => nota.revisao.pendente)
+        : decoradas,
+    };
+  }
+}
+
+export class AtualizarAnotacao {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly anotacoes: AnotacaoGrafoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: {
+      acessoId?: string;
+      anotacaoId?: string;
+      tipo?: string;
+      titulo?: string;
+      texto?: string;
+      governanca?: GovernancaConhecimentoInput;
+      confirmadoPeloUsuario?: boolean;
+    },
+  ): Promise<{ success: true; anotacao: AnotacaoGrafo }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    if (input.confirmadoPeloUsuario !== true) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Atualizar anotação exige confirmação do usuário.",
+        hint: "Revise a regra e chame novamente com confirmadoPeloUsuario: true.",
+      });
+    }
+    const id = input.anotacaoId?.trim() ?? "";
+    const atual = id ? await this.anotacoes.findById(id) : null;
+    if (atual?.acessoId !== acesso.id) {
+      throw new DomainError({
+        code: ERROR_CODES.ANOTACAO_NOT_FOUND,
+        message: "Anotação não encontrada.",
+        hint: "Use listar_anotacoes desta persona.",
+      });
+    }
+    const patch = {
+      ...(input.tipo !== undefined ? { tipo: input.tipo.trim() } : {}),
+      ...(input.titulo !== undefined
+        ? { titulo: validarTextoConhecimento(input.titulo, "titulo") }
+        : {}),
+      ...(input.texto !== undefined
+        ? { texto: validarTextoConhecimento(input.texto, "texto") }
+        : {}),
+      ...parseGovernancaConhecimento(input.governanca),
+    };
+    if (
+      Object.keys(patch).length === 0 ||
+      (patch.titulo !== undefined && !patch.titulo) ||
+      (patch.texto !== undefined && !patch.texto)
+    ) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Informe ao menos um campo válido para atualizar.",
+        hint: "titulo/texto não podem ficar vazios.",
+      });
+    }
+    return { success: true, anotacao: await this.anotacoes.update(atual.id, patch) };
   }
 }
 

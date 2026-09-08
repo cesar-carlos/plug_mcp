@@ -41,6 +41,7 @@ import type {
 import type { ExportarAnexo } from "../../application/use-cases/exportar-anexo.js";
 import type {
   AnotarGrafo,
+  AtualizarAnotacao,
   AtualizarSkill,
   ConfirmarColuna,
   ConfirmarRelacionamento,
@@ -66,6 +67,12 @@ import type {
   RegistrarLacunaFerramenta,
   SalvarConsulta,
 } from "../../application/use-cases/aprendizado.js";
+import type {
+  ConfigurarWebhookOperacional,
+  ListarAlertasOperacionais,
+  RearmarWebhookOperacional,
+  ReconhecerAlertaOperacional,
+} from "../../application/use-cases/operacoes.js";
 
 export interface ToolUseCases {
   registrarAcesso: RegistrarAcesso;
@@ -99,6 +106,7 @@ export interface ToolUseCases {
   confirmarColuna: ConfirmarColuna;
   anotarGrafo: AnotarGrafo;
   listarAnotacoes: ListarAnotacoes;
+  atualizarAnotacao: AtualizarAnotacao;
   removerAnotacao: RemoverAnotacao;
   salvarConsulta: SalvarConsulta;
   registrarAprendizado: RegistrarAprendizado;
@@ -106,6 +114,10 @@ export interface ToolUseCases {
   herdarCatalogo: HerdarCatalogo;
   listarAuditoria: ListarAuditoria;
   listarMetricasAgente: ListarMetricasAgente;
+  listarAlertasOperacionais: ListarAlertasOperacionais;
+  reconhecerAlertaOperacional: ReconhecerAlertaOperacional;
+  configurarWebhookOperacional: ConfigurarWebhookOperacional;
+  rearmarWebhookOperacional: RearmarWebhookOperacional;
   registrarLacunaFerramenta: RegistrarLacunaFerramenta;
   listarLacunas: ListarLacunas;
   inspecionarConsulta: InspecionarConsulta;
@@ -168,11 +180,7 @@ const metricaSaidaShape = z.object({
   colunaData: z.string().optional(),
 });
 
-const consultaSemanticaShape = z.object({
-  versao: z.literal(1).optional(),
-  metrica: z.string().optional(),
-  metricas: z.array(z.string()).optional(),
-  dimensoes: z.array(z.string()).optional(),
+const consultaSemanticaComumShape = {
   filtros: z
     .array(
       z.object({
@@ -195,15 +203,6 @@ const consultaSemanticaShape = z.object({
       }),
     )
     .optional(),
-  having: z
-    .array(
-      z.object({
-        metrica: z.string(),
-        op: z.enum(["=", "!=", ">", ">=", "<", "<="]),
-        param: z.string(),
-      }),
-    )
-    .optional(),
   periodo: z
     .object({
       coluna: z.string(),
@@ -215,6 +214,64 @@ const consultaSemanticaShape = z.object({
     .array(z.object({ coluna: z.string(), dir: z.enum(["asc", "desc"]).optional() }))
     .optional(),
   limite: z.number().int().positive().optional(),
+};
+
+const consultaSemanticaV1Shape = z.object({
+  versao: z.literal(1).optional(),
+  metrica: z.string().optional(),
+  metricas: z.array(z.string()).optional(),
+  dimensoes: z.array(z.string()).optional(),
+  having: z
+    .array(
+      z.object({
+        metrica: z.string(),
+        op: z.enum(["=", "!=", ">", ">=", "<", "<="]),
+        param: z.string(),
+      }),
+    )
+    .optional(),
+  ...consultaSemanticaComumShape,
+});
+
+const consultaSemanticaV2AgregacaoShape = z
+  .object({
+    versao: z.literal(2),
+    modo: z.literal("agregacao"),
+    metricas: z.array(z.string()).min(1),
+    dimensoes: z.array(z.string()).optional(),
+    having: z
+      .array(
+        z.object({
+          metrica: z.string(),
+          op: z.enum(["=", "!=", ">", ">=", "<", "<="]),
+          param: z.string(),
+        }),
+      )
+      .optional(),
+    ...consultaSemanticaComumShape,
+  })
+  .strict();
+
+const consultaSemanticaV2ListagemShape = z
+  .object({
+    versao: z.literal(2),
+    modo: z.literal("listagem"),
+    dimensoes: z.array(z.string()).min(1),
+    ...consultaSemanticaComumShape,
+  })
+  .strict();
+
+const consultaSemanticaShape = z.union([
+  consultaSemanticaV1Shape,
+  consultaSemanticaV2AgregacaoShape,
+  consultaSemanticaV2ListagemShape,
+]);
+
+const recomendacaoConsultaShape = z.object({
+  code: z.enum(["AGREGAR", "RECORTAR_PERIODO", "REDUZIR_JOINS", "PAGINAR"]),
+  motivo: z.string(),
+  bloqueante: z.boolean(),
+  nextAction: z.enum(["ajustar_sql", "usar_consulta_semantica", "reduzir_recorte"]),
 });
 
 const politicaConsultaShape = z.object({
@@ -225,17 +282,52 @@ const politicaConsultaShape = z.object({
   modoPreferencial: z.enum(["agregado", "detalhe"]).optional(),
 });
 
+const planoConsultaShape = z.object({
+  origem: z.enum(["sql", "semantica", "aprendida", "modelo"]),
+  dialeto: z.string(),
+  politicaAplicada: politicaConsultaShape.nullable(),
+  skillIds: z.array(z.string()),
+  tabelas: z.array(z.string()),
+  agregado: z.boolean(),
+  metricas: z.array(z.string()),
+  dimensoes: z.array(z.string()),
+  filtros: z.array(z.string()),
+  paginacao: z.object({
+    modo: z.enum(["unica", "pagina"]),
+    maxRows: z.number(),
+    page: z.number().optional(),
+    pageSize: z.number().optional(),
+  }),
+  recomendacoes: z.array(recomendacaoConsultaShape),
+});
+
+const planoValidacaoShape = planoConsultaShape;
+
+const governancaConhecimentoShape = z
+  .object({
+    fonteTipo: z.enum(["usuario", "erp", "documento", "importacao", "legado", "outro"]).optional(),
+    fonteReferencia: z.string().nullable().optional(),
+    responsavel: z.string().nullable().optional(),
+    validadoEm: z.string().nullable().optional(),
+    vigenteDe: z.string().nullable().optional(),
+    vigenteAte: z.string().nullable().optional(),
+    revisarEm: z.string().nullable().optional(),
+    periodoRevisaoDias: z.number().int().min(1).max(3650).nullable().optional(),
+    status: z.enum(["vigente", "obsoleta"]).optional(),
+  })
+  .optional();
+
 export const EXPORTAR_ANEXO_TOOL_DESCRIPTION =
   "Rebusca/converte um anexo (foto, PDF) a partir do handle do stub kind=anexo de consultar_dados. Handle de inspecionar_consulta não é exportável. Não invente bytes. mimeDestino: image/jpeg, image/png ou application/pdf. Mesmos portões de consultar_dados. Foto pessoal: PRIVACIDADE_NEGADA — não use inspeção como segunda via. Omita acessoId — o Bearer já amarra a persona; handle de outro acesso → MIDIA_ORIGEM_INVALIDA.";
 
 export const CONSULTAR_DADOS_TOOL_DESCRIPTION =
-  "Consulta o ERP via plug-server no escopo publicado e no dialeto do acesso. pergunta obrigatória. skillIds opcional (omitido = união das publicadas desta persona; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist (fail-closed), consultaSemantica (uma skill) ou consultaAprendidaId. JOIN só se estiver em algum pacote. Firebird: só consulta exemplo, sem SQL livre. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT. Omita acessoId — o Bearer autentica um único acesso.";
+  "Consulta o ERP via plug-server no escopo publicado e no dialeto do acesso. pergunta obrigatória. skillIds opcional (omitido = união das publicadas desta persona; se vierem, recortam). Sem sql: consulta exemplo (exige uma skill âncora). sql no allowlist (fail-closed), consultaSemantica (uma skill) ou consultaAprendidaId. IR v2: modo agregacao usa metricas[] certificadas; modo listagem usa dimensoes[] certificadas. JOIN só se estiver em algum pacote. Firebird: só consulta exemplo, sem SQL livre. Página: ORDER BY + options.page e page_size, sem TOP/LIMIT. Omita acessoId — o Bearer autentica um único acesso.";
 
 export const OBTER_SKILL_TOOL_DESCRIPTION =
   "Obtém o pacote da skill (mesmo conteúdo que skill://): escopo, colunas, relacionamentos, regras/métricas, consultas aprendidas, guia de dialeto e faltas[] (kind, alvo, nextAction). Aviso PERFIL_AUSENTE se tipo/formato/cardinalidade estiverem vazios. Não invente schema — leia daqui. Omita acessoId — o Bearer já amarra esta persona.";
 
 export const VALIDAR_CONSULTA_TOOL_DESCRIPTION =
-  "Dry-run: valida o SQL contra o escopo publicado (fail-closed; skillIds opcional = união das publicadas deste acesso) e executa envelope vazio no ERP via plug-server (sem ler dado). options.page + page_size aplicam a mesma regra de consultar_dados (ORDER BY externo, sem TOP/LIMIT/FETCH/FIRST). Placeholders ausentes ligam-se a null. Firebird: recusa SQL livre.";
+  "Dry-run: valida exatamente um entre sql e consultaSemantica contra o escopo publicado (fail-closed; skillIds opcional = união das publicadas deste acesso), devolve planoConsulta e executa envelope vazio no ERP (sem ler dado). options aplicam as mesmas regras de consultar_dados. Placeholders ausentes ligam-se a null. Firebird: recusa SQL livre.";
 
 export const ATUALIZAR_PERSONA_TOOL_DESCRIPTION =
   "Grava nomePersona (curto) e instrucoesPersona no acesso (usuário+agentId+token). Orienta tom/uso; não recorta skills nem licencia tabela, coluna, JOIN ou consultaPermitida. Em conflito vale o pacote. Exige confirmadoPeloUsuario: true. Recusa texto que pareça senha, token ou JWT. String vazia ou null limpa o campo.";
@@ -462,6 +554,7 @@ export const registerTools = (
               texto: z.string().optional(),
               tabela: z.string().optional(),
               skillId: z.string().optional(),
+              governanca: governancaConhecimentoShape,
             }),
           )
           .optional(),
@@ -511,6 +604,7 @@ export const registerTools = (
           })
           .optional(),
         hint: z.string().optional(),
+        planoConsulta: planoConsultaShape,
         paginacao: z
           .object({
             page: z.number(),
@@ -602,11 +696,12 @@ export const registerTools = (
 
   server.tool(
     "publicar_skill",
-    "Libera a skill só com checklist completo e confirmadoPeloUsuario: true. Sem confirmação devolve publicado:false, resumoPublicacao e faltas[] — não invente o resumo.",
+    "Libera a skill só com checklist completo. Primeiro chame sem confirmação para receber diffPublicacao e confirmacaoHash; depois envie confirmadoPeloUsuario:true com o mesmo hash. Sem hash, a chamada legada devolve novo preview sem publicar.",
     {
       acessoId: z.string().optional(),
       skillId: z.string().optional(),
       confirmadoPeloUsuario: z.boolean().optional(),
+      confirmacaoHash: z.string().optional(),
     },
     destroyLocal,
     async (args) =>
@@ -614,7 +709,7 @@ export const registerTools = (
         const result = await useCases.publicarSkill.execute(currentAccountId(), args);
         const uid = currentAccountId();
         const acessoId = currentAcessoId();
-        if (uid && acessoId && options?.onSkillsChanged) {
+        if (result.publicado && uid && acessoId && options?.onSkillsChanged) {
           await options.onSkillsChanged(uid, acessoId);
         }
         return result;
@@ -740,23 +835,36 @@ export const registerTools = (
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "validar_consulta",
-    VALIDAR_CONSULTA_TOOL_DESCRIPTION,
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      skillIds: z.array(z.string()).optional(),
-      sql: z.string().optional(),
-      params: z.record(z.unknown()).optional(),
-      options: z
-        .object({
-          page: z.number().int().positive().optional(),
-          page_size: z.number().int().positive().optional(),
-        })
-        .optional(),
+      description: VALIDAR_CONSULTA_TOOL_DESCRIPTION,
+      inputSchema: {
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        skillIds: z.array(z.string()).optional(),
+        sql: z.string().optional(),
+        consultaSemantica: consultaSemanticaShape.optional(),
+        params: z.record(z.unknown()).optional(),
+        options: z
+          .object({
+            max_rows: z.number().int().positive().optional(),
+            page: z.number().int().positive().optional(),
+            page_size: z.number().int().positive().optional(),
+            timeout_ms: z.number().int().positive().optional(),
+          })
+          .optional(),
+      },
+      outputSchema: {
+        success: z.literal(true),
+        valido: z.literal(true),
+        dialeto: z.string(),
+        tabelas: z.array(z.string()),
+        avisos: z.array(z.object({ code: z.string(), message: z.string() })),
+        planoConsulta: planoValidacaoShape,
+      },
+      annotations: readWorld,
     },
-    readWorld,
     async (args) =>
       run("validar_consulta", () => useCases.validarConsulta.execute(currentAccountId(), args)),
   );
@@ -796,9 +904,11 @@ export const registerTools = (
     {
       acessoId: z.string().optional(),
       tabela: z.string().optional(),
+      skillId: z.string().optional(),
       tipo: z.string().optional(),
       titulo: z.string().optional(),
       texto: z.string().optional(),
+      governanca: governancaConhecimentoShape,
     },
     writeLocal,
     async (args) =>
@@ -807,11 +917,34 @@ export const registerTools = (
 
   server.tool(
     "listar_anotacoes",
-    "Lista anotações deste acesso (opcionalmente de uma tabela).",
-    { acessoId: z.string().optional(), tabelaId: z.string().nullable().optional() },
+    "Lista histórico de anotações deste acesso; cada item informa ativaAgora e fila de revisão. Use somenteRevisaoPendente para notas a revisar ou perto de vencer, sem alterar a autorização SQL.",
+    {
+      acessoId: z.string().optional(),
+      tabelaId: z.string().nullable().optional(),
+      status: z.enum(["vigente", "obsoleta"]).optional(),
+      somenteRevisaoPendente: z.boolean().optional(),
+      janelaRevisaoDias: z.number().int().min(0).max(365).optional(),
+    },
     readList,
     async (args) =>
       run("listar_anotacoes", () => useCases.listarAnotacoes.execute(currentAccountId(), args)),
+  );
+
+  server.tool(
+    "atualizar_anotacao",
+    "Atualiza texto ou governança de uma anotação desta persona. Exige confirmadoPeloUsuario: true e recusa segredos.",
+    {
+      acessoId: z.string().optional(),
+      anotacaoId: z.string().optional(),
+      tipo: z.string().optional(),
+      titulo: z.string().optional(),
+      texto: z.string().optional(),
+      governanca: governancaConhecimentoShape,
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeLocal,
+    async (args) =>
+      run("atualizar_anotacao", () => useCases.atualizarAnotacao.execute(currentAccountId(), args)),
   );
 
   server.tool(
@@ -848,6 +981,7 @@ export const registerTools = (
       titulo: z.string().optional(),
       texto: z.string().optional(),
       tabela: z.string().optional(),
+      governanca: governancaConhecimentoShape,
     },
     writeLocal,
     async (args) =>
@@ -896,12 +1030,70 @@ export const registerTools = (
 
   server.tool(
     "listar_metricas_agente",
-    "Agrega auditoria por tool e código de erro (duração, linhas, bloqueios). Campo busca: totais de buscar_contexto (permitida, SKILL_GAP, SKILL_NOT_PUBLISHED, slot narrativo). Sem SQL, params ou linhas de ERP. Omita acessoId — o Bearer já recorta.",
+    "Painel operacional da auditoria: duração p50/p95, cache, truncamentos, distribuição por skill/origem/erro e tendência anônima. Campo busca: totais de buscar_contexto. Sem SQL, params ou linhas de ERP. Omita acessoId — o Bearer já recorta.",
     { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
     readList,
     async (args) =>
       run("listar_metricas_agente", () =>
         useCases.listarMetricasAgente.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "listar_alertas_operacionais",
+    "Lista alertas operacionais desta persona (SLO e revisão), apenas com IDs, datas e métricas agregadas. Não contém SQL, perguntas, parâmetros ou resultados.",
+    {
+      acessoId: z.string().optional(),
+      limite: z.number().int().min(1).max(200).optional(),
+      status: z.enum(["aberto", "reconhecido", "resolvido"]).optional(),
+    },
+    readList,
+    async (args) =>
+      run("listar_alertas_operacionais", () =>
+        useCases.listarAlertasOperacionais.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "reconhecer_alerta_operacional",
+    "Marca um alerta aberto desta persona como reconhecido. Reconhecimento não altera skill, vigência ou autorização SQL.",
+    { acessoId: z.string().optional(), alertaId: z.string().optional() },
+    writeLocal,
+    async (args) =>
+      run("reconhecer_alerta_operacional", () =>
+        useCases.reconhecerAlertaOperacional.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "configurar_webhook_operacional",
+    "Configura ou desativa o webhook opcional de alertas desta persona. Aceita apenas HTTPS público sem query/credenciais; o segredo é cifrado e nunca retornado. Exige confirmadoPeloUsuario: true.",
+    {
+      acessoId: z.string().optional(),
+      url: z.string().url().optional(),
+      segredo: z.string().min(16).max(256).optional(),
+      ativo: z.boolean().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeWorld,
+    async (args) =>
+      run("configurar_webhook_operacional", () =>
+        useCases.configurarWebhookOperacional.execute(currentAccountId(), args),
+      ),
+  );
+
+  server.tool(
+    "rearmar_webhook_operacional",
+    "Rearma uma entrega de webhook em dead-letter desta persona. Exige confirmadoPeloUsuario: true; não revela URL, segredo ou corpo enviado.",
+    {
+      acessoId: z.string().optional(),
+      eventoId: z.string().optional(),
+      confirmadoPeloUsuario: z.boolean().optional(),
+    },
+    writeWorld,
+    async (args) =>
+      run("rearmar_webhook_operacional", () =>
+        useCases.rearmarWebhookOperacional.execute(currentAccountId(), args),
       ),
   );
 

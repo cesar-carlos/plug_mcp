@@ -37,7 +37,15 @@ import {
   SalvarConsulta,
 } from "../application/use-cases/aprendizado.js";
 import {
+  ConfigurarWebhookOperacional,
+  ListarAlertasOperacionais,
+  MonitorOperacoes,
+  RearmarWebhookOperacional,
+  ReconhecerAlertaOperacional,
+} from "../application/use-cases/operacoes.js";
+import {
   AnotarGrafo,
+  AtualizarAnotacao,
   AtualizarSkill,
   ConfirmarColuna,
   ConfirmarRelacionamento,
@@ -57,6 +65,8 @@ import { TreinarComSql } from "../application/use-cases/treinar-com-sql.js";
 import type { LoggerPort } from "../domain/ports/logger.port.js";
 import type { PlugServerGatewayPort } from "../domain/ports/plug-server-gateway.port.js";
 import type { QueryResultCachePort } from "../domain/ports/query-result-cache.port.js";
+import type { QuerySingleflightPort } from "../domain/ports/query-singleflight.port.js";
+import type { SkillPublicacaoRepositoryPort } from "../domain/ports/skill-publicacao-repository.port.js";
 import { NodeCryptoAdapter } from "../infrastructure/crypto/node-crypto.adapter.js";
 import { createExpressApp } from "../infrastructure/http/create-app.js";
 import { MemoryRateLimitStore, type RateLimitStore } from "../infrastructure/http/rate-limit.js";
@@ -65,6 +75,7 @@ import { SetupCodeStore } from "../infrastructure/http/setup-code-store.js";
 import { createPino, PinoLoggerAdapter } from "../infrastructure/logging/pino-logger.adapter.js";
 import type { ToolUseCases } from "../infrastructure/mcp/register-tools.js";
 import { createDb } from "../infrastructure/persistence/drizzle/db.js";
+import { DrizzleSkillPublicacaoRepository } from "../infrastructure/persistence/drizzle/drizzle-skill-publicacao.js";
 import {
   DrizzleAprendizadoRepository,
   DrizzleAcessoRepository,
@@ -85,10 +96,20 @@ import {
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../infrastructure/persistence/memory/memory-cofre.js";
+import { InMemorySkillPublicacaoRepository } from "../infrastructure/persistence/memory/memory-skill-publicacao.js";
+import { InMemoryOperacoesRepository } from "../infrastructure/persistence/memory/memory-operacoes.js";
+import { DrizzleOperacoesRepository } from "../infrastructure/persistence/drizzle/drizzle-operacoes.js";
+import type { OperacoesRepositoryPort } from "../domain/ports/operacoes-repository.port.js";
+import { OperacoesWorker } from "../infrastructure/operacoes/webhook-worker.js";
+import { PublicHttpsWebhookDestination } from "../infrastructure/operacoes/webhook-destination.js";
 import {
   MemoryQueryResultCache,
   RedisQueryResultCache,
 } from "../infrastructure/cache/query-result-cache.js";
+import {
+  MemoryQuerySingleflight,
+  RedisQuerySingleflight,
+} from "../infrastructure/cache/query-singleflight.js";
 import { MemoryAnexoHandleStore } from "../infrastructure/anexo/memory-anexo-handle.js";
 import { SharpPdfkitAnexoConverter } from "../infrastructure/anexo/converter-anexo.js";
 import {
@@ -104,6 +125,7 @@ export interface Composition {
   app: ReturnType<typeof createExpressApp>["app"];
   logger: LoggerPort;
   useCases: ToolUseCases;
+  operationsWorker?: OperacoesWorker;
   close: () => Promise<void>;
 }
 
@@ -133,6 +155,8 @@ export const compose = async (
   let audit: InMemoryAuditLog | DrizzleAuditLog;
   let aprendizado: InMemoryAprendizadoRepository | DrizzleAprendizadoRepository;
   let setupPersistent: InMemoryMcpSetupRepository | DrizzleMcpSetupRepository;
+  let publicacoes: SkillPublicacaoRepositoryPort;
+  let operacoes: OperacoesRepositoryPort;
   let readinessCheck: (() => Promise<boolean>) | undefined;
   let dbPool: { query: (sql: string) => Promise<unknown> } | undefined;
 
@@ -143,10 +167,12 @@ export const compose = async (
     acessos = new DrizzleAcessoRepository(db);
     grafo = new DrizzleGrafoRepository(db);
     skills = new DrizzleSkillRepository(db);
+    publicacoes = new DrizzleSkillPublicacaoRepository(db);
     anotacoes = new DrizzleAnotacaoGrafoRepository(db);
     audit = new DrizzleAuditLog(db);
     aprendizado = new DrizzleAprendizadoRepository(db);
     setupPersistent = new DrizzleMcpSetupRepository(db);
+    operacoes = new DrizzleOperacoesRepository(db);
     disposers.push(async () => {
       await pool.end();
     });
@@ -155,10 +181,12 @@ export const compose = async (
     acessos = new InMemoryAcessoRepository();
     grafo = new InMemoryGrafoRepository();
     skills = new InMemorySkillRepository();
+    publicacoes = new InMemorySkillPublicacaoRepository(skills);
     anotacoes = new InMemoryAnotacaoGrafoRepository();
     audit = new InMemoryAuditLog();
     aprendizado = new InMemoryAprendizadoRepository();
     setupPersistent = new InMemoryMcpSetupRepository();
+    operacoes = new InMemoryOperacoesRepository();
   }
 
   let mcpRateLimitStore: RateLimitStore = new MemoryRateLimitStore();
@@ -169,6 +197,7 @@ export const compose = async (
       }
     | undefined;
   let queryCache: QueryResultCachePort = new MemoryQueryResultCache();
+  let querySingleflight: QuerySingleflightPort = new MemoryQuerySingleflight();
   if (config.REDIS_URL.length > 0) {
     const { createClient } = await import("redis");
     const redis = createClient({ url: config.REDIS_URL });
@@ -176,6 +205,11 @@ export const compose = async (
     mcpRateLimitStore = new RedisRateLimitStore(redis);
     policyKv = redis;
     queryCache = new RedisQueryResultCache(redis);
+    querySingleflight = new RedisQuerySingleflight(
+      redis,
+      config.QUERY_CACHE_SINGLEFLIGHT_LEASE_MS,
+      config.QUERY_CACHE_SINGLEFLIGHT_WAIT_MS,
+    );
     disposers.push(async () => {
       await redis.quit();
     });
@@ -203,6 +237,27 @@ export const compose = async (
   const sessions = new UsuarioTokenManager(usuarios, crypto, plug, logger);
   const anexoHandles = new MemoryAnexoHandleStore(config.MCP_ENCRYPTION_KEY);
   const anexoConverter = new SharpPdfkitAnexoConverter();
+  const destinosWebhook = new PublicHttpsWebhookDestination();
+  const monitorOperacoes = new MonitorOperacoes(acessos, audit, anotacoes, operacoes, {
+    janelaMs: config.OPERATIONS_SLO_WINDOW_MINUTES * 60_000,
+    minObservacoes: config.OPERATIONS_SLO_MIN_OBSERVATIONS,
+    erroAtencao: config.OPERATIONS_SLO_ERROR_WARNING_PERCENT / 100,
+    erroCritica: config.OPERATIONS_SLO_ERROR_CRITICAL_PERCENT / 100,
+    p95AtencaoMs: config.OPERATIONS_SLO_P95_WARNING_MS,
+    p95CriticaMs: config.OPERATIONS_SLO_P95_CRITICAL_MS,
+    truncamentoAtencao: config.OPERATIONS_SLO_TRUNCATION_WARNING_PERCENT / 100,
+  });
+  const operationsWorker = new OperacoesWorker(
+    monitorOperacoes,
+    operacoes,
+    crypto,
+    logger,
+    destinosWebhook,
+    {
+      timeoutMs: config.OPERATIONS_WEBHOOK_TIMEOUT_MS,
+      leaseMs: config.OPERATIONS_WEBHOOK_LEASE_MS,
+    },
+  );
 
   const useCases: ToolUseCases = {
     registrarAcesso: new RegistrarAcesso(
@@ -265,8 +320,10 @@ export const compose = async (
         aprendizado,
         anotacoes,
         cache: queryCache,
+        singleflight: querySingleflight,
         cacheTtlMs: config.QUERY_CACHE_TTL_MS,
         semanticQueryEnabled: config.MCP_SEMANTIC_QUERY_ENABLED,
+        timingsSamplePercent: config.PLUG_SERVER_TIMINGS_SAMPLE_PERCENT,
         anexos: anexoHandles,
       },
     ),
@@ -290,11 +347,17 @@ export const compose = async (
     ),
     resolverConflito: new ResolverConflito(acessos, grafo),
     listarConflitos: new ListarConflitos(acessos, grafo),
-    validarConsulta: new ValidarConsulta(acessos, skills, plug, sessions, crypto),
+    validarConsulta: new ValidarConsulta(acessos, skills, plug, sessions, crypto, {
+      defaultMaxRows: config.QUERY_DEFAULT_MAX_ROWS,
+      absoluteMaxRows: config.QUERY_ABSOLUTE_MAX_ROWS,
+      grafo,
+      audit,
+      timingsSamplePercent: config.PLUG_SERVER_TIMINGS_SAMPLE_PERCENT,
+    }),
     criarSkill: new CriarSkill(acessos, skills, grafo),
     atualizarSkill: new AtualizarSkill(acessos, skills, grafo),
     validarSkill: new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo),
-    publicarSkill: new PublicarSkill(acessos, skills, grafo),
+    publicarSkill: new PublicarSkill(acessos, skills, grafo, publicacoes, crypto),
     despublicarSkill: new DespublicarSkill(acessos, skills, grafo),
     removerSkill: new RemoverSkill(acessos, skills, aprendizado),
     listarSkills: new ListarSkills(acessos, skills, grafo),
@@ -314,6 +377,7 @@ export const compose = async (
     confirmarColuna: new ConfirmarColuna(acessos, grafo, skills),
     anotarGrafo: new AnotarGrafo(acessos, grafo, anotacoes, skills),
     listarAnotacoes: new ListarAnotacoes(acessos, anotacoes),
+    atualizarAnotacao: new AtualizarAnotacao(acessos, anotacoes),
     removerAnotacao: new RemoverAnotacao(acessos, anotacoes),
     salvarConsulta: new SalvarConsulta(acessos, skills, aprendizado),
     registrarAprendizado: new RegistrarAprendizado(acessos, grafo, anotacoes, aprendizado, skills),
@@ -321,6 +385,15 @@ export const compose = async (
     herdarCatalogo: new HerdarCatalogo(acessos, grafo),
     listarAuditoria: new ListarAuditoria(acessos, audit),
     listarMetricasAgente: new ListarMetricasAgente(acessos, audit),
+    listarAlertasOperacionais: new ListarAlertasOperacionais(acessos, operacoes),
+    reconhecerAlertaOperacional: new ReconhecerAlertaOperacional(acessos, operacoes),
+    configurarWebhookOperacional: new ConfigurarWebhookOperacional(
+      acessos,
+      operacoes,
+      crypto,
+      destinosWebhook,
+    ),
+    rearmarWebhookOperacional: new RearmarWebhookOperacional(acessos, operacoes),
     registrarLacunaFerramenta: new RegistrarLacunaFerramenta(acessos, aprendizado),
     listarLacunas: new ListarLacunas(acessos, aprendizado),
     inspecionarConsulta: new InspecionarConsulta(
@@ -345,7 +418,13 @@ export const compose = async (
       logger,
     ),
     descobrirTabela: new DescobrirTabela(acessos, skills, grafo, plug, sessions, crypto),
-    detectarDerivaEsquema: new DetectarDerivaEsquema(acessos, grafo, skills, queryCache),
+    detectarDerivaEsquema: new DetectarDerivaEsquema(
+      acessos,
+      grafo,
+      skills,
+      queryCache,
+      aprendizado,
+    ),
     cancelarOperacao: new CancelarOperacao(),
   };
 
@@ -376,6 +455,7 @@ export const compose = async (
     app,
     logger,
     useCases,
+    operationsWorker,
     close: async () => {
       for (const disposer of [...disposers].reverse()) {
         await disposer();

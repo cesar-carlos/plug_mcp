@@ -688,8 +688,9 @@ describe("BuscarContexto", () => {
     });
     expect(result.consultaPermitida).toBe(true);
     expect(result.consultaSemanticaSugerida).toEqual({
-      versao: 1,
-      metrica: "total",
+      versao: 2,
+      modo: "agregacao",
+      metricas: ["total"],
       dimensoes: ["empresa"],
       colunaData: "data",
     });
@@ -741,7 +742,7 @@ describe("BuscarContexto", () => {
       query: "produtos faturamento",
     });
     expect(result.consultaPermitida).toBe(true);
-    expect(result.consultaSemanticaSugerida).toMatchObject({ metrica: "receita" });
+    expect(result.consultaSemanticaSugerida).toMatchObject({ metricas: ["receita"] });
   });
 
   it("cobertura parcial com KPI não devolve esqueleto e pede sinônimo", async () => {
@@ -1068,11 +1069,11 @@ describe("BuscarContexto", () => {
     });
     expect(result.consultaPermitida).toBe(true);
     expect(result.consultaSemanticaSugerida).toMatchObject({
-      versao: 1,
+      versao: 2,
       modo: "listagem",
       dimensoes: ["codprod"],
     });
-    expect(result.consultaSemanticaSugerida?.metrica).toBeUndefined();
+    expect(result.consultaSemanticaSugerida?.metricas).toBeUndefined();
     expect(result.consultaSemanticaSugerida?.filtros).toEqual([
       { coluna: "ativo", op: "=", param: "ativo" },
     ]);

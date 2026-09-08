@@ -67,8 +67,9 @@ describe("esqueletoConsultaSemantica", () => {
       },
     );
     expect(esqueletoConsultaSemantica(skill)).toEqual({
-      versao: 1,
-      metrica: "receita",
+      versao: 2,
+      modo: "agregacao",
+      metricas: ["receita"],
       dimensoes: ["empresa"],
       colunaData: "emissao",
     });
@@ -109,7 +110,7 @@ describe("esqueletoConsultaSemantica", () => {
       }),
     );
     expect(esqueletoConsultaSemantica(skill, "faturamento da nota")).toMatchObject({
-      metrica: "receita",
+      metricas: ["receita"],
     });
   });
 
@@ -124,7 +125,7 @@ describe("esqueletoConsultaSemantica", () => {
       { versao: 1, metrica: "receita" },
     );
     expect(esqueletoConsultaSemantica(skill, "xyzinexistente")).toMatchObject({
-      metrica: "receita",
+      metricas: ["receita"],
     });
   });
 
@@ -146,7 +147,7 @@ describe("esqueletoConsultaSemantica", () => {
     };
     expect(
       esqueletoDaPrimeiraSkillComKpi([estoque, faturamento], "faturamento do mes"),
-    ).toMatchObject({ metrica: "receita" });
+    ).toMatchObject({ metricas: ["receita"] });
   });
 
   it("omite CAST de data em pergunta de saldo e não cai no primeiro alias", () => {
@@ -176,7 +177,7 @@ describe("esqueletoConsultaSemantica", () => {
       }),
     );
     expect(esqueletoConsultaSemantica(skill, "Quanto tenho para receber?")).toMatchObject({
-      metrica: "SaldoReceber",
+      metricas: ["SaldoReceber"],
     });
   });
 
@@ -204,7 +205,7 @@ describe("esqueletoConsultaSemantica", () => {
       params: [{ nome: "ativo", descricao: "flag", obrigatorio: true, tipo: "string" as const }],
     };
     expect(esqueletoConsultaSemantica(listing, "listar produtos ativos")).toEqual({
-      versao: 1,
+      versao: 2,
       modo: "listagem",
       dimensoes: ["CodProduto"],
       filtros: [{ coluna: "ativo", op: "=", param: "ativo" }],

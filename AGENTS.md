@@ -112,3 +112,13 @@ só em memória). Preserve a origem de cada falha e não faça retry cego.
 - Comunicação e auth do hub: `docs/plug-server/communication.md` e
   `docs/plug-server/auth.md`
 - Testes: `.cursor/rules/testing.mdc` e `tests/`
+
+## Evoluções coordenadas
+
+- `consultaSemantica` v2 é união discriminada: `agregacao` exige `metricas[]` e aceita dimensões; `listagem` exige apenas `dimensoes[]`. v1 continua válida e é normalizada internamente. `consultar_dados` e `validar_consulta` compartilham o preflight e devolvem `planoConsulta`; o validador executa somente envelope vazio.
+- `buscar_contexto` devolve `diagnosticoCobertura` factual e lexical (FTS/`ILIKE`, nunca embeddings/RAG). Anotações podem ter governança temporal (`fonteTipo`, responsável, vigência e status) e agenda opcional (`revisarEm`/cadência); a fila de revisão não altera vigência nem licença SQL. Legadas são `legado`/`vigente`, e `atualizar_anotacao` exige confirmação.
+- `publicar_skill` começa com preview/diff e `confirmacaoHash`; publicação efetiva exige confirmação explícita e o hash vigente em transação atômica. Snapshots são imutáveis. Deriva detalha deltas, skills/consultas afetadas e rebaixa somente quando o pacote é incompatível.
+- Auditoria guarda somente metadados permitidos (IDs, origem, contagens, cache, paginação, truncamento, estágio e duração), nunca SQL, pergunta, parâmetros, resultados ou segredos. Painel operacional deriva apenas taxas/tendência/percentis desses metadados. Timings do hub são opt-in amostrado por `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (padrão 10).
+- O contrato REST usado pelo MCP é gerado do OpenAPI do hub em `plug_server/contracts/plug-mcp-rest-v1.json`; o baseline `plug-mcp-rest-v1.compatibility.json` proíbe remoção silenciosa de campos públicos. `npm run contract:check` deve permanecer verde no checkout do `plug_server`.
+- Operação proativa é observabilidade, não conhecimento: alertas/revisões/webhooks ficam isolados por `acesso_id`, guardam só IDs e agregados permitidos e jamais licenciam SQL. URL/segredo de webhook são cifrados, só HTTPS público sem query/user-info, com DNS privado/loopback bloqueado a cada entrega. Worker separado usa outbox+lease, HMAC e retry/dead-letter; tools de configurar/rearmar exigem confirmação.
+- Cache agregado usa singleflight na mesma chave isolada de usuário/token/policy/skill. Redis coordena réplicas por lease e falha aberta; não cachear erro/anexo nem criar retry cego. `test:migrations` valida banco novo e upgrade a partir de `0023` somente em bancos CI efêmeros.

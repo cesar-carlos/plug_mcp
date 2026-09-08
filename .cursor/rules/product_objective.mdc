@@ -16,3 +16,5 @@ O MCP dá à IA uma **base de conhecimento** e especialidade em SQL no pacote pu
 - Três portões: JWT Client, `ClientAgentAccess`, policy do `client_token`. `approved` não prova token SQL ativo. Vários `acessoId` do mesmo `agentId` são independentes; escolha `sqlAccessState: active` em `verificar_acesso` — o servidor não deduplica.
 
 Não reintroduzir OAuth/JWT de conta MCP, Client de serviço no `.env`, catálogo `Fonte`/seed. Socket/relay fora de escopo. Detalhe: `server-instructions.ts` e `docs/mcp/tools.md`.
+
+Evoluções obrigatórias: IR v2 (`agregacao`/`listagem`) e preflight compartilhado não mudam a autoridade do pacote; `buscar_contexto` deve expor `diagnosticoCobertura`, nunca inferir schema físico. Publicação exige preview/diff, hash canônico e confirmação atômica; snapshots são históricos. Governança temporal remove apenas conhecimento obsoleto/futuro/expirado do contexto; agenda de revisão só prioriza manutenção e não altera vigência/cobertura/escopo. Auditoria/timings e painel operacional guardam/derivam somente metadados sem SQL, perguntas, parâmetros, resultados ou segredos. Não introduzir embeddings, vetor ou RAG.

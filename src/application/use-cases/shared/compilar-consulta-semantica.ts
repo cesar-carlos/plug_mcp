@@ -203,9 +203,10 @@ export const compilarConsultaSemantica = (
   opts?: { dialeto?: Dialeto; maxLimite?: number },
 ): { sql: string; elementos: string[] } => {
   const aliases = aliasesMetricas(consulta);
-  const metricas = aliases.map((alias) => resolverMetrica(escopo, alias));
+  const listagem = consulta.versao === 2 && consulta.modo === "listagem";
+  const metricas = listagem ? [] : aliases.map((alias) => resolverMetrica(escopo, alias));
   const primeira = metricas[0];
-  if (!primeira) {
+  if (!listagem && !primeira) {
     throw DomainError.pacote({
       code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
       message: "Consulta semântica exige ao menos uma métrica certificada.",
@@ -216,13 +217,15 @@ export const compilarConsultaSemantica = (
     alias: item.alias,
     expr: reescreverQualificadoresDaExpr(escopo, item.expr),
   }));
-  const elementos = aliases.map((alias) => `metrica:${alias}`);
-  const select: string[] = exprs.map((item) => `${item.expr} AS ${item.alias}`);
+  const elementos = listagem ? [] : aliases.map((alias) => `metrica:${alias}`);
+  const select: string[] = listagem ? [] : exprs.map((item) => `${item.expr} AS ${item.alias}`);
   const group: string[] = [];
-  const restricoesDim = metricas
-    .map((item) => item.dimensoesPermitidas ?? [])
-    .filter((lista) => lista.length > 0)
-    .map((lista) => new Set(lista.map(lower)));
+  const restricoesDim = listagem
+    ? []
+    : metricas
+        .map((item) => item.dimensoesPermitidas ?? [])
+        .filter((lista) => lista.length > 0)
+        .map((lista) => new Set(lista.map(lower)));
   for (const dim of consulta.dimensoes ?? []) {
     if (!colunaNoPacote(escopo, dim)) {
       throw DomainError.pacote({
@@ -231,7 +234,7 @@ export const compilarConsultaSemantica = (
         hint: "Declare só colunas certificadas em graoResultado/colunasPorTabela.",
       });
     }
-    if (restricoesDim.length > 0 && restricoesDim.some((ok) => !ok.has(lower(dim)))) {
+    if (!listagem && restricoesDim.length > 0 && restricoesDim.some((ok) => !ok.has(lower(dim)))) {
       throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
         message: `Dimensão ${dim} não é permitida para as métricas desta consulta.`,
@@ -240,7 +243,9 @@ export const compilarConsultaSemantica = (
     }
     const dimQ = qualificarColuna(escopo, dim);
     select.push(dimQ);
-    group.push(dimQ);
+    if (!listagem) {
+      group.push(dimQ);
+    }
     elementos.push(`dimensao:${dim}`);
   }
   const where: string[] = [];
@@ -256,7 +261,9 @@ export const compilarConsultaSemantica = (
     where.push(sqlDoFiltro(colQ, filtro));
     elementos.push(`filtro:${filtro.coluna}`);
   }
-  const kpiStatus = metricas.find((item) => (item.statusIncluidos ?? []).length > 0);
+  const kpiStatus = listagem
+    ? undefined
+    : metricas.find((item) => (item.statusIncluidos ?? []).length > 0);
   const statusIncluidos = kpiStatus?.statusIncluidos ?? [];
   if (
     statusIncluidos.length > 0 &&
@@ -270,7 +277,7 @@ export const compilarConsultaSemantica = (
     where.push(`${qualificarColuna(escopo, colStatus)} IN (${lista})`);
     elementos.push(`kpi-status:${colStatus}`);
   }
-  const colunaDataKpi = metricas.find((item) => item.colunaData)?.colunaData;
+  const colunaDataKpi = listagem ? undefined : metricas.find((item) => item.colunaData)?.colunaData;
   const colunaPeriodo = consulta.periodo?.coluna ?? colunaDataKpi;
   if (consulta.periodo) {
     if (!colunaNoPacote(escopo, consulta.periodo.coluna)) {
@@ -304,7 +311,9 @@ export const compilarConsultaSemantica = (
   }
   const aliasesLower = new Set(aliases.map(lower));
   const having: string[] = [];
-  for (const item of consulta.having ?? []) {
+  const havingInput =
+    consulta.versao === 2 && consulta.modo === "listagem" ? [] : (consulta.having ?? []);
+  for (const item of havingInput) {
     const metricaHaving = exprs.find((expr) => lower(expr.alias) === lower(item.metrica));
     if (!metricaHaving) {
       throw DomainError.pacote({
@@ -345,6 +354,27 @@ export const compilarConsultaSemantica = (
   }
   for (const dim of consulta.dimensoes ?? []) {
     addTabela(tabelaDaColuna(escopo, dim));
+  }
+  // Filtros, período e ordenação também podem referenciar uma segunda tabela.
+  // Incluí-los no conjunto de tabelas antes de montar os JOINs evita gerar uma
+  // listagem/agregação com coluna qualificada fora do FROM.
+  for (const filtro of consulta.filtros ?? []) {
+    addTabela(tabelaDaColuna(escopo, filtro.coluna));
+  }
+  if (consulta.periodo) {
+    addTabela(tabelaDaColuna(escopo, consulta.periodo.coluna));
+  }
+  for (const item of consulta.ordenacao ?? []) {
+    if (!aliasesLower.has(lower(item.coluna))) {
+      addTabela(tabelaDaColuna(escopo, item.coluna));
+    }
+  }
+  if (select.length === 0) {
+    throw DomainError.pacote({
+      code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
+      message: "Consulta semântica de listagem exige ao menos uma dimensão certificada.",
+      hint: "Use dimensoes[] com colunas do pacote publicado.",
+    });
   }
   if (tabelas.length === 0) {
     addTabela(escopo.tabelas[0] ?? null);

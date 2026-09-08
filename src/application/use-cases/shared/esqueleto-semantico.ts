@@ -1,4 +1,7 @@
-import type { ConsultaSemantica } from "../../../domain/entities/consulta-semantica.js";
+import {
+  aliasesMetricas,
+  type ConsultaSemantica,
+} from "../../../domain/entities/consulta-semantica.js";
 import {
   colunaNomeQuantidade,
   metricaEhMedida,
@@ -8,16 +11,16 @@ import type { Skill } from "../../../domain/entities/skill.js";
 import { overlapCapacidade } from "./cobertura-skill.js";
 
 export interface ConsultaSemanticaSugerida {
-  readonly versao: 1;
-  readonly metrica?: string;
-  readonly dimensoes?: readonly string[];
+  readonly versao: 2;
+  readonly modo: "agregacao" | "listagem";
+  readonly metricas?: readonly string[];
+  readonly dimensoes: readonly string[];
   readonly colunaData?: string;
   readonly filtros?: readonly {
     readonly coluna: string;
     readonly op: "=";
     readonly param: string;
   }[];
-  readonly modo?: "listagem";
 }
 
 export interface MetricaSemOverlay {
@@ -37,12 +40,24 @@ const perguntaFalaQuantidade = (query: string): boolean =>
 const omitirAliasQuantidade = (alias: string, query: string): boolean =>
   colunaNomeQuantidade(alias) && !perguntaFalaQuantidade(query);
 
-const deIr = (ir: ConsultaSemantica): ConsultaSemanticaSugerida => ({
-  versao: 1,
-  metrica: ir.metrica,
-  ...(ir.dimensoes && ir.dimensoes.length > 0 ? { dimensoes: ir.dimensoes } : {}),
-  ...(ir.periodo?.coluna ? { colunaData: ir.periodo.coluna } : {}),
-});
+const deIr = (ir: ConsultaSemantica): ConsultaSemanticaSugerida => {
+  const dimensoes = ir.dimensoes ?? [];
+  if (ir.versao === 2 && ir.modo === "listagem") {
+    return {
+      versao: 2,
+      modo: "listagem",
+      dimensoes,
+      ...(ir.periodo?.coluna ? { colunaData: ir.periodo.coluna } : {}),
+    };
+  }
+  return {
+    versao: 2,
+    modo: "agregacao",
+    metricas: aliasesMetricas(ir),
+    dimensoes,
+    ...(ir.periodo?.coluna ? { colunaData: ir.periodo.coluna } : {}),
+  };
+};
 
 interface CandidatoEsqueleto {
   readonly score: number;
@@ -92,12 +107,14 @@ export const esqueletoConsultaSemantica = (
   const candidatos: CandidatoEsqueleto[] = [];
   if (skill.consultaSemantica) {
     const ir = skill.consultaSemantica;
+    const aliases = aliasesMetricas(ir);
+    const alias = aliases[0] ?? "";
     const metrica = skill.escopo.metricasSaida.find(
-      (item) => item.alias.toLowerCase() === ir.metrica.toLowerCase(),
+      (item) => item.alias.toLowerCase() === alias.toLowerCase(),
     );
-    if (metrica && metricaEhMedida(metrica) && !omitirAliasQuantidade(ir.metrica, query)) {
+    if (metrica && metricaEhMedida(metrica) && !omitirAliasQuantidade(alias, query)) {
       candidatos.push({
-        score: overlapCapacidade(query, haystackKpi(ir.metrica, metrica.definicao, metrica.grao)),
+        score: overlapCapacidade(query, haystackKpi(alias, metrica.definicao, metrica.grao)),
         fromIr: true,
         hasDefinicao: Boolean(metrica.definicao?.trim()),
         order: 0,
@@ -115,11 +132,10 @@ export const esqueletoConsultaSemantica = (
       hasDefinicao: Boolean(item.definicao?.trim()),
       order: index + 1,
       esqueleto: {
-        versao: 1,
-        metrica: item.alias,
-        ...(item.dimensoesPermitidas && item.dimensoesPermitidas.length > 0
-          ? { dimensoes: item.dimensoesPermitidas }
-          : {}),
+        versao: 2,
+        modo: "agregacao",
+        metricas: [item.alias],
+        dimensoes: item.dimensoesPermitidas ?? [],
         ...(item.colunaData ? { colunaData: item.colunaData } : {}),
       },
     });
@@ -159,13 +175,13 @@ const esqueletoListagem = (skill: Skill): ConsultaSemanticaSugerida | undefined 
     op: "=" as const,
     param: param.nome,
   }));
-  if (dimensoes.length === 0 && filtros.length === 0) {
+  if (dimensoes.length === 0) {
     return undefined;
   }
   return {
-    versao: 1,
+    versao: 2,
     modo: "listagem",
-    ...(dimensoes.length > 0 ? { dimensoes } : {}),
+    dimensoes,
     ...(filtros.length > 0 ? { filtros } : {}),
   };
 };
@@ -196,11 +212,11 @@ export const esqueletoDaPrimeiraSkillComKpi = (
     if (!esqueleto || esqueleto.modo === "listagem") {
       return;
     }
-    const metricaAlias = esqueleto.metrica ?? "";
+    const metricaAlias = esqueleto.metricas?.[0] ?? "";
     const fromIr =
       skill.consultaSemantica !== null &&
       metricaAlias.length > 0 &&
-      skill.consultaSemantica.metrica.toLowerCase() === metricaAlias.toLowerCase();
+      aliasesMetricas(skill.consultaSemantica)[0]?.toLowerCase() === metricaAlias.toLowerCase();
     const metrica = skill.escopo.metricasSaida.find(
       (item) => item.alias.toLowerCase() === metricaAlias.toLowerCase(),
     );

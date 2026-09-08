@@ -38,6 +38,7 @@ const captureExecuteSql = async (
     timeoutMs?: number;
     page?: number;
     pageSize?: number;
+    requestServerTimings?: boolean;
   },
   httpTimeoutMs = 35_000,
 ): Promise<{ envelope: Record<string, unknown>; abortMs: number[]; fetchCalls: number }> => {
@@ -123,6 +124,13 @@ describe("PlugServerRestAdapter.executeSql", () => {
     expect(envelope.timeoutMs).toBe(hubBridgeWaitMs(AGENT_TIMEOUT_MS_LIMIT));
     expect(abortMs[0]).toBe(hubHttpAbortMs(35_000, hubBridgeWaitMs(AGENT_TIMEOUT_MS_LIMIT)));
     expect(fetchCalls).toBe(1);
+  });
+
+  it("solicita serverTimings somente quando o chamador opta", async () => {
+    const sampled = await captureExecuteSql({ requestServerTimings: true });
+    expect(sampled.envelope.requestServerTimings).toBe(true);
+    const omitted = await captureExecuteSql();
+    expect(omitted.envelope.requestServerTimings).toBeUndefined();
   });
 });
 
@@ -247,6 +255,27 @@ describe("normalizeSqlResult", () => {
       },
     });
     expect(named.columnsMetadata).toEqual([{ name: "SaldoReceber" }]);
+  });
+
+  it("normaliza timings e metadados de execução do hub", () => {
+    const result = normalizeSqlResult({
+      serverTimings: { phasesMs: { total: 12, agent: 7 } },
+      response: {
+        item: {
+          result: {
+            columns: ["id"],
+            rows: [{ id: 1 }],
+            sql_handling_mode: "preserve",
+            max_rows_handling: "response_truncation",
+            effective_max_rows: 100,
+          },
+        },
+      },
+    });
+    expect(result.serverTimings).toEqual({ total: 12, agent: 7 });
+    expect(result.sqlHandlingMode).toBe("preserve");
+    expect(result.maxRowsHandling).toBe("response_truncation");
+    expect(result.effectiveMaxRows).toBe(100);
   });
 });
 

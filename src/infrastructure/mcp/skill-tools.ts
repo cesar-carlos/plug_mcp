@@ -367,7 +367,7 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
               "3) Se houver placeholders :nome/@nome, peça significado e tipo (string/number/integer/decimal/date/datetime/boolean) → atualizar_skill com params[{ nome, descricao, tipo }].",
               "4) Se fluxoTreino indicar conflitos, chame resolver_conflito.",
               "5) validar_skill (une o sqlModelo ao escopo persistido; envelope vazio). atualizar_skill com SQL novo une o AST ao pacote (grafo inferido não entra).",
-              "6) Mostre o resumo e só chame publicar_skill com confirmadoPeloUsuario: true se o usuário confirmar. Sem confirmação, não publique.",
+              "6) Mostre o resumo e o diffPublicacao; só chame publicar_skill com confirmadoPeloUsuario: true e o mesmo confirmacaoHash se o usuário confirmar. Hash ausente/obsoleto gera novo preview e nunca publica.",
               "Não consulte o ERP pelo grafo. A consulta depois usa só a skill publicada.",
             ].join("\n"),
           },

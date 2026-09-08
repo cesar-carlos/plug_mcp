@@ -4,4 +4,4 @@ coverage
 drizzle/*.sql
 package-lock.json
 .nvmrc
-
+.data7

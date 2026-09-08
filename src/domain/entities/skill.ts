@@ -97,7 +97,34 @@ export interface AnotacaoGrafo {
   readonly tipo: string;
   readonly titulo: string;
   readonly texto: string;
+  readonly fonteTipo?: FonteConhecimento;
+  readonly fonteReferencia?: string | null;
+  readonly responsavel?: string | null;
+  readonly validadoEm?: Date | null;
+  readonly vigenteDe?: string | null;
+  readonly vigenteAte?: string | null;
+  /** Marco inicial para revisão única ou recorrente, na timezone do acesso. */
+  readonly revisarEm?: string | null;
+  /** Cadência opcional de revisão a partir de `revisarEm`/validação. */
+  readonly periodoRevisaoDias?: number | null;
+  readonly status?: StatusConhecimento;
   readonly autorUsuarioId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+export type FonteConhecimento = "usuario" | "erp" | "documento" | "importacao" | "legado" | "outro";
+
+export type StatusConhecimento = "vigente" | "obsoleta";
+
+export interface GovernancaConhecimento {
+  readonly fonteTipo?: FonteConhecimento;
+  readonly fonteReferencia?: string | null;
+  readonly responsavel?: string | null;
+  readonly validadoEm?: Date | null;
+  readonly vigenteDe?: string | null;
+  readonly vigenteAte?: string | null;
+  readonly revisarEm?: string | null;
+  readonly periodoRevisaoDias?: number | null;
+  readonly status?: StatusConhecimento;
 }

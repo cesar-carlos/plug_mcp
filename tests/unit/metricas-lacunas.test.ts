@@ -83,6 +83,16 @@ describe("métricas e lacunas de ferramenta", () => {
       skillNotPublished: 0,
       slotNarrativa: 0,
     });
+    expect(result.painel).toMatchObject({
+      status: "critica",
+      taxaErro: 0.5,
+      taxaCacheHit: 0,
+      taxaTruncamento: 0,
+      tendencia: {
+        recentes: { observacoes: 1 },
+        anteriores: { observacoes: 1 },
+      },
+    });
   });
 
   it("registra e lista lacuna de ferramenta", async () => {

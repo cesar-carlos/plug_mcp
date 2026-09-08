@@ -7,12 +7,11 @@ import { loadConfig } from "../../config/env.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const drizzleDir = path.resolve(here, "../../../drizzle");
 
-const run = async (): Promise<void> => {
-  const config = loadConfig();
-  if (!config.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required to migrate");
-  }
-  const client = new pg.Client({ connectionString: config.DATABASE_URL });
+export const applyMigrations = async (input: {
+  databaseUrl: string;
+  through?: string;
+}): Promise<void> => {
+  const client = new pg.Client({ connectionString: input.databaseUrl });
   await client.connect();
   try {
     await client.query(`
@@ -23,6 +22,7 @@ const run = async (): Promise<void> => {
     `);
     const files = readdirSync(drizzleDir)
       .filter((name) => name.endsWith(".sql"))
+      .filter((name) => input.through === undefined || name <= input.through)
       .sort();
     const applied = await client.query<{ filename: string }>(
       "SELECT filename FROM _mcp_migrations",
@@ -51,7 +51,15 @@ const run = async (): Promise<void> => {
   }
 };
 
-run().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+const run = async (): Promise<void> => {
+  const config = loadConfig();
+  if (!config.DATABASE_URL) throw new Error("DATABASE_URL is required to migrate");
+  await applyMigrations({ databaseUrl: config.DATABASE_URL });
+};
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  run().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

@@ -16,3 +16,7 @@ alwaysApply: false
 - Sessões MCP in-process; sticky `mcp-session-id`. Redis não replica sessão MCP.
 - `JSON.stringify` de tool sem pretty-print.
 - Sweep de sessões idle: `MCP_SESSION_IDLE_TIMEOUT_MS`.
+- Preflight é compartilhado por validação e execução e deve terminar antes do hub; seu `planoConsulta` permite observar fanout, modo, tabelas, paginação e limite sem carregar linhas. `CONSULTA_ORCAMENTO` retorna recomendações estruturadas (`AGREGAR`, `RECORTAR_PERIODO`, `REDUZIR_JOINS`, `PAGINAR`) sem reescrever a consulta.
+- `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (0..100, default 10) controla pedidos de `serverTimings`; registre somente amostra, fases e durações, nunca SQL ou payload.
+- Singleflight: somente consultas agregadas e cacheáveis podem coalescer. A chave é a mesma chave já isolada do cache; Redis usa lease com espera limitada e falha aberta para coalescência local. Não cacheie falhas nem anexos e não transforme a espera em retry cego de SQL.
+- Operação proativa roda em processo separado (`worker:operacoes`), com lease/outbox para impedir duplicação entre réplicas. SLO usa janela e mínimo de observações configuráveis; webhook tem timeout curto, backoff+jitter e dead-letter após 10 tentativas.

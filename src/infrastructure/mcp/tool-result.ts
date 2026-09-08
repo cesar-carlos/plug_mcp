@@ -123,7 +123,7 @@ export const errorResult = (
   return {
     content: [{ type: "text", text: JSON.stringify(payload) }],
     isError: true,
-    structuredContent: payload as Record<string, unknown>,
+    structuredContent: payload as unknown as Record<string, unknown>,
     _meta: Object.keys(meta).length ? meta : undefined,
   };
 };

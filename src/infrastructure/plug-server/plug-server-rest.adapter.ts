@@ -160,7 +160,13 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     clientToken: string;
     sql: string;
     params?: Record<string, unknown>;
-    options?: { maxRows?: number; timeoutMs?: number; page?: number; pageSize?: number };
+    options?: {
+      maxRows?: number;
+      timeoutMs?: number;
+      page?: number;
+      pageSize?: number;
+      requestServerTimings?: boolean;
+    };
   }): Promise<SqlExecuteResult> {
     const paginar = Boolean(input.options?.page && input.options.pageSize);
     const agentTimeoutMs = clampAgentTimeoutMs(input.options?.timeoutMs);
@@ -185,6 +191,7 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
       {
         agentId: input.agentId,
         timeoutMs: bridgeWaitMs,
+        ...(input.options?.requestServerTimings ? { requestServerTimings: true } : {}),
         command: {
           jsonrpc: "2.0",
           method: "sql.execute",
@@ -382,6 +389,20 @@ const readColumnsMetadata = (result: Record<string, unknown>): SqlColumnMetadata
 
 export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
   const result = unwrapRpcResult(body);
+  const envelope = asRecord(body);
+  const resultRecord = asRecord(result);
+  const envelopeMeta = asRecord(envelope?.meta);
+  const resultMeta = asRecord(resultRecord?.meta);
+  const timingsRaw =
+    asRecord(envelope?.serverTimings)?.phasesMs ??
+    asRecord(resultRecord?.serverTimings)?.phasesMs ??
+    asRecord(envelope?.server_timings)?.phases_ms ??
+    asRecord(envelopeMeta?.serverTimings)?.phasesMs ??
+    asRecord(resultMeta?.serverTimings)?.phasesMs ??
+    asRecord(envelopeMeta?.server_timings)?.phases_ms ??
+    asRecord(resultMeta?.server_timings)?.phases_ms;
+  const serverTimings = asRecord(timingsRaw);
+  const executionMeta = resultMeta ?? envelopeMeta;
   let columns = Array.isArray(result.columns)
     ? result.columns.map((col) => (typeof col === "string" ? col : String(col)))
     : [];
@@ -419,5 +440,59 @@ export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
     ...(result.truncated === true ? { truncated: true } : {}),
     ...(pagination ? { pagination } : {}),
     ...(metadata.length > 0 ? { columnsMetadata: metadata } : {}),
+    ...(serverTimings
+      ? {
+          serverTimings: Object.fromEntries(
+            Object.entries(serverTimings).filter(
+              (entry): entry is [string, number] => typeof entry[1] === "number",
+            ),
+          ),
+        }
+      : {}),
+    ...(typeof resultRecord?.sql_handling_mode === "string" ||
+    typeof resultRecord?.sqlHandlingMode === "string" ||
+    typeof executionMeta?.sql_handling_mode === "string" ||
+    typeof executionMeta?.sqlHandlingMode === "string"
+      ? {
+          sqlHandlingMode:
+            typeof resultRecord?.sql_handling_mode === "string"
+              ? resultRecord.sql_handling_mode
+              : typeof resultRecord?.sqlHandlingMode === "string"
+                ? resultRecord.sqlHandlingMode
+                : typeof executionMeta?.sql_handling_mode === "string"
+                  ? executionMeta.sql_handling_mode
+                  : (executionMeta?.sqlHandlingMode as string),
+        }
+      : {}),
+    ...(typeof resultRecord?.max_rows_handling === "string" ||
+    typeof resultRecord?.maxRowsHandling === "string" ||
+    typeof executionMeta?.max_rows_handling === "string" ||
+    typeof executionMeta?.maxRowsHandling === "string"
+      ? {
+          maxRowsHandling:
+            typeof resultRecord?.max_rows_handling === "string"
+              ? resultRecord.max_rows_handling
+              : typeof resultRecord?.maxRowsHandling === "string"
+                ? resultRecord.maxRowsHandling
+                : typeof executionMeta?.max_rows_handling === "string"
+                  ? executionMeta.max_rows_handling
+                  : (executionMeta?.maxRowsHandling as string),
+        }
+      : {}),
+    ...(typeof resultRecord?.effective_max_rows === "number" ||
+    typeof resultRecord?.effectiveMaxRows === "number" ||
+    typeof executionMeta?.effective_max_rows === "number" ||
+    typeof executionMeta?.effectiveMaxRows === "number"
+      ? {
+          effectiveMaxRows:
+            typeof resultRecord?.effective_max_rows === "number"
+              ? resultRecord.effective_max_rows
+              : typeof resultRecord?.effectiveMaxRows === "number"
+                ? resultRecord.effectiveMaxRows
+                : typeof executionMeta?.effective_max_rows === "number"
+                  ? executionMeta.effective_max_rows
+                  : (executionMeta?.effectiveMaxRows as number),
+        }
+      : {}),
   };
 };

@@ -11,14 +11,17 @@
     "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=.env dist/main.js",
+    "worker:operacoes": "tsx --env-file-if-exists=.env src/worker-operacoes.ts",
     "lint": "eslint src tests",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "release:check": "npm run lint && npm run format:check && npx tsc -p tsconfig.json --noEmit && npm test && npm run build",
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts",
+    "test:migrations": "tsx scripts/verify-migrations.ts",
     "db:backfill-escopo": "tsx --env-file-if-exists=.env src/infrastructure/persistence/backfill-escopo.ts"
   },
   "dependencies": {

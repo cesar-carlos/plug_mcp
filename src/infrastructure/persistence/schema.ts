@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -16,6 +17,14 @@ import type { PoliticaConsulta } from "../../domain/entities/politica-consulta.j
 import type { EscopoSkill } from "../../domain/entities/escopo.js";
 import type { PerfilColuna } from "../../domain/entities/escopo.js";
 import type { EscopoValidacaoRel } from "../../domain/entities/grafo.js";
+import type { AuditMetadata } from "../../domain/entities/audit-log.js";
+import type {
+  CategoriaAlertaOperacional,
+  MetadadosAlertaOperacional,
+  SeveridadeAlertaOperacional,
+  StatusAlertaOperacional,
+  TipoEventoWebhook,
+} from "../../domain/entities/operacoes.js";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -230,12 +239,23 @@ export const anotacaoGrafo = pgTable(
     tipo: text("tipo").notNull(),
     titulo: text("titulo").notNull(),
     texto: text("texto").notNull(),
+    fonteTipo: text("fonte_tipo").notNull().default("usuario"),
+    fonteReferencia: text("fonte_referencia"),
+    responsavel: text("responsavel"),
+    validadoEm: timestamp("validado_em", { withTimezone: true }),
+    vigenteDe: date("vigente_de"),
+    vigenteAte: date("vigente_ate"),
+    revisarEm: date("revisar_em"),
+    periodoRevisaoDias: integer("periodo_revisao_dias"),
+    status: text("status").notNull().default("vigente"),
     autorUsuarioId: uuid("autor_usuario_id"),
     ...timestamps,
   },
   (t) => [
     index("anotacao_grafo_acesso_idx").on(t.acessoId),
     index("anotacao_grafo_skill_idx").on(t.skillId),
+    index("anotacao_grafo_vigencia_idx").on(t.acessoId, t.status, t.vigenteDe, t.vigenteAte),
+    index("anotacao_grafo_revisao_idx").on(t.acessoId, t.status, t.revisarEm),
   ],
 );
 
@@ -251,11 +271,114 @@ export const auditLog = pgTable(
     codigoErro: text("codigo_erro"),
     linhasRetornadas: integer("linhas_retornadas"),
     duracaoMs: integer("duracao_ms"),
+    metadata: jsonb("metadata").$type<AuditMetadata | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("audit_log_usuario_idx").on(t.usuarioId),
     index("audit_log_created_idx").on(t.createdAt),
+    index("audit_log_acesso_created_idx").on(t.acessoId, t.createdAt),
+  ],
+);
+
+export const skillPublicacao = pgTable(
+  "skill_publicacao",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => skill.id, { onDelete: "cascade" }),
+    publicacaoVersao: integer("publicacao_versao").notNull(),
+    skillVersao: integer("skill_versao").notNull(),
+    pacote: jsonb("pacote").$type<Record<string, unknown>>().notNull(),
+    pacoteHash: text("pacote_hash").notNull(),
+    origem: text("origem").notNull().default("publicacao"),
+    autorUsuarioId: uuid("autor_usuario_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("skill_publicacao_skill_versao_uidx").on(t.skillId, t.publicacaoVersao),
+    index("skill_publicacao_acesso_skill_idx").on(t.acessoId, t.skillId, t.publicacaoVersao),
+  ],
+);
+
+export const alertaOperacional = pgTable(
+  "alerta_operacional",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    categoria: text("categoria").$type<CategoriaAlertaOperacional>().notNull(),
+    severidade: text("severidade").$type<SeveridadeAlertaOperacional>().notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    status: text("status").$type<StatusAlertaOperacional>().notNull().default("aberto"),
+    metadados: jsonb("metadados").$type<MetadadosAlertaOperacional>().notNull().default({}),
+    ocorrencias: integer("ocorrencias").notNull().default(1),
+    versao: integer("versao").notNull().default(1),
+    reconhecidoEm: timestamp("reconhecido_em", { withTimezone: true }),
+    resolvidoEm: timestamp("resolvido_em", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("alerta_operacional_chave_uidx").on(t.acessoId, t.categoria, t.fingerprint),
+    index("alerta_operacional_acesso_status_idx").on(t.acessoId, t.status, t.updatedAt),
+  ],
+);
+
+export const webhookOperacional = pgTable(
+  "webhook_operacional",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    urlEnc: text("url_enc").notNull(),
+    urlHash: text("url_hash").notNull(),
+    segredoEnc: text("segredo_enc").notNull(),
+    ativo: boolean("ativo").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("webhook_operacional_acesso_uidx").on(t.acessoId)],
+);
+
+export const webhookOperacionalOutbox = pgTable(
+  "webhook_operacional_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    webhookId: uuid("webhook_id")
+      .notNull()
+      .references(() => webhookOperacional.id, { onDelete: "cascade" }),
+    alertaId: uuid("alerta_id")
+      .notNull()
+      .references(() => alertaOperacional.id, { onDelete: "cascade" }),
+    alertaVersao: integer("alerta_versao").notNull(),
+    tipoEvento: text("tipo_evento").$type<TipoEventoWebhook>().notNull(),
+    tentativas: integer("tentativas").notNull().default(0),
+    proximaTentativaEm: timestamp("proxima_tentativa_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseAte: timestamp("lease_ate", { withTimezone: true }),
+    leasePor: text("lease_por"),
+    entregueEm: timestamp("entregue_em", { withTimezone: true }),
+    falhaPermanenteEm: timestamp("falha_permanente_em", { withTimezone: true }),
+    ultimoErroCodigo: text("ultimo_erro_codigo"),
+    ultimoStatusHttp: integer("ultimo_status_http"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("webhook_operacional_outbox_evento_uidx").on(
+      t.webhookId,
+      t.alertaId,
+      t.alertaVersao,
+    ),
+    index("webhook_operacional_outbox_pendente_idx").on(t.proximaTentativaEm, t.createdAt),
   ],
 );
 

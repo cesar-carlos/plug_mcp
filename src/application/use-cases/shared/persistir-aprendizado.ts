@@ -11,6 +11,8 @@ import type {
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import { isIdentificadorSql } from "./schema-introspection.js";
 import { requireSkillDoAcesso } from "./skill-do-acesso.js";
+import { parseGovernancaConhecimento, type GovernancaConhecimentoInput } from "../skills.js";
+import { pareceSegredoEmTexto } from "../../../domain/entities/parece-segredo.js";
 
 export const TIPOS_APRENDIZADO = new Set([
   "regra",
@@ -27,6 +29,7 @@ export interface ItemAprendizadoInput {
   readonly texto?: string;
   readonly tabela?: string;
   readonly skillId?: string;
+  readonly governanca?: GovernancaConhecimentoInput;
 }
 
 export const persistirConsultaExecutada = async (input: {
@@ -72,6 +75,13 @@ export const persistirItensAprendizado = async (input: {
       avisos.push({
         code: "APRENDIZADO_IGNORADO",
         message: "Item de aprendizado sem titulo ou texto foi ignorado.",
+      });
+      continue;
+    }
+    if (pareceSegredoEmTexto(`${titulo}\n${texto}`)) {
+      avisos.push({
+        code: "APRENDIZADO_IGNORADO",
+        message: "Item de aprendizado parece conter segredo e não foi persistido.",
       });
       continue;
     }
@@ -177,6 +187,7 @@ export const persistirItensAprendizado = async (input: {
       titulo,
       texto,
       autorUsuarioId: input.autorUsuarioId,
+      governanca: parseGovernancaConhecimento(item.governanca),
     });
     anotacoes.push(anotacao);
   }

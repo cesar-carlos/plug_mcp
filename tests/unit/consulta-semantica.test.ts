@@ -3,6 +3,7 @@ import {
   compilarConsultaSemantica,
   keywordJoinDoPacote,
 } from "../../src/application/use-cases/shared/compilar-consulta-semantica.js";
+import { parseConsultaSemantica } from "../../src/domain/entities/consulta-semantica.js";
 import { parseEscopoSkill } from "../../src/domain/entities/escopo.js";
 import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 
@@ -223,6 +224,109 @@ describe("consulta semântica", () => {
     expect(compiled.sql).toMatch(/nome IS NULL/i);
     expect(compiled.sql).toMatch(/valor BETWEEN :minVal AND :maxVal/i);
     expect(compiled.sql).toMatch(/HAVING SUM\(receber\.valor\) > :piso/i);
+  });
+
+  it("inclui tabelas de filtros e período na listagem v2", () => {
+    const multi = parseEscopoSkill({
+      tabelas: ["receber", "cliente"],
+      colunasPorTabela: {
+        receber: ["codcli", "vencimento"],
+        cliente: ["codcli", "nome"],
+      },
+      graoResultado: ["nome"],
+      metricasSaida: [],
+      relacionamentos: [
+        {
+          tabelaOrigem: "receber",
+          colunaOrigem: "codcli",
+          tabelaDestino: "cliente",
+          colunaDestino: "codcli",
+          pares: [{ colunaOrigem: "codcli", colunaDestino: "codcli" }],
+          tipoJoin: "inner",
+        },
+      ],
+    });
+    const compiled = compilarConsultaSemantica(
+      {
+        versao: 2,
+        modo: "listagem",
+        dimensoes: ["nome"],
+        filtros: [{ coluna: "vencimento", op: "is_not_null" }],
+      },
+      multi,
+    );
+    expect(compiled.sql).toMatch(/FROM cliente INNER JOIN receber/i);
+    expect(compiled.sql).toMatch(/receber\.vencimento IS NOT NULL/i);
+  });
+
+  it("normaliza e compila IR v2 de agregação com múltiplas métricas", () => {
+    const escopoV2 = parseEscopoSkill({
+      tabelas: ["receber"],
+      colunasPorTabela: { receber: ["valor", "empresa"] },
+      graoResultado: ["empresa"],
+      metricasSaida: [
+        { alias: "total", expr: "SUM(receber.valor)" },
+        { alias: "qtde", expr: "COUNT(*)" },
+      ],
+      relacionamentos: [],
+    });
+    const consulta = parseConsultaSemantica({
+      versao: 2,
+      modo: "agregacao",
+      metricas: ["total", "qtde"],
+      dimensoes: ["empresa"],
+      filtros: [{ coluna: "empresa", op: "=", param: "empresa" }],
+    });
+    expect(consulta).toMatchObject({
+      versao: 2,
+      modo: "agregacao",
+      metricas: ["total", "qtde"],
+    });
+    const compiled = compilarConsultaSemantica(consulta!, escopoV2);
+    expect(compiled.sql).toMatch(/SUM\(receber\.valor\) AS total/i);
+    expect(compiled.sql).toMatch(/COUNT\(\*\) AS qtde/i);
+    expect(compiled.sql).toMatch(/GROUP BY empresa/i);
+  });
+
+  it("normaliza e compila IR v2 de listagem sem inventar métrica", () => {
+    const consulta = parseConsultaSemantica({
+      versao: 2,
+      modo: "listagem",
+      dimensoes: ["empresa"],
+      ordenacao: [{ coluna: "empresa", dir: "desc" }],
+      limite: 10,
+    });
+    expect(consulta).toMatchObject({
+      versao: 2,
+      modo: "listagem",
+      dimensoes: ["empresa"],
+    });
+    const compiled = compilarConsultaSemantica(consulta!, escopo, undefined, {
+      dialeto: "postgres",
+    });
+    expect(compiled.sql).toMatch(/SELECT empresa FROM receber/i);
+    expect(compiled.sql).not.toMatch(/SUM\(|COUNT\(/i);
+    expect(compiled.sql).toMatch(/ORDER BY empresa DESC/i);
+    expect(compiled.sql).toMatch(/LIMIT 10/i);
+  });
+
+  it("recusa campos de agregação no modo listagem v2", () => {
+    expect(
+      parseConsultaSemantica({
+        versao: 2,
+        modo: "listagem",
+        dimensoes: ["empresa"],
+        metricas: ["total"],
+      }),
+    ).toBeNull();
+    expect(
+      parseConsultaSemantica({
+        versao: 2,
+        modo: "listagem",
+        dimensoes: ["empresa"],
+        having: [{ metrica: "total", op: ">", param: "piso" }],
+      }),
+    ).toBeNull();
   });
 
   it("injeta LIMIT e recusa uso conceitual com page no caller", () => {

@@ -1,5 +1,12 @@
 import type { HitBusca } from "../entities/hit-busca.js";
-import type { AnotacaoGrafo, NovaSkill, Skill, StatusSkill } from "../entities/skill.js";
+import type {
+  AnotacaoGrafo,
+  GovernancaConhecimento,
+  NovaSkill,
+  Skill,
+  StatusConhecimento,
+  StatusSkill,
+} from "../entities/skill.js";
 
 export interface SkillRepositoryPort {
   create(input: NovaSkill): Promise<Skill>;
@@ -45,11 +52,17 @@ export interface AnotacaoGrafoRepositoryPort {
     titulo: string;
     texto: string;
     autorUsuarioId: string | null;
+    governanca?: GovernancaConhecimento;
   }): Promise<AnotacaoGrafo>;
+  update(
+    id: string,
+    patch: Partial<Pick<AnotacaoGrafo, "tipo" | "titulo" | "texto"> & GovernancaConhecimento>,
+  ): Promise<AnotacaoGrafo>;
   list(
     acessoId: string,
     tabelaId?: string | null,
     skillId?: string | null,
+    options?: { status?: StatusConhecimento; ativasEm?: Date },
   ): Promise<readonly AnotacaoGrafo[]>;
   findById(id: string): Promise<AnotacaoGrafo | null>;
   deleteByAcesso(acessoId: string): Promise<void>;
@@ -58,5 +71,6 @@ export interface AnotacaoGrafoRepositoryPort {
     acessoId: string,
     query: string,
     limite: number,
+    options?: { ativasEm?: Date },
   ): Promise<readonly HitBusca<AnotacaoGrafo>[]>;
 }

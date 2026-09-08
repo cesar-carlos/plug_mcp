@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { and, count, desc, eq, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { tokenizeQuery } from "../busca-termos.js";
 import type { Db } from "./db.js";
 import {
@@ -17,8 +17,10 @@ import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { NovoUsuarioMcp, UsuarioMcp } from "../../../domain/entities/usuario-mcp.js";
 import type {
   AnotacaoGrafo,
+  GovernancaConhecimento,
   NovaSkill,
   Skill,
+  StatusConhecimento,
   StatusSkill,
 } from "../../../domain/entities/skill.js";
 import type {
@@ -185,6 +187,11 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
       .select()
       .from(schema.acesso)
       .where(eq(schema.acesso.usuarioId, usuarioId));
+    return rows.map(toAcesso);
+  }
+
+  async listAll(): Promise<readonly Acesso[]> {
+    const rows = await this.db.select().from(schema.acesso);
     return rows.map(toAcesso);
   }
 
@@ -1143,6 +1150,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
     titulo: string;
     texto: string;
     autorUsuarioId: string | null;
+    governanca?: GovernancaConhecimento;
   }): Promise<AnotacaoGrafo> {
     const [row] = await this.db
       .insert(schema.anotacaoGrafo)
@@ -1153,8 +1161,29 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
         tipo: input.tipo,
         titulo: input.titulo,
         texto: input.texto,
+        fonteTipo: input.governanca?.fonteTipo ?? "usuario",
+        fonteReferencia: input.governanca?.fonteReferencia ?? null,
+        responsavel: input.governanca?.responsavel ?? null,
+        validadoEm: input.governanca?.validadoEm ?? null,
+        vigenteDe: input.governanca?.vigenteDe ?? null,
+        vigenteAte: input.governanca?.vigenteAte ?? null,
+        revisarEm: input.governanca?.revisarEm ?? null,
+        periodoRevisaoDias: input.governanca?.periodoRevisaoDias ?? null,
+        status: input.governanca?.status ?? "vigente",
         autorUsuarioId: input.autorUsuarioId,
       })
+      .returning();
+    return this.toAnotacao(row!);
+  }
+
+  async update(
+    id: string,
+    patch: Partial<Pick<AnotacaoGrafo, "tipo" | "titulo" | "texto"> & GovernancaConhecimento>,
+  ): Promise<AnotacaoGrafo> {
+    const [row] = await this.db
+      .update(schema.anotacaoGrafo)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(schema.anotacaoGrafo.id, id))
       .returning();
     return this.toAnotacao(row!);
   }
@@ -1163,6 +1192,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
     acessoId: string,
     tabelaId?: string | null,
     skillId?: string | null,
+    options?: { status?: StatusConhecimento; ativasEm?: Date },
   ): Promise<readonly AnotacaoGrafo[]> {
     const filters = [eq(schema.anotacaoGrafo.acessoId, acessoId)];
     if (tabelaId === null) {
@@ -1174,6 +1204,17 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
       filters.push(isNull(schema.anotacaoGrafo.skillId));
     } else if (skillId !== undefined) {
       filters.push(eq(schema.anotacaoGrafo.skillId, skillId));
+    }
+    if (options?.status) {
+      filters.push(eq(schema.anotacaoGrafo.status, options.status));
+    }
+    if (options?.ativasEm) {
+      const dia = options.ativasEm.toISOString().slice(0, 10);
+      filters.push(
+        or(isNull(schema.anotacaoGrafo.vigenteDe), lte(schema.anotacaoGrafo.vigenteDe, dia))!,
+        or(isNull(schema.anotacaoGrafo.vigenteAte), gte(schema.anotacaoGrafo.vigenteAte, dia))!,
+        eq(schema.anotacaoGrafo.status, "vigente"),
+      );
     }
     const rows = await this.db
       .select()
@@ -1207,6 +1248,7 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
     acessoId: string,
     query: string,
     limite: number,
+    options?: { ativasEm?: Date },
   ): Promise<readonly HitBusca<AnotacaoGrafo>[]> {
     const terms = tokenizeQuery(query);
     const likes = terms.flatMap((term) => {
@@ -1221,13 +1263,22 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
     if (!busca) {
       return [];
     }
+    const filters = [eq(schema.anotacaoGrafo.acessoId, acessoId), busca];
+    if (options?.ativasEm) {
+      const dia = options.ativasEm.toISOString().slice(0, 10);
+      filters.push(
+        eq(schema.anotacaoGrafo.status, "vigente"),
+        or(isNull(schema.anotacaoGrafo.vigenteDe), lte(schema.anotacaoGrafo.vigenteDe, dia))!,
+        or(isNull(schema.anotacaoGrafo.vigenteAte), gte(schema.anotacaoGrafo.vigenteAte, dia))!,
+      );
+    }
     const rows = await this.db
       .select({
         item: schema.anotacaoGrafo,
         rank: exprTsRank("anotacao_grafo", query),
       })
       .from(schema.anotacaoGrafo)
-      .where(and(eq(schema.anotacaoGrafo.acessoId, acessoId), busca))
+      .where(and(...filters))
       .orderBy(ordemPorTsRank("anotacao_grafo", query))
       .limit(janelaBuscaFts(limite));
     return rows
@@ -1244,6 +1295,15 @@ export class DrizzleAnotacaoGrafoRepository implements AnotacaoGrafoRepositoryPo
       tipo: row.tipo,
       titulo: row.titulo,
       texto: row.texto,
+      fonteTipo: row.fonteTipo as AnotacaoGrafo["fonteTipo"],
+      fonteReferencia: row.fonteReferencia,
+      responsavel: row.responsavel,
+      validadoEm: row.validadoEm,
+      vigenteDe: row.vigenteDe,
+      vigenteAte: row.vigenteAte,
+      revisarEm: row.revisarEm,
+      periodoRevisaoDias: row.periodoRevisaoDias,
+      status: row.status as AnotacaoGrafo["status"],
       autorUsuarioId: row.autorUsuarioId,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -1266,6 +1326,7 @@ export class DrizzleAuditLog implements AuditLogPort {
         codigoErro: entry.codigoErro,
         linhasRetornadas: entry.linhasRetornadas,
         duracaoMs: entry.duracaoMs,
+        metadata: entry.metadata ?? null,
       })
       .returning();
     return {
@@ -1279,6 +1340,7 @@ export class DrizzleAuditLog implements AuditLogPort {
       codigoErro: row!.codigoErro,
       linhasRetornadas: row!.linhasRetornadas,
       duracaoMs: row!.duracaoMs,
+      metadata: row!.metadata,
     };
   }
 
@@ -1308,6 +1370,7 @@ export class DrizzleAuditLog implements AuditLogPort {
       codigoErro: row.codigoErro,
       linhasRetornadas: row.linhasRetornadas,
       duracaoMs: row.duracaoMs,
+      metadata: row.metadata,
     }));
   }
 
@@ -1329,6 +1392,7 @@ export class DrizzleAuditLog implements AuditLogPort {
       codigoErro: row.codigoErro,
       linhasRetornadas: row.linhasRetornadas,
       duracaoMs: row.duracaoMs,
+      metadata: row.metadata,
     }));
   }
 }

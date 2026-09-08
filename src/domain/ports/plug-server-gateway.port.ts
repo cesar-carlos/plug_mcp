@@ -21,6 +21,7 @@ export interface SqlExecuteOptions {
   readonly timeoutMs?: number;
   readonly page?: number;
   readonly pageSize?: number;
+  readonly requestServerTimings?: boolean;
 }
 
 export interface SqlExecutePagination {
@@ -42,6 +43,10 @@ export interface SqlExecuteResult {
   readonly truncated?: boolean;
   readonly pagination?: SqlExecutePagination;
   readonly columnsMetadata?: readonly SqlColumnMetadata[];
+  readonly serverTimings?: Readonly<Record<string, number>>;
+  readonly sqlHandlingMode?: string;
+  readonly maxRowsHandling?: string;
+  readonly effectiveMaxRows?: number;
 }
 
 export interface ClientTokenPolicy {

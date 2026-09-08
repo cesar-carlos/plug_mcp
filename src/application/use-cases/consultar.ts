@@ -5,11 +5,13 @@ import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { AuditLogPort } from "../../domain/ports/audit-log.port.js";
+import type { AuditMetadata } from "../../domain/entities/audit-log.js";
 import type {
   ConflitoGrafo,
   GrafoRepositoryPort,
 } from "../../domain/ports/grafo-repository.port.js";
 import type { QueryResultCachePort } from "../../domain/ports/query-result-cache.port.js";
+import type { QuerySingleflightPort } from "../../domain/ports/query-singleflight.port.js";
 import type {
   AnotacaoGrafoRepositoryPort,
   SkillRepositoryPort,
@@ -17,6 +19,7 @@ import type {
 import type {
   ClientTokenPolicy,
   PlugServerGatewayPort,
+  SqlExecuteResult,
   UsuarioPlugSessionPort,
 } from "../../domain/ports/plug-server-gateway.port.js";
 import type {
@@ -36,6 +39,8 @@ import { compilarConsultaSemantica } from "./shared/compilar-consulta-semantica.
 import { assertFanoutSeguro } from "./shared/assert-fanout.js";
 import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
 import { assertOrcamentoConsulta } from "./shared/assert-orcamento.js";
+import type { PlanoConsulta, OrigemConsulta } from "./shared/planejar-consulta.js";
+import { montarPlanoConsulta } from "./shared/planejar-consulta.js";
 import { avisosKpiDesalinhado } from "./shared/avisos-kpi.js";
 import { lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
 import { aplicarDerivaTabelaNoGrafo } from "./shared/schema-drift.js";
@@ -144,11 +149,27 @@ import {
 } from "./shared/columns-metadata.js";
 import type { AnexoHandlePort } from "../../domain/ports/anexo-handle.port.js";
 import { avisoAnexos, sanitizarLinhasConsulta } from "./shared/sanitizar-linhas-consulta.js";
+import { analisarCelulaBinaria } from "./shared/detectar-celula-binaria.js";
 
 const PERIODO_NA_PERGUNTA =
   /\b(per[ií]odo|ano|m[eê]s|yoy|versus|compar(ar|ação|acao)|trimestre|semestre)\b/i;
 
 const HINT_IDS_MAX = 3;
+
+const diaNoFusoDoAcesso = (timezone: string | null | undefined): Date => {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone ?? "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    const value = (type: string): string => parts.find((part) => part.type === type)?.value ?? "";
+    return new Date(`${value("year")}-${value("month")}-${value("day")}T00:00:00.000Z`);
+  } catch {
+    return new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+  }
+};
 
 const hintConsultasAprendidas = (
   query: string,
@@ -321,6 +342,17 @@ const rethrowCatalogDenied = (error: unknown): never => {
   throw error;
 };
 
+const origemErroAuditoria = (source: string | undefined): AuditMetadata["errorSource"] =>
+  source === "mcp"
+    ? "mcp_preflight"
+    : source === "sql" ||
+        source === "sql_engine" ||
+        source === "client_token_rpc" ||
+        source === "plug_server_http" ||
+        source === "mcp_preflight"
+      ? source
+      : undefined;
+
 export class ConsultarDados {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -336,10 +368,12 @@ export class ConsultarDados {
       aprendizado?: AprendizadoRepositoryPort;
       anotacoes?: AnotacaoGrafoRepositoryPort;
       cache?: QueryResultCachePort;
+      singleflight?: QuerySingleflightPort;
       cacheTtlMs?: number;
       semanticQueryEnabled?: boolean;
       schemaDriftEnabled?: boolean;
       anexos?: AnexoHandlePort;
+      timingsSamplePercent?: number;
     } = {},
   ) {}
 
@@ -381,6 +415,7 @@ export class ConsultarDados {
       hasPreviousPage: boolean;
     };
     hint?: string;
+    planoConsulta: PlanoConsulta;
   }> {
     const started = Date.now();
     const uid = requireUsuario(usuarioId);
@@ -399,85 +434,137 @@ export class ConsultarDados {
     const consultaAprendidaId = input.consultaAprendidaId?.trim() ?? "";
     const sqlInformado = input.sql?.trim() ?? "";
     const consultaSemantica = parseConsultaSemantica(input.consultaSemantica);
+    const registrarFalhaPreflight = async (error: unknown, skillIds = ids): Promise<void> => {
+      await this.audit.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: "consultar_dados",
+        sqlEnviado: `skills:${skillIds.join(",") || "resolucao"}`,
+        sucesso: false,
+        codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
+        linhasRetornadas: null,
+        duracaoMs: Date.now() - started,
+        metadata: {
+          origem: consultaSemantica ? "semantica" : consultaAprendidaId ? "aprendida" : "sql",
+          skillIds,
+          cacheHit: false,
+          stage: "preflight",
+          ...(error instanceof DomainError && error.source
+            ? { errorSource: origemErroAuditoria(error.source) }
+            : {}),
+        },
+      });
+    };
+    const preflight = async <T>(work: () => Promise<T> | T, skillIds = ids): Promise<T> => {
+      try {
+        return await work();
+      } catch (error) {
+        await registrarFalhaPreflight(error, skillIds);
+        throw error;
+      }
+    };
     const fontes = [
       sqlInformado.length > 0,
       Boolean(consultaSemantica),
       consultaAprendidaId.length > 0,
     ].filter(Boolean).length;
     if (fontes > 1) {
-      throw new DomainError({
+      const error = new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "Use só uma fonte de SQL: sql, consultaSemantica ou consultaAprendidaId.",
         hint: "consultaAprendidaId reusa o SELECT gravado. Não misture com sql nem IR.",
       });
+      await registrarFalhaPreflight(error);
+      throw error;
     }
-    const allowlist = await resolverSkillsConsulta(this.skills, acesso.id, ids);
+    const allowlist = await preflight(() => resolverSkillsConsulta(this.skills, acesso.id, ids));
     let aprendida: ConsultaAprendida | null = null;
     if (consultaAprendidaId) {
-      if (!this.extras.aprendizado) {
-        throw new DomainError({
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: "Consulta aprendida indisponível neste servidor.",
-          hint: "Passe sql ou consultaSemantica. Em Postgres o cofre precisa estar ligado.",
-        });
-      }
-      aprendida = await this.extras.aprendizado.obterConsulta(acesso.id, consultaAprendidaId);
-      if (aprendida?.status !== "ativa") {
-        throw new DomainError({
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: "Consulta aprendida não encontrada ou inativa.",
-          hint: "Reuse o id de buscar_contexto em obter_skill.consultasExemplo e consulte de novo.",
-        });
-      }
+      aprendida = await preflight(async () => {
+        if (!this.extras.aprendizado) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "Consulta aprendida indisponível neste servidor.",
+            hint: "Passe sql ou consultaSemantica. Em Postgres o cofre precisa estar ligado.",
+          });
+        }
+        const encontrada = await this.extras.aprendizado.obterConsulta(
+          acesso.id,
+          consultaAprendidaId,
+        );
+        if (encontrada?.status !== "ativa") {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "Consulta aprendida não encontrada ou inativa.",
+            hint: "Reuse o id de buscar_contexto em obter_skill.consultasExemplo e consulte de novo.",
+          });
+        }
+        return encontrada;
+      });
     }
     const sqlLivre = aprendida ? aprendida.sql.trim() : sqlInformado;
+    const origemConsulta: OrigemConsulta = consultaSemantica
+      ? "semantica"
+      : aprendida
+        ? "aprendida"
+        : sqlLivre.length > 0
+          ? "sql"
+          : "modelo";
     if (acesso.dialeto === "firebird" && (sqlLivre.length > 0 || Boolean(consultaSemantica))) {
-      recusarSqlLivreFirebird();
+      await preflight(() => recusarSqlLivreFirebird());
     }
     let sqlSemantico: string | null = null;
     let avisoSemantico: { code: string; message: string } | null = null;
     let ancoraSemantica: Skill | null = null;
     if (consultaSemantica) {
-      if (this.extras.semanticQueryEnabled === false) {
-        throw new DomainError({
-          code: ERROR_CODES.FEATURE_DESLIGADA,
-          message: "Consulta semântica está desligada.",
-          hint: "Use SQL livre validado ou ligue MCP_SEMANTIC_QUERY_ENABLED.",
-        });
-      }
-      if (
-        consultaSemantica.limite != null &&
-        (input.options?.page != null || input.options?.page_size != null)
-      ) {
-        throw new DomainError({
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: "consultaSemantica.limite não combina com options.page.",
-          hint: "Não misture os dois padrões: use limite (TOP/LIMIT) sem página, ou pagine com ORDER BY + page e page_size sem limite no IR.",
-        });
-      }
-      ancoraSemantica = ancoraConsultaSemantica(allowlist, aliasesMetricas(consultaSemantica), ids);
-      const compiled = compilarConsultaSemantica(
-        consultaSemantica,
-        escopoDaSkillPublicada(ancoraSemantica),
-        {
-          empresa: Boolean(acesso.escopoPadrao?.empresa),
-          filial: Boolean(acesso.escopoPadrao?.filial),
-        },
-        { dialeto: acesso.dialeto, maxLimite: this.absoluteMaxRows },
-      );
-      sqlSemantico = compiled.sql;
-      avisoSemantico = {
-        code: "CONSULTA_SEMANTICA",
-        message: `SQL compilado dos elementos certificados: ${compiled.elementos.join(", ")}.`,
-      };
+      await preflight(() => {
+        if (this.extras.semanticQueryEnabled === false) {
+          throw new DomainError({
+            code: ERROR_CODES.FEATURE_DESLIGADA,
+            message: "Consulta semântica está desligada.",
+            hint: "Use SQL livre validado ou ligue MCP_SEMANTIC_QUERY_ENABLED.",
+          });
+        }
+        if (
+          consultaSemantica.limite != null &&
+          (input.options?.page != null || input.options?.page_size != null)
+        ) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "consultaSemantica.limite não combina com options.page.",
+            hint: "Não misture os dois padrões: use limite (TOP/LIMIT) sem página, ou pagine com ORDER BY + page e page_size sem limite no IR.",
+          });
+        }
+        ancoraSemantica = ancoraConsultaSemantica(
+          allowlist,
+          aliasesMetricas(consultaSemantica),
+          ids,
+        );
+        const compiled = compilarConsultaSemantica(
+          consultaSemantica,
+          escopoDaSkillPublicada(ancoraSemantica),
+          {
+            empresa: Boolean(acesso.escopoPadrao?.empresa),
+            filial: Boolean(acesso.escopoPadrao?.filial),
+          },
+          { dialeto: acesso.dialeto, maxLimite: this.absoluteMaxRows },
+        );
+        sqlSemantico = compiled.sql;
+        avisoSemantico = {
+          code: "CONSULTA_SEMANTICA",
+          message: `SQL compilado dos elementos certificados: ${compiled.elementos.join(", ")}.`,
+        };
+      });
     }
     const perguntaUsada = input.pergunta?.trim() ?? "";
     if (!perguntaUsada) {
-      throw new DomainError({
+      const error = new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "pergunta é obrigatória.",
         hint: "Envie a pergunta do usuário em consultar_dados. O servidor grava o SQL que funcionou.",
       });
+      await registrarFalhaPreflight(error);
+      throw error;
     }
     const avisos: { code: string; message: string }[] = [];
     if (avisoSemantico) {
@@ -496,26 +583,38 @@ export class ConsultarDados {
     const escopoConsulta = uniaoEscoposPublicados(allowlist);
     let atribuidas: Skill[];
     if (sqlParaValidar) {
-      const ast = validarSqlNoEscopo(sqlParaValidar, acesso.dialeto, escopoConsulta, {
-        page: input.options?.page,
-        pageSize: input.options?.page_size,
-      });
+      const ast = await preflight(() => {
+        const parsed = validarSqlNoEscopo(sqlParaValidar, acesso.dialeto, escopoConsulta, {
+          page: input.options?.page,
+          pageSize: input.options?.page_size,
+        });
+        assertFanoutSeguro(parsed, escopoConsulta);
+        return parsed;
+      }, ids);
       avisos.push(...coletarAvisosValidacao(ast));
       sqlExecutar = ast.sql;
-      modelo = parseSqlModelo(sqlParaValidar, acesso.dialeto);
-      assertFanoutSeguro(ast, escopoConsulta);
+      modelo = await preflight(() => parseSqlModelo(sqlParaValidar, acesso.dialeto), ids);
       avisos.push(...avisosKpiDesalinhado(ast, escopoConsulta));
-      atribuidas = ancoraSemantica
-        ? [ancoraSemantica]
-        : atribuirSkillsPorSql(allowlist, sqlExecutar, acesso.dialeto, aprendida?.skillIds ?? []);
+      atribuidas = await preflight(
+        () =>
+          ancoraSemantica
+            ? [ancoraSemantica]
+            : atribuirSkillsPorSql(
+                allowlist,
+                sqlExecutar,
+                acesso.dialeto,
+                aprendida?.skillIds ?? [],
+              ),
+        ids,
+      );
     } else {
-      const ancora = ancoraSqlModelo(allowlist, ids);
+      const ancora = await preflight(() => ancoraSqlModelo(allowlist, ids), ids);
       sqlExecutar = ancora.sqlModelo;
-      modelo = parseSqlModelo(sqlExecutar, acesso.dialeto);
+      modelo = await preflight(() => parseSqlModelo(sqlExecutar, acesso.dialeto), ids);
       atribuidas = [ancora];
       const astModelo = tryParseSelect(sqlExecutar, acesso.dialeto);
       if (astModelo) {
-        assertFanoutSeguro(astModelo, escopoConsulta);
+        await preflight(() => assertFanoutSeguro(astModelo, escopoConsulta), ids);
       }
     }
     const skill = atribuidas[0]!;
@@ -536,33 +635,37 @@ export class ConsultarDados {
     const columnHints = new Map<string, ColumnMetadataHint>();
     let lookupAnexo: ((coluna: string) => SensibilidadeColuna | null) | undefined;
     if (this.extras.grafo) {
-      for (const tabela of modelo.tabelas) {
-        const found = await this.extras.grafo.findTabelaByNome(acesso.id, tabela.nome);
-        if (!found) {
-          continue;
+      await preflight(async () => {
+        for (const tabela of modelo.tabelas) {
+          const found = await this.extras.grafo!.findTabelaByNome(acesso.id, tabela.nome);
+          if (!found) {
+            continue;
+          }
+          const cols = await this.extras.grafo!.listColunas(acesso.id, found.id);
+          colunasDasTabelas[tabela.nome] = cols.map((coluna) => coluna.nome);
+          mergeColumnHints(columnHints, cols);
         }
-        const cols = await this.extras.grafo.listColunas(acesso.id, found.id);
-        colunasDasTabelas[tabela.nome] = cols.map((coluna) => coluna.nome);
-        mergeColumnHints(columnHints, cols);
-      }
-      const astPriv = tryParseSelect(sqlExecutar, acesso.dialeto);
-      if (astPriv) {
-        applySelectAliasHints(columnHints, astPriv.colunas);
-        const lookup = await lookupSensibilidadeGrafo(
-          this.extras.grafo,
-          acesso.id,
-          astPriv.tabelas.map((item) => item.nome),
-        );
-        assertPrivacidadeAntesDoHub({ ast: astPriv, lookup, negar: ["segredo", "pessoal"] });
-        lookupAnexo = (coluna) => lookup(null, coluna);
-      }
+        const astPriv = tryParseSelect(sqlExecutar, acesso.dialeto);
+        if (astPriv) {
+          applySelectAliasHints(columnHints, astPriv.colunas);
+          const lookup = await lookupSensibilidadeGrafo(
+            this.extras.grafo!,
+            acesso.id,
+            astPriv.tabelas.map((item) => item.nome),
+          );
+          assertPrivacidadeAntesDoHub({ ast: astPriv, lookup, negar: ["segredo", "pessoal"] });
+          lookupAnexo = (coluna) => lookup(null, coluna);
+        }
+      }, ids);
     }
-    exigirFiltroEscopoPadrao({
-      sql: sqlExecutar,
-      colunasDasTabelas,
-      escopoPadrao: acesso.escopoPadrao,
-      dialeto: acesso.dialeto,
-    });
+    await preflight(() =>
+      exigirFiltroEscopoPadrao({
+        sql: sqlExecutar,
+        colunasDasTabelas,
+        escopoPadrao: acesso.escopoPadrao,
+        dialeto: acesso.dialeto,
+      }),
+    );
     avisos.push(
       ...avisosPlaceholderEscopo({
         sql: sqlExecutar,
@@ -571,7 +674,9 @@ export class ConsultarDados {
       }),
     );
     if (this.extras.anotacoes) {
-      const notas = await this.extras.anotacoes.list(acesso.id);
+      const notas = await this.extras.anotacoes.list(acesso.id, undefined, undefined, {
+        ativasEm: diaNoFusoDoAcesso(acesso.timezone),
+      });
       const tabelasSql = new Set(modelo.tabelas.map((tabela) => tabela.nome.toLowerCase()));
       const aliasesSql = [
         ...modelo.tabelas.flatMap((tabela) => (tabela.alias ? [tabela.alias] : [])),
@@ -596,48 +701,113 @@ export class ConsultarDados {
       );
     }
     const mergedParams = mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao);
-    const expandido = expandirInListas(sqlExecutar, mergedParams);
+    const expandido = await preflight(() => expandirInListas(sqlExecutar, mergedParams), ids);
     sqlExecutar = expandido.sql;
-    const params = coerceBoundParams(
-      bindNamedParams(sqlExecutar, expandido.params, contratoParams),
-      contratoParams,
+    const params = await preflight(
+      () =>
+        coerceBoundParams(
+          bindNamedParams(sqlExecutar, expandido.params, contratoParams),
+          contratoParams,
+        ),
+      ids,
     );
     const requested = input.options?.max_rows ?? this.defaultMaxRows;
-    const orcamento = assertOrcamentoConsulta({
-      ast: tryParseSelect(sqlExecutar, acesso.dialeto),
-      politica: politicaMaisRestrita(atribuidas),
-      maxRows: Math.min(Math.max(1, requested), this.absoluteMaxRows),
-      timeoutMs: input.options?.timeout_ms,
-    });
+    const politicaConsulta = politicaMaisRestrita(atribuidas);
+    const astOrcamento = tryParseSelect(sqlExecutar, acesso.dialeto);
+    const maxRowsSolicitado = Math.min(Math.max(1, requested), this.absoluteMaxRows);
+    let orcamento: ReturnType<typeof assertOrcamentoConsulta>;
+    try {
+      orcamento = assertOrcamentoConsulta({
+        ast: astOrcamento,
+        politica: politicaConsulta,
+        maxRows: maxRowsSolicitado,
+        timeoutMs: input.options?.timeout_ms,
+      });
+    } catch (error) {
+      await registrarFalhaPreflight(
+        error,
+        atribuidas.map((item) => item.id),
+      );
+      throw error;
+    }
     const maxRows = orcamento.maxRows;
     const page = input.options?.page;
     const pageSize = input.options?.page_size;
-    assertParPaginacao({ page, pageSize });
+    await preflight(
+      () => assertParPaginacao({ page, pageSize }),
+      atribuidas.map((item) => item.id),
+    );
     if (pageSize !== undefined && pageSize > maxRows) {
-      throw new DomainError({
+      const error = new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "page_size não pode exceder max_rows.",
         hint: `Use page_size <= ${String(maxRows)}.`,
       });
+      await registrarFalhaPreflight(
+        error,
+        atribuidas.map((item) => item.id),
+      );
+      throw error;
     }
     const paginar = Boolean(page && pageSize);
+    const planoConsulta = montarPlanoConsulta({
+      origem: origemConsulta,
+      dialeto: acesso.dialeto,
+      skillIds: atribuidas.map((item) => item.id),
+      tabelas: modelo.tabelas.map((item) => item.nome),
+      ast: astOrcamento,
+      consultaSemantica,
+      politica: politicaConsulta,
+      maxRows: orcamento.maxRows,
+      maxRowsSolicitado,
+      paginacao: { page, pageSize },
+    });
     if (paginar && acesso.dialeto === "firebird") {
-      throw DomainError.pacote({
+      const error = DomainError.pacote({
         code: ERROR_CODES.DIALECT_UNSUPPORTED,
         message: "Firebird não pagina via options.page.",
         hint: "Firebird: só consulta exemplo da skill, sem SQL livre nem paginação gerenciada. Não reenvie options.page neste dialeto.",
       });
+      await registrarFalhaPreflight(
+        error,
+        atribuidas.map((item) => item.id),
+      );
+      throw error;
     }
     const fetchMax = paginar ? maxRows : Math.min(maxRows + 1, this.absoluteMaxRows + 1);
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
-    const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
-      this.plug.getClientTokenPolicy({
-        accessToken,
-        agentId: acesso.agentId,
-        clientToken,
-      }),
-    );
-    const paramKeys = Object.keys(params).sort().join(",");
+    let policy: ClientTokenPolicy;
+    try {
+      policy = await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.getClientTokenPolicy({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken,
+        }),
+      );
+    } catch (error) {
+      await this.audit.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: "consultar_dados",
+        sqlEnviado: `skill:${atribuidas[0]?.id ?? "resolucao"}`,
+        sucesso: false,
+        codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
+        linhasRetornadas: null,
+        duracaoMs: Date.now() - started,
+        metadata: {
+          origem: origemConsulta,
+          skillIds: atribuidas.map((item) => item.id),
+          cacheHit: false,
+          tabelas: modelo.tabelas.length,
+          stage: "hub",
+          ...(error instanceof DomainError && origemErroAuditoria(error.source)
+            ? { errorSource: origemErroAuditoria(error.source) }
+            : {}),
+        },
+      });
+      throw error;
+    }
     const recorte = modelo.relacionamentos.map((rel) => ({
       tipoJoin: rel.tipoJoin,
       tabela: rel.tabela,
@@ -651,10 +821,7 @@ export class ConsultarDados {
     const asOf = asOfInfo.asOf;
     const itensAprendizado = input.aprendizado ?? [];
     const astLivre = tryParseSelect(sqlExecutar, acesso.dialeto);
-    exigirPaginacaoEstavel(sqlExecutar, astLivre, {
-      page,
-      pageSize,
-    });
+    await preflight(() => exigirPaginacaoEstavel(sqlExecutar, astLivre, { page, pageSize }), ids);
     const sqlNoFio = sqlParaOdbc(sqlExecutar);
     const cacheable = Boolean(astLivre?.temAgregacao && this.extras.cache && !paginar);
     const cacheKey = queryCacheKey({
@@ -672,73 +839,191 @@ export class ConsultarDados {
       escopoFilial: acesso.escopoPadrao?.filial,
       policyFingerprint: policyFingerprint(policy),
     });
+    const solicitarTimings =
+      (this.extras.timingsSamplePercent ?? 10) > 0 &&
+      Math.random() * 100 < (this.extras.timingsSamplePercent ?? 10);
+    const responderCache = async (
+      parsed: CachedQueryPayload,
+      coalescencia?: { role: "leader" | "waiter"; waitMs: number },
+    ) => {
+      const loop = await gravarAprendizadoDaConsulta({
+        extras: { ...this.extras, skills: this.skills },
+        acessoId: acesso.id,
+        skillIds: atribuidas.map((item) => item.id),
+        pergunta: perguntaUsada,
+        sql: sqlNoFio,
+        paramsContrato: contratoParams,
+        autorUsuarioId: uid,
+        itens: itensAprendizado,
+      });
+      await this.audit.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: "consultar_dados",
+        sqlEnviado: `skill:${skill.id}`,
+        sucesso: true,
+        codigoErro: null,
+        linhasRetornadas: parsed.rows.length,
+        duracaoMs: Date.now() - started,
+        metadata: {
+          origem: origemConsulta,
+          skillIds: atribuidas.map((item) => item.id),
+          agregado: true,
+          cacheHit: true,
+          tabelas: modelo.tabelas.length,
+          truncated: parsed.truncated,
+          maxRows,
+          stage: "cache",
+          timingsSolicitados: false,
+          timingsDevolvidos: false,
+          ...(coalescencia
+            ? {
+                coalescencia: coalescencia.role,
+                esperaCoalescenciaMs: coalescencia.waitMs,
+              }
+            : {}),
+        },
+      });
+      return {
+        success: true as const,
+        skillId: skill.id,
+        skillIds: atribuidas.map((item) => item.id),
+        columns: parsed.columns,
+        rows: parsed.rows,
+        rowCount: parsed.rows.length,
+        maxRowsApplied: maxRows,
+        truncated: parsed.truncated,
+        sqlExecutado: sqlNoFio,
+        paramsUsados: params,
+        asOf: parsed.asOf,
+        recorte,
+        columnsMetadata: normalizeColumnsMetadata(
+          parsed.columns,
+          parsed.columnsMetadata,
+          columnHints,
+        ),
+        escopoAplicado: {
+          empresa: acesso.escopoPadrao?.empresa,
+          filial: acesso.escopoPadrao?.filial,
+          consolidado: !acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial,
+        },
+        avisos: [
+          ...avisos,
+          ...loop.avisos,
+          {
+            code: "CACHE",
+            message: `Resultado agregado do cache (dataDoResultado=${parsed.asOf}; servidoEm=${parsed.servidoEm}). Não trate como leitura ao vivo.`,
+          },
+        ],
+        aprendizadoGravado: loop.gravado,
+        planoConsulta,
+      };
+    };
+    const salvarResultadoNoCache = async (result: SqlExecuteResult): Promise<void> => {
+      if (!cacheable || !this.extras.cache) return;
+      const pageRows = result.rows.slice(0, maxRows);
+      const columns =
+        result.columns.length > 0
+          ? result.columns
+          : (result.columnsMetadata?.map((item) => item.name) ?? []);
+      const columnsMetadata = normalizeColumnsMetadata(
+        columns,
+        result.columnsMetadata,
+        columnHints,
+      );
+      const columnTypes = new Map<string, string | null>(
+        columnsMetadata.map((item) => [item.name.toLowerCase(), item.type]),
+      );
+      const temAnexo = pageRows.some((row) =>
+        Object.entries(row).some(([coluna, valor]) =>
+          Boolean(analisarCelulaBinaria(valor, columnTypes.get(coluna.toLowerCase()))),
+        ),
+      );
+      if (temAnexo) return;
+      const sanitizadas = sanitizarLinhasConsulta({
+        rows: pageRows,
+        columnTypes,
+        usuarioId: uid,
+        acessoId: acesso.id,
+        origem: "consultar_dados",
+        lookupSensibilidade: (coluna) =>
+          lookupAnexo?.(coluna) ?? inferirSensibilidadeColuna(coluna),
+      });
+      await this.extras.cache.set(
+        cacheKey,
+        JSON.stringify({
+          columns,
+          rows: sanitizadas.rows,
+          asOf,
+          servidoEm: asOf,
+          truncated: result.rows.length > maxRows || result.truncated === true,
+          columnsMetadata,
+        }),
+        this.extras.cacheTtlMs ?? 60_000,
+      );
+    };
     try {
       if (cacheable && this.extras.cache) {
         const cached = await this.extras.cache.get(cacheKey);
         if (cached) {
           const parsed = parseCachedQuery(cached);
           if (parsed) {
-            const loop = await gravarAprendizadoDaConsulta({
-              extras: { ...this.extras, skills: this.skills },
-              acessoId: acesso.id,
-              skillIds: atribuidas.map((item) => item.id),
-              pergunta: perguntaUsada,
-              sql: sqlNoFio,
-              paramsContrato: contratoParams,
-              autorUsuarioId: uid,
-              itens: itensAprendizado,
-            });
-            return {
-              success: true,
-              skillId: skill.id,
-              skillIds: atribuidas.map((item) => item.id),
-              columns: parsed.columns,
-              rows: parsed.rows,
-              rowCount: parsed.rows.length,
-              maxRowsApplied: maxRows,
-              truncated: parsed.truncated,
-              sqlExecutado: sqlNoFio,
-              paramsUsados: params,
-              asOf: parsed.asOf,
-              recorte,
-              columnsMetadata: normalizeColumnsMetadata(
-                parsed.columns,
-                parsed.columnsMetadata,
-                columnHints,
-              ),
-              escopoAplicado: {
-                empresa: acesso.escopoPadrao?.empresa,
-                filial: acesso.escopoPadrao?.filial,
-                consolidado: !acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial,
-              },
-              avisos: [
-                ...avisos,
-                ...loop.avisos,
-                {
-                  code: "CACHE",
-                  message: `Resultado agregado do cache (dataDoResultado=${parsed.asOf}; servidoEm=${parsed.servidoEm}). Não trate como leitura ao vivo.`,
-                },
-              ],
-              aprendizadoGravado: loop.gravado,
-            };
+            return responderCache(parsed);
           }
         }
       }
-      const result = await withHubAuth(this.sessions, uid, (accessToken) =>
-        this.plug.executeSql({
-          accessToken,
-          agentId: acesso.agentId,
-          clientToken,
-          sql: sqlNoFio,
-          params,
-          options: {
-            maxRows: fetchMax,
-            page: paginar ? input.options?.page : undefined,
-            pageSize: paginar ? input.options?.page_size : undefined,
-            timeoutMs: orcamento.timeoutMs ?? input.options?.timeout_ms,
-          },
-        }),
-      );
+      const executeHub = () =>
+        withHubAuth(this.sessions, uid, (accessToken) =>
+          this.plug.executeSql({
+            accessToken,
+            agentId: acesso.agentId,
+            clientToken,
+            sql: sqlNoFio,
+            params,
+            options: {
+              maxRows: fetchMax,
+              page: paginar ? input.options?.page : undefined,
+              pageSize: paginar ? input.options?.page_size : undefined,
+              timeoutMs: orcamento.timeoutMs ?? input.options?.timeout_ms,
+              requestServerTimings: solicitarTimings,
+            },
+          }),
+        );
+      const executeHubOuCache = (): Promise<SqlExecuteResult | CachedQueryPayload> => executeHub();
+      const singleflight =
+        cacheable && this.extras.singleflight
+          ? await this.extras.singleflight.run(cacheKey, executeHubOuCache, {
+              onLeaderResult: async (resultado) => {
+                if ("asOf" in resultado) return;
+                try {
+                  await salvarResultadoNoCache(resultado);
+                } catch {
+                  // Cache é otimização: falhar ao persistir não bloqueia a leitura autorizada.
+                }
+              },
+              readShared: async () => {
+                try {
+                  const cached = await this.extras.cache?.get(cacheKey);
+                  const parsed = cached ? parseCachedQuery(cached) : null;
+                  return parsed ?? undefined;
+                } catch {
+                  return undefined;
+                }
+              },
+              waitMs: Math.max(
+                0,
+                (orcamento.timeoutMs ?? input.options?.timeout_ms ?? 35_000) -
+                  (Date.now() - started),
+              ),
+            })
+          : { value: await executeHubOuCache(), role: "leader" as const, waitMs: 0 };
+      if ("asOf" in singleflight.value) {
+        return responderCache(singleflight.value, {
+          role: singleflight.role,
+          waitMs: singleflight.waitMs,
+        });
+      }
+      const result = singleflight.value;
       if (paginar && !result.pagination) {
         throw new DomainError({
           code: ERROR_CODES.METADATA_CONTRATO,
@@ -788,11 +1073,30 @@ export class ConsultarDados {
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "consultar_dados",
-        sqlEnviado: `skill:${skill.id};params:${paramKeys}`,
+        sqlEnviado: `skill:${skill.id}`,
         sucesso: true,
         codigoErro: null,
         linhasRetornadas: rows.length,
         duracaoMs: Date.now() - started,
+        metadata: {
+          origem: origemConsulta,
+          skillIds: atribuidas.map((item) => item.id),
+          agregado: Boolean(astLivre?.temAgregacao),
+          cacheHit: false,
+          coalescencia: singleflight.role,
+          esperaCoalescenciaMs: singleflight.waitMs,
+          tabelas: modelo.tabelas.length,
+          truncated,
+          paginada: Boolean(paginacao),
+          maxRows,
+          stage: "hub",
+          timingsSolicitados: solicitarTimings,
+          timingsDevolvidos: Boolean(result.serverTimings),
+          ...(result.serverTimings ? { timings: result.serverTimings } : {}),
+          ...(result.sqlHandlingMode ? { sqlHandlingMode: result.sqlHandlingMode } : {}),
+          ...(result.maxRowsHandling ? { maxRowsHandling: result.maxRowsHandling } : {}),
+          ...(result.effectiveMaxRows != null ? { effectiveMaxRows: result.effectiveMaxRows } : {}),
+        },
       });
       if (this.extras.grafo) {
         await promoverFatosDaExecucao({
@@ -805,7 +1109,7 @@ export class ConsultarDados {
       if (consultaSemantica && !skill.consultaSemantica) {
         await this.skills.update(skill.id, { consultaSemantica });
       }
-      if (cacheable && this.extras.cache && sanitizadas.anexos === 0) {
+      if (cacheable && this.extras.cache && !this.extras.singleflight && sanitizadas.anexos === 0) {
         await this.extras.cache.set(
           cacheKey,
           JSON.stringify({
@@ -858,17 +1162,39 @@ export class ConsultarDados {
             : loop.gravado
               ? "SQL gravado. Se o usuário ensinou regra, dicionário ou sinônimo, envie em aprendizado[] ou chame registrar_aprendizado."
               : undefined,
+        planoConsulta,
       };
     } catch (error) {
+      if (cacheable && this.extras.cache) {
+        try {
+          await this.extras.cache.deleteByPrefix(cacheKey);
+        } catch {
+          // A remoção de otimização não pode esconder o erro original da consulta.
+        }
+      }
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "consultar_dados",
-        sqlEnviado: `skill:${skill.id};params:${paramKeys}`,
+        sqlEnviado: `skill:${skill.id}`,
         sucesso: false,
         codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
         linhasRetornadas: null,
         duracaoMs: Date.now() - started,
+        metadata: {
+          origem: origemConsulta,
+          skillIds: atribuidas.map((item) => item.id),
+          agregado: Boolean(astLivre?.temAgregacao),
+          cacheHit: false,
+          tabelas: modelo.tabelas.length,
+          maxRows,
+          stage: "hub",
+          timingsSolicitados: solicitarTimings,
+          timingsDevolvidos: false,
+          ...(error instanceof DomainError && origemErroAuditoria(error.source)
+            ? { errorSource: origemErroAuditoria(error.source) }
+            : {}),
+        },
       });
       if (error instanceof DomainError && isSqlClassificationDenial(error)) {
         throw error.withHint(
@@ -887,6 +1213,13 @@ export class ValidarConsulta {
     private readonly plug: PlugServerGatewayPort,
     private readonly sessions: UsuarioPlugSessionPort,
     private readonly crypto: CryptoPort,
+    private readonly options: {
+      defaultMaxRows?: number;
+      absoluteMaxRows?: number;
+      grafo?: GrafoRepositoryPort;
+      audit?: AuditLogPort;
+      timingsSamplePercent?: number;
+    } = {},
   ) {}
 
   async execute(
@@ -896,8 +1229,9 @@ export class ValidarConsulta {
       skillId?: string;
       skillIds?: string[];
       sql?: string;
+      consultaSemantica?: unknown;
       params?: Record<string, unknown>;
-      options?: { page?: number; page_size?: number };
+      options?: { max_rows?: number; page?: number; page_size?: number; timeout_ms?: number };
     },
   ): Promise<{
     success: true;
@@ -905,8 +1239,10 @@ export class ValidarConsulta {
     dialeto: string;
     tabelas: string[];
     avisos: { code: string; message: string }[];
+    planoConsulta: PlanoConsulta;
   }> {
     const uid = requireUsuario(usuarioId);
+    const started = Date.now();
     const acesso = await refreshAndRequireAcessoAprovado(
       this.acessos,
       this.plug,
@@ -919,40 +1255,246 @@ export class ValidarConsulta {
       uid,
     );
     const ids = idsSkillDaChamada(input);
-    const sql = input.sql?.trim() ?? "";
-    if (!sql) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "sql é obrigatório.",
-        hint: "Passe o SELECT a validar. skillId é opcional: omitido usa todas as publicadas deste acesso.",
+    const sqlInformado = input.sql?.trim() ?? "";
+    const consultaSemantica = parseConsultaSemantica(input.consultaSemantica);
+    const registrarFalhaPreflight = async (error: unknown, skillIds = ids): Promise<void> => {
+      await this.options.audit?.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: "validar_consulta",
+        sqlEnviado: `skills:${skillIds.join(",") || "resolucao"}`,
+        sucesso: false,
+        codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
+        linhasRetornadas: null,
+        duracaoMs: Date.now() - started,
+        metadata: {
+          origem: consultaSemantica ? "semantica" : "sql",
+          skillIds,
+          cacheHit: false,
+          stage: "preflight",
+          ...(error instanceof DomainError && error.source
+            ? { errorSource: origemErroAuditoria(error.source) }
+            : {}),
+        },
       });
+    };
+    const preflight = async <T>(work: () => Promise<T> | T, skillIds = ids): Promise<T> => {
+      try {
+        return await work();
+      } catch (error) {
+        await registrarFalhaPreflight(error, skillIds);
+        throw error;
+      }
+    };
+    if ((sqlInformado.length > 0 ? 1 : 0) + (consultaSemantica ? 1 : 0) !== 1) {
+      const error = new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Informe exatamente um entre sql e consultaSemantica.",
+        hint: "skillId é opcional: omitido usa todas as publicadas deste acesso.",
+      });
+      await registrarFalhaPreflight(error);
+      throw error;
     }
     if (acesso.dialeto === "firebird") {
-      recusarSqlLivreFirebird();
+      await preflight(() => recusarSqlLivreFirebird());
     }
-    const allowlist = await resolverSkillsConsulta(this.skills, acesso.id, ids);
+    const allowlist = await preflight(() => resolverSkillsConsulta(this.skills, acesso.id, ids));
     const escopo = uniaoEscoposPublicados(allowlist);
-    const ast = validarSqlNoEscopo(sql, acesso.dialeto, escopo, {
-      page: input.options?.page,
-      pageSize: input.options?.page_size,
-    });
-    const expandido = expandirInListas(ast.sql, input.params ?? {});
-    await withHubAuth(this.sessions, uid, (accessToken) =>
-      this.plug.executeSql({
-        accessToken,
-        agentId: acesso.agentId,
-        clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-        sql: sqlValidacaoVazia(acesso.dialeto, sqlParaOdbc(expandido.sql)),
-        params: bindParamsForValidation(expandido.sql, expandido.params),
-        options: { maxRows: 1 },
+    let sql = sqlInformado;
+    let ancora: Skill | null = null;
+    if (consultaSemantica) {
+      await preflight(() => {
+        if (
+          consultaSemantica.limite != null &&
+          (input.options?.page != null || input.options?.page_size != null)
+        ) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "consultaSemantica.limite não combina com paginação.",
+            hint: "Use limite ou options.page/page_size, não os dois.",
+          });
+        }
+        ancora = ancoraConsultaSemantica(allowlist, aliasesMetricas(consultaSemantica), ids);
+        sql = compilarConsultaSemantica(
+          consultaSemantica,
+          escopoDaSkillPublicada(ancora),
+          {
+            empresa: Boolean(acesso.escopoPadrao?.empresa),
+            filial: Boolean(acesso.escopoPadrao?.filial),
+          },
+          { dialeto: acesso.dialeto, maxLimite: this.options.absoluteMaxRows ?? 5_000 },
+        ).sql;
+      });
+    }
+    const ast = await preflight(() =>
+      validarSqlNoEscopo(sql, acesso.dialeto, escopo, {
+        page: input.options?.page,
+        pageSize: input.options?.page_size,
       }),
     );
+    if (this.options.grafo) {
+      const columnHints = new Map<string, ColumnMetadataHint>();
+      const colunasDasTabelas: Record<string, string[]> = {};
+      await preflight(async () => {
+        for (const tabela of ast.tabelas) {
+          const found = await this.options.grafo!.findTabelaByNome(acesso.id, tabela.nome);
+          if (!found) continue;
+          const colunas = await this.options.grafo!.listColunas(acesso.id, found.id);
+          colunasDasTabelas[tabela.nome] = colunas.map((item) => item.nome);
+          mergeColumnHints(columnHints, colunas);
+        }
+        applySelectAliasHints(columnHints, ast.colunas);
+        const lookup = await lookupSensibilidadeGrafo(
+          this.options.grafo!,
+          acesso.id,
+          ast.tabelas.map((item) => item.nome),
+        );
+        assertPrivacidadeAntesDoHub({ ast, lookup, negar: ["segredo", "pessoal"] });
+        exigirFiltroEscopoPadrao({
+          sql: ast.sql,
+          colunasDasTabelas,
+          escopoPadrao: acesso.escopoPadrao,
+          dialeto: acesso.dialeto,
+        });
+      }, ids);
+    }
+    await preflight(() => {
+      assertFanoutSeguro(ast, escopo);
+      assertParPaginacao({ page: input.options?.page, pageSize: input.options?.page_size });
+      exigirPaginacaoEstavel(sql, ast, {
+        page: input.options?.page,
+        pageSize: input.options?.page_size,
+      });
+    }, ids);
+    const atribuidas = await preflight(
+      () => (ancora ? [ancora] : atribuirSkillsPorSql(allowlist, ast.sql, acesso.dialeto)),
+      ids,
+    );
+    const maxRowsSolicitado = Math.min(
+      Math.max(1, input.options?.max_rows ?? this.options.defaultMaxRows ?? 500),
+      this.options.absoluteMaxRows ?? 5_000,
+    );
+    const politica = politicaMaisRestrita(atribuidas);
+    let orcamento: ReturnType<typeof assertOrcamentoConsulta>;
+    try {
+      orcamento = assertOrcamentoConsulta({
+        ast,
+        politica,
+        maxRows: maxRowsSolicitado,
+        timeoutMs: input.options?.timeout_ms,
+      });
+    } catch (error) {
+      await registrarFalhaPreflight(
+        error,
+        atribuidas.map((item) => item.id),
+      );
+      throw error;
+    }
+    if (input.options?.page_size !== undefined && input.options.page_size > orcamento.maxRows) {
+      const error = new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "page_size não pode exceder max_rows.",
+        hint: `Use page_size <= ${String(orcamento.maxRows)}.`,
+      });
+      await registrarFalhaPreflight(
+        error,
+        atribuidas.map((item) => item.id),
+      );
+      throw error;
+    }
+    const expandido = expandirInListas(
+      ast.sql,
+      mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao),
+    );
+    const solicitarTimings =
+      (this.options.timingsSamplePercent ?? 10) > 0 &&
+      Math.random() * 100 < (this.options.timingsSamplePercent ?? 10);
+    try {
+      const result = await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.executeSql({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
+          sql: sqlValidacaoVazia(acesso.dialeto, sqlParaOdbc(expandido.sql)),
+          params: bindParamsForValidation(expandido.sql, expandido.params),
+          options: {
+            maxRows: 1,
+            timeoutMs: orcamento.timeoutMs ?? input.options?.timeout_ms,
+            requestServerTimings: solicitarTimings,
+          },
+        }),
+      );
+      await this.options.audit?.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: "validar_consulta",
+        sqlEnviado: `skills:${atribuidas.map((item) => item.id).join(",")}`,
+        sucesso: true,
+        codigoErro: null,
+        linhasRetornadas: 0,
+        duracaoMs: Date.now() - started,
+        metadata: {
+          origem: consultaSemantica ? "semantica" : "sql",
+          skillIds: atribuidas.map((item) => item.id),
+          agregado: ast.temAgregacao,
+          cacheHit: false,
+          tabelas: ast.tabelas.length,
+          paginada: Boolean(input.options?.page && input.options.page_size),
+          maxRows: orcamento.maxRows,
+          stage: "hub",
+          timingsSolicitados: solicitarTimings,
+          timingsDevolvidos: Boolean(result.serverTimings),
+          ...(result.serverTimings ? { timings: result.serverTimings } : {}),
+          ...(result.sqlHandlingMode ? { sqlHandlingMode: result.sqlHandlingMode } : {}),
+          ...(result.maxRowsHandling ? { maxRowsHandling: result.maxRowsHandling } : {}),
+          ...(result.effectiveMaxRows != null ? { effectiveMaxRows: result.effectiveMaxRows } : {}),
+        },
+      });
+    } catch (error) {
+      await this.options.audit?.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: "validar_consulta",
+        sqlEnviado: `skills:${atribuidas.map((item) => item.id).join(",")}`,
+        sucesso: false,
+        codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
+        linhasRetornadas: null,
+        duracaoMs: Date.now() - started,
+        metadata: {
+          origem: consultaSemantica ? "semantica" : "sql",
+          skillIds: atribuidas.map((item) => item.id),
+          agregado: ast.temAgregacao,
+          cacheHit: false,
+          tabelas: ast.tabelas.length,
+          maxRows: orcamento.maxRows,
+          stage: "hub",
+          timingsSolicitados: solicitarTimings,
+          timingsDevolvidos: false,
+          ...(error instanceof DomainError && error.source
+            ? { errorSource: origemErroAuditoria(error.source) }
+            : {}),
+        },
+      });
+      throw error;
+    }
     return {
       success: true,
       valido: true,
       dialeto: acesso.dialeto,
       tabelas: [...ast.tabelas.map((tabela) => tabela.nome)],
       avisos: coletarAvisosValidacao(ast),
+      planoConsulta: montarPlanoConsulta({
+        origem: consultaSemantica ? "semantica" : "sql",
+        dialeto: acesso.dialeto,
+        skillIds: atribuidas.map((item) => item.id),
+        tabelas: ast.tabelas.map((item) => item.nome),
+        ast,
+        consultaSemantica,
+        politica,
+        maxRows: orcamento.maxRows,
+        maxRowsSolicitado,
+        paginacao: { page: input.options?.page, pageSize: input.options?.page_size },
+      }),
     };
   }
 }
@@ -1005,11 +1547,20 @@ export class ExplorarTabelas {
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "explorar_tabelas",
-        sqlEnviado: sql,
+        // Keep legacy field as a safe operation tag; never persist catalog SQL.
+        sqlEnviado: `catalogo;dialeto:${acesso.dialeto}`,
         sucesso: true,
         codigoErro: null,
         linhasRetornadas: tabelas.length,
         duracaoMs: 0,
+        metadata: {
+          origem: "sql",
+          cacheHit: false,
+          tabelas: 1,
+          truncated: tabelas.length >= EXPLORAR_TABELAS_MAX_ROWS,
+          maxRows: EXPLORAR_TABELAS_MAX_ROWS,
+          stage: "hub",
+        },
       });
       return {
         success: true,
@@ -1264,6 +1815,25 @@ export class BuscarContexto {
     blockingReason?: "SKILL_NOT_PUBLISHED";
     nextAction?: string;
     hint?: string;
+    diagnosticoCobertura: {
+      status: "executavel" | "composicao" | "treino_pendente" | "lacuna_parcial" | "lacuna_total";
+      skillsRelacionadas: readonly {
+        skillId: string;
+        slug: string;
+        status: StatusSkill;
+      }[];
+      termosAusentes: readonly string[];
+      proximaAcao: string | null;
+      necessidades: readonly {
+        kind: "capacidade" | "publicacao" | "pacote" | "composicao" | "metrica";
+        alvo: string;
+        bloqueante: boolean;
+        nextAction: string;
+        skillId?: string;
+        termos?: readonly string[];
+      }[];
+      planoTreino: readonly { ordem: number; tool: string; motivo: string; skillId?: string }[];
+    };
   }> {
     const startedAt = Date.now();
     const uid = requireUsuario(usuarioId);
@@ -1301,7 +1871,9 @@ export class BuscarContexto {
       this.grafo.buscar(acesso.id, query, 12),
       this.skills.buscar(acesso.id, query, 8, "publicada"),
       this.skills.buscar(acesso.id, query, 8, ["rascunho", "validada", "rascunho_revalidacao"]),
-      this.anotacoes.buscar(acesso.id, query, 8),
+      this.anotacoes.buscar(acesso.id, query, 8, {
+        ativasEm: diaNoFusoDoAcesso(acesso.timezone),
+      }),
       this.aprendizado
         ? this.aprendizado.buscarConsultas(acesso.id, query, 5)
         : Promise.resolve([]),
@@ -1515,6 +2087,99 @@ export class BuscarContexto {
       [hintAprendidas, hintComposta, hintRegra, hintSemantico, hintOverlay]
         .filter(Boolean)
         .join(" ") || undefined;
+    const necessidadesDiagnostico: {
+      kind: "capacidade" | "publicacao" | "pacote" | "composicao" | "metrica";
+      alvo: string;
+      bloqueante: boolean;
+      nextAction: string;
+      skillId?: string;
+      termos?: readonly string[];
+    }[] = [];
+    if (coberturaGeral === "composta") {
+      necessidadesDiagnostico.push({
+        kind: "composicao",
+        alvo: "fatias certificadas",
+        bloqueante: false,
+        nextAction: "consultar_dados",
+        termos: composicao.termosSemSkill,
+      });
+    }
+    if (skillNaoPublicada && emAndamento) {
+      necessidadesDiagnostico.push({
+        kind: "publicacao",
+        alvo: emAndamento.nome,
+        bloqueante: true,
+        nextAction: fluxoTreino?.proximoPasso ?? "publicar_skill",
+        skillId: emAndamento.id,
+      });
+    }
+    const termosSemSkill =
+      coberturaGeral === "composta"
+        ? composicao.termosSemSkill
+        : [...new Set(candidatos.flatMap((item) => item.termosAusentes))];
+    if (!consultaPermitida && termosSemSkill.length > 0) {
+      necessidadesDiagnostico.push({
+        kind: "capacidade",
+        alvo: "capacidade ainda não certificada",
+        bloqueante: true,
+        nextAction: emAndamento
+          ? (fluxoTreino?.proximoPasso ?? "validar_skill")
+          : "treinar_com_sql",
+        termos: termosSemSkill,
+        ...(emAndamento ? { skillId: emAndamento.id } : {}),
+      });
+    }
+    if (emAndamento && fluxoTreino?.proximoPasso && !skillNaoPublicada) {
+      necessidadesDiagnostico.push({
+        kind: "pacote",
+        alvo: emAndamento.nome,
+        bloqueante: true,
+        nextAction: fluxoTreino.proximoPasso,
+        skillId: emAndamento.id,
+      });
+    }
+    for (const metrica of metricasSemOverlay) {
+      necessidadesDiagnostico.push({
+        kind: "metrica",
+        alvo: metrica.alias,
+        bloqueante: false,
+        nextAction: metrica.nextAction,
+        skillId: metrica.skillId,
+      });
+    }
+    const statusDiagnostico:
+      "executavel" | "composicao" | "treino_pendente" | "lacuna_parcial" | "lacuna_total" =
+      consultaPermitida
+        ? coberturaGeral === "composta"
+          ? "composicao"
+          : "executavel"
+        : skillNaoPublicada
+          ? "treino_pendente"
+          : candidatos.some((item) => item.cobertura === "parcial")
+            ? "lacuna_parcial"
+            : "lacuna_total";
+    const diagnosticoCobertura = {
+      status: statusDiagnostico,
+      skillsRelacionadas: [
+        ...new Map(
+          [...skillsPublicadas, ...skillsParaTreinoUnidas].map((skill) => [
+            skill.id,
+            { skillId: skill.id, slug: skill.slug, status: skill.status },
+          ]),
+        ).values(),
+      ],
+      termosAusentes: termosSemSkill,
+      proximaAcao: necessidadesDiagnostico[0]?.nextAction ?? null,
+      necessidades: necessidadesDiagnostico,
+      planoTreino: necessidadesDiagnostico
+        .filter((item) => item.bloqueante)
+        .map((item, index) => ({
+          ordem: index + 1,
+          tool: item.nextAction,
+          motivo: item.alvo,
+          ...(item.skillId ? { skillId: item.skillId } : {}),
+        })),
+    };
     const gapCode: GapBusca = skillNaoPublicada
       ? "SKILL_NOT_PUBLISHED"
       : consultaPermitida &&
@@ -1582,6 +2247,7 @@ export class BuscarContexto {
                 hint: gapHint,
               },
       hint,
+      diagnosticoCobertura,
     };
   }
 }

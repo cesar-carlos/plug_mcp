@@ -130,6 +130,12 @@ No REST de comandos, o hub materializa o stream em memória. Estouro de linhas/c
 
 `consultar_dados` deve preferir agregação, `WHERE` e paginação no SQL — não aumentar tetos. Pools HTTP, keepAlive e abort deste MCP: [rest-integration.md](rest-integration.md).
 
+## Contrato versionado e timings
+
+O hub publica o OpenAPI em `GET /docs.json`; o repositório `plug_server` também gera o artefato determinístico `contracts/plug-mcp-rest-v1.json` com `npm run contract:generate`. `npm run contract:check` falha quando o artefato versionado diverge da especificação, e a CI do MCP valida esse arquivo via `PLUG_SERVER_ROOT` (ou checkout irmão). O artefato cobre login/refresh, cadastro e `client_token`, pedidos de acesso, `POST /api/v1/agents/commands`, `client_token.getPolicy`, `sql.execute`, envelopes de erro/sucesso e metadados de execução.
+
+O MCP pode enviar `requestServerTimings: true` no comando. O hub responde opcionalmente `serverTimings`, `sql_handling_mode`, `max_rows_handling` e `effective_max_rows`; a amostragem é controlada por `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (0..100, padrão 10). Ausência de timings é uma resposta válida e aparece apenas como metadado de observabilidade.
+
 ## O que não fazer neste canal
 
 - Não abrir Socket `/agents` (é o namespace do `plug_agente`).

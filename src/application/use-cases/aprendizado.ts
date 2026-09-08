@@ -1,10 +1,12 @@
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
+import { pareceSegredoEmTexto } from "../../domain/entities/parece-segredo.js";
 import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
 import type { AnotacaoGrafo, Skill } from "../../domain/entities/skill.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { AuditLogPort } from "../../domain/ports/audit-log.port.js";
+import type { AuditMetadata } from "../../domain/entities/audit-log.js";
 import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
 import type {
   AnotacaoGrafoRepositoryPort,
@@ -22,6 +24,7 @@ import {
 } from "./shared/telemetria-busca.js";
 import { parseEscopoPadrao } from "../../domain/entities/escopo.js";
 import { persistirItensAprendizado, TIPOS_APRENDIZADO } from "./shared/persistir-aprendizado.js";
+import type { GovernancaConhecimentoInput } from "./skills.js";
 
 export class SalvarConsulta {
   constructor(
@@ -109,6 +112,7 @@ export class RegistrarAprendizado {
       titulo?: string;
       texto?: string;
       tabela?: string;
+      governanca?: GovernancaConhecimentoInput;
     },
   ): Promise<{
     success: true;
@@ -130,6 +134,13 @@ export class RegistrarAprendizado {
         hint: "Grave o que o usuário ensinou (regra, dicionário, glossário). Não invente.",
       });
     }
+    if (pareceSegredoEmTexto(`${titulo}\n${texto}`)) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "O aprendizado parece conter um segredo e não será persistido.",
+        hint: "Remova senha, token, JWT ou credencial antes de registrar conhecimento.",
+      });
+    }
     if (!TIPOS_APRENDIZADO.has(tipo)) {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -145,7 +156,16 @@ export class RegistrarAprendizado {
       aprendizado: this.aprendizado,
       skills: this.skills,
       strictMetricas: true,
-      itens: [{ tipo, titulo, texto, tabela: input.tabela, skillId: input.skillId }],
+      itens: [
+        {
+          tipo,
+          titulo,
+          texto,
+          tabela: input.tabela,
+          skillId: input.skillId,
+          governanca: input.governanca,
+        },
+      ],
     });
     if (tipo === "sinonimo") {
       return {
@@ -308,6 +328,7 @@ export class ListarAuditoria {
       codigoErro: string | null;
       linhasRetornadas: number | null;
       duracaoMs: number | null;
+      metadata?: AuditMetadata | null;
       telemetria?: TelemetriaBusca;
     }[];
   }> {
@@ -327,6 +348,7 @@ export class ListarAuditoria {
           codigoErro: row.codigoErro,
           linhasRetornadas: row.linhasRetornadas,
           duracaoMs: row.duracaoMs,
+          ...(row.metadata ? { metadata: row.metadata } : {}),
           ...(telemetria ? { telemetria } : {}),
         };
       }),
@@ -354,6 +376,32 @@ export class ListarMetricasAgente {
       skillNotPublished: number;
       slotNarrativa: number;
     };
+    janela: { observacoes: number; de: string | null; ate: string | null };
+    consultas: {
+      cacheHits: number;
+      truncadas: number;
+      p50Ms: number | null;
+      p95Ms: number | null;
+      porSkill: Record<string, number>;
+      porOrigem: Record<string, number>;
+      porOrigemErro: Record<string, number>;
+      maisLentas: {
+        skillIds: readonly string[];
+        origem?: string;
+        duracaoMs: number;
+        createdAt: string;
+      }[];
+    };
+    painel: {
+      status: "estavel" | "atencao" | "critica";
+      taxaErro: number;
+      taxaCacheHit: number;
+      taxaTruncamento: number;
+      tendencia: {
+        recentes: { observacoes: number; taxaErro: number; p95Ms: number | null };
+        anteriores: { observacoes: number; taxaErro: number; p95Ms: number | null };
+      };
+    };
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
@@ -377,7 +425,102 @@ export class ListarMetricasAgente {
         porCodigo[row.codigoErro] = (porCodigo[row.codigoErro] ?? 0) + 1;
       }
     }
-    return { success: true, porTool, porCodigo, busca: agregarTelemetriaBusca(rows) };
+    const consultas = rows.filter(
+      (row) => row.tool === "consultar_dados" || row.tool === "validar_consulta",
+    );
+    const duracoes = consultas
+      .map((row) => row.duracaoMs)
+      .filter((value): value is number => value !== null)
+      .sort((a, b) => a - b);
+    const percentil = (p: number): number | null => {
+      if (duracoes.length === 0) return null;
+      return duracoes[Math.min(duracoes.length - 1, Math.ceil(duracoes.length * p) - 1)] ?? null;
+    };
+    const resumoDaJanela = (items: readonly (typeof consultas)[number][]) => {
+      const durations = items
+        .map((row) => row.duracaoMs)
+        .filter((value): value is number => value !== null)
+        .sort((a, b) => a - b);
+      const p95 =
+        durations.length === 0
+          ? null
+          : (durations[Math.min(durations.length - 1, Math.ceil(durations.length * 0.95) - 1)] ??
+            null);
+      return {
+        observacoes: items.length,
+        taxaErro:
+          items.length === 0 ? 0 : items.filter((row) => !row.sucesso).length / items.length,
+        p95Ms: p95,
+      };
+    };
+    const porSkill: Record<string, number> = {};
+    const porOrigem: Record<string, number> = {};
+    const porOrigemErro: Record<string, number> = {};
+    let cacheHits = 0;
+    let truncadas = 0;
+    for (const row of consultas) {
+      const meta = row.metadata;
+      if (meta?.cacheHit) cacheHits += 1;
+      if (meta?.truncated) truncadas += 1;
+      if (meta?.origem) porOrigem[meta.origem] = (porOrigem[meta.origem] ?? 0) + 1;
+      if (meta?.errorSource)
+        porOrigemErro[meta.errorSource] = (porOrigemErro[meta.errorSource] ?? 0) + 1;
+      for (const skillId of meta?.skillIds ?? []) porSkill[skillId] = (porSkill[skillId] ?? 0) + 1;
+    }
+    const maisLentas = [...consultas]
+      .filter((row) => row.duracaoMs !== null)
+      .sort((a, b) => (b.duracaoMs ?? 0) - (a.duracaoMs ?? 0))
+      .slice(0, 10)
+      .map((row) => ({
+        skillIds: row.metadata?.skillIds ?? [],
+        ...(row.metadata?.origem ? { origem: row.metadata.origem } : {}),
+        duracaoMs: row.duracaoMs ?? 0,
+        createdAt: row.createdAt.toISOString(),
+      }));
+    const taxaErro =
+      consultas.length === 0
+        ? 0
+        : consultas.filter((row) => !row.sucesso).length / consultas.length;
+    const taxaCacheHit = consultas.length === 0 ? 0 : cacheHits / consultas.length;
+    const taxaTruncamento = consultas.length === 0 ? 0 : truncadas / consultas.length;
+    const p95Ms = percentil(0.95);
+    const status: "estavel" | "atencao" | "critica" =
+      taxaErro >= 0.2 || (p95Ms ?? 0) >= 30_000
+        ? "critica"
+        : taxaErro >= 0.05 || taxaTruncamento >= 0.1 || (p95Ms ?? 0) >= 10_000
+          ? "atencao"
+          : "estavel";
+    const recentCut = Math.ceil(consultas.length / 2);
+    const recentes = resumoDaJanela(consultas.slice(0, recentCut));
+    const anteriores = resumoDaJanela(consultas.slice(recentCut));
+    return {
+      success: true,
+      porTool,
+      porCodigo,
+      busca: agregarTelemetriaBusca(rows),
+      janela: {
+        observacoes: rows.length,
+        de: rows.at(-1)?.createdAt.toISOString() ?? null,
+        ate: rows[0]?.createdAt.toISOString() ?? null,
+      },
+      consultas: {
+        cacheHits,
+        truncadas,
+        p50Ms: percentil(0.5),
+        p95Ms: percentil(0.95),
+        porSkill,
+        porOrigem,
+        porOrigemErro,
+        maisLentas,
+      },
+      painel: {
+        status,
+        taxaErro,
+        taxaCacheHit,
+        taxaTruncamento,
+        tendencia: { recentes, anteriores },
+      },
+    };
   }
 }
 

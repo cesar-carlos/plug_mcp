@@ -5,6 +5,7 @@ import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.
 import type { AuditLogPort } from "../../domain/ports/audit-log.port.js";
 import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
 import type { QueryResultCachePort } from "../../domain/ports/query-result-cache.port.js";
+import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import type {
   PlugServerGatewayPort,
@@ -29,7 +30,11 @@ import { recusarSqlLivreFirebird, tryParseSelect, type SqlAstSelect } from "./sh
 import { mesclarParamsEscopo } from "./shared/escopo-filtro.js";
 import { garantirLimiteInspecao, sqlStarDescoberta } from "./shared/expandir-star.js";
 import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
-import { aplicarDerivaEsquema, assinaturaTabela } from "./shared/schema-drift.js";
+import {
+  aplicarDerivaEsquema,
+  assinaturaTabela,
+  type DeltaAssinaturaSchema,
+} from "./shared/schema-drift.js";
 import { isIdentificadorSql } from "./shared/schema-introspection.js";
 import {
   applySelectAliasHints,
@@ -528,6 +533,7 @@ export class DetectarDerivaEsquema {
     private readonly grafo: GrafoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
     private readonly cache?: QueryResultCachePort,
+    private readonly aprendizado?: AprendizadoRepositoryPort,
   ) {}
 
   async execute(
@@ -537,7 +543,9 @@ export class DetectarDerivaEsquema {
     success: true;
     tabela: string;
     drifted: boolean;
+    mudou: boolean;
     anterior: string | null;
+    delta: DeltaAssinaturaSchema;
     skillsAfetadas: { id: string; slug: string; status: string }[];
   }> {
     const uid = requireUsuario(usuarioId);
@@ -576,6 +584,8 @@ export class DetectarDerivaEsquema {
               ? (nomeById.get(rel.tabelaDestinoId) ?? "")
               : (nomeById.get(rel.tabelaOrigemId) ?? ""),
           fingerprint: fingerprintPares(rel.pares),
+          tipoJoin: rel.tipoJoin,
+          cardinalidade: rel.cardinalidade,
         })),
     });
     const result = await aplicarDerivaEsquema({
@@ -585,12 +595,15 @@ export class DetectarDerivaEsquema {
       acessoId: acesso.id,
       tabelaNome: tabela.nome,
       assinatura,
+      aprendizado: this.aprendizado,
     });
     return {
       success: true,
       tabela: tabela.nome,
       drifted: result.drifted,
+      mudou: result.mudou,
       anterior: result.anterior,
+      delta: result.delta,
       skillsAfetadas: result.skillsAfetadas,
     };
   }

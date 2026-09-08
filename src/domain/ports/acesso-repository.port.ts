@@ -6,6 +6,8 @@ export interface AcessoRepositoryPort {
   findByIdForUsuario(id: string, usuarioId: string): Promise<Acesso | null>;
   findByTokenHash(tokenHash: string): Promise<Acesso | null>;
   listByUsuario(usuarioId: string): Promise<readonly Acesso[]>;
+  /** Uso operacional interno; nunca expõe catálogos para uma sessão MCP. */
+  listAll(): Promise<readonly Acesso[]>;
   findByUsuarioAgentTokenHash(
     usuarioId: string,
     agentId: string,

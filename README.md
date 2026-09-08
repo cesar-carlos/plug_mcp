@@ -59,16 +59,25 @@ Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a con
 
 ## Scripts
 
-| Script                       | Função                                                 |
-| ---------------------------- | ------------------------------------------------------ |
-| `npm run dev`                | `tsx watch`                                            |
-| `npm test`                   | Vitest in-memory                                       |
-| `npm run test:live`          | plug-server real (`E2E_*`)                             |
-| `npm run lint` / `format`    | ESLint + Prettier                                      |
-| `npm run db:migrate`         | Aplica `drizzle/*.sql`                                 |
-| `npm run db:backfill-escopo` | Preenche `skill.escopo` vazio a partir do `sql_modelo` |
+| Script                       | Função                                                     |
+| ---------------------------- | ---------------------------------------------------------- |
+| `npm run dev`                | `tsx watch`                                                |
+| `npm test`                   | Vitest in-memory                                           |
+| `npm run test:live`          | plug-server real (`E2E_*`)                                 |
+| `npm run lint` / `format`    | ESLint + Prettier                                          |
+| `npm run release:check`      | Gate local: lint, formatação, tipos, testes e build        |
+| `npm run db:migrate`         | Aplica `drizzle/*.sql`                                     |
+| `npm run test:migrations`    | Certifica banco limpo e upgrade `0023` em DB efêmero de CI |
+| `npm run worker:operacoes`   | Processa SLO, revisões e outbox de webhook (requer banco)  |
+| `npm run db:backfill-escopo` | Preenche `skill.escopo` vazio a partir do `sql_modelo`     |
 
 Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.19.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
+
+### Contratos e consulta inteligente
+
+`consultaSemantica` v2 separa agregação (múltiplas métricas) de listagem (dimensões) e mantém v1 compatível. `validar_consulta` aplica o mesmo preflight de `consultar_dados` e só executa envelope vazio. `publicar_skill` funciona em preview/diff + `confirmacaoHash` antes da confirmação efetiva. Anotações podem ter data/cadência de revisão; a fila de `listar_anotacoes` apenas prioriza manutenção do conhecimento e nunca licencia SQL. `listar_metricas_agente.painel` resume tendência, erro, cache e truncamento sem conteúdo sensível. Timings do hub são solicitados por amostragem com `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (0..100, padrão 10). O contrato REST versionado é gerado no repositório irmão pelo script `contract:generate`, protegido por baseline que rastreia todos os campos públicos e verificado na CI.
+
+Operação proativa é separada do servidor HTTP: `npm run worker:operacoes` calcula SLO e revisões por `acessoId`, grava somente IDs/contagens/taxas e entrega alertas a uma caixa MCP. Webhook é opcional por acesso, exige confirmação, HTTPS público sem query/credenciais e segredo cifrado; eventos são assinados e entregues pelo menos uma vez. Nenhuma dessas funções é conhecimento, RAG ou licença de SQL.
 
 ## Testes live contra o plug-server real
 
