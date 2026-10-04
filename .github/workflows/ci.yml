@@ -105,7 +105,7 @@ jobs:
           --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
       - run: docker build --platform linux/${{ matrix.arch }} -t se7e-native .
       - run: docker run --rm --platform linux/${{ matrix.arch }} --entrypoint node se7e-native --input-type=module -e "import sharp from 'sharp'; import { fileTypeFromBuffer } from 'file-type'; const png=await sharp({create:{width:2,height:2,channels:3,background:'red'}}).png().toBuffer(); if((await fileTypeFromBuffer(png))?.mime!=='image/png') process.exit(1);"
       - name: Packaged migrations, server and worker
