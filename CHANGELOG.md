@@ -19,12 +19,15 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added — treinamento compartilhado e curadoria
 
-- Base SQL + plug_server versionada, recursos e tool públicos, contrato empacotado/hash e gate de consistência.
+- Base SQL + plug_server 1.0.0 compartilhada por todas as personas: `guia://treinamento-base`, `guia://sql`, `guia://plug-server` e `obter_treinamento_base` no bootstrap; versão/hash, contrato empacotado e gate de consistência. `pre_treino` compõe contexto de sessão, sem treinamento de pesos.
 - Curadoria paginada, aprovação por ID/múltiplas skills com preview/hash/CAS, inativação explícita, dedup por contrato/publicações e contagem de execução separada.
 - Grão/chaves, constantes de negócio, metadados semânticos de métricas, feedback/revisão e diagnóstico consolidado.
 - Casos sintéticos versionados, runner PostgreSQL separado e gates graduais de testes obrigatórios; templates/datasets confirmados sem autoridade herdada.
 - Avaliador consome descoberta/resources/schemas reais, compara tipos/decimais exatos e registra ferramentas/duração/consumo; variantes explícitas sem alteração automática de invariantes.
 - Migrações 0032/0033 preservam histórico e acrescentam CAS/revisões/recorrência, sem confirmação ou certificação retroativa.
+- Tools de curadoria `listar_consultas_aprendidas`, `obter_consulta_aprendida` e `inativar_consulta_aprendida`; `confirmar_grao` distingue origem e resultado, e `confirmar_constante_negocio` admite somente constantes não sensíveis aprovadas no pacote.
+- Casos de negócio: `registrar_caso_teste`, `atualizar_caso_teste`, `listar_casos_teste`, `obter_caso_teste` e `arquivar_caso_teste`. Relatórios do runner separado ficam disponíveis em `listar_relatorios_avaliacao`; testes obrigatórios reprovados ou obsoletos bloqueiam somente a nova publicação.
+- Feedback e diagnóstico: `registrar_feedback_consulta`, `revisar_feedback_consulta` e `diagnosticar_treinamento`, sem aprovação automática de conhecimento. `exportar_template_skill` / `importar_template_skill` criam rascunhos no destino; `exportar_dataset_treinamento` entrega JSON/JSONL sintético aprovado, com manifesto e partições de treino/desenvolvimento/teste.
 
 ### Changed — atualização e autoridade publicada
 
@@ -33,6 +36,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Nova consulta ao npm atualiza `@types/node` para 26.6.4 e remove a exclusão de majors desse pacote no Dependabot; runtime permanece Node 24 LTS e novas APIs exigem compatibilidade com ele.
 - Publicação ativa imutável separada da edição: consulta/resources usam snapshot, rascunho não interrompe a publicação anterior. Publish com CAS e confirmação ligada à versão/base; alterações de segurança/cardinalidade suspendem pacotes afetados.
 - Aprendizado automático gera candidatas parametrizadas; reuso exige confirmação humana e publicações vigentes. Legados sem evidência viram candidatas, retenção 90 dias e falha de captura não perde consulta.
+- Contratos de clientes: `salvar_consulta` sem `confirmacaoHash` retorna preview, inclusive na entrada legada por pergunta/SQL/skill; aprovação por ID ou múltiplas skills exige confirmação e publicações exatas. `obter_skill` lê a publicação ativa por padrão e aceita `revisao=rascunho`; `statusRascunho` é separado de `status`.
+- `metricasSaida` inclui unidade/moeda, arredondamento, tratamento de nulos, aditividade, dimensões permitidas e calendário de negócio. `COALESCE`/`ROUND` são aplicados pela IR conforme o contrato; metadados documentais não reescrevem SQL livre.
 
 ### Security — isolamento e cofre
 
@@ -65,7 +70,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
-- Token MCP **por acesso** (`acesso.token_hash`): cada `CLIENT_TOKEN` ganha um Bearer distinto. `registrar_acesso` com e-mail existente + senha correta + token novo emite outro setup; `adicionar_acesso` devolve `setupUrl` da persona nova **sem** trocar a sessão atual. Migration `0023_token_por_acesso.sql`: o acesso mais antigo herda o Bearer; extras ganham `mcp_setup` (TTL 7 dias).
+- Token MCP **por acesso** (`acesso.token_hash`): cada `CLIENT_TOKEN` ganha um Bearer distinto. `registrar_acesso` com identidade autenticada no navegador e token novo emite outro acesso; `adicionar_acesso` devolve `setupUrl` da persona nova **sem** trocar a sessão atual. A migration histórica `0023_token_por_acesso.sql` preservou o Bearer do acesso mais antigo e criou entregas legadas em `mcp_setup`; o fluxo atual utiliza `setup_operation` com validade de 15 minutos.
 - Entrega persistida legada em mcp_setup foi substituída por setup_operation; 0029 invalida códigos pendentes, preservando Bearers existentes.
 
 ### Changed
@@ -80,7 +85,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Escritas do grafo chaveadas por UUID (`listColunas` / `mergeColuna` / `deleteRelacionamento`) recusam mutar linha de outro `acesso_id` mesmo com UUID furtado.
 - Falha de rede até o hub (`ECONNREFUSED` / `fetch failed`) deixa de virar `INTERNAL_ERROR` opaco: a IA recebe `PLUG_SERVER_ERROR` + `source: plug_server_http` (retryable, **não** reescrever SQL). HTTP 400 e JSON-RPC `-326xx` também são transporte. Firebird/Sybase `Column unknown` / `not found` apontam `mapear_tabela` com o texto do motor.
 - Envelope de erro da tool também preenche `structuredContent` com o mesmo JSON de `content[0].text` (`domain.toJson()`), sem vazar segredos.
-- `GET /setup/{code}` consome memória e `mcp_setup` (one-shot). `DrizzleMcpSetup.consume` usa `DELETE … RETURNING`. Troca de Bearer no mesmo `mcp-session-id` refresca tools `skill_*`.
+- O consumo legado de setup por GET foi substituído: `GET /setup/{code}` somente apresenta o formulário; a conclusão exige POST autenticado, CSRF e claim atômico. Sessão legada fixa usuário/acesso e recusa troca de Bearer para outra persona no mesmo `mcp-session-id`; é necessária nova sessão.
 - Wrap genérico do driver (sem detalhe ODBC) no `engineMessage` pede `mapear_tabela` / `obter_skill` e **não** reescrever SQL por `plug_server_http`. `SQLSTATE` `42703`/`42P01` entra no hint quando o motor já mapeia identificador Postgres.
 
 ### Added
@@ -104,7 +109,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - `confirmar_coluna` com `confirmadoPeloUsuario` aplica `sensibilidade` (origem `confirmado_usuario`) mesmo se a coluna já for `validado_execucao`. Perfil/`enriquecer=completo` posterior **não** rebaixa a classe. Se a classe não gravar, a tool recusa com `VALIDATION_ERROR` em vez de `success: true` opaco.
 - Lista após “não autoriza cruzar vendas, compras nem títulos” sai do haystack de cobertura: o segundo (e demais) termos da cláusula negada **não** entram em `termosEncontrados`. “Não agrega estoque” continua fora. `SKILL_GAP` por termo só negado não pede sinônimo.
 - Descrições de `treinar_com_sql` / `validar_skill` diziam Firebird SQL livre → `DIALECT_UNSUPPORTED` (falso vs o use-case). Treino parseia o `sqlModelo` no dialeto do acesso; `FIRST`/`TOP`/`LIMIT` no modelo é `INVALID_SQL`. `DIALECT_UNSUPPORTED` continua só em `consultar_dados` / `inspecionar_consulta` / `validar_consulta` **com** `sql` depois de publicar.
-- `atualizar_skill` com SQL novo apagava tabelas/colunas/JOINs extra do pacote (só reaplicava overlay de KPI). Agora une o AST ao pacote persistido, como `validar_skill`. Grafo só `inferido` não entra. Status volta a rascunho.
+- `atualizar_skill` com SQL novo apagava tabelas/colunas/JOINs extra do pacote (só reaplicava overlay de KPI). Agora une o AST ao rascunho persistido, como `validar_skill`. Grafo só `inferido` não entra. A revisão editável volta a `rascunho`; havendo publicação ativa utilizável, `status=publicada` e a consulta continua no snapshot anterior até republicação.
 - Envelope `PACOTE_INCOMPLETO`: `nextAction` era o fallback `validar_skill`; agora é o da primeira falta bloqueante em `details.faltas[]`.
 
 ### Changed
@@ -120,7 +125,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - `consultaSemantica` honra `tipoJoin` do pacote (`LEFT JOIN` se left; `INNER JOIN` se inner/ausente). `validar_consulta` aceita `options.page`/`page_size` e aplica a mesma regra de `consultar_dados` (TOP/LIMIT no SELECT externo incompatível com página). `consultaSemantica.limite` + `options.page` recusa misturar os dois padrões de corte.
 - `enriquecer=completo`: até 16 `sql.execute` com concorrência 4 (`PERFIL_SQL_CONCURRENCY`), sem fundir `getPolicy` e sem retry. Falha isolada continua aviso; o teto 16 e o fail-closed não mudam.
 - Cliente REST do hub: AbortSignal de `sql.execute` acompanha o wait do bridge (`options.timeout_ms` + 5s, teto 360s) — não corta em 35s; `PLUG_SERVER_HTTP_TIMEOUT_MS` é piso de login/policy (teto Zod 60s). Dois `http(s).Agent` (auth 4 / SQL 16). Probe TCP keepalive 30s (`keepAliveMsecs`); idle até o peer (Nginx `keepalive_timeout`). Sem retry de SQL. Borda Nginx (`proxy_read_timeout`, ex. 180s) ainda corta skills ~≥175s mesmo com abort MCP ~310s.
-- Pre-treino (`initialize.instructions` / `pre_treino`): base comum = SQL no plug-server no dialeto do `agentId` (`sybase`/`mssql`/`postgres`/`firebird` — não assumir mssql) + resources `guia://paginacao`, `guia://dialeto/{dialeto}`, `skill://` + pacote publicado (fail-closed, sem embeddings). Estrutura via `obter_skill` / `skill://` (treino: `explorar_tabelas` / `mapear_tabela`); Firebird só consulta exemplo. Papel = persona do acesso (tom) + skills publicadas (pacote); SQL primeiro, persona depois; conflito → pacote. Canal com o hub é REST (Socket/relay de consumer fora de escopo). Host precisa reconectar após deploy para recarregar `instructions`.
+- Pre-treino (`initialize.instructions` / `pre_treino`): base comum = SQL no plug-server no dialeto configurado no acesso (`sybase`/`mssql`/`postgres`/`firebird` — não assumir mssql) + guias públicos + pacote publicado (fail-closed, sem embeddings). Estrutura via `obter_skill` / `skill://` (treino: `explorar_tabelas` / `mapear_tabela`); Firebird só consulta exemplo. Papel = persona do acesso (tom) + skills publicadas (pacote); SQL primeiro, persona depois; conflito → pacote. Canal com o hub é REST (Socket/relay de consumer fora de escopo). Clientes legados reconectam para recarregar `initialize.instructions`; no protocolo 2026-07-28 o contexto autenticado é recomposto por requisição.
 - Pre-treino: nomeia `MULTI_SKILL_PARAMS` no cruzamento; a IA pergunta cardinalidade **e** tipo de JOIN (INNER vs LEFT) e passa `tipoJoin` em `confirmar_relacionamento` (omitir preserva o tipo do SQL/grafo). Continua agregar no banco e params `:nome`.
 - Resource `guia://paginacao`: bloco comum distingue `truncated` (teto `max_rows`, caminho sem página) de `paginacao.hasNextPage` (próxima página).
 - Mapper e `source`: `-32009` `invalid_payload` → `PLUG_SERVER_ERROR` + `plug_server_http` (reason ganha; não reescrever SQL). Haystack de motor só vira `INVALID_SQL`/`sql_engine` se reason ≠ `invalid_payload`. `-32001` ramifica (`missing_client_token` vs assinatura). Motor `-32101`/`-32102`/`-32107` → `INVALID_SQL`/`QUERY_TIMEOUT` + `sql_engine`. HTTP 404 de agentId nunca registado → `AGENT_UNAVAILABLE` sem retry (`verificar_acesso`). Instructions: `sql`/`sql_engine` corrige no pacote; transporte/`invalid_payload` não reescreve; 429/503 ≠ policy. SQL falho não persiste.
