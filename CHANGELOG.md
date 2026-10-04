@@ -11,6 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Fixed — integração das branches de CI
+
+- Mescladas as atualizações para `actions/checkout` v7, `actions/setup-node` v7 e `docker/setup-qemu-action` v4, preservando todas nos conflitos do workflow.
+- Formatação ignora o checkout auxiliar `plug_server_contract`; o teste de contrato carrega arquivos somente quando a suíte é executada, permitindo sua ausência no job Windows.
+- Histórico da branch `epic/ciclo-treino-publicacao` reconciliado após verificar equivalência com o patch já integrado pelo PR #9, preservando o conteúdo atual da main.
+
 ### Added — treinamento compartilhado e curadoria
 
 - Base SQL + plug_server versionada, recursos e tool públicos, contrato empacotado/hash e gate de consistência.

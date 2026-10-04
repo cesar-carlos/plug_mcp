@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const roots = [
   process.env.PLUG_SERVER_ROOT,
@@ -19,7 +19,7 @@ const compatibilityPath = roots
 const contractDescribe = contractPath && compatibilityPath ? describe : describe.skip;
 
 contractDescribe("plug_server REST contract used by MCP", () => {
-  const contract = JSON.parse(readFileSync(contractPath!, "utf8")) as {
+  let contract: {
     contractVersion?: string;
     paths?: Record<string, unknown>;
     schemas?: Record<string, unknown>;
@@ -37,11 +37,16 @@ contractDescribe("plug_server REST contract used by MCP", () => {
     };
   };
 
-  const compatibilityBaseline = JSON.parse(readFileSync(compatibilityPath!, "utf8")) as {
+  let compatibilityBaseline: {
     contractVersion?: string;
     responseFields?: Record<string, string[]>;
     requestFields?: Record<string, Record<string, { required?: boolean; types?: string[] }>>;
   };
+
+  beforeAll(() => {
+    contract = JSON.parse(readFileSync(contractPath!, "utf8"));
+    compatibilityBaseline = JSON.parse(readFileSync(compatibilityPath!, "utf8"));
+  });
 
   it("keeps every REST route used by the adapter", () => {
     expect(contract.contractVersion).toMatch(/^1\.\d+\.\d+$/);

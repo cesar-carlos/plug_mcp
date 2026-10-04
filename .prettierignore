@@ -7,3 +7,4 @@ package-lock.json
 .data7
 
 contracts/plug-mcp-rest-v1.json
+plug_server_contract
