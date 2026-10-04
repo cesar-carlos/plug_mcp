@@ -47,7 +47,7 @@ jobs:
           repository: cesar-carlos/plug_server
           path: plug_server_contract
           ref: 0d2c6b488438a77be71b39e514cd06ab11fbb95e
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
           cache: npm
@@ -78,7 +78,7 @@ jobs:
       CI: "false"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
           cache: npm
