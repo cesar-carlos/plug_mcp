@@ -5,3 +5,5 @@ drizzle/*.sql
 package-lock.json
 .nvmrc
 .data7
+
+contracts/plug-mcp-rest-v1.json

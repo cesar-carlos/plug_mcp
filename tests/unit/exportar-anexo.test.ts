@@ -58,6 +58,28 @@ const jpegBytes = async (): Promise<Buffer> =>
 const zipBytes = (): Buffer =>
   Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(40, 0)]);
 
+const classificarFoto = async (
+  grafo: InMemoryGrafoRepository,
+  acessoId: string,
+  usuarioId: string,
+) => {
+  const { tabela } = await grafo.mergeTabela({
+    acessoId,
+    nome: "produto",
+    origem: "confirmado_usuario",
+    autorUsuarioId: usuarioId,
+  });
+  await grafo.mergeColuna({
+    acessoId,
+    tabelaId: tabela.id,
+    nome: "foto",
+    tipo: "image",
+    sensibilidade: "livre",
+    origem: "confirmado_usuario",
+    autorUsuarioId: usuarioId,
+  });
+};
+
 describe("exportar_anexo", () => {
   it("converte jpeg→png com sharp e recusa zip", async () => {
     const converter = new SharpPdfkitAnexoConverter();
@@ -100,6 +122,7 @@ describe("exportar_anexo", () => {
   });
 
   it("consultar_dados devolve stub e exportar_anexo gera imagem MCP", async () => {
+    const grafo = new InMemoryGrafoRepository();
     const plug = new FakePlugServer();
     plug.approve(agentId);
     const jpeg = await jpegBytes();
@@ -142,7 +165,7 @@ describe("exportar_anexo", () => {
       audit,
       500,
       5000,
-      { aprendizado: new InMemoryAprendizadoRepository(), anexos },
+      { aprendizado: new InMemoryAprendizadoRepository(), anexos, grafo },
     );
     const skill = await skills.create({
       acessoId: created.acessoId,
@@ -150,9 +173,13 @@ describe("exportar_anexo", () => {
       nome: "Fotos",
       descricao: "anexos",
       sqlModelo: "SELECT p.foto FROM produto p WHERE p.codprod = :codigo",
+      escopo: escopoFromSqlModelo(
+        parseSqlModelo("SELECT p.foto FROM produto p WHERE p.codprod = :codigo"),
+      ),
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
+    await classificarFoto(grafo, created.acessoId, created.usuarioId);
     const result = await consultar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       pergunta: "mostra a foto",
@@ -176,6 +203,7 @@ describe("exportar_anexo", () => {
       crypto,
       audit,
       silentLogger,
+      grafo,
     );
     const exported = await exportar.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -323,6 +351,38 @@ describe("exportar_anexo", () => {
     expect(anexos.get(handleB, "user-b")).toBeNull();
   });
 
+  it("quotas de bytes isolam acesso/processo e buffers são copiados", () => {
+    let now = 1000;
+    const store = new MemoryAnexoHandleStore("quota-test-secret", 1000, () => now, {
+      acessoBytes: 4,
+      processoBytes: 6,
+    });
+    const bytes = new Uint8Array([1, 2, 3]);
+    const put = (acessoId: string) =>
+      store.put({
+        usuarioId: "u",
+        acessoId,
+        bytes,
+        coluna: "foto",
+        sensibilidade: "livre",
+        origem: "consultar_dados",
+      });
+    const first = put("a");
+    bytes[0] = 99;
+    expect(store.get(first, "u")?.bytes[0]).toBe(1);
+    const copy = store.get(first, "u")!;
+    copy.bytes[0] = 88;
+    expect(store.get(first, "u")?.bytes[0]).toBe(1);
+    expect(() => put("a")).toThrow(expect.objectContaining({ code: "CONSULTA_ORCAMENTO" }));
+    put("b");
+    expect(() => put("c")).toThrow(expect.objectContaining({ code: "CONSULTA_ORCAMENTO" }));
+    store.invalidateAcesso("a");
+    expect(store.get(first, "u")).toBeNull();
+    expect(() => put("c")).not.toThrow();
+    now = 3000;
+    expect(() => put("a")).not.toThrow();
+  });
+
   it("inspeção + stub → export recusa; consultar_dados + pessoal no grafo continua PRIVACIDADE_NEGADA", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
@@ -379,6 +439,7 @@ describe("exportar_anexo", () => {
       audit,
       { anexos },
     );
+    await classificarFoto(grafo, created.acessoId, created.usuarioId);
     const fillCap = (coluna: string): string =>
       anexos.put({
         usuarioId: created.usuarioId,
@@ -396,7 +457,8 @@ describe("exportar_anexo", () => {
     const inspecao = await inspecionar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       skillId: skill.id,
-      tabela: "produto",
+      sql: sqlModelo,
+      params: { codigo: 1 },
       finalidade: "validar_tipo",
     });
     const stub = inspecao.rows[0]?.foto as { kind?: string; handle?: string; truncated?: boolean };
@@ -562,6 +624,7 @@ describe("exportar_anexo", () => {
     const usuarios = new InMemoryUsuarioRepository();
     const acessos = new InMemoryAcessoRepository();
     const skills = new InMemorySkillRepository();
+    const grafo = new InMemoryGrafoRepository();
     const audit = new InMemoryAuditLog();
     const anexos = new MemoryAnexoHandleStore("secret-anexo-hmac-key-32bytes-min");
     const created = await new RegistrarAcesso(
@@ -607,6 +670,9 @@ describe("exportar_anexo", () => {
     });
     await skills.setStatus(skillB.id, "publicada");
     const jpeg = await jpegBytes();
+    await classificarFoto(grafo, created.acessoId, created.usuarioId);
+    const source = (await acessos.findById(created.acessoId))!;
+    const publication = (await skills.findPublicadaById(skillA.id))!;
     const handle = anexos.put({
       usuarioId: created.usuarioId,
       acessoId: created.acessoId,
@@ -614,6 +680,19 @@ describe("exportar_anexo", () => {
       coluna: "foto",
       sensibilidade: "livre",
       origem: "consultar_dados",
+      proveniencia: {
+        tabela: "produto",
+        coluna: "foto",
+        bearerHash: source.tokenHash,
+        clientTokenHash: source.clientTokenHash,
+        publicacoes: [
+          {
+            skillId: skillA.id,
+            id: publication.publicacaoAtivaId!,
+            hash: publication.publicacaoHash!,
+          },
+        ],
+      },
     });
     const exportar = new ExportarAnexo(
       acessos,
@@ -625,6 +704,7 @@ describe("exportar_anexo", () => {
       crypto,
       audit,
       silentLogger,
+      grafo,
     );
     const inferred = await exportar.execute(created.usuarioId, {
       handle,

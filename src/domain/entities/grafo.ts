@@ -67,10 +67,10 @@ export interface SchemaSnapshotGrafo {
 }
 
 export const origemRank = (origem: OrigemFato): number => {
-  if (origem === "validado_execucao") {
+  if (origem === "confirmado_usuario") {
     return 3;
   }
-  if (origem === "confirmado_usuario") {
+  if (origem === "validado_execucao") {
     return 2;
   }
   return 1;

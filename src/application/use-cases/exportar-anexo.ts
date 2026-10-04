@@ -18,6 +18,7 @@ import {
 } from "../../domain/entities/anexo.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
+import type { GrafoRepositoryPort } from "../../domain/ports/grafo-repository.port.js";
 
 const origemInvalida = (hint: string): DomainError =>
   DomainError.anexo({
@@ -37,6 +38,7 @@ export class ExportarAnexo {
     private readonly crypto: CryptoPort,
     private readonly audit: AuditLogPort,
     private readonly logger: LoggerPort,
+    private readonly grafo?: GrafoRepositoryPort,
   ) {}
 
   async execute(
@@ -80,9 +82,7 @@ export class ExportarAnexo {
       await requireAcesso(this.acessos, boundAcessoId, uid),
       uid,
     );
-    const publicadas = (await this.skills.listByAcesso(acesso.id)).filter(
-      (item) => item.status === "publicada",
-    );
+    const publicadas = await this.skills.listPublicadas(acesso.id);
     if (publicadas.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.SKILL_NOT_PUBLISHED,
@@ -91,7 +91,7 @@ export class ExportarAnexo {
       });
     }
     const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
-    await withHubAuth(this.sessions, uid, (accessToken) =>
+    const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.getClientTokenPolicy({
         accessToken,
         agentId: acesso.agentId,
@@ -99,6 +99,77 @@ export class ExportarAnexo {
       }),
     );
     const record = peeked;
+    if (record.sensibilidade === "pessoal" || record.sensibilidade === "segredo") {
+      throw new DomainError({
+        code: ERROR_CODES.PRIVACIDADE_NEGADA,
+        message: "Anexo pessoal ou segredo não é exportável.",
+        hint: "Consulte apenas anexos classificados como livres.",
+        nextAction: "consultar_dados",
+      });
+    }
+    const source = record.proveniencia;
+    const assertCurrent = async (): Promise<void> => {
+      const current = await refreshAndRequireAcessoAprovado(
+        this.acessos,
+        this.plug,
+        this.sessions,
+        await requireAcesso(this.acessos, acesso.id, uid),
+        uid,
+      );
+      if (
+        !source?.publicacoes.length ||
+        source.bearerHash !== current.tokenHash ||
+        source.clientTokenHash !== current.clientTokenHash
+      ) {
+        throw origemInvalida(
+          "Autorização de origem inválida. Consulte novamente no pacote vigente.",
+        );
+      }
+      for (const origin of source.publicacoes) {
+        const active = await this.skills.findPublicadaById(origin.skillId);
+        if (
+          active?.acessoId !== acesso.id ||
+          active.publicacaoAtivaId !== origin.id ||
+          active.publicacaoHash !== origin.hash ||
+          !Object.entries(active.escopo.colunasPorTabela).some(
+            ([table, cols]) =>
+              table.toLowerCase() === source.tabela.toLowerCase() &&
+              cols.some((col) => col.toLowerCase() === source.coluna.toLowerCase()),
+          )
+        ) {
+          throw origemInvalida("Publicação de origem revogada ou substituída. Consulte novamente.");
+        }
+      }
+      const fresh = await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.getClientTokenPolicy({
+          accessToken,
+          agentId: current.agentId,
+          clientToken: this.crypto.decrypt(current.clientTokenEnc),
+        }),
+      );
+      if (
+        !fresh.allTables &&
+        !fresh.tables.some((table) => table.toLowerCase() === source.tabela.toLowerCase())
+      ) {
+        throw origemInvalida("A policy vigente não autoriza a tabela de origem.");
+      }
+      if (!this.grafo) {
+        throw origemInvalida("Classificação vigente indisponível.");
+      }
+      const table = await this.grafo.findTabelaByNome(acesso.id, source.tabela);
+      const column = table ? await this.grafo.findColuna(acesso.id, table.id, source.coluna) : null;
+      if (column?.origem !== "confirmado_usuario" || column.sensibilidade !== "livre") {
+        throw origemInvalida("A classificação vigente não permite exportação desta coluna.");
+      }
+    };
+    if (
+      source &&
+      !policy.allTables &&
+      !policy.tables.some((table) => table.toLowerCase() === source.tabela.toLowerCase())
+    ) {
+      throw origemInvalida("Tabela de origem fora da policy.");
+    }
+    await assertCurrent();
     if (record.acessoId !== acesso.id) {
       throw origemInvalida("O handle não pertence a este acessoId. Confira listar_acessos.");
     }
@@ -107,20 +178,12 @@ export class ExportarAnexo {
         "Handle de inspecionar_consulta não é exportável. Foto livre: consultar_dados + exportar_anexo. Não use inspeção como segunda via.",
       );
     }
-    if (record.sensibilidade === "pessoal" || record.sensibilidade === "segredo") {
-      throw new DomainError({
-        code: ERROR_CODES.PRIVACIDADE_NEGADA,
-        message: "Anexo pessoal ou segredo não é exportado.",
-        hint: "Não use inspecionar_consulta como segunda via de foto pessoal. Segredo nunca é revelado. Foto livre: consultar_dados + exportar_anexo.",
-        nextAction: "consultar_dados",
-        details: { coluna: record.coluna },
-      });
-    }
     try {
       const converted = await this.converter.converter({
         bytes: record.bytes,
         mimeDestino,
       });
+      await assertCurrent();
       this.logger.info("anexo exported", {
         tool: "exportar_anexo",
         mime: converted.mime,
@@ -137,6 +200,7 @@ export class ExportarAnexo {
         linhasRetornadas: 1,
         duracaoMs: Date.now() - started,
       });
+      await assertCurrent();
       return {
         kind: ANEXO_EXPORT_KIND,
         mime: converted.mime,

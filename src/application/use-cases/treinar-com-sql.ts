@@ -16,7 +16,7 @@ import {
   avisoLimiteNoSqlModelo,
   bindParamsForValidation,
   parseSqlModelo,
-  sqlAmostra,
+  sqlValidacaoVazia,
   sqlParaOdbc,
 } from "./shared/sql-modelo.js";
 import { inferirPapelColuna } from "./shared/inferir-papel.js";
@@ -116,7 +116,7 @@ export class TreinarComSql {
           accessToken,
           agentId: acesso.agentId,
           clientToken,
-          sql: sqlParaOdbc(sqlAmostra(acesso.dialeto, modelo.sql)),
+          sql: sqlParaOdbc(sqlValidacaoVazia(acesso.dialeto, modelo.sql)),
           params,
           options: { maxRows: 1 },
         }),
@@ -284,9 +284,7 @@ export class TreinarComSql {
           autorUsuarioId: uid,
           modelo,
           escopo,
-          escopoPadrao: acesso.escopoPadrao
-            ? { empresa: acesso.escopoPadrao.empresa, filial: acesso.escopoPadrao.filial }
-            : undefined,
+          escopoPadrao: acesso.escopoPadrao ?? undefined,
           signal: op.signal,
           onProgress: (item) => {
             progresso = op.report(item.fase, item.queriesUsadas);

@@ -1,5 +1,9 @@
+import type { Treinamento } from "../../application/use-cases/treinamento.js";
+import { registerTrainingTools } from "./training-tools.js";
+import type { SetupOperations } from "../../application/use-cases/setup-operation.js";
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { obterTreinamentoBase } from "../../application/use-cases/shared/treinamento-base.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import {
   INSTRUCOES_PERSONA_MAX_CHARS,
   NOME_PERSONA_MAX_CHARS,
@@ -75,6 +79,8 @@ import type {
 } from "../../application/use-cases/operacoes.js";
 
 export interface ToolUseCases {
+  treinamento?: Treinamento;
+  setupOperations?: SetupOperations;
   registrarAcesso: RegistrarAcesso;
   adicionarAcesso: AdicionarAcesso;
   listarAcessos: ListarAcessos;
@@ -178,6 +184,14 @@ const metricaSaidaShape = z.object({
   statusIncluidos: z.array(z.string()).optional(),
   statusExcluidos: z.array(z.string()).optional(),
   colunaData: z.string().optional(),
+  unidade: z.string().optional(),
+  moeda: z.string().optional(),
+  arredondamento: z
+    .strictObject({ casas: z.number().int().min(0).max(12), modo: z.enum(["documental", "round"]) })
+    .optional(),
+  tratamentoNulos: z.enum(["preservar", "zero"]).optional(),
+  aditividade: z.enum(["aditiva", "semi_aditiva", "nao_aditiva"]).optional(),
+  calendarioNegocio: z.string().optional(),
 });
 
 const consultaSemanticaComumShape = {
@@ -283,6 +297,16 @@ const politicaConsultaShape = z.object({
 });
 
 const planoConsultaShape = z.object({
+  treinamentoBase: z
+    .object({
+      versao: z.string(),
+      hash: z.string(),
+      contratoHubRef: z.string(),
+      contratoHubHash: z.string(),
+    })
+    .optional(),
+  aplicacaoSemantica: z.string().optional(),
+
   origem: z.enum(["sql", "semantica", "aprendida", "modelo"]),
   dialeto: z.string(),
   politicaAplicada: politicaConsultaShape.nullable(),
@@ -336,7 +360,7 @@ export const TREINAR_COM_SQL_TOOL_DESCRIPTION =
   "Treina o grafo deste acesso/persona com um SELECT nomeado. Proíbe SELECT *. Exige JOIN explícito se houver várias tabelas. Params nomeados opcionais. Origem: validado_execucao. enriquecer=completo (opt-in) perfila cardinalidade, tipo/formato, min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso). Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no SQL (amostra FIRST é wrap do servidor). Aviso PAGINACAO_MODELO se o SQL já declara TOP/LIMIT/FIRST. Depois de publicar: só consultar_dados / inspecionar_consulta sem sql. Omita acessoId — o Bearer já amarra esta persona.";
 
 export const VALIDAR_SKILL_TOOL_DESCRIPTION =
-  "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo. Une o sqlModelo ao escopo persistido. Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no sqlModelo (amostra é wrap do servidor). Aviso PAGINACAO_MODELO se o modelo já declara TOP/LIMIT/FIRST. SQL livre depois de publicar continua DIALECT_UNSUPPORTED.";
+  "Valida o sqlModelo com envelope vazio (sem ler dado). Recusa params sem descrição. Placeholders ausentes vão como null. Skill já publicada permanece publicada. enriquecer=completo (opt-in) perfila o sqlModelo no grafo. Une o sqlModelo ao escopo persistido. Firebird: treino NÃO é DIALECT_UNSUPPORTED; não coloque FIRST/TOP/LIMIT no sqlModelo (amostra é wrap do servidor). Aviso PAGINACAO_MODELO se o modelo já declara TOP/LIMIT/FIRST. SQL livre depois de publicar continua DIALECT_UNSUPPORTED. A validação altera só o rascunho; publicação ativa permanece.";
 
 export const EXPLORAR_TABELAS_TOOL_DESCRIPTION =
   "Lista tabelas/views do ERP via catálogo de sistema do dialeto do acesso. Só no treino (descobrir estrutura); não licencia consultar_dados. Não invente nomes de tabela.";
@@ -358,20 +382,40 @@ export const registerTools = (
     rateLimit: options?.rateLimit,
     clientIp: options?.clientIp,
   });
-
-  server.tool(
-    "registrar_acesso",
-    "Primeira tool, sem Bearer. Recebe e-mail/senha do Client no plug-server, agentId, dialeto e client_token. Devolve setupCode/setupUrl — o token MCP NÃO vem na resposta da tool. Não ecoe senha nem client_token no chat.",
+  server.registerTool(
+    "obter_treinamento_base",
     {
-      email: z.string().optional(),
-      senha: z.string().optional(),
-      agentId: z.string().optional(),
-      dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
-      clientToken: z.string().optional(),
-      nomeAmigavel: z.string().optional(),
+      description:
+        "Camada comum de SQL e plug_server para todas as personas. Sem credenciais, sem catálogo, não autoriza dados.",
+      inputSchema: z.strictObject({
+        modulo: z.enum(["sql", "dialetos", "plug-server", "procedimento"]).optional(),
+        dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
+      }),
+      annotations: readList,
     },
-    writeLocal,
-    async (args) => run("registrar_acesso", () => useCases.registrarAcesso.execute(args)),
+    async (args) =>
+      run("obter_treinamento_base", () => Promise.resolve(obterTreinamentoBase(args))),
+  );
+
+  server.registerTool(
+    "registrar_acesso",
+    {
+      description:
+        "Retorna uma URL de cadastro no navegador (15 minutos). Sem argumentos. Senha e tokens são recusados nos argumentos e preenchidos somente no formulário.",
+      inputSchema: z.strictObject({}),
+      annotations: writeLocal,
+    },
+    async () =>
+      run("registrar_acesso", () => {
+        if (!useCases.setupOperations) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "Operação de navegador indisponível.",
+            hint: "Configure o serviço de setup seguro.",
+          });
+        }
+        return useCases.setupOperations.begin("registrar", currentAccountId());
+      }),
   );
 
   registerPreTreinoPrompt(server, options?.catalog?.acessos);
@@ -382,154 +426,214 @@ export const registerTools = (
     return;
   }
 
-  server.tool(
+  if (useCases.treinamento) registerTrainingTools(server, useCases.treinamento, run);
+
+  server.registerTool(
     "adicionar_acesso",
-    "Com token MCP, cria outra persona (agentId/client_token) sem pedir senha de novo. Catálogo vazio — não herda skills/grafo. Devolve setupCode/setupUrl do Bearer **novo** (nunca o token na resposta). Esta sessão continua só na persona atual. Não ecoe o client_token no chat.",
     {
-      agentId: z.string().optional(),
-      dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
-      clientToken: z.string().optional(),
-      nomeAmigavel: z.string().optional(),
+      description:
+        "Retorna uma URL de cadastro de outra persona no navegador. A nova persona começa vazia e recebe Bearer próprio; esta sessão permanece no acesso atual. Sem argumentos ou segredos.",
+      inputSchema: z.strictObject({}),
+      annotations: writeLocal,
     },
-    writeLocal,
-    async (args) =>
-      run("adicionar_acesso", () => useCases.adicionarAcesso.execute(currentAccountId(), args)),
+    async () =>
+      run("adicionar_acesso", () => {
+        if (!useCases.setupOperations) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "Operação de navegador indisponível.",
+            hint: "Configure o serviço de setup seguro.",
+          });
+        }
+        return useCases.setupOperations.begin("adicionar", currentAccountId());
+      }),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_acessos",
-    "Lista só o acesso deste Bearer (client_token mascarado; nomePersona e instrucoesPersona). Sem sessão ALS recusa (VALIDATION_ERROR) — não lista todos os chapéus. sqlAccessState vem só do cofre (approved → unknown). Outras personas usam o token MCP delas. Persona não licencia SQL.",
-    emptyShape,
-    readList,
+    {
+      description:
+        "Lista só o acesso deste Bearer (client_token mascarado; nomePersona e instrucoesPersona). Sem sessão ALS recusa (VALIDATION_ERROR) — não lista todos os chapéus. sqlAccessState vem só do cofre (approved → unknown). Outras personas usam o token MCP delas. Persona não licencia SQL.",
+      inputSchema: z.object(emptyShape),
+      annotations: readList,
+    },
     async () => run("listar_acessos", () => useCases.listarAcessos.execute(currentAccountId())),
   );
 
-  server.tool(
+  server.registerTool(
     "verificar_acesso",
-    "Consulta o status do pedido de acesso no plug-server e a prontidão SQL (hub + policy). Devolve nomePersona/instrucoesPersona. Não faça polling agressivo. hasClientToken false no hub não prova token morto.",
-    { acessoId: z.string().optional() },
-    readWorld,
+    {
+      description:
+        "Consulta o status do pedido de acesso no plug-server e a prontidão SQL (hub + policy). Devolve nomePersona/instrucoesPersona. Não faça polling agressivo. hasClientToken false no hub não prova token morto.",
+      inputSchema: z.object({ acessoId: z.string().optional() }),
+      annotations: readWorld,
+    },
     async (args) =>
       run("verificar_acesso", () => useCases.verificarAcesso.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "remover_acesso",
-    "Remove o acesso **deste** Bearer do cofre. O catálogo (skills/grafo) desta persona é apagado; o token atual deixa de valer. Não apaga outra persona por id.",
-    { acessoId: z.string().optional() },
-    destroyLocal,
+    {
+      description:
+        "Remove o acesso **deste** Bearer do cofre. O catálogo (skills/grafo) desta persona é apagado; o token atual deixa de valer. Não apaga outra persona por id.",
+      inputSchema: z.object({ acessoId: z.string().optional() }),
+      annotations: destroyLocal,
+    },
     async (args) =>
       run("remover_acesso", () => useCases.removerAcesso.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "atualizar_credencial_plug",
-    "Atualiza e-mail/senha do Client no cofre após o plug-server recusar login. Não ecoe a senha no chat.",
-    { email: z.string().optional(), senha: z.string().optional() },
-    writeLocal,
-    async (args) =>
-      run("atualizar_credencial_plug", () =>
-        useCases.atualizarCredencialPlug.execute(currentAccountId(), args),
-      ),
-  );
-
-  server.tool(
-    "rotacionar_token_mcp",
-    "Invalida o token MCP **desta** persona (o Bearer em Authorization) e emite um setupCode para copiar o novo. Abra setupUrl antes de reiniciar o processo — o código one-shot vale 7 dias (memória e mcp_setup). O Bearer anterior já é inválido. Outras personas continuam com o token delas.",
-    emptyShape,
-    destroyLocal,
-    async () =>
-      run("rotacionar_token_mcp", () => useCases.rotacionarTokenMcp.execute(currentAccountId())),
-  );
-
-  server.tool(
-    "atualizar_dialeto",
-    "Muda o dialeto deste acesso e do grafo da persona. Skills deste acesso deixam de estar publicadas (voltam a rascunho) porque o SQL pode não valer no dialeto novo. Exige confirmadoPeloUsuario: true.",
     {
-      acessoId: z.string().optional(),
-      dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Retorna URL para atualizar credenciais no navegador, mediante reautenticação no hub. Sem argumentos ou segredos.",
+      inputSchema: z.strictObject({}),
+      annotations: writeLocal,
     },
-    writeLocal,
+    async () =>
+      run("atualizar_credencial_plug", () => {
+        if (!useCases.setupOperations) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "Operação de navegador indisponível.",
+            hint: "Configure o serviço de setup seguro.",
+          });
+        }
+        return useCases.setupOperations.begin("credenciais", currentAccountId());
+      }),
+  );
+
+  server.registerTool(
+    "rotacionar_token_mcp",
+    {
+      description:
+        "Retorna URL de rotação no navegador. O Bearer atual permanece válido até a conclusão confirmada por POST; o novo é mostrado uma única vez. Sem argumentos.",
+      inputSchema: z.strictObject({}),
+      annotations: writeLocal,
+    },
+    async () =>
+      run("rotacionar_token_mcp", () => {
+        if (!useCases.setupOperations) {
+          throw new DomainError({
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: "Operação de navegador indisponível.",
+            hint: "Configure o serviço de setup seguro.",
+          });
+        }
+        return useCases.setupOperations.begin("rotacionar", currentAccountId());
+      }),
+  );
+
+  server.registerTool(
+    "atualizar_dialeto",
+    {
+      description:
+        "Muda o dialeto deste acesso e do grafo da persona. Skills deste acesso deixam de estar publicadas (voltam a rascunho) porque o SQL pode não valer no dialeto novo. Exige confirmadoPeloUsuario: true.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        dialeto: z.enum(["mssql", "sybase", "postgres", "firebird"]).optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
+    },
     async (args) =>
       run("atualizar_dialeto", () => useCases.atualizarDialeto.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "atualizar_persona",
-    ATUALIZAR_PERSONA_TOOL_DESCRIPTION,
     {
-      acessoId: z.string().optional(),
-      nomePersona: z.string().max(NOME_PERSONA_MAX_CHARS).nullable().optional(),
-      instrucoesPersona: z.string().max(INSTRUCOES_PERSONA_MAX_CHARS).nullable().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description: ATUALIZAR_PERSONA_TOOL_DESCRIPTION,
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        nomePersona: z.string().max(NOME_PERSONA_MAX_CHARS).nullable().optional(),
+        instrucoesPersona: z.string().max(INSTRUCOES_PERSONA_MAX_CHARS).nullable().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("atualizar_persona", () => useCases.atualizarPersona.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "treinar_com_sql",
-    TREINAR_COM_SQL_TOOL_DESCRIPTION,
     {
-      acessoId: z.string().optional(),
-      sql: z.string().optional(),
-      params: z.record(z.unknown()).optional(),
-      enriquecer: z.enum(["basico", "completo"]).optional(),
+      description: TREINAR_COM_SQL_TOOL_DESCRIPTION,
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        sql: z.string().optional(),
+        params: z.record(z.string(), z.unknown()).optional(),
+        enriquecer: z.enum(["basico", "completo"]).optional(),
+      }),
+      annotations: writeWorld,
     },
-    writeWorld,
     async (args) =>
       run("treinar_com_sql", () => useCases.treinarComSql.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "explorar_tabelas",
-    EXPLORAR_TABELAS_TOOL_DESCRIPTION,
-    { acessoId: z.string().optional(), filtro: z.string().optional() },
-    readWorld,
+    {
+      description: EXPLORAR_TABELAS_TOOL_DESCRIPTION,
+      inputSchema: z.object({ acessoId: z.string().optional(), filtro: z.string().optional() }),
+      annotations: readWorld,
+    },
     async (args) =>
       run("explorar_tabelas", () => useCases.explorarTabelas.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "mapear_tabela",
-    "Lê colunas de uma tabela no ERP e funde no grafo (origem inferido). Só no treino; não licencia consultar_dados. Infere papel/formato. Vários tipos por coluna viram aviso CATALOGO_TIPOS_AMBIGUOS (SQL Server → atualizar_dialeto para mssql). Não invente coluna.",
-    { acessoId: z.string().optional(), tabela: z.string().optional() },
-    writeWorld,
+    {
+      description:
+        "Lê colunas de uma tabela no ERP e funde no grafo (origem inferido). Só no treino; não licencia consultar_dados. Infere papel/formato. Vários tipos por coluna viram aviso CATALOGO_TIPOS_AMBIGUOS (SQL Server → atualizar_dialeto para mssql). Não invente coluna.",
+      inputSchema: z.object({ acessoId: z.string().optional(), tabela: z.string().optional() }),
+      annotations: writeWorld,
+    },
     async (args) =>
       run("mapear_tabela", () => useCases.mapearTabela.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "buscar_contexto",
-    "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra; negação na descrição — inclusive lista após não autoriza cruzar — não conta). consultaPermitida se cobertura completa ou composta (fatias[] = várias consultar_dados, não um SELECT cruzado). conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; tokens de calendário não baixam cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida: consultaSemanticaSugerida (KPI de agregação, ou listagem só com dimensões/filtros; CAST não entra) e metricasSemOverlay[] se a medida não tem definicao. Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. SKILL_GAP: não registre sinônimo; não cruze sem JOIN publicado; fluxoTreino só com skill em andamento. grafoParaTreino só no fluxo de gap.",
-    { acessoId: z.string().optional(), query: z.string().optional() },
-    readWorld,
+    {
+      description:
+        "Candidatos com cobertura certificada (nome/slug/descrição/params/metricasSaida, não SQL nem corpo de regra; negação na descrição — inclusive lista após não autoriza cruzar — não conta). consultaPermitida se cobertura completa ou composta (fatias[] = várias consultar_dados, não um SELECT cruzado). conhecimentos[] é evidência FTS/ILIKE (não embeddings/RAG); stem une inflexão na cobertura; tokens de calendário não baixam cobertura; não autoriza SQL. Envelope sem sqlModelo nem SQL aprendido — use obter_skill.consultasExemplo pelo id de consultasAprendidas. Se consultaPermitida: consultaSemanticaSugerida (KPI de agregação, ou listagem só com dimensões/filtros; CAST não entra) e metricasSemOverlay[] se a medida não tem definicao. Skill em treino que cobre a pergunta: blockingReason SKILL_NOT_PUBLISHED. Cobertura parcial: registrar_aprendizado tipo=sinonimo se o usuário confirmar o termo. SKILL_GAP: não registre sinônimo; não cruze sem JOIN publicado; fluxoTreino só com skill em andamento. grafoParaTreino só no fluxo de gap.",
+      inputSchema: z.object({ acessoId: z.string().optional(), query: z.string().optional() }),
+      annotations: readWorld,
+    },
     async (args) =>
       run("buscar_contexto", () => useCases.buscarContexto.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "resolver_conflito",
-    "Resolve conflito de fato no grafo com confirmação do usuário.",
     {
-      acessoId: z.string().optional(),
-      tabelaId: z.string().optional(),
-      colunaId: z.string().optional(),
-      relacionamentoId: z.string().optional(),
-      descricao: z.string().optional(),
+      description: "Resolve conflito de fato no grafo com confirmação do usuário.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        tabelaId: z.string().optional(),
+        colunaId: z.string().optional(),
+        relacionamentoId: z.string().optional(),
+        descricao: z.string().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("resolver_conflito", () => useCases.resolverConflito.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_conflitos",
-    "Lista fatos em conflito do grafo deste acesso (kind, ids, nomes, hint) para resolver_conflito. Sem SQL e sem linhas de ERP.",
-    { acessoId: z.string().optional() },
-    readList,
+    {
+      description:
+        "Lista fatos em conflito do grafo deste acesso (kind, ids, nomes, hint) para resolver_conflito. Sem SQL e sem linhas de ERP.",
+      inputSchema: z.object({ acessoId: z.string().optional() }),
+      annotations: readList,
+    },
     async (args) =>
       run("listar_conflitos", () => useCases.listarConflitos.execute(currentAccountId(), args)),
   );
@@ -538,7 +642,7 @@ export const registerTools = (
     "consultar_dados",
     {
       description: CONSULTAR_DADOS_TOOL_DESCRIPTION,
-      inputSchema: {
+      inputSchema: z.object({
         acessoId: z.string().optional(),
         skillId: z.string().optional(),
         skillIds: z.array(z.string()).optional(),
@@ -558,7 +662,7 @@ export const registerTools = (
             }),
           )
           .optional(),
-        params: z.record(z.unknown()).optional(),
+        params: z.record(z.string(), z.unknown()).optional(),
         options: z
           .object({
             max_rows: z.number().int().positive().optional(),
@@ -567,9 +671,10 @@ export const registerTools = (
             timeout_ms: z.number().int().positive().optional(),
           })
           .optional(),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.literal(true),
+        consultaExecucaoId: z.string().uuid().optional(),
         skillId: z.string(),
         skillIds: z.array(z.string()),
         columns: z.array(z.string()),
@@ -596,6 +701,7 @@ export const registerTools = (
         avisos: z.array(z.object({ code: z.string(), message: z.string() })),
         aprendizadoGravado: z
           .object({
+            estado: z.string().optional(),
             consultaId: z.string(),
             execucoes: z.number(),
             nova: z.boolean(),
@@ -613,61 +719,69 @@ export const registerTools = (
             hasPreviousPage: z.boolean(),
           })
           .optional(),
-      },
+      }),
       annotations: readWorld,
     },
     async (args) =>
       run("consultar_dados", () => useCases.consultarDados.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "exportar_anexo",
-    EXPORTAR_ANEXO_TOOL_DESCRIPTION,
     {
-      acessoId: z.string().optional(),
-      handle: z.string(),
-      mimeDestino: z.enum(["image/jpeg", "image/png", "application/pdf"]).optional(),
+      description: EXPORTAR_ANEXO_TOOL_DESCRIPTION,
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        handle: z.string(),
+        mimeDestino: z.enum(["image/jpeg", "image/png", "application/pdf"]).optional(),
+      }),
+      annotations: readWorld,
     },
-    readWorld,
     async (args) =>
       run("exportar_anexo", () => useCases.exportarAnexo.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "criar_skill",
-    "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Pacote mínimo: uma tabela, colunas nomeadas, WHERE ou agregação, params com descricao; JOIN/KPI só se o usuário pedir. Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. Firebird: parseia o sqlModelo (não DIALECT_UNSUPPORTED); FIRST/TOP/LIMIT no modelo → INVALID_SQL. A IA consulta o ERP pela skill publicada, não pelo grafo.",
     {
-      acessoId: z.string().optional(),
-      slug: z.string().optional(),
-      nome: z.string().optional(),
-      descricao: z.string().optional(),
-      sqlModelo: z.string().optional(),
-      params: z.array(paramSkillShape).optional(),
-      consultaSemantica: consultaSemanticaShape.optional(),
-      politicaConsulta: politicaConsultaShape.optional(),
-      metricasSaida: z.array(metricaSaidaShape).optional(),
+      description:
+        "Nomeia um SQL de negócio já treinado (tabelas precisam estar no grafo). Pacote mínimo: uma tabela, colunas nomeadas, WHERE ou agregação, params com descricao; JOIN/KPI só se o usuário pedir. Params com descrição fecham o checklist antes de publicar. metricasSaida overlaya definição/grão/status só de aliases já no pacote. Firebird: parseia o sqlModelo (não DIALECT_UNSUPPORTED); FIRST/TOP/LIMIT no modelo → INVALID_SQL. A IA consulta o ERP pela skill publicada, não pelo grafo.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        slug: z.string().optional(),
+        nome: z.string().optional(),
+        descricao: z.string().optional(),
+        sqlModelo: z.string().optional(),
+        params: z.array(paramSkillShape).optional(),
+        consultaSemantica: consultaSemanticaShape.optional(),
+        politicaConsulta: politicaConsultaShape.optional(),
+        metricasSaida: z.array(metricaSaidaShape).optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) => run("criar_skill", () => useCases.criarSkill.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "atualizar_skill",
-    "Atualiza nome/descrição/SQL/params/KPI. Se o SQL mudar, une o novo sqlModelo ao pacote persistido (não apaga confirmar_coluna / confirmar_relacionamento / expandir_escopo), as tabelas do SQL precisam estar no grafo e o status volta a rascunho. Grafo inferido não entra. Patch só de nome/descrição/params/KPI/slug mantém o status. Renomear slug exige confirmadoPeloUsuario. Firebird: FIRST/TOP/LIMIT no sqlModelo → INVALID_SQL (não DIALECT_UNSUPPORTED).",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      nome: z.string().optional(),
-      descricao: z.string().optional(),
-      slug: z.string().optional(),
-      sqlModelo: z.string().optional(),
-      params: z.array(paramSkillShape).optional(),
-      consultaSemantica: consultaSemanticaShape.optional(),
-      politicaConsulta: politicaConsultaShape.optional(),
-      metricasSaida: z.array(metricaSaidaShape).optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Atualiza nome/descrição/SQL/params/KPI. Se o SQL mudar, une o novo sqlModelo ao pacote persistido (não apaga confirmar_coluna / confirmar_relacionamento / expandir_escopo), as tabelas do SQL precisam estar no grafo e o status volta a rascunho. Grafo inferido não entra. Patch só de nome/descrição/params/KPI/slug mantém o status. Renomear slug exige confirmadoPeloUsuario. Firebird: FIRST/TOP/LIMIT no sqlModelo → INVALID_SQL (não DIALECT_UNSUPPORTED).",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        nome: z.string().optional(),
+        descricao: z.string().optional(),
+        slug: z.string().optional(),
+        sqlModelo: z.string().optional(),
+        params: z.array(paramSkillShape).optional(),
+        consultaSemantica: consultaSemanticaShape.optional(),
+        politicaConsulta: politicaConsultaShape.optional(),
+        metricasSaida: z.array(metricaSaidaShape).optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("atualizar_skill", async () => {
         const result = await useCases.atualizarSkill.execute(currentAccountId(), args);
@@ -680,30 +794,35 @@ export const registerTools = (
       }),
   );
 
-  server.tool(
+  server.registerTool(
     "validar_skill",
-    VALIDAR_SKILL_TOOL_DESCRIPTION,
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      params: z.record(z.unknown()).optional(),
-      enriquecer: z.enum(["basico", "completo"]).optional(),
+      description: VALIDAR_SKILL_TOOL_DESCRIPTION,
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        params: z.record(z.string(), z.unknown()).optional(),
+        enriquecer: z.enum(["basico", "completo"]).optional(),
+      }),
+      annotations: writeWorld,
     },
-    writeWorld,
     async (args) =>
       run("validar_skill", () => useCases.validarSkill.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "publicar_skill",
-    "Libera a skill só com checklist completo. Primeiro chame sem confirmação para receber diffPublicacao e confirmacaoHash; depois envie confirmadoPeloUsuario:true com o mesmo hash. Sem hash, a chamada legada devolve novo preview sem publicar.",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
-      confirmacaoHash: z.string().optional(),
+      description:
+        "Libera a skill só com checklist completo. Primeiro chame sem confirmação para receber diffPublicacao e confirmacaoHash; depois envie confirmadoPeloUsuario:true com o mesmo hash. Sem hash, a chamada legada devolve novo preview sem publicar.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+        confirmacaoHash: z.string().optional(),
+      }),
+      annotations: destroyLocal,
     },
-    destroyLocal,
     async (args) =>
       run("publicar_skill", async () => {
         const result = await useCases.publicarSkill.execute(currentAccountId(), args);
@@ -716,15 +835,18 @@ export const registerTools = (
       }),
   );
 
-  server.tool(
+  server.registerTool(
     "despublicar_skill",
-    "Rebaixa skill publicada para validada sem apagar pacote, params nem consultas aprendidas. Exige confirmadoPeloUsuario: true. Consulta volta a SKILL_NOT_PUBLISHED. Não confundir com remover_skill.",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Rebaixa skill publicada para validada sem apagar pacote, params nem consultas aprendidas. Exige confirmadoPeloUsuario: true. Consulta volta a SKILL_NOT_PUBLISHED. Não confundir com remover_skill.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: destroyLocal,
     },
-    destroyLocal,
     async (args) =>
       run("despublicar_skill", async () => {
         const result = await useCases.despublicarSkill.execute(currentAccountId(), args);
@@ -737,16 +859,19 @@ export const registerTools = (
       }),
   );
 
-  server.tool(
+  server.registerTool(
     "remover_skill",
-    "Apaga a skill (pacote e sqlModelo) deste acesso/persona. Exige confirmadoPeloUsuario: true. O grafo do acesso permanece; consultas aprendidas ficam desvinculadas. Mostre nome/slug/status no chat antes.",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      slug: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Apaga a skill (pacote e sqlModelo) deste acesso/persona. Exige confirmadoPeloUsuario: true. O grafo do acesso permanece; consultas aprendidas ficam desvinculadas. Mostre nome/slug/status no chat antes.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        slug: z.string().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: destroyLocal,
     },
-    destroyLocal,
     async (args) =>
       run("remover_skill", async () => {
         const result = await useCases.removerSkill.execute(currentAccountId(), args);
@@ -759,76 +884,95 @@ export const registerTools = (
       }),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_skills",
-    "Lista skills desta persona (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote. Omita acessoId — o Bearer já amarra o catálogo.",
-    { acessoId: z.string().optional() },
-    readList,
+    {
+      description:
+        "Lista skills desta persona (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote. Omita acessoId — o Bearer já amarra o catálogo.",
+      inputSchema: z.object({ acessoId: z.string().optional() }),
+      annotations: readList,
+    },
     async (args) =>
       run("listar_skills", () => useCases.listarSkills.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "obter_skill",
-    OBTER_SKILL_TOOL_DESCRIPTION,
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      slug: z.string().optional(),
+      description: OBTER_SKILL_TOOL_DESCRIPTION,
+      inputSchema: z.object({
+        revisao: z.enum(["publicada", "rascunho"]).optional(),
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        slug: z.string().optional(),
+      }),
+      annotations: readList,
     },
-    readList,
     async (args) => run("obter_skill", () => useCases.obterSkill.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "expandir_escopo",
-    "Acrescenta tabelas já treinadas ao escopo da skill. Exige confirmadoPeloUsuario: true. Sem JOIN coluna=coluna: nextAction confirmar_coluna (tabela isolada); não invente igualdade. Skill publicada só une JOIN confirmado_usuario/validado_execucao — herdar_catalogo inferido não licencia o validador.",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      tabelas: z.array(z.string()).optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Acrescenta tabelas já treinadas ao escopo da skill. Exige confirmadoPeloUsuario: true. Sem JOIN coluna=coluna: nextAction confirmar_coluna (tabela isolada); não invente igualdade. Skill publicada só une JOIN confirmado_usuario/validado_execucao — herdar_catalogo inferido não licencia o validador.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        tabelas: z.array(z.string()).optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("expandir_escopo", () => useCases.expandirEscopo.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "confirmar_relacionamento",
-    "Confirma um JOIN no grafo (origem confirmado_usuario). pares[] para chave composta; colunaOrigem/colunaDestino continuam válidos (um par). Pergunte cardinalidade e tipo de JOIN (INNER vs LEFT). Passe tipoJoin — omitir preserva o tipo já inferido do SQL/grafo (não grava inner por cima de LEFT). Com skillId, persiste no pacote da skill — só o grafo não libera consulta. Sem skillId o validador publicado não vê o JOIN até ele entrar no pacote.",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      tabelaOrigem: z.string().optional(),
-      colunaOrigem: z.string().optional(),
-      tabelaDestino: z.string().optional(),
-      colunaDestino: z.string().optional(),
-      pares: z.array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() })).optional(),
-      tipoJoin: z.string().optional(),
-      cardinalidade: z.enum(["1:1", "1:N", "N:1", "N:N"]).optional(),
+      description:
+        "Confirma um JOIN no grafo (origem confirmado_usuario). pares[] para chave composta; colunaOrigem/colunaDestino continuam válidos (um par). Pergunte cardinalidade e tipo de JOIN (INNER vs LEFT). Passe tipoJoin — omitir preserva o tipo já inferido do SQL/grafo (não grava inner por cima de LEFT). Com skillId, persiste no pacote da skill — só o grafo não libera consulta. Sem skillId o validador publicado não vê o JOIN até ele entrar no pacote.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        tabelaOrigem: z.string().optional(),
+        colunaOrigem: z.string().optional(),
+        tabelaDestino: z.string().optional(),
+        colunaDestino: z.string().optional(),
+        pares: z
+          .array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() }))
+          .optional(),
+        tipoJoin: z.string().optional(),
+        cardinalidade: z.enum(["1:1", "1:N", "N:1", "N:N"]).optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("confirmar_relacionamento", () =>
         useCases.confirmarRelacionamento.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "remover_relacionamento",
-    "Remove um JOIN (fingerprint dos pares) do grafo e, com skillId, do pacote. Um relacionamento por chamada. Exige confirmadoPeloUsuario: true.",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      tabelaOrigem: z.string().optional(),
-      tabelaDestino: z.string().optional(),
-      pares: z.array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() })).optional(),
-      colunaOrigem: z.string().optional(),
-      colunaDestino: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Remove um JOIN (fingerprint dos pares) do grafo e, com skillId, do pacote. Um relacionamento por chamada. Exige confirmadoPeloUsuario: true.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        tabelaOrigem: z.string().optional(),
+        tabelaDestino: z.string().optional(),
+        pares: z
+          .array(z.object({ colunaOrigem: z.string(), colunaDestino: z.string() }))
+          .optional(),
+        colunaOrigem: z.string().optional(),
+        colunaDestino: z.string().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("remover_relacionamento", () =>
         useCases.removerRelacionamento.execute(currentAccountId(), args),
@@ -839,13 +983,13 @@ export const registerTools = (
     "validar_consulta",
     {
       description: VALIDAR_CONSULTA_TOOL_DESCRIPTION,
-      inputSchema: {
+      inputSchema: z.object({
         acessoId: z.string().optional(),
         skillId: z.string().optional(),
         skillIds: z.array(z.string()).optional(),
         sql: z.string().optional(),
         consultaSemantica: consultaSemanticaShape.optional(),
-        params: z.record(z.unknown()).optional(),
+        params: z.record(z.string(), z.unknown()).optional(),
         options: z
           .object({
             max_rows: z.number().int().positive().optional(),
@@ -854,277 +998,345 @@ export const registerTools = (
             timeout_ms: z.number().int().positive().optional(),
           })
           .optional(),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.literal(true),
         valido: z.literal(true),
         dialeto: z.string(),
         tabelas: z.array(z.string()),
         avisos: z.array(z.object({ code: z.string(), message: z.string() })),
         planoConsulta: planoValidacaoShape,
-      },
+      }),
       annotations: readWorld,
     },
     async (args) =>
       run("validar_consulta", () => useCases.validarConsulta.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "confirmar_coluna",
-    "Confirma significado/dicionário de coluna(s) no grafo (origem confirmado_usuario). colunas[] ou tabela+coluna. Com skillId, entra no pacote. sensibilidade só com confirmadoPeloUsuario: true; aplica a classe mesmo se a origem atual for validado_execucao (perfil não apaga depois).",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      tabela: z.string().optional(),
-      coluna: z.string().optional(),
-      descricao: z.string().optional(),
-      dicionario: z.string().optional(),
-      sensibilidade: z.enum(["livre", "pessoal", "sensivel", "segredo"]).optional(),
-      colunas: z
-        .array(
-          z.object({
-            tabela: z.string(),
-            coluna: z.string(),
-            descricao: z.string().optional(),
-            dicionario: z.string().optional(),
-            sensibilidade: z.enum(["livre", "pessoal", "sensivel", "segredo"]).optional(),
-          }),
-        )
-        .optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Confirma significado/dicionário de coluna(s) no grafo (origem confirmado_usuario). colunas[] ou tabela+coluna. Com skillId, entra no pacote. sensibilidade só com confirmadoPeloUsuario: true; aplica a classe mesmo se a origem atual for validado_execucao (perfil não apaga depois).",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        tabela: z.string().optional(),
+        coluna: z.string().optional(),
+        descricao: z.string().optional(),
+        dicionario: z.string().optional(),
+        sensibilidade: z.enum(["livre", "pessoal", "sensivel", "segredo"]).optional(),
+        colunas: z
+          .array(
+            z.object({
+              tabela: z.string(),
+              coluna: z.string(),
+              descricao: z.string().optional(),
+              dicionario: z.string().optional(),
+              sensibilidade: z.enum(["livre", "pessoal", "sensivel", "segredo"]).optional(),
+            }),
+          )
+          .optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("confirmar_coluna", () => useCases.confirmarColuna.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "anotar_grafo",
-    "Grava nota/glossário no grafo deste acesso. Não invente significado.",
     {
-      acessoId: z.string().optional(),
-      tabela: z.string().optional(),
-      skillId: z.string().optional(),
-      tipo: z.string().optional(),
-      titulo: z.string().optional(),
-      texto: z.string().optional(),
-      governanca: governancaConhecimentoShape,
+      description: "Grava nota/glossário no grafo deste acesso. Não invente significado.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        tabela: z.string().optional(),
+        skillId: z.string().optional(),
+        tipo: z.string().optional(),
+        titulo: z.string().optional(),
+        texto: z.string().optional(),
+        governanca: governancaConhecimentoShape,
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("anotar_grafo", () => useCases.anotarGrafo.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_anotacoes",
-    "Lista histórico de anotações deste acesso; cada item informa ativaAgora e fila de revisão. Use somenteRevisaoPendente para notas a revisar ou perto de vencer, sem alterar a autorização SQL.",
     {
-      acessoId: z.string().optional(),
-      tabelaId: z.string().nullable().optional(),
-      status: z.enum(["vigente", "obsoleta"]).optional(),
-      somenteRevisaoPendente: z.boolean().optional(),
-      janelaRevisaoDias: z.number().int().min(0).max(365).optional(),
+      description:
+        "Lista histórico de anotações deste acesso; cada item informa ativaAgora e fila de revisão. Use somenteRevisaoPendente para notas a revisar ou perto de vencer, sem alterar a autorização SQL.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        tabelaId: z.string().nullable().optional(),
+        status: z.enum(["vigente", "obsoleta"]).optional(),
+        somenteRevisaoPendente: z.boolean().optional(),
+        janelaRevisaoDias: z.number().int().min(0).max(365).optional(),
+      }),
+      annotations: readList,
     },
-    readList,
     async (args) =>
       run("listar_anotacoes", () => useCases.listarAnotacoes.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "atualizar_anotacao",
-    "Atualiza texto ou governança de uma anotação desta persona. Exige confirmadoPeloUsuario: true e recusa segredos.",
     {
-      acessoId: z.string().optional(),
-      anotacaoId: z.string().optional(),
-      tipo: z.string().optional(),
-      titulo: z.string().optional(),
-      texto: z.string().optional(),
-      governanca: governancaConhecimentoShape,
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Atualiza texto ou governança de uma anotação desta persona. Exige confirmadoPeloUsuario: true e recusa segredos.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        anotacaoId: z.string().optional(),
+        tipo: z.string().optional(),
+        titulo: z.string().optional(),
+        texto: z.string().optional(),
+        governanca: governancaConhecimentoShape,
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("atualizar_anotacao", () => useCases.atualizarAnotacao.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "remover_anotacao",
-    "Remove uma anotação do grafo.",
-    { acessoId: z.string().optional(), anotacaoId: z.string().optional() },
-    destroyLocal,
+    {
+      description: "Remove uma anotação do grafo.",
+      inputSchema: z.object({ acessoId: z.string().optional(), anotacaoId: z.string().optional() }),
+      annotations: destroyLocal,
+    },
     async (args) =>
       run("remover_anotacao", () => useCases.removerAnotacao.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "salvar_consulta",
-    "Promove/renomeia um SQL que funcionou a exemplo reutilizável (consulta aprendida). consultar_dados já grava o SQL; use esta tool para amarrar a pergunta do usuário. Exige confirmadoPeloUsuario: true.",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      pergunta: z.string().optional(),
-      sql: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Promove/renomeia um SQL que funcionou a exemplo reutilizável (consulta aprendida). consultar_dados captura somente candidata; esta tool confirma o exemplo parametrizado e o vincula à publicação vigente. Sem hash retorna preview; aprovação humana exige ID, hash vigente e confirmadoPeloUsuario: true. Não conta execução.",
+      inputSchema: z.strictObject({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        skillIds: z.array(z.string()).optional(),
+        consultaAprendidaId: z.string().optional(),
+        confirmacaoHash: z.string().optional(),
+        pergunta: z.string().optional(),
+        sql: z.string().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("salvar_consulta", () => useCases.salvarConsulta.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "registrar_aprendizado",
-    "Obrigatório quando o usuário ensinar regra, métrica, glossário, dicionário ou sinônimo. Grava na base de conhecimento (anotacao_grafo / sinonimo). Também aceito em consultar_dados.aprendizado[].",
     {
-      acessoId: z.string().optional(),
-      skillId: z.string().optional(),
-      tipo: z.string().optional(),
-      titulo: z.string().optional(),
-      texto: z.string().optional(),
-      tabela: z.string().optional(),
-      governanca: governancaConhecimentoShape,
+      description:
+        "Obrigatório quando o usuário ensinar regra, métrica, glossário, dicionário ou sinônimo. Grava na base de conhecimento (anotacao_grafo / sinonimo). Também aceito em consultar_dados.aprendizado[].",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        skillId: z.string().optional(),
+        tipo: z.string().optional(),
+        titulo: z.string().optional(),
+        texto: z.string().optional(),
+        tabela: z.string().optional(),
+        governanca: governancaConhecimentoShape,
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("registrar_aprendizado", () =>
         useCases.registrarAprendizado.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "atualizar_escopo_padrao",
-    "Define empresa/filial default e timezone do acesso. Exige confirmadoPeloUsuario: true. Consultas passam a recortar esse escopo.",
     {
-      acessoId: z.string().optional(),
-      empresa: z.string().optional(),
-      filial: z.string().optional(),
-      timezone: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Define empresa/filial default e timezone do acesso. Exige confirmadoPeloUsuario: true. Consultas passam a recortar esse escopo.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        empresa: z.string().optional(),
+        filial: z.string().optional(),
+        timezone: z.string().optional(),
+        bindings: z
+          .array(
+            z.strictObject({
+              tabela: z.string().min(1),
+              coluna: z.string().min(1),
+              param: z.enum(["empresa", "filial"]),
+            }),
+          )
+          .max(256)
+          .optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("atualizar_escopo_padrao", () =>
         useCases.atualizarEscopoPadrao.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "herdar_catalogo",
-    "Copia o template ilustrativo Se7e (empresa/filial/cliente/produto/receber/pagar, JOINs simples e compostos empresa+filial) para o grafo. Envelope: origem inferido, publicaSkill false — não autoriza consultar_dados. Treino com SQL real continua obrigatório. Exige confirmadoPeloUsuario: true.",
     {
-      acessoId: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Copia o template ilustrativo Se7e (empresa/filial/cliente/produto/receber/pagar, JOINs simples e compostos empresa+filial) para o grafo. Envelope: origem inferido, publicaSkill false — não autoriza consultar_dados. Treino com SQL real continua obrigatório. Exige confirmadoPeloUsuario: true.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("herdar_catalogo", () => useCases.herdarCatalogo.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_auditoria",
-    "Lista as últimas execuções de tools desta persona (sem SQL completo nem segredos). Omita acessoId — o Bearer já recorta. buscar_contexto inclui telemetria (counts/enums, sem a pergunta).",
-    { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
-    readList,
+    {
+      description:
+        "Lista as últimas execuções de tools desta persona (sem SQL completo nem segredos). Omita acessoId — o Bearer já recorta. buscar_contexto inclui telemetria (counts/enums, sem a pergunta).",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        limite: z.number().int().positive().optional(),
+      }),
+      annotations: readList,
+    },
     async (args) =>
       run("listar_auditoria", () => useCases.listarAuditoria.execute(currentAccountId(), args)),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_metricas_agente",
-    "Painel operacional da auditoria: duração p50/p95, cache, truncamentos, distribuição por skill/origem/erro e tendência anônima. Campo busca: totais de buscar_contexto. Sem SQL, params ou linhas de ERP. Omita acessoId — o Bearer já recorta.",
-    { acessoId: z.string().optional(), limite: z.number().int().positive().optional() },
-    readList,
+    {
+      description:
+        "Painel operacional da auditoria: duração p50/p95, cache, truncamentos, distribuição por skill/origem/erro e tendência anônima. Campo busca: totais de buscar_contexto. Sem SQL, params ou linhas de ERP. Omita acessoId — o Bearer já recorta.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        limite: z.number().int().positive().optional(),
+      }),
+      annotations: readList,
+    },
     async (args) =>
       run("listar_metricas_agente", () =>
         useCases.listarMetricasAgente.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_alertas_operacionais",
-    "Lista alertas operacionais desta persona (SLO e revisão), apenas com IDs, datas e métricas agregadas. Não contém SQL, perguntas, parâmetros ou resultados.",
     {
-      acessoId: z.string().optional(),
-      limite: z.number().int().min(1).max(200).optional(),
-      status: z.enum(["aberto", "reconhecido", "resolvido"]).optional(),
+      description:
+        "Lista alertas operacionais desta persona (SLO e revisão), apenas com IDs, datas e métricas agregadas. Não contém SQL, perguntas, parâmetros ou resultados.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        limite: z.number().int().min(1).max(200).optional(),
+        status: z.enum(["aberto", "reconhecido", "resolvido"]).optional(),
+      }),
+      annotations: readList,
     },
-    readList,
     async (args) =>
       run("listar_alertas_operacionais", () =>
         useCases.listarAlertasOperacionais.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "reconhecer_alerta_operacional",
-    "Marca um alerta aberto desta persona como reconhecido. Reconhecimento não altera skill, vigência ou autorização SQL.",
-    { acessoId: z.string().optional(), alertaId: z.string().optional() },
-    writeLocal,
+    {
+      description:
+        "Marca um alerta aberto desta persona como reconhecido. Reconhecimento não altera skill, vigência ou autorização SQL.",
+      inputSchema: z.object({ acessoId: z.string().optional(), alertaId: z.string().optional() }),
+      annotations: writeLocal,
+    },
     async (args) =>
       run("reconhecer_alerta_operacional", () =>
         useCases.reconhecerAlertaOperacional.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "configurar_webhook_operacional",
-    "Configura ou desativa o webhook opcional de alertas desta persona. Aceita apenas HTTPS público sem query/credenciais; o segredo é cifrado e nunca retornado. Exige confirmadoPeloUsuario: true.",
     {
-      acessoId: z.string().optional(),
-      url: z.string().url().optional(),
-      segredo: z.string().min(16).max(256).optional(),
-      ativo: z.boolean().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Configura ou desativa o webhook opcional de alertas desta persona. Aceita apenas HTTPS público sem query/credenciais; o segredo é cifrado e nunca retornado. Exige confirmadoPeloUsuario: true.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        url: z.string().url().optional(),
+        segredo: z.string().min(16).max(256).optional(),
+        ativo: z.boolean().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeWorld,
     },
-    writeWorld,
     async (args) =>
       run("configurar_webhook_operacional", () =>
         useCases.configurarWebhookOperacional.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "rearmar_webhook_operacional",
-    "Rearma uma entrega de webhook em dead-letter desta persona. Exige confirmadoPeloUsuario: true; não revela URL, segredo ou corpo enviado.",
     {
-      acessoId: z.string().optional(),
-      eventoId: z.string().optional(),
-      confirmadoPeloUsuario: z.boolean().optional(),
+      description:
+        "Rearma uma entrega de webhook em dead-letter desta persona. Exige confirmadoPeloUsuario: true; não revela URL, segredo ou corpo enviado.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        eventoId: z.string().optional(),
+        confirmadoPeloUsuario: z.boolean().optional(),
+      }),
+      annotations: writeWorld,
     },
-    writeWorld,
     async (args) =>
       run("rearmar_webhook_operacional", () =>
         useCases.rearmarWebhookOperacional.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "registrar_lacuna_ferramenta",
-    "Registra contrato da tool que falta (objetivo, entradas, saídas, permissão, teto, aceite) sem inventar SQL.",
     {
-      acessoId: z.string().optional(),
-      objetivo: z.string().optional(),
-      entradas: z.string().optional(),
-      saidas: z.string().optional(),
-      permissao: z.string().optional(),
-      teto: z.string().optional(),
-      aceite: z.string().optional(),
+      description:
+        "Registra contrato da tool que falta (objetivo, entradas, saídas, permissão, teto, aceite) sem inventar SQL.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        objetivo: z.string().optional(),
+        entradas: z.string().optional(),
+        saidas: z.string().optional(),
+        permissao: z.string().optional(),
+        teto: z.string().optional(),
+        aceite: z.string().optional(),
+      }),
+      annotations: writeLocal,
     },
-    writeLocal,
     async (args) =>
       run("registrar_lacuna_ferramenta", () =>
         useCases.registrarLacunaFerramenta.execute(currentAccountId(), args),
       ),
   );
 
-  server.tool(
+  server.registerTool(
     "listar_lacunas",
-    "Lista lacunas abertas de skill (SKILL_GAP) e de ferramenta deste acesso. status=arquivada lista o que o treino já cobriu. SKILL_GAP da busca não grava lacuna se já houver skill publicada.",
     {
-      acessoId: z.string().optional(),
-      limite: z.number().int().positive().optional(),
-      status: z.enum(["aberta", "arquivada"]).optional(),
+      description:
+        "Lista lacunas abertas de skill (SKILL_GAP) e de ferramenta deste acesso. status=arquivada lista o que o treino já cobriu. SKILL_GAP da busca não grava lacuna se já houver skill publicada.",
+      inputSchema: z.object({
+        acessoId: z.string().optional(),
+        limite: z.number().int().positive().optional(),
+        status: z.enum(["aberta", "arquivada"]).optional(),
+      }),
+      annotations: readList,
     },
-    readList,
     async (args) =>
       run("listar_lacunas", () => useCases.listarLacunas.execute(currentAccountId(), args)),
   );
@@ -1140,25 +1352,28 @@ export const registerTools = (
   };
 
   if (config.MCP_INSPECTION_ENABLED) {
-    server.tool(
+    server.registerTool(
       "inspecionar_consulta",
-      "Amostra estrutural (máx. 100 linhas) de skill validada, rascunho_revalidacao ou publicada. SELECT * cru de uma tabela do allowlist do agente (sem WHERE; servidor injeta TOP/LIMIT). Sem máscara. Colunas novas vão ao grafo como inferido — confirmar_coluna para consultar_dados. JOIN inventado recusado. Firebird: só consulta exemplo. Sem cache, paginação gerenciada ou consulta_aprendida.",
       {
-        acessoId: z.string().optional(),
-        skillId: z.string().optional(),
-        skillIds: z.array(z.string()).optional(),
-        sql: z.string().optional(),
-        tabela: z.string().optional(),
-        finalidade: z.enum([
-          "validar_tipo",
-          "avaliar_nulos",
-          "verificar_join",
-          "amostra_estrutura",
-        ]),
-        params: z.record(z.unknown()).optional(),
-        options: z.object({ timeout_ms: z.number().int().positive().optional() }).optional(),
+        description:
+          "Amostra estrutural (máx. 100 linhas) de skill validada, rascunho_revalidacao ou publicada. SELECT * expandido para projeção segura de uma tabela do allowlist do agente (sem WHERE; servidor injeta TOP/LIMIT). Colunas pessoais, secretas e inferidas são omitidas. Colunas novas vão ao grafo como inferido — confirmar_coluna para consultar_dados. JOIN inventado recusado. Firebird: só consulta exemplo. Sem cache, paginação gerenciada ou consulta_aprendida.",
+        inputSchema: z.object({
+          acessoId: z.string().optional(),
+          skillId: z.string().optional(),
+          skillIds: z.array(z.string()).optional(),
+          sql: z.string().optional(),
+          tabela: z.string().optional(),
+          finalidade: z.enum([
+            "validar_tipo",
+            "avaliar_nulos",
+            "verificar_join",
+            "amostra_estrutura",
+          ]),
+          params: z.record(z.string(), z.unknown()).optional(),
+          options: z.object({ timeout_ms: z.number().int().positive().optional() }).optional(),
+        }),
+        annotations: readWorld,
       },
-      readWorld,
       async (args) =>
         run("inspecionar_consulta", () => {
           requireFlag(config.MCP_INSPECTION_ENABLED, "inspecionar_consulta");
@@ -1168,11 +1383,14 @@ export const registerTools = (
   }
 
   if (config.MCP_DISCOVERY_QUERY_ENABLED) {
-    server.tool(
+    server.registerTool(
       "descobrir_tabela",
-      "Estrutura (colunas físicas, tipos, chaves, sensibilidade, relacionamentos) só do pacote publicado da tabela (fingerprints como obter_skill). Sem vizinhança extra do grafo, linhas, contagens, DDL, valores nem título de anotação como coluna.",
-      { acessoId: z.string().optional(), tabela: z.string().optional() },
-      readList,
+      {
+        description:
+          "Estrutura (colunas físicas, tipos, chaves, sensibilidade, relacionamentos) só do pacote publicado da tabela (fingerprints como obter_skill). Sem vizinhança extra do grafo, linhas, contagens, DDL, valores nem título de anotação como coluna.",
+        inputSchema: z.object({ acessoId: z.string().optional(), tabela: z.string().optional() }),
+        annotations: readList,
+      },
       async (args) =>
         run("descobrir_tabela", () => {
           requireFlag(config.MCP_DISCOVERY_QUERY_ENABLED, "descobrir_tabela");
@@ -1182,11 +1400,14 @@ export const registerTools = (
   }
 
   if (config.MCP_SCHEMA_DRIFT_ENABLED) {
-    server.tool(
+    server.registerTool(
       "detectar_deriva_esquema",
-      "Compara a assinatura mapeada da tabela com a última versão. Lista skills afetadas, invalida cache e move só essas skills para revalidação. Não repara schema automaticamente.",
-      { acessoId: z.string().optional(), tabela: z.string().optional() },
-      writeLocal,
+      {
+        description:
+          "Compara a assinatura mapeada da tabela com a última versão. Lista skills afetadas, invalida cache e move só essas skills para revalidação. Não repara schema automaticamente.",
+        inputSchema: z.object({ acessoId: z.string().optional(), tabela: z.string().optional() }),
+        annotations: writeLocal,
+      },
       async (args) =>
         run("detectar_deriva_esquema", () => {
           requireFlag(config.MCP_SCHEMA_DRIFT_ENABLED, "detectar_deriva_esquema");
@@ -1195,11 +1416,14 @@ export const registerTools = (
     );
   }
 
-  server.tool(
+  server.registerTool(
     "cancelar_operacao",
-    "Cancela perfilamento/descoberta longa pelo operacaoId. Estado parcial não inclui dados sensíveis.",
-    { operacaoId: z.string().optional() },
-    writeLocal,
+    {
+      description:
+        "Cancela perfilamento/descoberta longa pelo operacaoId. Estado parcial não inclui dados sensíveis.",
+      inputSchema: z.object({ operacaoId: z.string().optional() }),
+      annotations: writeLocal,
+    },
     async (args) =>
       run("cancelar_operacao", () => useCases.cancelarOperacao.execute(currentAccountId(), args)),
   );

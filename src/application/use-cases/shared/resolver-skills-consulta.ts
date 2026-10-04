@@ -6,7 +6,6 @@ import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { SkillRepositoryPort } from "../../../domain/ports/skill-repository.port.js";
 import { escopoFromSqlModelo } from "./escopo-from-modelo.js";
-import { persistirEscopoSeVazio } from "./persistir-escopo.js";
 import { parseSqlModelo } from "./sql-modelo.js";
 import { tryParseSelect } from "./sql-ast.js";
 import { hintComProximos } from "./sugestoes.js";
@@ -33,13 +32,7 @@ export const resolverSkillsConsulta = async (
   ids: readonly string[],
 ): Promise<Skill[]> => {
   if (ids.length === 0) {
-    const conhecidas = await skills.listByAcesso(acessoId);
-    const publicadas: Skill[] = [];
-    for (const item of conhecidas) {
-      if (item.status === "publicada") {
-        publicadas.push(await persistirEscopoSeVazio(skills, item));
-      }
-    }
+    const publicadas = [...(await skills.listPublicadas(acessoId))];
     if (publicadas.length === 0) {
       throw new DomainError({
         code: ERROR_CODES.SKILL_GAP,
@@ -51,8 +44,9 @@ export const resolverSkillsConsulta = async (
   }
   const out: Skill[] = [];
   for (const id of ids) {
-    const found = await skills.findById(id);
-    if (found?.acessoId !== acessoId) {
+    const draft = await skills.findById(id);
+    const found = await skills.findPublicadaById(id);
+    if (draft?.acessoId !== acessoId) {
       const conhecidas = await skills.listByAcesso(acessoId);
       throw new DomainError({
         code: ERROR_CODES.SKILL_NOT_FOUND,
@@ -64,17 +58,17 @@ export const resolverSkillsConsulta = async (
         ),
       });
     }
-    if (found.status !== "publicada") {
+    if (!found) {
       throw new DomainError({
         code: ERROR_CODES.SKILL_NOT_PUBLISHED,
         message: "Só skill publicada pode consultar o ERP.",
         hint:
-          found.status === "validada"
+          draft.status === "validada"
             ? "Chame publicar_skill antes de consultar_dados."
             : "Valide e publique a skill (validar_skill → publicar_skill).",
       });
     }
-    out.push(await persistirEscopoSeVazio(skills, found));
+    out.push(found);
   }
   return out;
 };

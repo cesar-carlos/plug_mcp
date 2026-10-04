@@ -1,3 +1,15 @@
+import { Treinamento } from "../application/use-cases/treinamento.js";
+import {
+  DrizzleTreinamentoRepository,
+  MemoryTreinamentoRepository,
+} from "../infrastructure/persistence/treinamento.js";
+import type { TreinamentoRepositoryPort } from "../domain/ports/treinamento-repository.port.js";
+import { SetupOperations } from "../application/use-cases/setup-operation.js";
+import {
+  MemorySetupOperations,
+  DrizzleSetupOperations,
+} from "../infrastructure/persistence/setup-operation.js";
+import type { SetupOperationRepositoryPort } from "../domain/ports/setup-operation.port.js";
 import type { AppConfig } from "../config/env.js";
 import {
   AdicionarAcesso,
@@ -82,7 +94,6 @@ import {
   DrizzleAnotacaoGrafoRepository,
   DrizzleAuditLog,
   DrizzleGrafoRepository,
-  DrizzleMcpSetupRepository,
   DrizzleSkillRepository,
   DrizzleUsuarioRepository,
 } from "../infrastructure/persistence/drizzle/drizzle-cofre.js";
@@ -92,7 +103,6 @@ import {
   InMemoryAnotacaoGrafoRepository,
   InMemoryAuditLog,
   InMemoryGrafoRepository,
-  InMemoryMcpSetupRepository,
   InMemorySkillRepository,
   InMemoryUsuarioRepository,
 } from "../infrastructure/persistence/memory/memory-cofre.js";
@@ -126,6 +136,7 @@ export interface Composition {
   logger: LoggerPort;
   useCases: ToolUseCases;
   operationsWorker?: OperacoesWorker;
+  purgeExpiredCandidates: () => Promise<number>;
   close: () => Promise<void>;
 }
 
@@ -143,7 +154,12 @@ export const compose = async (
       ? createPino(config.LOG_LEVEL, config.NODE_ENV !== "production")
       : undefined;
   const logger = overrides.logger ?? new PinoLoggerAdapter(pino!);
-  const crypto = new NodeCryptoAdapter(config.MCP_ENCRYPTION_KEY);
+  const crypto = new NodeCryptoAdapter(
+    config.MCP_ENCRYPTION_KEY,
+    config.MCP_ENCRYPTION_KEY_ID,
+    config.MCP_ENCRYPTION_PREVIOUS_KEYS,
+    config.MCP_ENCRYPTION_LEGACY_KEY,
+  );
   const setup = new SetupCodeStore();
   const disposers: (() => Promise<void> | void)[] = [];
 
@@ -154,7 +170,8 @@ export const compose = async (
   let anotacoes: InMemoryAnotacaoGrafoRepository | DrizzleAnotacaoGrafoRepository;
   let audit: InMemoryAuditLog | DrizzleAuditLog;
   let aprendizado: InMemoryAprendizadoRepository | DrizzleAprendizadoRepository;
-  let setupPersistent: InMemoryMcpSetupRepository | DrizzleMcpSetupRepository;
+  let setupOperationsStore: SetupOperationRepositoryPort;
+  let treinamentoRepo: TreinamentoRepositoryPort;
   let publicacoes: SkillPublicacaoRepositoryPort;
   let operacoes: OperacoesRepositoryPort;
   let readinessCheck: (() => Promise<boolean>) | undefined;
@@ -167,11 +184,12 @@ export const compose = async (
     acessos = new DrizzleAcessoRepository(db);
     grafo = new DrizzleGrafoRepository(db);
     skills = new DrizzleSkillRepository(db);
+    treinamentoRepo = new DrizzleTreinamentoRepository(db);
     publicacoes = new DrizzleSkillPublicacaoRepository(db);
     anotacoes = new DrizzleAnotacaoGrafoRepository(db);
     audit = new DrizzleAuditLog(db);
     aprendizado = new DrizzleAprendizadoRepository(db);
-    setupPersistent = new DrizzleMcpSetupRepository(db);
+    setupOperationsStore = new DrizzleSetupOperations(db);
     operacoes = new DrizzleOperacoesRepository(db);
     disposers.push(async () => {
       await pool.end();
@@ -181,11 +199,12 @@ export const compose = async (
     acessos = new InMemoryAcessoRepository();
     grafo = new InMemoryGrafoRepository();
     skills = new InMemorySkillRepository();
+    treinamentoRepo = new MemoryTreinamentoRepository();
     publicacoes = new InMemorySkillPublicacaoRepository(skills);
     anotacoes = new InMemoryAnotacaoGrafoRepository();
     audit = new InMemoryAuditLog();
     aprendizado = new InMemoryAprendizadoRepository();
-    setupPersistent = new InMemoryMcpSetupRepository();
+    setupOperationsStore = new MemorySetupOperations();
     operacoes = new InMemoryOperacoesRepository();
   }
 
@@ -235,7 +254,10 @@ export const compose = async (
   }
   const plug = overrides.plug ? plugInner : new CachedPlugGateway(plugInner, { kv: policyKv });
   const sessions = new UsuarioTokenManager(usuarios, crypto, plug, logger);
-  const anexoHandles = new MemoryAnexoHandleStore(config.MCP_ENCRYPTION_KEY);
+  const anexoHandles = new MemoryAnexoHandleStore(config.MCP_ENCRYPTION_KEY, undefined, undefined, {
+    acessoBytes: config.ANEXO_MAX_BYTES_PER_ACCESS,
+    processoBytes: config.ANEXO_MAX_BYTES_PROCESS,
+  });
   const anexoConverter = new SharpPdfkitAnexoConverter();
   const destinosWebhook = new PublicHttpsWebhookDestination();
   const monitorOperacoes = new MonitorOperacoes(acessos, audit, anotacoes, operacoes, {
@@ -260,6 +282,7 @@ export const compose = async (
   );
 
   const useCases: ToolUseCases = {
+    treinamento: new Treinamento(acessos, skills, grafo, aprendizado, treinamentoRepo, audit),
     registrarAcesso: new RegistrarAcesso(
       usuarios,
       acessos,
@@ -270,7 +293,6 @@ export const compose = async (
       config.MCP_TOKEN_TTL_DAYS,
       sessions,
       logger,
-      setupPersistent,
     ),
     adicionarAcesso: new AdicionarAcesso(
       acessos,
@@ -281,7 +303,6 @@ export const compose = async (
       config.PUBLIC_BASE_URL,
       config.MCP_TOKEN_TTL_DAYS,
       logger,
-      setupPersistent,
     ),
     listarAcessos: new ListarAcessos(acessos),
     verificarAcesso: new VerificarAcesso(acessos, plug, sessions, crypto, logger),
@@ -298,7 +319,6 @@ export const compose = async (
       setup,
       config.PUBLIC_BASE_URL,
       config.MCP_TOKEN_TTL_DAYS,
-      setupPersistent,
     ),
     atualizarDialeto: new AtualizarDialeto(acessos, grafo, skills),
     atualizarPersona: new AtualizarPersona(acessos),
@@ -357,7 +377,15 @@ export const compose = async (
     criarSkill: new CriarSkill(acessos, skills, grafo),
     atualizarSkill: new AtualizarSkill(acessos, skills, grafo),
     validarSkill: new ValidarSkill(acessos, skills, plug, sessions, crypto, grafo),
-    publicarSkill: new PublicarSkill(acessos, skills, grafo, publicacoes, crypto),
+    publicarSkill: new PublicarSkill(
+      acessos,
+      skills,
+      grafo,
+      publicacoes,
+      crypto,
+      anotacoes,
+      treinamentoRepo,
+    ),
     despublicarSkill: new DespublicarSkill(acessos, skills, grafo),
     removerSkill: new RemoverSkill(acessos, skills, aprendizado),
     listarSkills: new ListarSkills(acessos, skills, grafo),
@@ -379,7 +407,7 @@ export const compose = async (
     listarAnotacoes: new ListarAnotacoes(acessos, anotacoes),
     atualizarAnotacao: new AtualizarAnotacao(acessos, anotacoes),
     removerAnotacao: new RemoverAnotacao(acessos, anotacoes),
-    salvarConsulta: new SalvarConsulta(acessos, skills, aprendizado),
+    salvarConsulta: new SalvarConsulta(acessos, skills, aprendizado, grafo),
     registrarAprendizado: new RegistrarAprendizado(acessos, grafo, anotacoes, aprendizado, skills),
     atualizarEscopoPadrao: new AtualizarEscopoPadrao(acessos),
     herdarCatalogo: new HerdarCatalogo(acessos, grafo),
@@ -416,6 +444,7 @@ export const compose = async (
       crypto,
       audit,
       logger,
+      grafo,
     ),
     descobrirTabela: new DescobrirTabela(acessos, skills, grafo, plug, sessions, crypto),
     detectarDerivaEsquema: new DetectarDerivaEsquema(
@@ -436,6 +465,47 @@ export const compose = async (
     };
   }
 
+  useCases.setupOperations = new SetupOperations(
+    setupOperationsStore,
+    crypto,
+    acessos,
+    usuarios,
+    plug,
+    sessions,
+    config.PUBLIC_BASE_URL,
+    async (purpose, uid, form) => {
+      if (purpose === "credenciais") {
+        await useCases.atualizarCredencialPlug.execute(uid, form);
+        return {};
+      }
+      const result: { setupCode?: string; acessoId?: string; acesso?: { id: string } } =
+        purpose === "registrar"
+          ? await useCases.registrarAcesso.execute({
+              ...form,
+              recuperarAcesso: form.recuperar === "sim",
+            })
+          : purpose === "adicionar"
+            ? await useCases.adicionarAcesso.execute(uid, form)
+            : await useCases.rotacionarTokenMcp.execute(uid, form.expectedBearerHash);
+      const token = result.setupCode ? setup.consume(result.setupCode) : null;
+      if (!token) {
+        throw new Error("Browser delivery unavailable");
+      }
+      return { token, acessoId: result.acessoId ?? result.acesso?.id };
+    },
+    async (acessoId) => {
+      anexoHandles.invalidateAcesso(acessoId);
+      try {
+        await queryCache.deleteByPrefix(`mcp:query:acesso:${acessoId}:`);
+      } catch {
+        logger.warn(
+          "Cache indisponível durante invalidação; autorização permanece revalidada a cada entrega",
+          { acessoId },
+        );
+      }
+    },
+  );
+
   const { app, dispose } = createExpressApp({
     config,
     logger,
@@ -444,7 +514,6 @@ export const compose = async (
     skills,
     crypto,
     setup,
-    setupPersistent,
     pino,
     mcpRateLimitStore,
     readinessCheck,
@@ -456,6 +525,8 @@ export const compose = async (
     logger,
     useCases,
     operationsWorker,
+    purgeExpiredCandidates: () =>
+      aprendizado.purgeCandidatasAntesDe(new Date(Date.now() - 90 * 86400_000)),
     close: async () => {
       for (const disposer of [...disposers].reverse()) {
         await disposer();

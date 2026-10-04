@@ -1,10 +1,12 @@
+import { registerAccessViaBrowser } from "../helpers/secure-setup.js";
+import type { ToolUseCases } from "../../src/infrastructure/mcp/register-tools.js";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { testConfig } from "../../src/config/env.js";
 import { compose } from "../../src/composition/compose.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
-import { mcpRpc, parseMcpPayload, readToolResult } from "../helpers/mcp-rpc.js";
+import { mcpRpc, parseMcpPayload } from "../helpers/mcp-rpc.js";
 import { PRE_TREINO_SESSAO } from "../../src/infrastructure/mcp/server-instructions.js";
 import { withBound } from "../helpers/session-bound.js";
 
@@ -39,44 +41,16 @@ const registrarEObterToken = async (
   app: Awaited<ReturnType<typeof compose>>["app"],
   plug: FakePlugServer,
   agentId: string,
+  useCases: ToolUseCases,
 ): Promise<{ token: string; usuarioId: string; acessoId: string }> => {
   plug.approve(agentId);
-  const boot = await initialize(app);
-  const registrar = await request(app)
-    .post("/mcp")
-    .set("Accept", "application/json, text/event-stream")
-    .set("Content-Type", "application/json")
-    .set("mcp-session-id", boot.sessionId ?? "")
-    .send({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
-        name: "registrar_acesso",
-        arguments: {
-          email: `client-${agentId.slice(0, 8)}@example.com`,
-          senha: "secret-pass",
-          agentId,
-          dialeto: "sybase",
-          clientToken: `tok-sql-${agentId}`,
-        },
-      },
-    });
-  const registered = readToolResult(parseMcpPayload(registrar));
-  if (!registered.ok) {
-    throw new Error("registrar_acesso falhou");
-  }
-  const setupCode = registered.json.setupCode as string;
-  const setup = await request(app).get(`/setup/${setupCode}`);
-  const token = /<pre>([^<]+)<\/pre>/.exec(setup.text)?.[1];
-  if (!token) {
-    throw new Error("token MCP ausente no setup");
-  }
-  return {
-    token,
-    usuarioId: registered.json.usuarioId as string,
-    acessoId: registered.json.acessoId as string,
-  };
+  return registerAccessViaBrowser(app, useCases, {
+    email: `client-${agentId.slice(0, 8)}@example.com`,
+    senha: "secret-pass",
+    agentId,
+    dialeto: "sybase",
+    clientToken: `tok-sql-${agentId}`,
+  });
 };
 
 const promptTextOf = (payload: Record<string, unknown>): string => {
@@ -116,7 +90,12 @@ describe("persona no initialize autenticado", () => {
     const plug = new FakePlugServer();
     const { app, close, useCases } = await compose(testConfig(), { plug });
     try {
-      const { token, usuarioId, acessoId } = await registrarEObterToken(app, plug, agentId);
+      const { token, usuarioId, acessoId } = await registrarEObterToken(
+        app,
+        plug,
+        agentId,
+        useCases,
+      );
       await useCases.atualizarPersona.execute(usuarioId, {
         acessoId,
         nomePersona: "Atendimento financeiro",
@@ -125,7 +104,7 @@ describe("persona no initialize autenticado", () => {
       });
 
       const authed = await initialize(app, token);
-      expect(authed.instructions.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+      expect(authed.instructions.includes(PRE_TREINO_SESSAO)).toBe(true);
       expect(authed.instructions).toContain("Atendimento financeiro");
       expect(authed.instructions).toContain("Tom formal. Nunca invente JOIN.");
       expect(authed.instructions).toMatch(/instru[cç][oõ]es do usu[aá]rio/i);
@@ -146,7 +125,7 @@ describe("persona no initialize autenticado", () => {
         authed.sessionId,
       );
       const promptText = promptTextOf(promptGet.payload);
-      expect(promptText.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+      expect(promptText.includes(PRE_TREINO_SESSAO)).toBe(true);
       expect(promptText).toContain("Atendimento financeiro");
 
       plug.approve(agentId2);
@@ -170,7 +149,7 @@ describe("persona no initialize autenticado", () => {
         authed.sessionId,
       );
       const preTreinoN = promptTextOf(promptAposSegundo.payload);
-      expect(preTreinoN.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+      expect(preTreinoN.includes(PRE_TREINO_SESSAO)).toBe(true);
       expect(preTreinoN).toContain("Atendimento financeiro");
       expect(preTreinoN).toContain("Tom formal. Nunca invente JOIN.");
       expect(preTreinoN).not.toContain("Há vários acessos neste token");
@@ -178,7 +157,7 @@ describe("persona no initialize autenticado", () => {
       expect(preTreinoN).not.toContain("Chapéu que não deve aparecer concatenado.");
 
       const multi = await initialize(app, token);
-      expect(multi.instructions.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+      expect(multi.instructions.includes(PRE_TREINO_SESSAO)).toBe(true);
       expect(multi.instructions).toContain("Atendimento financeiro");
       expect(multi.instructions).toMatch(/n[aã]o concatenar chap[eé]us/i);
       expect(multi.instructions).not.toContain("Há vários acessos neste token");
@@ -193,7 +172,12 @@ describe("persona no initialize autenticado", () => {
     const plug = new FakePlugServer();
     const { app, close, useCases } = await compose(testConfig(), { plug });
     try {
-      const { token, usuarioId, acessoId } = await registrarEObterToken(app, plug, agentId);
+      const { token, usuarioId, acessoId } = await registrarEObterToken(
+        app,
+        plug,
+        agentId,
+        useCases,
+      );
       await useCases.atualizarPersona.execute(usuarioId, {
         acessoId,
         nomePersona: "Atendimento financeiro",
@@ -234,7 +218,7 @@ describe("persona no initialize autenticado", () => {
       });
       expect(JSON.stringify(body)).not.toMatch(/tok-sql|secret-pass|clientToken/);
 
-      const other = await registrarEObterToken(app, plug, randomUUID());
+      const other = await registrarEObterToken(app, plug, randomUUID(), useCases);
       const otherInit = await initialize(app, other.token);
       const idor = await mcpRpc(
         app,

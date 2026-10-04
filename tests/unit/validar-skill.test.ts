@@ -151,7 +151,8 @@ describe("ValidarSkill", () => {
       acessoId: created.acessoId,
       skillId: skill.skill.id,
     });
-    expect(revalidada.skill.status).toBe("publicada");
+    expect(revalidada.skill.status).toBe("validada");
+    expect((await skills.findPublicadaById(skill.skill.id))?.status).toBe("publicada");
     expect(revalidada.statusPreservado).toBe(true);
   });
 

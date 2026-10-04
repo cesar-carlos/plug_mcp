@@ -1,8 +1,18 @@
+import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
+import {
+  inferirSensibilidadeColuna,
+  parseSensibilidadeColuna,
+} from "../../domain/entities/privacidade.js";
+import { createHash } from "node:crypto";
+import { identidadeConsulta } from "../../domain/entities/consulta-fingerprint.js";
+import { uniaoEscopos } from "../../domain/entities/escopo.js";
+import { resolverSkillsConsulta } from "./shared/resolver-skills-consulta.js";
+import { capturaSqlSegura, textoSeguro } from "./shared/curadoria-segura.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import { pareceSegredoEmTexto } from "../../domain/entities/parece-segredo.js";
 import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
-import type { AnotacaoGrafo, Skill } from "../../domain/entities/skill.js";
+import type { AnotacaoGrafo } from "../../domain/entities/skill.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AprendizadoRepositoryPort } from "../../domain/ports/aprendizado-repository.port.js";
 import type { AuditLogPort } from "../../domain/ports/audit-log.port.js";
@@ -13,8 +23,6 @@ import type {
   SkillRepositoryPort,
 } from "../../domain/ports/skill-repository.port.js";
 import { requireAcesso, requireUsuario } from "./shared/guards.js";
-import { parseSqlModelo } from "./shared/sql-modelo.js";
-import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { validarSqlNoEscopo } from "./shared/validar-escopo.js";
 import { catalogoSe7eParaDialeto } from "./shared/catalogo-se7e.js";
 import {
@@ -22,75 +30,190 @@ import {
   parseTagsTelemetriaBusca,
   type TelemetriaBusca,
 } from "./shared/telemetria-busca.js";
-import { parseEscopoPadrao } from "../../domain/entities/escopo.js";
+import { parseEscopoPadrao, type BindingEscopoPadrao } from "../../domain/entities/escopo.js";
 import { persistirItensAprendizado, TIPOS_APRENDIZADO } from "./shared/persistir-aprendizado.js";
 import type { GovernancaConhecimentoInput } from "./skills.js";
+import { assertFanoutSeguro } from "./shared/assert-fanout.js";
+import { exigirFiltroEscopoPadrao } from "./shared/escopo-filtro.js";
 
 export class SalvarConsulta {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
     private readonly skills: SkillRepositoryPort,
     private readonly aprendizado: AprendizadoRepositoryPort,
+    private readonly grafo?: GrafoRepositoryPort,
   ) {}
-
   async execute(
+    usuarioId: string | undefined,
+    input: Parameters<SalvarConsulta["executeUnlocked"]>[1],
+  ): ReturnType<SalvarConsulta["executeUnlocked"]> {
+    const uid = requireUsuario(usuarioId),
+      access = await requireAcesso(this.acessos, input.acessoId, uid, {
+        skills: this.skills,
+        skillId: input.skillId,
+      });
+    return this.grafo
+      ? this.grafo.withAcessoLock(access.id, () => this.executeUnlocked(uid, input))
+      : this.executeUnlocked(uid, input);
+  }
+  private async executeUnlocked(
     usuarioId: string | undefined,
     input: {
       acessoId?: string;
       skillId?: string;
+      skillIds?: readonly string[];
+      consultaAprendidaId?: string;
       pergunta?: string;
       sql?: string;
       confirmadoPeloUsuario?: boolean;
+      confirmacaoHash?: string;
     },
-  ): Promise<{ success: true; consulta: ConsultaAprendida }> {
+  ): Promise<{
+    success: boolean;
+    confirmacaoPendente?: boolean;
+    confirmacaoHash?: string;
+    consulta: ConsultaAprendida;
+  }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid, {
       skills: this.skills,
       skillId: input.skillId,
     });
-    if (input.confirmadoPeloUsuario !== true) {
+    let consulta = input.consultaAprendidaId
+      ? await this.aprendizado.obterConsulta(acesso.id, input.consultaAprendidaId)
+      : null;
+    if (input.consultaAprendidaId && !consulta)
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Salvar a consulta exige confirmação do usuário.",
-        hint: "Mostre o SQL que funcionou e chame de novo com confirmadoPeloUsuario: true.",
+        message: "Consulta não encontrada neste acesso.",
+        hint: "Liste as candidatas.",
       });
-    }
-    const pergunta = input.pergunta?.trim() ?? "";
-    const sql = input.sql?.trim() ?? "";
-    if (!pergunta || !sql) {
+    const ids = consulta?.skillIds ?? [
+      ...new Set([...(input.skillIds ?? []), ...(input.skillId ? [input.skillId] : [])]),
+    ];
+    if (!ids.length)
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
-        message: "pergunta e sql são obrigatórios.",
-        hint: "Grave a pergunta do usuário e o SELECT que funcionou.",
+        message: "Vincule ao menos uma skill publicada.",
+        hint: "Informe skillIds.",
       });
-    }
-    const skillId = input.skillId?.trim() ? input.skillId.trim() : null;
-    let paramsContrato: Skill["params"] = [];
-    if (skillId) {
-      const skill = await this.skills.findById(skillId);
-      if (skill?.acessoId !== acesso.id || skill.status !== "publicada") {
+    const published = await resolverSkillsConsulta(this.skills, acesso.id, ids);
+    const sql = consulta?.sql ?? input.sql?.trim() ?? "";
+    const pergunta = consulta?.pergunta ?? input.pergunta?.trim() ?? "";
+    const scope = uniaoEscopos(published.map((s) => s.escopo));
+    const ast = validarSqlNoEscopo(sql, acesso.dialeto, scope);
+    assertFanoutSeguro(ast, scope);
+    assertPrivacidadeAntesDoHub({
+      ast,
+      negar: ["pessoal", "segredo"],
+      lookup: (table, col) => {
+        const found = published
+          .flatMap((s) => s.conhecimentoPublicado?.colunas ?? [])
+          .filter(
+            (c) =>
+              (!table || c.tabela.toLowerCase() === table.toLowerCase()) &&
+              c.nome.toLowerCase() === col.toLowerCase(),
+          );
+        return found.length === 1
+          ? parseSensibilidadeColuna(found[0]!.sensibilidade)
+          : inferirSensibilidadeColuna(col);
+      },
+    });
+    exigirFiltroEscopoPadrao({
+      sql,
+      dialeto: acesso.dialeto,
+      escopoPadrao: acesso.escopoPadrao,
+      colunasDasTabelas: Object.fromEntries(
+        Object.entries(scope.colunasPorTabela).map(([k, v]) => [k, [...v]]),
+      ),
+    });
+    if (!pergunta || !textoSeguro(pergunta) || !capturaSqlSegura(sql, acesso.dialeto, published))
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Exemplo não pode ser capturado com segurança.",
+        hint: "Parametrize os valores; confirme apenas constantes de negócio não sensíveis no pacote.",
+      });
+    const params = published.flatMap((s) => s.params);
+    for (const param of params)
+      if (
+        params.some(
+          (other) =>
+            other.nome === param.nome &&
+            (other.tipo !== param.tipo || other.obrigatorio !== param.obrigatorio),
+        )
+      )
         throw new DomainError({
-          code: ERROR_CODES.SKILL_NOT_PUBLISHED,
-          message: "Só skill publicada recebe consulta aprendida.",
-          hint: "Use listar_skills e passe um skillId publicado.",
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Contratos incompatíveis para o mesmo parâmetro.",
+          hint: "Harmonize os parâmetros dos pacotes antes de confirmar o exemplo.",
         });
-      }
-      const escopo =
-        skill.escopo.tabelas.length > 0
-          ? skill.escopo
-          : escopoFromSqlModelo(parseSqlModelo(skill.sqlModelo));
-      validarSqlNoEscopo(sql, acesso.dialeto, escopo);
-      paramsContrato = skill.params;
-    }
-    const consulta = await this.aprendizado.salvarConsulta({
+    const pubs = published
+      .map((s) => ({ skillId: s.id, id: s.publicacaoAtivaId!, hash: s.publicacaoHash! }))
+      .sort((a, b) => a.skillId.localeCompare(b.skillId));
+    if (pubs.some((p) => !p.id || !p.hash))
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+        message: "Publicação indisponível.",
+        hint: "Publique a skill.",
+      });
+    consulta ??= await this.aprendizado.salvarConsulta({
       acessoId: acesso.id,
-      skillIds: skillId ? [skillId] : [],
+      skillIds: ids,
       pergunta,
       sql,
-      paramsContrato,
+      paramsContrato: published
+        .flatMap((s) => s.params)
+        .filter((p, i, all) => all.findIndex((q) => q.nome === p.nome) === i),
       autorUsuarioId: uid,
+      publicacoes: pubs,
+      registroExecucao: false,
     });
-    return { success: true, consulta };
+    if (
+      JSON.stringify(
+        [...(consulta.publicacoes ?? [])].sort((a, b) => a.skillId.localeCompare(b.skillId)),
+      ) !== JSON.stringify(pubs)
+    )
+      throw new DomainError({
+        code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+        message: "Publicações da candidata não são vigentes.",
+        hint: "Prepare um novo exemplo para o pacote atual.",
+      });
+    const hash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          acessoId: acesso.id,
+          id: consulta.id,
+          versao: consulta.versao ?? 1,
+          conteudo: identidadeConsulta(consulta),
+          pergunta: consulta.pergunta,
+        }),
+      )
+      .digest("hex");
+    if (!input.confirmacaoHash || !input.confirmadoPeloUsuario)
+      return { success: true, confirmacaoPendente: true, confirmacaoHash: hash, consulta };
+    if (hash !== input.confirmacaoHash)
+      throw new DomainError({
+        code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+        message: "Confirmação desatualizada.",
+        hint: "Revise o novo preview.",
+      });
+    if (consulta.status !== "candidata")
+      throw new DomainError({
+        code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+        message: "Exemplo já curado ou inativo.",
+        hint: "Obtenha o estado atual.",
+      });
+    return {
+      success: true,
+      consulta: await this.aprendizado.alterarEstado({
+        acessoId: acesso.id,
+        id: consulta.id,
+        expectedVersion: consulta.versao ?? 1,
+        status: "confirmada",
+        autorUsuarioId: uid,
+        publicacoes: pubs,
+      }),
+    };
   }
 }
 
@@ -194,6 +317,7 @@ export class AtualizarEscopoPadrao {
       acessoId?: string;
       empresa?: string;
       filial?: string;
+      bindings?: readonly BindingEscopoPadrao[];
       timezone?: string;
       confirmadoPeloUsuario?: boolean;
     },
@@ -214,6 +338,7 @@ export class AtualizarEscopoPadrao {
     const escopoPadrao = parseEscopoPadrao({
       empresa: input.empresa,
       filial: input.filial,
+      bindings: input.bindings ?? acesso.escopoPadrao?.bindings,
     });
     const timezone = input.timezone?.trim() ? input.timezone.trim() : null;
     await this.acessos.updateEscopoPadrao(acesso.id, escopoPadrao, timezone);

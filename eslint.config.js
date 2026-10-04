@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 import prettierConfig from "eslint-config-prettier";
 
 /**
- * Flat config (ESLint 9). Divisão de responsabilidades:
+ * Flat config (ESLint 10). Divisão de responsabilidades:
  * - EditorConfig: charset, EOL, indentação bruta em qualquer editor
  * - Prettier: estilo (aspas, vírgulas, printWidth) — eslint-config-prettier por último
  * - ESLint + typescript-eslint: correção (tipos, promises, imports)

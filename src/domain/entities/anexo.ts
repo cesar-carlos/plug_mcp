@@ -59,6 +59,7 @@ export interface AnexoExportPayload {
 }
 
 export interface AnexoPutInput {
+  readonly proveniencia?: AnexoProveniencia;
   readonly usuarioId: string;
   readonly acessoId: string;
   readonly bytes: Uint8Array;
@@ -69,6 +70,7 @@ export interface AnexoPutInput {
 }
 
 export interface AnexoRecord {
+  readonly proveniencia?: AnexoProveniencia;
   readonly usuarioId: string;
   readonly acessoId: string;
   readonly bytes: Uint8Array;
@@ -78,6 +80,14 @@ export interface AnexoRecord {
   readonly origem: OrigemAnexoHandle;
   readonly createdAt: number;
   readonly expiresAt: number;
+}
+
+export interface AnexoProveniencia {
+  readonly tabela: string;
+  readonly coluna: string;
+  readonly bearerHash: string;
+  readonly clientTokenHash: string;
+  readonly publicacoes: readonly { skillId: string; id: string; hash: string }[];
 }
 
 export const isMimeDestinoAnexo = (value: string): value is MimeDestinoAnexo =>

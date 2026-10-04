@@ -1,6 +1,6 @@
-/** TTL do código one-shot `GET /setup/{code}` (memória e `mcp_setup`). 7 dias. */
-export const MCP_SETUP_TTL_DAYS = 7;
-export const MCP_SETUP_TTL_MS = MCP_SETUP_TTL_DAYS * 86_400_000;
+/** Entrega interna legada ao formulário. Operações públicas usam SetupOperationRepositoryPort. */
+export const MCP_SETUP_TTL_DAYS = 15 / (24 * 60);
+export const MCP_SETUP_TTL_MS = 15 * 60_000;
 
 export interface McpSetupIssue {
   readonly code: string;

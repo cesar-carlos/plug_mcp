@@ -14,6 +14,12 @@ export interface AcessoRepositoryPort {
     clientTokenHash: string,
   ): Promise<Acesso | null>;
   updateTokenHash(id: string, tokenHash: string, tokenExpiresAt?: Date | null): Promise<void>;
+  compareAndRotateToken(
+    id: string,
+    expectedHash: string,
+    tokenHash: string,
+    tokenExpiresAt: Date | null,
+  ): Promise<boolean>;
   updateStatus(id: string, status: StatusAcesso): Promise<void>;
   updateClientToken(id: string, clientTokenEnc: string, clientTokenHash: string): Promise<void>;
   updateDialeto(id: string, dialeto: string): Promise<void>;

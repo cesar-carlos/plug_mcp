@@ -84,16 +84,16 @@ describe("mergeCamposColuna", () => {
       sensibilidade: "pessoal",
     });
     expect(afterProfile?.campos.sensibilidade).toBe("livre");
-    expect(afterProfile?.campos.origem).toBe("validado_execucao");
+    expect(afterProfile?.campos.origem).toBe("confirmado_usuario");
   });
 
-  it("origem mais fraca sem classe confirmada continua no-op", () => {
+  it("confirmação de significado supera a validação técnica", () => {
     expect(
       mergeCamposColuna(existente, {
         origem: "confirmado_usuario",
         descricao: "Nome comercial",
       }),
-    ).toBeNull();
+    ).toMatchObject({ campos: { descricao: "Nome comercial", origem: "confirmado_usuario" } });
   });
 });
 

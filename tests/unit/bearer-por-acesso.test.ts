@@ -85,6 +85,29 @@ describe("Bearer 1:1 com acesso", () => {
       clientToken,
     });
 
+  it("duas rotações concorrentes do mesmo Bearer concluem somente uma", async () => {
+    const ctx = repos();
+    const created = await registrar(ctx, "rotacao-cas@b.com", "tok-rotation-ci");
+    const previous = (await ctx.acessos.findById(created.acessoId))!.tokenHash;
+    const rotate = new RotacionarTokenMcp(ctx.acessos, crypto, ctx.setup, "http://localhost", 0);
+    const attempts = await withBound(created.usuarioId, created.acessoId, () =>
+      Promise.allSettled([
+        rotate.execute(created.usuarioId, previous),
+        rotate.execute(created.usuarioId, previous),
+      ]),
+    );
+    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+    const winner = attempts.find((attempt) => attempt.status === "fulfilled");
+    if (winner?.status !== "fulfilled") throw new Error("rotation failed");
+    const token = ctx.setup.consume(winner.value.setupCode)!;
+    expect((await ctx.acessos.findById(created.acessoId))!.tokenHash).toBe(crypto.sha256Hex(token));
+    await expect(
+      withBound(created.usuarioId, created.acessoId, () =>
+        rotate.execute(created.usuarioId, previous),
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
   it("dois CLIENT_TOKEN no mesmo e-mail geram Bearers e catálogos distintos", async () => {
     const ctx = repos();
     const primeiro = await registrar(ctx, "mesmo@b.com", "tok-persona-a-111");
@@ -211,8 +234,8 @@ describe("Bearer 1:1 com acesso", () => {
       ).execute(a.usuarioId),
     );
     expect(rotated.setupCode).toBeTruthy();
-    expect(rotated.hint).toMatch(/antes de reiniciar/);
-    expect(rotated.hint).toMatch(/7 dias/);
+    expect(rotated.hint).toMatch(/navegador/);
+    expect(rotated.hint).toMatch(/15 minutos/);
     const novo = ctx.setup.consume(rotated.setupCode);
     expect(novo).toBeTruthy();
     expect((await ctx.acessos.findById(a.acessoId))!.tokenHash).not.toBe(hashA);

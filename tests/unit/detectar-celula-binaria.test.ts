@@ -131,7 +131,7 @@ describe("sanitizar linhas de consulta", () => {
     });
     expect(anexos).toBe(1);
     expect(rows[0]?.foto).toMatchObject({ kind: ANEXO_KIND, truncated: true });
-    expect((rows[0]?.foto as { handle?: string }).handle).toMatch(/^[0-9a-f-]{36}\./i);
+    expect((rows[0]?.foto as { handle?: string }).handle).toBeUndefined();
     expect(JSON.stringify(rows)).not.toContain(b64);
   });
 

@@ -21,6 +21,7 @@ export const queryCacheKey = (input: {
   agentId: string;
   skillIds: readonly string[];
   skillVersoes: readonly number[];
+  publicacoes?: readonly { skillId: string; id: string | null; hash: string | null }[];
   sql: string;
   params: Record<string, unknown>;
   maxRows: number;
@@ -29,13 +30,15 @@ export const queryCacheKey = (input: {
   escopoFilial?: string;
   policyFingerprint?: string;
 }): string => {
-  const payload = JSON.stringify({
+  const payload = canonicalJson({
     usuarioId: input.usuarioId,
     acessoId: input.acessoId,
     clientTokenHash: input.clientTokenHash,
     agentId: input.agentId,
-    skillIds: [...input.skillIds].sort(),
-    skillVersoes: input.skillVersoes,
+    skills: input.skillIds
+      .map((id, index) => ({ id, versao: input.skillVersoes[index] }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    publicacoes: [...(input.publicacoes ?? [])].sort((a, b) => a.skillId.localeCompare(b.skillId)),
     sql: input.sql,
     params: input.params,
     maxRows: input.maxRows,
@@ -45,4 +48,18 @@ export const queryCacheKey = (input: {
     policy: input.policyFingerprint ?? null,
   });
   return `${queryCachePrefixForAcesso(input.acessoId)}${createHash("sha256").update(payload).digest("hex")}`;
+};
+
+export const canonicalJson = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 };

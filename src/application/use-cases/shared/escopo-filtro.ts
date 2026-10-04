@@ -2,7 +2,7 @@ import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { EscopoPadraoAcesso } from "../../../domain/entities/escopo.js";
 import { extractNamedParams } from "./sql-scan.js";
-import { tryParseSelect } from "./sql-ast.js";
+import { parseSelect, type SqlAstSelect } from "./sql-ast.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 
 export const NOMES_COLUNA_EMPRESA = [
@@ -24,21 +24,60 @@ export const NOMES_COLUNA_FILIAL = [
 const colunaCasa = (nome: string, candidatos: readonly string[]): boolean =>
   candidatos.some((item) => item.toLowerCase() === nome.toLowerCase());
 
-const temPredicadoParam = (
-  sql: string,
-  colunas: readonly string[],
-  param: "empresa" | "filial",
-  dialeto?: Dialeto,
+const record = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+const columnName = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    return value;
+  }
+  const rec = record(value);
+  return typeof rec?.value === "string" ? rec.value : rec?.expr ? columnName(rec.expr) : null;
+};
+
+/** A mandatory predicate must dominate every alternative; an AND needs either side. */
+const implicaRecorte = (
+  node: unknown,
+  alias: string,
+  coluna: string,
+  param: string,
+  single: boolean,
 ): boolean => {
-  const placeholders = new Set(extractNamedParams(sql).map((nome) => nome.toLowerCase()));
-  if (!placeholders.has(param)) {
+  const expr = record(node);
+  if (expr?.type !== "binary_expr") {
     return false;
   }
-  const ast = tryParseSelect(sql, dialeto);
-  if (!ast) {
+  const op = String(expr.operator).toUpperCase();
+  if (op === "AND") {
+    return (
+      implicaRecorte(expr.left, alias, coluna, param, single) ||
+      implicaRecorte(expr.right, alias, coluna, param, single)
+    );
+  }
+  if (op === "OR") {
+    return (
+      implicaRecorte(expr.left, alias, coluna, param, single) &&
+      implicaRecorte(expr.right, alias, coluna, param, single)
+    );
+  }
+  if (op !== "=") {
     return false;
   }
-  return ast.filtroRefs.some((ref) => colunaCasa(ref.column, colunas));
+  const matches = (left: unknown, right: unknown): boolean => {
+    const col = record(left),
+      bound = record(right);
+    return (
+      col?.type === "column_ref" &&
+      columnName(col.column)?.toLowerCase() === coluna.toLowerCase() &&
+      (col.table == null
+        ? single
+        : (typeof col.table === "string" ? col.table : "").toLowerCase() === alias.toLowerCase()) &&
+      bound?.type === "param" &&
+      bound.value === param
+    );
+  };
+  return matches(expr.left, expr.right) || matches(expr.right, expr.left);
 };
 
 export const exigirFiltroEscopoPadrao = (input: {
@@ -50,48 +89,68 @@ export const exigirFiltroEscopoPadrao = (input: {
   if (!input.escopoPadrao) {
     return;
   }
-  const colunas = Object.values(input.colunasDasTabelas).flat();
-  const bindings = input.escopoPadrao.bindings ?? [];
-  if (bindings.length > 0) {
-    for (const binding of bindings) {
-      const valor =
-        binding.param === "empresa" ? input.escopoPadrao.empresa : input.escopoPadrao.filial;
-      if (!valor) {
-        continue;
+  const defaults = input.escopoPadrao;
+  const bindings = defaults.bindings ?? [];
+  const visit = (ast: SqlAstSelect): void => {
+    const tables = ast.tabelas.filter((table) => !table.isCte && !table.isSubquery);
+    for (const table of tables) {
+      const cols =
+        Object.entries(input.colunasDasTabelas).find(
+          ([name]) => name.toLowerCase() === table.nome.toLowerCase(),
+        )?.[1] ?? [];
+      for (const param of ["empresa", "filial"] as const) {
+        if (defaults[param] === undefined) {
+          continue;
+        }
+        const configured = bindings.filter(
+          (b) => b.param === param && b.tabela.toLowerCase() === table.nome.toLowerCase(),
+        );
+        const candidates =
+          configured.length > 0
+            ? configured.map((b) => b.coluna)
+            : bindings.some((b) => b.param === param)
+              ? []
+              : cols.filter((c) =>
+                  colunaCasa(c, param === "empresa" ? NOMES_COLUNA_EMPRESA : NOMES_COLUNA_FILIAL),
+                );
+        if (candidates.length === 0 && !bindings.some((b) => b.param === param)) {
+          throw DomainError.pacote({
+            code: ERROR_CODES.ESCOPO_FILTRO_AUSENTE,
+            message: `Não foi possível identificar o recorte físico de ${param} em ${table.nome}.`,
+            hint: "Inclua a coluna de recorte no pacote ou configure bindings físicos do acesso. Tabelas globais só são admitidas quando os bindings do recorte estão explicitamente configurados.",
+          });
+        }
+        if (candidates.length > 1 && configured.length === 0) {
+          throw DomainError.pacote({
+            code: ERROR_CODES.ESCOPO_FILTRO_AUSENTE,
+            message: "Recorte padrão ambíguo.",
+            hint: "Configure o binding físico de empresa/filial neste acesso.",
+          });
+        }
+        for (const col of candidates) {
+          if (
+            !implicaRecorte(
+              ast.whereAst,
+              table.alias ?? table.nome,
+              col,
+              param,
+              tables.length === 1,
+            )
+          ) {
+            throw DomainError.pacote({
+              code: ERROR_CODES.ESCOPO_FILTRO_AUSENTE,
+              message: `A consulta não garante o recorte de ${param} em ${table.nome}.${col}.`,
+              hint: `Inclua ${table.alias ?? table.nome}.${col} = :${param} em todos os caminhos lógicos deste SELECT.`,
+            });
+          }
+        }
       }
-      if (!temPredicadoParam(input.sql, [binding.coluna], binding.param, input.dialeto)) {
-        throw new DomainError({
-          code: ERROR_CODES.ESCOPO_FILTRO_AUSENTE,
-          message: `A consulta não recorta ${binding.param} em ${binding.tabela}.${binding.coluna}.`,
-          hint: `Inclua ${binding.tabela}.${binding.coluna} = :${binding.param} (valor do acesso).`,
-        });
-      }
     }
-    return;
-  }
-  if (input.escopoPadrao.empresa) {
-    const temColuna = colunas.some((nome) => colunaCasa(nome, NOMES_COLUNA_EMPRESA));
-    if (
-      temColuna &&
-      !temPredicadoParam(input.sql, NOMES_COLUNA_EMPRESA, "empresa", input.dialeto)
-    ) {
-      throw new DomainError({
-        code: ERROR_CODES.ESCOPO_FILTRO_AUSENTE,
-        message: "A consulta não recorta empresa, mas o acesso tem empresa default.",
-        hint: `Inclua predicado na coluna de empresa = :empresa (valor ${input.escopoPadrao.empresa}).`,
-      });
+    for (const child of [...ast.subqueries, ...ast.setBranches]) {
+      visit(child);
     }
-  }
-  if (input.escopoPadrao.filial) {
-    const temColuna = colunas.some((nome) => colunaCasa(nome, NOMES_COLUNA_FILIAL));
-    if (temColuna && !temPredicadoParam(input.sql, NOMES_COLUNA_FILIAL, "filial", input.dialeto)) {
-      throw new DomainError({
-        code: ERROR_CODES.ESCOPO_FILTRO_AUSENTE,
-        message: "A consulta não recorta filial, mas o acesso tem filial default.",
-        hint: `Inclua predicado na coluna de filial = :filial (valor ${input.escopoPadrao.filial}).`,
-      });
-    }
-  }
+  };
+  visit(parseSelect(input.sql, input.dialeto ?? "mssql"));
 };
 
 export const mesclarParamsEscopo = (

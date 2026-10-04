@@ -8,14 +8,14 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       postgres:
         image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: se7e_mcp_test
+          POSTGRES_DB: se7e_mcp_ci
         ports:
           - 5432:5432
         options: >-
@@ -23,8 +23,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_mcp_test
+      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_mcp_ci
       MCP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       PLUG_SERVER_BASE_URL: http://plug-server.test
       GIT_SHA: ${{ github.sha }}
@@ -36,11 +46,14 @@ jobs:
         with:
           repository: cesar-carlos/plug_server
           path: plug_server_contract
+          ref: 0d2c6b488438a77be71b39e514cd06ab11fbb95e
       - uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
           cache: npm
       - run: npm ci
+      - run: npm run compiler:check
+      - run: npm audit --omit=dev --audit-level=high
       - name: Install plug_server contract dependencies
         run: npm ci
         working-directory: plug_server_contract
@@ -54,3 +67,52 @@ jobs:
       - run: npm run db:migrate
       - name: Release gate
         run: npm run release:check
+      - run: npm run runtime:check
+        env:
+          CI: "true"
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CI: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+      - run: npm ci
+      - run: npm run release:check
+      - run: npm audit --omit=dev --audit-level=high
+
+  native-musl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: se7e_native_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - run: docker build --platform linux/${{ matrix.arch }} -t se7e-native .
+      - run: docker run --rm --platform linux/${{ matrix.arch }} --entrypoint node se7e-native --input-type=module -e "import sharp from 'sharp'; import { fileTypeFromBuffer } from 'file-type'; const png=await sharp({create:{width:2,height:2,channels:3,background:'red'}}).png().toBuffer(); if((await fileTypeFromBuffer(png))?.mime!=='image/png') process.exit(1);"
+      - name: Packaged migrations, server and worker
+        run: >-
+          docker run --rm --platform linux/${{ matrix.arch }} --network host
+          -e CI=true -e DATABASE_URL=postgres://postgres:postgres@localhost:5432/se7e_native_ci
+          -e MCP_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          -e PLUG_SERVER_BASE_URL=http://plug-server.test
+          -v ${{ github.workspace }}/scripts/smoke-runtime.mjs:/app/smoke-runtime.mjs:ro
+          --entrypoint node se7e-native smoke-runtime.mjs --migrate

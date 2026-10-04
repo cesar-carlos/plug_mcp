@@ -4,7 +4,7 @@ import { compose } from "./composition/compose.js";
 const main = async (): Promise<void> => {
   const config = loadConfig();
   if (!config.DATABASE_URL) throw new Error("DATABASE_URL is required for worker:operacoes");
-  const { operationsWorker, close, logger } = await compose(config);
+  const { operationsWorker, close, logger, purgeExpiredCandidates } = await compose(config);
   if (!operationsWorker) throw new Error("operations worker requires persistent repositories");
   let running = false;
   const tick = async () => {
@@ -12,6 +12,7 @@ const main = async (): Promise<void> => {
     running = true;
     try {
       await operationsWorker.executarUmaVez();
+      await purgeExpiredCandidates();
     } catch {
       logger.error("operations worker tick failed", { stage: "monitor_or_delivery" });
     } finally {

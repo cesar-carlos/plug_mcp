@@ -55,6 +55,10 @@ export const parseParametroSkillList = (value: unknown): ParametroSkill[] => {
 };
 
 export interface Skill {
+  readonly conhecimentoPublicado?: ConhecimentoSkillPublicado;
+  readonly publicacaoAtivaId?: string | null;
+  readonly publicacaoHash?: string;
+  readonly statusRascunho?: StatusSkill;
   readonly id: string;
   readonly acessoId: string | null;
   readonly slug: string;
@@ -72,6 +76,37 @@ export interface Skill {
   readonly autorUsuarioId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+export interface ConhecimentoSkillPublicado {
+  readonly colunas: readonly {
+    tabela: string;
+    nome: string;
+    tipo: string | null;
+    nullable: boolean | null;
+    papel: string | null;
+    dicionario: string | null;
+    formato: string | null;
+    descricao: string | null;
+    perfil: unknown;
+    sensibilidade: string;
+    origem: string;
+    status: string;
+  }[];
+  readonly relacionamentos: readonly {
+    origem: string;
+    destino: string;
+    colunaOrigem: string;
+    colunaDestino: string;
+    pares: { colunaOrigem: string; colunaDestino: string }[];
+    tipoJoin: string;
+    cardinalidade: string | null;
+    descricao: string | null;
+    origemFato: string;
+    escopoValidacao: { empresa?: string; filial?: string } | null;
+  }[];
+  readonly regras: readonly AnotacaoGrafo[];
+  readonly metricas: readonly AnotacaoGrafo[];
 }
 
 export interface NovaSkill {

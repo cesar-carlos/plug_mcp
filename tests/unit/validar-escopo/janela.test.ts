@@ -11,10 +11,10 @@ const escopo = escopoFromSqlModelo(
 describe("validarSqlNoEscopo janela", () => {
   it("aceita SUM OVER no escopo em mssql e postgres", () => {
     const sql =
-      "SELECT SUM(p.valor) OVER (PARTITION BY p.empresa ORDER BY p.data) AS total FROM produto p";
+      "SELECT SUM(p.valor) OVER (PARTITION BY p.empresa ORDER BY p.data) AS total FROM produto p WHERE p.empresa = :empresa";
     for (const dialeto of ["mssql", "postgres"] as const) {
       const ast = validarSqlNoEscopo(sql, dialeto, escopo);
-      expect(ast.temAgregacao).toBe(true);
+      expect(ast.temAgregacao).toBe(false);
     }
   });
 
@@ -28,13 +28,13 @@ describe("validarSqlNoEscopo janela", () => {
     ).toThrow(expect.objectContaining({ code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO }));
   });
 
-  it("janela sem WHERE não dispara CONSULTA_SEM_RECORTE", () => {
-    const ast = validarSqlNoEscopo(
-      "SELECT ROW_NUMBER() OVER (PARTITION BY p.empresa ORDER BY p.data) AS rn FROM produto p",
-      "mssql",
-      escopo,
-    );
-    expect(ast.temAgregacao).toBe(true);
-    expect(ast.temWhere).toBe(false);
+  it("janela sem WHERE exige recorte", () => {
+    expect(() =>
+      validarSqlNoEscopo(
+        "SELECT ROW_NUMBER() OVER (PARTITION BY p.empresa ORDER BY p.data) AS rn FROM produto p",
+        "mssql",
+        escopo,
+      ),
+    ).toThrow(expect.objectContaining({ code: ERROR_CODES.CONSULTA_SEM_RECORTE }));
   });
 });

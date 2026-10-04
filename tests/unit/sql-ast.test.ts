@@ -58,20 +58,20 @@ describe("sql-ast", () => {
     expect(star?.temStar).toBe(true);
   });
 
-  it("trata OVER como agregação e coleta colunas da janela", () => {
+  it("não trata OVER como redução de linhas e coleta colunas da janela", () => {
     for (const dialeto of ["mssql", "sybase", "postgres"] as const) {
       const ast = parseSelect(
         "SELECT SUM(t.valor) OVER (PARTITION BY t.empresa ORDER BY t.data) AS total FROM titulo t",
         dialeto,
       );
-      expect(ast.temAgregacao).toBe(true);
+      expect(ast.temAgregacao).toBe(false);
       const cols = ast.filtroRefs.map((ref) => ref.column.toLowerCase());
       expect(cols).toEqual(expect.arrayContaining(["valor", "empresa", "data"]));
       const rowNumber = parseSelect(
         "SELECT ROW_NUMBER() OVER (PARTITION BY t.empresa ORDER BY t.data) AS rn FROM titulo t",
         dialeto,
       );
-      expect(rowNumber.temAgregacao).toBe(true);
+      expect(rowNumber.temAgregacao).toBe(false);
     }
   });
 

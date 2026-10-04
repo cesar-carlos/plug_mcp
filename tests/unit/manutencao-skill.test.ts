@@ -262,7 +262,7 @@ describe("manutenção de skill", () => {
     });
     const afterProfile = await grafo.findColuna(created.acessoId, tabela!.id, "obs");
     expect(afterProfile?.sensibilidade).toBe("pessoal");
-    expect(afterProfile?.origem).toBe("validado_execucao");
+    expect(afterProfile?.origem).toBe("confirmado_usuario");
     expect(afterProfile?.tipo).toBe("varchar");
   });
 
@@ -485,6 +485,14 @@ describe("manutenção de skill", () => {
             rel.tabelaDestino.toLowerCase() === "cliente"),
       ),
     ).toBe(true);
+    await expect(
+      validar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: createdSkill.skill.id,
+        sql: sqlJoin,
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.TABELA_FORA_DO_ESCOPO });
+    await skills.setStatus(createdSkill.skill.id, "publicada");
     const ok = await validar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       skillId: createdSkill.skill.id,

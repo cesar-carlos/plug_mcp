@@ -54,7 +54,7 @@ documentação de produto e os testes correspondentes.
   repete o padrão recusado. Não espere o hub reescrever dialeto.
   `plug_server_http` + `invalid_payload` / `PLUG_SERVER_ERROR` de transporte →
   **não** reescreva o SQL. 429/503 ≠ policy. SQL falho não persiste;
-  aprendizado continua sendo sucesso com `pergunta`, `registrar_aprendizado`,
+  sucesso com pergunta segura captura somente candidata; confirmação humana promove; conhecimento explícito usa `registrar_aprendizado`,
   `salvar_consulta` e `SKILL_GAP` → `lacuna_consulta`.
 - Agregações, filtros e paginação devem acontecer no banco.
 - Treinamento segue `treinar_com_sql` → `criar_skill` → params →
@@ -67,7 +67,7 @@ documentação de produto e os testes correspondentes.
   exemplo. Aviso `PAGINACAO_MODELO` se o modelo já declara TOP/LIMIT/FIRST.
   Envelope `PACOTE_INCOMPLETO.nextAction` é a primeira falta bloqueante (não
   sempre `validar_skill`). `confirmar_relacionamento` sem `skillId` grava só no
-  grafo — o validador publicado não vê o JOIN até ele entrar no pacote. Rascunho, validada ou
+  grafo — o validador publicado não vê o JOIN até ele entrar no pacote. Sem publicação ativa, rascunho, validada ou
   `rascunho_revalidacao` não consultam (`rascunho_revalidacao`: validar →
   republicar). `listar_skills` devolve status/`fluxoTreino`/`faltas[]`; o
   pacote fica em `obter_skill`. Skill `validada` com perfil incompleto:
@@ -76,7 +76,7 @@ documentação de produto e os testes correspondentes.
   `confirmar_relacionamento` pede cardinalidade e tipo de JOIN (`tipoJoin`;
   omitir preserva LEFT do SQL, não grava inner). `remover_relacionamento` apaga
   um fingerprint. `inspecionar_consulta` aceita
-  `validada` e permite `SELECT *` cortado de uma tabela do allowlist (sem máscara;
+  `validada` e permite `SELECT *` cortado de uma tabela do allowlist (com projeção segura e omissão de colunas pessoais/secretas/inferidas;
   colunas novas no grafo `inferido`). Célula binária vira stub `kind: anexo`
   **sem handle** na inspeção (não invente bytes; não use inspeção
   como segunda via de foto pessoal). Foto livre: `consultar_dados` +
@@ -122,3 +122,17 @@ só em memória). Preserve a origem de cada falha e não faça retry cego.
 - O contrato REST usado pelo MCP é gerado do OpenAPI do hub em `plug_server/contracts/plug-mcp-rest-v1.json`; o baseline `plug-mcp-rest-v1.compatibility.json` proíbe remoção silenciosa de campos públicos. `npm run contract:check` deve permanecer verde no checkout do `plug_server`.
 - Operação proativa é observabilidade, não conhecimento: alertas/revisões/webhooks ficam isolados por `acesso_id`, guardam só IDs e agregados permitidos e jamais licenciam SQL. URL/segredo de webhook são cifrados, só HTTPS público sem query/user-info, com DNS privado/loopback bloqueado a cada entrega. Worker separado usa outbox+lease, HMAC e retry/dead-letter; tools de configurar/rearmar exigem confirmação.
 - Cache agregado usa singleflight na mesma chave isolada de usuário/token/policy/skill. Redis coordena réplicas por lease e falha aberta; não cachear erro/anexo nem criar retry cego. `test:migrations` valida banco novo e upgrade a partir de `0023` somente em bancos CI efêmeros.
+
+## Autoridade ativa e segurança da evolução
+
+Skill tem identidade, rascunho editável e publicação ativa imutável. Edição/validação mantém a anterior; ampliação exige republicação. status=publicada quando há snapshot utilizável e statusRascunho separado. obter_skill default ativo, revisao=rascunho explícito; skill:// só ativo. Publicar usa CAS/hash ligado a acesso/rascunho/base; confirmação obsoleta exige preview novo. Restrições/revogação/deriva/cardinalidade incompatível suspendem publicações afetadas imediatamente.
+
+Tools de credenciais recebem objeto vazio estrito, retornam setupUrl/expiresAt. GET mostra formulário; POST confirmado/CSRF autentica identidade e vínculo no hub, mostra Bearer uma vez. Código hash de 256 bits/15 minutos; rotação só invalida anterior na conclusão. Snapshot/draft não substituem os três portões vigentes, revalidados em cache/exportação/entrega.
+
+SQL inteiro somente leitura/funções seguras; recortes físicos dominantes em todos os caminhos e JOINs compostos simultâneos. Ambiguidade/fanout recusados; não SUM(DISTINCT valor) automático. Inspeção/perfil omitem valores inferidos/pessoais/segredos, sensíveis permitidos mascarados. Anexos vinculam origem física/publicações exatas e quotas de bytes.
+
+Captura segura gera candidata, nunca licença de reuso. Confirmação humana por salvar_consulta vincula à publicação vigente. Retenção 90 dias. Execução técnica preserva definição/classificação/cardinalidade confirmadas; aprendizado semântico altera rascunho. MCP legado mantém sessão fixa por usuário/acesso; 2026-07-28 recompõe contexto por requisição. Origin/Host/proxy explícitos. Node 24 LTS e TypeScript 7 real no gate.
+
+## Base comum e curadoria versionada
+
+Base canônica: `shared/treinamento-base.ts`, guias públicos e obter_treinamento_base; ref/hash do contrato fixados. `salvar_consulta` é preview/hash/CAS, aprovar não incrementa execução; inativação não é revertida por captura. Grão de origem não é GROUP BY nem prova automática de unicidade. Casos sintéticos obrigatórios precisam de relatório atual do runner separado; ausência avisa. IA não grava aprovação de relatório. Templates criam rascunhos sem autoridade; datasets separam famílias e não mineram auditoria. Atualizar docs/product/training.md, schemas/runtime/rules/testes juntos.

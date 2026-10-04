@@ -7,12 +7,34 @@ export const PLUG_SERVER_HTTP_TIMEOUT_MS_MAX = 60_000;
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3333),
-  HOST: z.string().min(1).default("0.0.0.0"),
+  HOST: z.string().min(1).default("127.0.0.1"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.string().default("info"),
   PUBLIC_BASE_URL: z.string().url().default("http://127.0.0.1:3333"),
   DATABASE_URL: z.string().optional(),
   MCP_ENCRYPTION_KEY: z.string().min(32),
+  MCP_ENCRYPTION_KEY_ID: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{1,64}$/)
+    .default("primary"),
+  MCP_ENCRYPTION_LEGACY_KEY: z.string().min(32).optional(),
+  MCP_ENCRYPTION_PREVIOUS_KEYS: z
+    .string()
+    .default("{}")
+    .transform((value, ctx): Record<string, string> => {
+      try {
+        const parsed = z
+          .record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().min(32))
+          .safeParse(JSON.parse(value));
+        if (parsed.success) {
+          return parsed.data;
+        }
+      } catch {
+        /* diagnóstico sem segredos */
+      }
+      ctx.addIssue({ code: "custom", message: "Keyring inválido." });
+      return {};
+    }),
   PLUG_SERVER_BASE_URL: z.string().url(),
   PLUG_SERVER_HTTP_TIMEOUT_MS: z.coerce
     .number()
@@ -29,6 +51,20 @@ const envSchema = z.object({
     .default(30 * 60_000),
   AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
   MCP_ALLOWED_ORIGINS: z.string().optional().default(""),
+  MCP_ALLOWED_HOSTS: z.string().default(""),
+  TRUST_PROXY: z.string().default(""),
+  MCP_MAX_SESSIONS: z.coerce.number().int().positive().default(2000),
+  MCP_MAX_SESSIONS_PER_ACCESS: z.coerce.number().int().positive().default(200),
+  ANEXO_MAX_BYTES_PER_ACCESS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(32 * 1024 * 1024),
+  ANEXO_MAX_BYTES_PROCESS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(128 * 1024 * 1024),
   REDIS_URL: z.string().optional().default(""),
   MCP_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   MCP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
@@ -98,7 +134,8 @@ export const loadConfig = (overrides: Record<string, string | undefined> = {}): 
     PUBLIC_BASE_URL: publicBase,
     PLUG_SERVER_BASE_URL: stripTrailingSlash(parsed.PLUG_SERVER_BASE_URL),
     mcpResourceUrl: `${publicBase}/mcp`,
-    allowedOrigins: parsed.MCP_ALLOWED_ORIGINS.split(",")
+    allowedOrigins: (parsed.MCP_ALLOWED_ORIGINS || new URL(publicBase).origin)
+      .split(",")
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0),
   };
@@ -112,7 +149,11 @@ export const testConfig = (overrides: Partial<AppConfig> = {}): AppConfig =>
     PLUG_SERVER_BASE_URL: "http://plug-server.test",
     MCP_RATE_LIMIT_MAX: "10000",
     MCP_BOOTSTRAP_RATE_LIMIT_MAX: "10000",
+    MCP_ALLOWED_HOSTS: "127.0.0.1,localhost",
     ...Object.fromEntries(
-      Object.entries(overrides).map(([k, v]) => [k, v === undefined ? undefined : String(v)]),
+      Object.entries(overrides).map(([k, v]) => [
+        k,
+        v === undefined ? undefined : typeof v === "object" ? JSON.stringify(v) : String(v),
+      ]),
     ),
   });

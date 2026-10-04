@@ -175,7 +175,7 @@ export class ConfigurarWebhookOperacional {
       const salvo = await this.operacoes.salvarWebhook({ ...atual, ativo: false });
       return { success: true as const, webhook: { ativo: salvo.ativo, configurado: true } };
     }
-    let url: URL | null = null;
+    let url: URL | null;
     try {
       url = input.url?.trim() ? await this.destinos.validate(input.url.trim()) : null;
     } catch {

@@ -1,3 +1,4 @@
+import { registerAccessViaBrowser } from "../helpers/secure-setup.js";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import request from "supertest";
@@ -51,13 +52,7 @@ describe("consultar_dados só com skill", () => {
           method: "tools/call",
           params: {
             name: "registrar_acesso",
-            arguments: {
-              email: `client-${agentId.slice(0, 8)}@example.com`,
-              senha: "secret-pass",
-              agentId,
-              dialeto: "sybase",
-              clientToken: `tok-sql-${agentId}`,
-            },
+            arguments: {},
           },
         });
       const registered = readToolResult(parseMcpPayload(registrar));
@@ -65,15 +60,28 @@ describe("consultar_dados só com skill", () => {
       if (!registered.ok) {
         return;
       }
-      const setupCode = registered.json.setupCode as string;
-      const setup = await request(app).get(`/setup/${setupCode}`);
-      const token = /<pre>([^<]+)<\/pre>/.exec(setup.text)?.[1];
-      expect(token).toBeTruthy();
+      const browserAccess = await registerAccessViaBrowser(
+        app,
+        useCases,
+        {
+          email: `client-${agentId.slice(0, 8)}@example.com`,
+          senha: "secret-pass",
+          agentId,
+          dialeto: "sybase",
+          clientToken: `tok-sql-${agentId}`,
+        },
+        registered.json.setupUrl as string,
+      );
+      const token = browserAccess.token;
+      Object.assign(registered.json, {
+        usuarioId: browserAccess.usuarioId,
+        acessoId: browserAccess.acessoId,
+      });
 
       const authed = await initialize(app, token);
       const toolsList = await mcpRpc(
         app,
-        token!,
+        token,
         { jsonrpc: "2.0", id: 21, method: "tools/list", params: {} },
         authed.sessionId,
       );
@@ -109,7 +117,7 @@ describe("consultar_dados só com skill", () => {
 
       const promptList = await mcpRpc(
         app,
-        token!,
+        token,
         { jsonrpc: "2.0", id: 20, method: "prompts/list", params: {} },
         authed.sessionId,
       );
@@ -120,7 +128,7 @@ describe("consultar_dados só com skill", () => {
 
       const resourcesList = await mcpRpc(
         app,
-        token!,
+        token,
         { jsonrpc: "2.0", id: 22, method: "resources/list", params: {} },
         authed.sessionId,
       );
@@ -141,7 +149,7 @@ describe("consultar_dados só com skill", () => {
 
       const firebirdRead = await mcpRpc(
         app,
-        token!,
+        token,
         {
           jsonrpc: "2.0",
           id: 23,
@@ -160,7 +168,7 @@ describe("consultar_dados só com skill", () => {
 
       const missing = await mcpRpc(
         app,
-        token!,
+        token,
         {
           jsonrpc: "2.0",
           id: 3,
@@ -214,7 +222,7 @@ describe("consultar_dados só com skill", () => {
       plug.lastSql = null;
       const ok = await mcpRpc(
         app,
-        token!,
+        token,
         {
           jsonrpc: "2.0",
           id: 4,
@@ -239,7 +247,7 @@ describe("consultar_dados só com skill", () => {
 
       const skillRead = await mcpRpc(
         app,
-        token!,
+        token,
         {
           jsonrpc: "2.0",
           id: 24,

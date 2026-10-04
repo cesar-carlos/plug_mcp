@@ -4,6 +4,7 @@ import type {
   EscopoSkill,
   PapelColuna,
   PerfilColuna,
+  EscopoPadraoAcesso,
 } from "../../../domain/entities/escopo.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
 import { inferirFormatoColuna, inferirPapelColuna } from "./inferir-papel.js";
@@ -50,7 +51,7 @@ export interface EnriquecerPerfilDeps {
   readonly autorUsuarioId: string;
   readonly modelo: SqlModelo;
   readonly escopo?: EscopoSkill;
-  readonly escopoPadrao?: { empresa?: string; filial?: string };
+  readonly escopoPadrao?: EscopoPadraoAcesso;
   readonly signal?: AbortSignal;
   readonly onProgress?: (input: {
     fase: "cardinalidade" | "catalogo" | "perfil" | "dicionario";
@@ -111,16 +112,28 @@ const sqlCountDistinctCols = (
 
 const recorteOrganizacional = (
   tabela: string,
-  escopoPadrao?: { empresa?: string; filial?: string },
+  escopoPadrao?: EscopoPadraoAcesso,
 ): { sql: string; params: Record<string, unknown> } => {
   const parts: string[] = [];
   const params: Record<string, unknown> = {};
   if (escopoPadrao?.empresa) {
-    parts.push(`${tabela}.empresa = :empresa`);
+    const binding = escopoPadrao.bindings?.find(
+      (item) => item.param === "empresa" && item.tabela.toLowerCase() === tabela.toLowerCase(),
+    );
+    if (binding && !ident(binding.coluna)) {
+      throw new Error("invalid scope binding");
+    }
+    parts.push(`${tabela}.${binding?.coluna ?? "empresa"} = :empresa`);
     params.empresa = escopoPadrao.empresa;
   }
   if (escopoPadrao?.filial) {
-    parts.push(`${tabela}.filial = :filial`);
+    const binding = escopoPadrao.bindings?.find(
+      (item) => item.param === "filial" && item.tabela.toLowerCase() === tabela.toLowerCase(),
+    );
+    if (binding && !ident(binding.coluna)) {
+      throw new Error("invalid scope binding");
+    }
+    parts.push(`${tabela}.${binding?.coluna ?? "filial"} = :filial`);
     params.filial = escopoPadrao.filial;
   }
   return {
@@ -544,7 +557,7 @@ export const enriquecerPerfilCompleto = async (
       tipo,
       papel: inferirPapelColuna(item.coluna, tipo),
       formato: inferirFormatoColuna(tipo, null),
-      origem: "validado_execucao",
+      origem: "inferido",
       autorUsuarioId: deps.autorUsuarioId,
     });
   }
@@ -559,6 +572,11 @@ export const enriquecerPerfilCompleto = async (
   fase = "perfil";
   const pendentesPerfil: { tabela: string; coluna: string }[] = [];
   for (const item of ordenadas) {
+    const table = await deps.grafo.findTabelaByNome(deps.acessoId, item.tabela);
+    const col = table ? await deps.grafo.findColuna(deps.acessoId, table.id, item.coluna) : null;
+    if (col?.origem !== "confirmado_usuario" || col.sensibilidade !== "livre") {
+      continue;
+    }
     if (await colunaJaTemEstatistica(item.tabela, item.coluna)) {
       continue;
     }
@@ -587,7 +605,13 @@ export const enriquecerPerfilCompleto = async (
       break;
     }
     const perfilRows = await mapWithConcurrency(wave, PERFIL_SQL_CONCURRENCY, async (item) =>
-      primeiraLinha(await executarReservada(sqlPerfilColuna(item.tabela, item.coluna))),
+      primeiraLinha(
+        await executarReservada(
+          sqlPerfilColuna(item.tabela, item.coluna) +
+            recorteOrganizacional(item.tabela, deps.escopoPadrao).sql,
+          recorteOrganizacional(item.tabela, deps.escopoPadrao).params,
+        ),
+      ),
     );
     const merges: {
       item: { tabela: string; coluna: string };
@@ -632,7 +656,15 @@ export const enriquecerPerfilCompleto = async (
       fase = "dicionario";
       const dictRows = await mapWithConcurrency(dictJobs, PERFIL_SQL_CONCURRENCY, async (job) => {
         const result = await executarReservada(
-          sqlDistinctLimitado(deps.dialeto, job.item.tabela, job.item.coluna),
+          sqlDistinctLimitado(deps.dialeto, job.item.tabela, job.item.coluna).replace(
+            " IS NOT NULL",
+            " IS NOT NULL" +
+              recorteOrganizacional(job.item.tabela, deps.escopoPadrao).sql.replace(
+                /^ WHERE /,
+                " AND ",
+              ),
+          ),
+          recorteOrganizacional(job.item.tabela, deps.escopoPadrao).params,
         );
         return result?.rows ?? null;
       });

@@ -9,6 +9,23 @@ import type { HitBusca } from "../entities/hit-busca.js";
 import type { ParametroSkill } from "../entities/skill.js";
 
 export interface AprendizadoRepositoryPort {
+  paginarConsultas(input: {
+    acessoId: string;
+    skillId?: string;
+    estado?: string;
+    pagina: number;
+    limite: number;
+  }): Promise<{ total: number; consultas: readonly ConsultaAprendida[] }>;
+  alterarEstado(input: {
+    acessoId: string;
+    id: string;
+    expectedVersion: number;
+    status: "confirmada" | "inativa";
+    autorUsuarioId: string;
+    motivo?: string;
+    publicacoes: NonNullable<ConsultaAprendida["publicacoes"]>;
+  }): Promise<ConsultaAprendida>;
+  purgeCandidatasAntesDe(cutoff: Date): Promise<number>;
   salvarConsulta(input: {
     acessoId: string;
     skillIds: readonly string[];
@@ -16,6 +33,9 @@ export interface AprendizadoRepositoryPort {
     sql: string;
     paramsContrato: readonly ParametroSkill[];
     autorUsuarioId: string | null;
+    registroExecucao?: boolean;
+    status?: "candidata" | "confirmada";
+    publicacoes?: ConsultaAprendida["publicacoes"];
   }): Promise<ConsultaAprendida>;
   listarConsultas(acessoId: string, limite: number): Promise<readonly ConsultaAprendida[]>;
   listarConsultasDaSkill(

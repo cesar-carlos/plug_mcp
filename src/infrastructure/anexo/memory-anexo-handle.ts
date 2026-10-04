@@ -2,6 +2,8 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { AnexoHandlePort } from "../../domain/ports/anexo-handle.port.js";
 import type { AnexoPutInput, AnexoRecord } from "../../domain/entities/anexo.js";
 import { ANEXO_HANDLE_MAX_PER_USER, ANEXO_HANDLE_TTL_MS } from "../../domain/entities/anexo.js";
+import { DomainError } from "../../domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 
 const HMAC_CHARS = 32;
 
@@ -28,10 +30,32 @@ export class MemoryAnexoHandleStore implements AnexoHandlePort {
     private readonly secret: string,
     private readonly ttlMs: number = ANEXO_HANDLE_TTL_MS,
     private readonly now: () => number = Date.now,
+    private readonly quotas: { acessoBytes: number; processoBytes: number } = {
+      acessoBytes: 32 * 1024 * 1024,
+      processoBytes: 128 * 1024 * 1024,
+    },
   ) {}
 
   put(input: AnexoPutInput): string {
     this.sweep();
+    let total = 0,
+      access = 0;
+    for (const record of this.records.values()) {
+      total += record.bytes.byteLength;
+      if (record.acessoId === input.acessoId) {
+        access += record.bytes.byteLength;
+      }
+    }
+    if (
+      total + input.bytes.byteLength > this.quotas.processoBytes ||
+      access + input.bytes.byteLength > this.quotas.acessoBytes
+    ) {
+      throw DomainError.anexo({
+        code: ERROR_CODES.CONSULTA_ORCAMENTO,
+        message: "Orçamento de anexos em memória excedido.",
+        hint: "Aguarde a expiração dos handles ou reduza a quantidade e o tamanho dos anexos.",
+      });
+    }
     const idsDoUsuario: string[] = [];
     for (const [id, record] of this.records) {
       if (record.usuarioId === input.usuarioId) {
@@ -48,6 +72,7 @@ export class MemoryAnexoHandleStore implements AnexoHandlePort {
     const id = randomUUID();
     const createdAt = this.now();
     this.records.set(id, {
+      proveniencia: input.proveniencia ? structuredClone(input.proveniencia) : undefined,
       usuarioId: input.usuarioId,
       acessoId: input.acessoId,
       bytes: Uint8Array.from(input.bytes),
@@ -81,7 +106,19 @@ export class MemoryAnexoHandleStore implements AnexoHandlePort {
       this.records.delete(id);
       return null;
     }
-    return record;
+    return {
+      ...record,
+      bytes: Uint8Array.from(record.bytes),
+      proveniencia: record.proveniencia ? structuredClone(record.proveniencia) : undefined,
+    };
+  }
+
+  invalidateAcesso(acessoId: string): void {
+    for (const [id, record] of this.records) {
+      if (record.acessoId === acessoId) {
+        this.records.delete(id);
+      }
+    }
   }
 
   private sweep(): void {

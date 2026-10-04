@@ -30,16 +30,21 @@ const unquoteIdent = (ident: string): string => ident.replace(/[[\]"`']/g, "").t
 
 const tabelaDaColunaNoPacote = (escopo: EscopoSkill, coluna: string): string | null => {
   const wanted = lower(unquoteIdent(coluna));
-  for (const [tabela, cols] of Object.entries(escopo.colunasPorTabela)) {
-    if (cols.some((item) => item.toLowerCase() === wanted)) {
-      return tabela;
-    }
+  const matches = Object.entries(escopo.colunasPorTabela).filter(([, cols]) =>
+    cols.some((item) => lower(item) === wanted),
+  );
+  if (matches.length > 1) {
+    throw DomainError.pacote({
+      code: ERROR_CODES.COLUNA_AMBIGUA,
+      message: `Coluna ${coluna} ocorre em mais de uma tabela do pacote.`,
+      hint: "Use o nome físico qualificado tabela.coluna.",
+    });
   }
-  return null;
+  return matches[0]?.[0] ?? null;
 };
 
 const tabelaDaColuna = (escopo: EscopoSkill, coluna: string): string | null =>
-  tabelaDaColunaNoPacote(escopo, coluna) ?? escopo.tabelas[0] ?? null;
+  tabelaDaColunaNoPacote(escopo, coluna);
 
 const QUALIFICADOR_COLUNA =
   /(?:\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_$#]*))\s*\.\s*(?:\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_$#]*))/g;
@@ -215,7 +220,13 @@ export const compilarConsultaSemantica = (
   }
   const exprs = metricas.map((item) => ({
     alias: item.alias,
-    expr: reescreverQualificadoresDaExpr(escopo, item.expr),
+    expr: (() => {
+      let expr = reescreverQualificadoresDaExpr(escopo, item.expr);
+      if (item.tratamentoNulos === "zero") expr = `COALESCE(${expr}, 0)`;
+      if (item.arredondamento?.modo === "round")
+        expr = `ROUND(${expr}, ${item.arredondamento.casas})`;
+      return expr;
+    })(),
   }));
   const elementos = listagem ? [] : aliases.map((alias) => `metrica:${alias}`);
   const select: string[] = listagem ? [] : exprs.map((item) => `${item.expr} AS ${item.alias}`);

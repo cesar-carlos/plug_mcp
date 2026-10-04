@@ -139,6 +139,15 @@ const tipoJoinAposMerge = (
 };
 
 export const decidirMerge = (atual: FatoMerge, incoming: FatoMerge): MergeResultado => {
+  if (atual.origem === "confirmado_usuario" && incoming.origem === "validado_execucao") {
+    return {
+      ...atual,
+      tipo: tipoFisicoAposMerge(atual.tipo, incoming.tipo),
+      formato: atual.formato ?? incoming.formato,
+      conflito: false,
+      aplicar: true,
+    };
+  }
   const rankAtual = origemRank(atual.origem);
   const rankNovo = origemRank(incoming.origem);
   const tipo = tipoFisicoAposMerge(atual.tipo, incoming.tipo);

@@ -28,7 +28,7 @@ const invoke = async (
   limiter: ReturnType<typeof createRateLimiter>,
   req: Request,
   res: Response,
-  next: ReturnType<typeof vi.fn>,
+  next: () => void,
 ): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
     const wrappedNext: NextFunction = ((err?: unknown) => {

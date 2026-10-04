@@ -1,3 +1,4 @@
+import type { GraoConfirmado } from "./treinamento.js";
 import { DomainError } from "../errors/domain-error.js";
 import { ERROR_CODES } from "../errors/error-codes.js";
 import {
@@ -61,6 +62,12 @@ export interface MetricaSaida {
   readonly statusIncluidos?: readonly string[];
   readonly statusExcluidos?: readonly string[];
   readonly colunaData?: string;
+  readonly unidade?: string;
+  readonly moeda?: string;
+  readonly arredondamento?: { casas: number; modo: "documental" | "round" };
+  readonly tratamentoNulos?: "preservar" | "zero";
+  readonly aditividade?: "aditiva" | "semi_aditiva" | "nao_aditiva";
+  readonly calendarioNegocio?: string;
 }
 
 export interface EscopoSkill {
@@ -70,6 +77,12 @@ export interface EscopoSkill {
   readonly graoPorTabela: Readonly<Record<string, readonly string[]>>;
   readonly graoResultado: readonly string[];
   readonly metricasSaida: readonly MetricaSaida[];
+  readonly graosConfirmados?: Readonly<Record<string, GraoConfirmado>>;
+  readonly constantesNegocio?: readonly {
+    tabela: string;
+    coluna: string;
+    valor: string | number | boolean;
+  }[];
   readonly pacoteVersao: number;
 }
 
@@ -146,6 +159,30 @@ const parseMetricas = (value: unknown): MetricaSaida[] => {
         ? { statusExcluidos: asStringArray(rec.statusExcluidos) }
         : {}),
       ...(colunaData ? { colunaData } : {}),
+      ...(typeof rec.unidade === "string" ? { unidade: rec.unidade } : {}),
+      ...(typeof rec.moeda === "string" ? { moeda: rec.moeda } : {}),
+      ...(typeof rec.calendarioNegocio === "string"
+        ? { calendarioNegocio: rec.calendarioNegocio }
+        : {}),
+      ...(rec.tratamentoNulos === "zero" || rec.tratamentoNulos === "preservar"
+        ? { tratamentoNulos: rec.tratamentoNulos }
+        : {}),
+      ...(rec.aditividade === "aditiva" ||
+      rec.aditividade === "semi_aditiva" ||
+      rec.aditividade === "nao_aditiva"
+        ? { aditividade: rec.aditividade }
+        : {}),
+      ...(rec.arredondamento &&
+      typeof rec.arredondamento === "object" &&
+      "casas" in rec.arredondamento &&
+      typeof rec.arredondamento.casas === "number" &&
+      Number.isInteger(rec.arredondamento.casas) &&
+      rec.arredondamento.casas >= 0 &&
+      rec.arredondamento.casas <= 12 &&
+      "modo" in rec.arredondamento &&
+      (rec.arredondamento.modo === "round" || rec.arredondamento.modo === "documental")
+        ? { arredondamento: { casas: rec.arredondamento.casas, modo: rec.arredondamento.modo } }
+        : {}),
     });
   }
   return out;
@@ -154,6 +191,47 @@ const parseMetricas = (value: unknown): MetricaSaida[] => {
 const parseCardinalidade = (value: unknown): Cardinalidade | null =>
   value === "1:1" || value === "1:N" || value === "N:1" || value === "N:N" ? value : null;
 
+const parseGraosConfirmados = (value: unknown): Record<string, GraoConfirmado> => {
+  const out: Record<string, GraoConfirmado> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  for (const [table, item] of Object.entries(value)) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    if (
+      typeof record.significado !== "string" ||
+      !record.significado.trim() ||
+      !asStringArray(record.chaves).length ||
+      (record.evidencia !== "declaracao_usuario" && record.evidencia !== "constraint_banco")
+    )
+      continue;
+    out[table] = {
+      significado: record.significado,
+      chaves: asStringArray(record.chaves),
+      evidencia: record.evidencia,
+    };
+  }
+  return out;
+};
+const parseConstantesNegocio = (value: unknown): NonNullable<EscopoSkill["constantesNegocio"]> => {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const rec = item as Record<string, unknown>;
+    if (
+      typeof rec.tabela !== "string" ||
+      typeof rec.coluna !== "string" ||
+      !rec.tabela.trim() ||
+      !rec.coluna.trim() ||
+      !(
+        typeof rec.valor === "string" ||
+        typeof rec.valor === "boolean" ||
+        (typeof rec.valor === "number" && Number.isFinite(rec.valor))
+      )
+    )
+      return [];
+    return [{ tabela: rec.tabela, coluna: rec.coluna, valor: rec.valor }];
+  });
+};
 export const parseEscopoSkill = (value: unknown): EscopoSkill => {
   if (!value || typeof value !== "object") {
     return escopoVazio();
@@ -205,6 +283,8 @@ export const parseEscopoSkill = (value: unknown): EscopoSkill => {
     relacionamentos,
     graoPorTabela: asStringMap(rec.graoPorTabela),
     graoResultado: graoLegado,
+    graosConfirmados: parseGraosConfirmados(rec.graosConfirmados),
+    constantesNegocio: parseConstantesNegocio(rec.constantesNegocio),
     metricasSaida: parseMetricas(rec.metricasSaida),
     pacoteVersao,
   };
@@ -316,6 +396,11 @@ export const uniaoEscopos = (escopos: readonly EscopoSkill[]): EscopoSkill => {
     ),
     graoPorTabela: freezeMap(graoPorTabela),
     graoResultado: [...graoResultado],
+    graosConfirmados: Object.assign(
+      {},
+      ...escopos.map((s) => s.graosConfirmados ?? {}),
+    ) as EscopoSkill["graosConfirmados"],
+    constantesNegocio: escopos.flatMap((s) => s.constantesNegocio ?? []),
     metricasSaida: [...metricas.values()],
     pacoteVersao,
   };
@@ -328,7 +413,7 @@ export const escopoSemRelacoesSubset = (escopo: EscopoSkill): EscopoSkill => ({
   ),
 });
 
-export interface MetricaSaidaPatch {
+export interface MetricaSaidaPatch extends Partial<Omit<MetricaSaida, "alias" | "expr">> {
   readonly alias: string;
   readonly expr?: string;
   readonly definicao?: string;
@@ -368,6 +453,7 @@ const overlayKpiList = (
 };
 
 const toMetricaPatch = (metrica: MetricaSaida): MetricaSaidaPatch => ({
+  ...metrica,
   alias: metrica.alias,
   ...(metrica.definicao !== undefined ? { definicao: metrica.definicao } : {}),
   ...(metrica.grao !== undefined ? { grao: metrica.grao } : {}),
@@ -389,7 +475,13 @@ export const patchesKpiDeMetricas = (metricas: readonly MetricaSaida[]): Metrica
         item.dimensoesPermitidas !== undefined ||
         item.statusIncluidos !== undefined ||
         item.statusExcluidos !== undefined ||
-        item.colunaData !== undefined,
+        item.colunaData !== undefined ||
+        item.unidade !== undefined ||
+        item.moeda !== undefined ||
+        item.arredondamento !== undefined ||
+        item.tratamentoNulos !== undefined ||
+        item.aditividade !== undefined ||
+        item.calendarioNegocio !== undefined,
     );
 
 export const overlayMetricasSaida = (
@@ -441,6 +533,19 @@ export const overlayMetricasSaida = (
     const statusIncluidos = overlayKpiList(existing.statusIncluidos, item.statusIncluidos);
     const statusExcluidos = overlayKpiList(existing.statusExcluidos, item.statusExcluidos);
     byAlias.set(alias.toLowerCase(), {
+      ...existing,
+      ...Object.fromEntries(
+        [
+          "unidade",
+          "moeda",
+          "arredondamento",
+          "tratamentoNulos",
+          "aditividade",
+          "calendarioNegocio",
+        ]
+          .filter((k) => item[k as keyof MetricaSaidaPatch] !== undefined)
+          .map((k) => [k, item[k as keyof MetricaSaidaPatch]]),
+      ),
       alias: existing.alias,
       expr: existing.expr,
       ...(definicao ? { definicao } : {}),

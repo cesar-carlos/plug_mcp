@@ -22,6 +22,31 @@ export const absoluteErrorMappingUrl = (publicBaseUrl: string, pathOrUrl: string
 };
 
 const MAP: Partial<Record<ErrorCode, ErrorGuidance>> = {
+  [ERROR_CODES.COLUNA_AMBIGUA]: {
+    category: "scope",
+    nextAction: "obter_skill",
+    documentationUrl: doc("coluna_ambigua"),
+  },
+  [ERROR_CODES.SQL_EFEITO_COLATERAL]: {
+    category: "sql",
+    nextAction: "corrigir_sql",
+    documentationUrl: doc("sql_efeito_colateral"),
+  },
+  [ERROR_CODES.AGREGACAO_INSEGURA]: {
+    category: "sql",
+    nextAction: "corrigir_grao",
+    documentationUrl: doc("agregacao_insegura"),
+  },
+  [ERROR_CODES.CONFIRMACAO_DESATUALIZADA]: {
+    category: "validation",
+    nextAction: "publicar_skill",
+    documentationUrl: doc("confirmacao_desatualizada"),
+  },
+  [ERROR_CODES.APRENDIZADO_NAO_CONFIRMADO]: {
+    category: "scope",
+    nextAction: "salvar_consulta",
+    documentationUrl: doc("aprendizado_nao_confirmado"),
+  },
   [ERROR_CODES.UNAUTHENTICATED]: {
     category: "auth",
     nextAction: "registrar_acesso",

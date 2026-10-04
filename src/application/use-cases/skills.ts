@@ -1,3 +1,6 @@
+import type { TreinamentoRepositoryPort } from "../../domain/ports/treinamento-repository.port.js";
+import { gateTestes } from "./shared/casos-treino.js";
+import { capturarConhecimentoPublicavel } from "./shared/conhecimento-publicado.js";
 import { DomainError, ERROR_SOURCE } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { Acesso } from "../../domain/entities/acesso.js";
@@ -67,6 +70,10 @@ import {
   type FatoIncompleto,
 } from "./shared/gates-skill.js";
 import { validarSqlNoEscopo } from "./shared/validar-escopo.js";
+import { assertFanoutSeguro } from "./shared/assert-fanout.js";
+import { exigirFiltroEscopoPadrao } from "./shared/escopo-filtro.js";
+import { lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
+import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import {
@@ -92,6 +99,7 @@ import { withHubAuth } from "./shared/hub-auth.js";
 import { guiaDialeto } from "./shared/guia-dialeto.js";
 import { parseConsultaSemantica } from "../../domain/entities/consulta-semantica.js";
 import {
+  maxSensibilidade,
   parseSensibilidadeColuna,
   type SensibilidadeColuna,
 } from "../../domain/entities/privacidade.js";
@@ -290,6 +298,8 @@ export interface SkillListItem {
   readonly slug: string;
   readonly nome: string;
   readonly status: StatusSkill;
+  readonly statusRascunho?: StatusSkill;
+  readonly publicacaoAtivaId?: string | null;
   readonly versao: number;
   readonly motivoRevalidacao: string | null;
   readonly podeLiberar: boolean;
@@ -739,6 +749,20 @@ export class AtualizarSkill {
           ? parsePoliticaConsulta(input.politicaConsulta)
           : skill.politicaConsulta,
     });
+    if (input.politicaConsulta !== undefined && skill.publicacaoAtivaId) {
+      const active = await this.skills.findPublicadaById(skill.id);
+      const before = active?.politicaConsulta ?? POLITICA_CONSULTA_DEFAULT;
+      const after = updated.politicaConsulta;
+      if (
+        after &&
+        ((after.maxRows ?? Infinity) < (before.maxRows ?? Infinity) ||
+          (after.timeoutMs ?? Infinity) < (before.timeoutMs ?? Infinity) ||
+          (after.maxTabelas ?? Infinity) < (before.maxTabelas ?? Infinity) ||
+          (after.exigirRecorteTemporal === true && before.exigirRecorteTemporal !== true))
+      ) {
+        await this.skills.suspenderPublicacao(skill.id);
+      }
+    }
     return {
       success: true,
       skill: updated,
@@ -847,10 +871,7 @@ export class ValidarSkill {
         options: { maxRows: 1 },
       }),
     );
-    const preservarPublicada = persisted.status === "publicada";
-    const updated = preservarPublicada
-      ? persisted
-      : await this.skills.setStatus(persisted.id, "validada");
+    const updated = await this.skills.setStatus(persisted.id, "validada");
     const avisos: AvisoPerfil[] = [];
     const avisoLimite = avisoLimiteNoSqlModelo(modelo.sql);
     if (avisoLimite) {
@@ -875,9 +896,7 @@ export class ValidarSkill {
         autorUsuarioId: uid,
         modelo,
         escopo,
-        escopoPadrao: acesso.escopoPadrao
-          ? { empresa: acesso.escopoPadrao.empresa, filial: acesso.escopoPadrao.filial }
-          : undefined,
+        escopoPadrao: acesso.escopoPadrao ?? undefined,
       });
       avisos.push(...perfil.avisos);
     }
@@ -888,7 +907,7 @@ export class ValidarSkill {
     return {
       success: true,
       skill: skillFinal,
-      statusPreservado: preservarPublicada,
+      statusPreservado: Boolean(skill.publicacaoAtivaId),
       fluxoTreino: await fluxoForAcessoSkill(this.grafo, acesso.id, skillFinal),
       avisos,
     };
@@ -902,6 +921,8 @@ export class PublicarSkill {
     private readonly grafo: GrafoRepositoryPort,
     private readonly publicacoes?: SkillPublicacaoRepositoryPort,
     private readonly crypto?: CryptoPort,
+    private readonly notasPublicacao?: AnotacaoGrafoRepositoryPort,
+    private readonly treinamentoRepo?: TreinamentoRepositoryPort,
   ) {}
 
   async execute(
@@ -918,6 +939,7 @@ export class PublicarSkill {
     skill: Skill;
     fluxoTreino: FluxoTreino;
     resumoPublicacao: ResumoPublicacao;
+    testes?: Awaited<ReturnType<typeof gateTestes>>;
     faltas: readonly FatoIncompleto[];
     diffPublicacao?: DiffPublicacao;
     confirmacaoHash?: string;
@@ -928,119 +950,170 @@ export class PublicarSkill {
       skills: this.skills,
       skillId: input.skillId,
     });
-    const skill = await this.skills.findById(input.skillId ?? "");
-    if (skill?.acessoId !== acesso.id) {
-      throw new DomainError({
-        code: ERROR_CODES.SKILL_NOT_FOUND,
-        message: "Skill não encontrada neste acesso.",
-        hint: "Use listar_skills.",
-      });
-    }
-    const { fluxo, faltas } = await fluxoEFaltasForAcessoSkill(this.grafo, acesso.id, skill);
-    const resumoPublicacao = montarResumoPublicacao(skill, fluxo.podeLiberar);
-    const politica = skill.politicaConsulta ?? POLITICA_CONSULTA_DEFAULT;
-    const pacote = pacotePublicavel(skill, politica);
-    const base = this.publicacoes ? await this.publicacoes.latest(acesso.id, skill.id) : null;
-    const diff = this.publicacoes ? diffPublicacao(pacote, base) : undefined;
-    const hash =
-      this.publicacoes && this.crypto
-        ? this.crypto.sha256Hex(
-            jsonCanonico({
-              acessoId: acesso.id,
-              skillId: skill.id,
-              skillVersao: skill.versao,
-              baseHash: base?.pacoteHash ?? null,
-              pacote,
-            }),
-          )
-        : undefined;
-    if (input.confirmadoPeloUsuario !== true) {
-      return {
-        success: true,
-        publicado: false,
-        skill,
-        fluxoTreino: fluxo,
-        resumoPublicacao,
-        faltas,
-        ...(diff ? { diffPublicacao: diff } : {}),
-        ...(hash ? { confirmacaoHash: hash, confirmacaoPendente: true } : {}),
+    return this.grafo.withAcessoLock(acesso.id, async () => {
+      const skill = await this.skills.findById(input.skillId ?? "");
+      if (skill?.acessoId !== acesso.id) {
+        throw new DomainError({
+          code: ERROR_CODES.SKILL_NOT_FOUND,
+          message: "Skill não encontrada neste acesso.",
+          hint: "Use listar_skills.",
+        });
+      }
+      const { fluxo, faltas } = await fluxoEFaltasForAcessoSkill(this.grafo, acesso.id, skill);
+      const resumoPublicacao = montarResumoPublicacao(skill, fluxo.podeLiberar);
+      const politica = skill.politicaConsulta ?? POLITICA_CONSULTA_DEFAULT;
+      const pacote = {
+        ...pacotePublicavel(skill, politica),
+        conhecimentoPublicado: await capturarConhecimentoPublicavel(
+          this.grafo,
+          this.notasPublicacao,
+          acesso.id,
+          skill,
+        ),
       };
-    }
-    if (this.publicacoes && hash && input.confirmacaoHash !== hash) {
-      if (!input.confirmacaoHash) {
+      const testes = this.treinamentoRepo
+        ? await gateTestes(this.treinamentoRepo, skill)
+        : undefined;
+      const base = this.publicacoes ? await this.publicacoes.latest(acesso.id, skill.id) : null;
+      const diff = this.publicacoes ? diffPublicacao(pacote, base) : undefined;
+      const hash =
+        this.publicacoes && this.crypto
+          ? this.crypto.sha256Hex(
+              jsonCanonico({
+                acessoId: acesso.id,
+                skillId: skill.id,
+                skillVersao: skill.versao,
+                baseHash: base?.pacoteHash ?? null,
+                publicacaoAtivaId: skill.publicacaoAtivaId ?? null,
+                pacote,
+                testesSignature: testes?.signature,
+              }),
+            )
+          : undefined;
+      if (input.confirmadoPeloUsuario !== true) {
         return {
           success: true,
           publicado: false,
           skill,
           fluxoTreino: fluxo,
           resumoPublicacao,
+          testes,
           faltas,
-          diffPublicacao: diff!,
-          confirmacaoHash: hash,
-          confirmacaoPendente: true,
+          ...(diff ? { diffPublicacao: diff } : {}),
+          ...(hash ? { confirmacaoHash: hash, confirmacaoPendente: true } : {}),
         };
       }
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "O pacote mudou desde o preview de publicação.",
-        hint: "Revise o novo diff e confirme com o confirmacaoHash devolvido.",
-        details: { diffPublicacao: diff, confirmacaoHash: hash },
+      if (this.publicacoes && hash && input.confirmacaoHash !== hash) {
+        if (!input.confirmacaoHash) {
+          return {
+            success: true,
+            publicado: false,
+            skill,
+            fluxoTreino: fluxo,
+            resumoPublicacao,
+            testes,
+            faltas,
+            diffPublicacao: diff!,
+            confirmacaoHash: hash,
+            confirmacaoPendente: true,
+          };
+        }
+        throw new DomainError({
+          code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+          message: "O pacote mudou desde o preview de publicação.",
+          hint: "Revise o novo diff e confirme com o confirmacaoHash devolvido.",
+          details: { diffPublicacao: diff, confirmacaoHash: hash },
+        });
+      }
+      if (testes && !testes.liberado)
+        throw new DomainError({
+          code: testes.pendencias.some((p) => p.status === "reprovado")
+            ? ERROR_CODES.TESTE_REPROVADO
+            : testes.pendencias.some((p) => p.status === "indisponivel")
+              ? ERROR_CODES.AVALIACAO_INDISPONIVEL
+              : ERROR_CODES.TESTE_OBSOLETO,
+          message: "Testes obrigatórios reprovados, obsoletos ou não executados.",
+          hint: "Execute evaluate:skills para esta revisão.",
+          details: { testes },
+        });
+      if (skill.status !== "validada") {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Só skill validada pode ser publicada.",
+          hint: "Chame validar_skill depois de treinar_com_sql com o SQL da skill.",
+        });
+      }
+      if (!paramsDescribed(skill.params)) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Descreva todos os parâmetros da skill antes de publicar.",
+          hint: "Chame atualizar_skill com params[{ nome, descricao }] para cada placeholder :nome/@nome.",
+        });
+      }
+      const conflitos = await countConflitosNoEscopo(this.grafo, acesso.id, skill.escopo);
+      if (conflitos > 0) {
+        throw new DomainError({
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "Há conflitos pendentes no escopo desta skill.",
+          hint: "Chame listar_conflitos e depois resolver_conflito só para tabelas/colunas/JOINs deste pacote.",
+          details: { faltas },
+        });
+      }
+      await exigirPacotePublicavel(this.grafo, acesso.id, skill.escopo, skill.sqlModelo);
+      const ast = validarSqlNoEscopo(skill.sqlModelo, acesso.dialeto, skill.escopo);
+      assertFanoutSeguro(ast, skill.escopo);
+      exigirFiltroEscopoPadrao({
+        sql: skill.sqlModelo,
+        dialeto: acesso.dialeto,
+        escopoPadrao: acesso.escopoPadrao,
+        colunasDasTabelas: skill.escopo.colunasPorTabela,
       });
-    }
-    if (skill.status !== "validada") {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Só skill validada pode ser publicada.",
-        hint: "Chame validar_skill depois de treinar_com_sql com o SQL da skill.",
-      });
-    }
-    if (!paramsDescribed(skill.params)) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Descreva todos os parâmetros da skill antes de publicar.",
-        hint: "Chame atualizar_skill com params[{ nome, descricao }] para cada placeholder :nome/@nome.",
-      });
-    }
-    const conflitos = await countConflitosNoEscopo(this.grafo, acesso.id, skill.escopo);
-    if (conflitos > 0) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Há conflitos pendentes no escopo desta skill.",
-        hint: "Chame listar_conflitos e depois resolver_conflito só para tabelas/colunas/JOINs deste pacote.",
-        details: { faltas },
-      });
-    }
-    await exigirPacotePublicavel(this.grafo, acesso.id, skill.escopo, skill.sqlModelo);
-    const updated =
-      this.publicacoes && hash
-        ? (
-            await this.publicacoes.publishAtomically({
-              acessoId: acesso.id,
-              skillId: skill.id,
-              expectedSkillVersion: skill.versao,
-              pacote,
-              pacoteHash: hash,
-              politicaConsulta: politica,
-              autorUsuarioId: uid,
-            })
-          ).skill
-        : await (async () => {
-            const withPolicy =
-              skill.politicaConsulta === null
-                ? await this.skills.update(skill.id, { politicaConsulta: politica })
-                : skill;
-            return this.skills.setStatus(withPolicy.id, "publicada", withPolicy.versao);
-          })();
-    const after = await fluxoEFaltasForAcessoSkill(this.grafo, acesso.id, updated);
-    return {
-      success: true,
-      publicado: true,
-      skill: updated,
-      fluxoTreino: after.fluxo,
-      resumoPublicacao: montarResumoPublicacao(updated, after.fluxo.podeLiberar),
-      faltas: after.faltas,
-      ...(diff ? { diffPublicacao: diff } : {}),
-    };
+      const lookup = await lookupSensibilidadeGrafo(this.grafo, acesso.id, skill.escopo.tabelas);
+      assertPrivacidadeAntesDoHub({ ast, lookup, negar: ["pessoal", "segredo"] });
+      const updated =
+        this.publicacoes && hash
+          ? (
+              await this.publicacoes.publishAtomically({
+                acessoId: acesso.id,
+                skillId: skill.id,
+                validarTestesAtuais: this.treinamentoRepo
+                  ? async () => {
+                      const current = await gateTestes(this.treinamentoRepo!, skill);
+                      if (!current.liberado || current.signature !== testes?.signature)
+                        throw new DomainError({
+                          code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+                          message: "Testes mudaram desde o preview.",
+                          hint: "Execute avaliação e gere novo preview.",
+                        });
+                    }
+                  : undefined,
+                expectedSkillVersion: skill.versao,
+                expectedActiveId: skill.publicacaoAtivaId ?? null,
+                expectedBaseHash: base?.pacoteHash ?? null,
+                pacote,
+                pacoteHash: hash,
+                politicaConsulta: politica,
+                autorUsuarioId: uid,
+              })
+            ).skill
+          : await (async () => {
+              const withPolicy =
+                skill.politicaConsulta === null
+                  ? await this.skills.update(skill.id, { politicaConsulta: politica })
+                  : skill;
+              return this.skills.setStatus(withPolicy.id, "publicada", withPolicy.versao);
+            })();
+      const after = await fluxoEFaltasForAcessoSkill(this.grafo, acesso.id, updated);
+      return {
+        success: true,
+        publicado: true,
+        skill: updated,
+        fluxoTreino: after.fluxo,
+        resumoPublicacao: montarResumoPublicacao(updated, after.fluxo.podeLiberar),
+        faltas: after.faltas,
+        ...(diff ? { diffPublicacao: diff } : {}),
+      };
+    });
   }
 }
 
@@ -1075,13 +1148,14 @@ export class DespublicarSkill {
         hint: `Mostre que "${skill.nome}" (slug ${skill.slug}) deixa de consultar o ERP e volta a validada. Pacote, params e consultas aprendidas permanecem. Chame de novo com confirmadoPeloUsuario: true.`,
       });
     }
-    if (skill.status !== "publicada") {
+    if (!skill.publicacaoAtivaId && skill.status !== "publicada") {
       throw new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
         message: "Só skill publicada pode ser despublicada.",
         hint: "Despublicar rebaixa para validada. Para apagar, use remover_skill.",
       });
     }
+    await this.skills.suspenderPublicacao(skill.id);
     const updated = await this.skills.setStatus(skill.id, "validada", skill.versao);
     return {
       success: true,
@@ -1180,7 +1254,8 @@ export class ListarSkills {
           id: skill.id,
           slug: skill.slug,
           nome: skill.nome,
-          status: skill.status,
+          status: skill.publicacaoAtivaId ? "publicada" : skill.status,
+          statusRascunho: skill.status,
           versao: skill.versao,
           motivoRevalidacao: skill.motivoRevalidacao,
           podeLiberar: fluxoTreino.podeLiberar,
@@ -1206,7 +1281,12 @@ export class ObterSkill {
 
   async execute(
     usuarioId: string | undefined,
-    input: { acessoId?: string; skillId?: string; slug?: string },
+    input: {
+      acessoId?: string;
+      skillId?: string;
+      slug?: string;
+      revisao?: "publicada" | "rascunho";
+    },
   ): Promise<{
     success: true;
     skill: Skill;
@@ -1261,11 +1341,22 @@ export class ObterSkill {
       }),
       uid,
     );
-    const skill = input.skillId
+    const draft = input.skillId
       ? await this.skills.findById(input.skillId)
       : input.slug
         ? await this.skills.findBySlug(acesso.id, input.slug)
         : null;
+    const skill =
+      draft && input.revisao !== "rascunho"
+        ? ((await this.skills.findPublicadaById(draft.id)) ?? draft)
+        : draft;
+    if (input.revisao === "publicada" && skill?.status !== "publicada") {
+      throw new DomainError({
+        code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+        message: "A skill não possui uma publicação ativa.",
+        hint: "Use revisao: rascunho para treinamento, ou valide e publique a revisão.",
+      });
+    }
     if (skill?.acessoId !== acesso.id) {
       throw new DomainError({
         code: ERROR_CODES.SKILL_NOT_FOUND,
@@ -1273,7 +1364,8 @@ export class ObterSkill {
         hint: "Passe skillId ou slug. Use listar_skills.",
       });
     }
-    const persisted = await persistirEscopoSeVazio(this.skills, skill);
+    const persisted =
+      skill.status === "publicada" ? skill : await persistirEscopoSeVazio(this.skills, skill);
     const escopo =
       persisted.escopo.tabelas.length > 0
         ? persisted.escopo
@@ -1398,16 +1490,75 @@ export class ObterSkill {
         message: perfilFaltas.map((item) => item.message).join(" "),
       });
     }
+    const protegerColuna = (coluna: (typeof colunas)[number]): (typeof colunas)[number] => {
+      const atual = colunas.find(
+        (item) =>
+          item.tabela.toLowerCase() === coluna.tabela.toLowerCase() &&
+          item.nome.toLowerCase() === coluna.nome.toLowerCase(),
+      );
+      const sensibilidade = maxSensibilidade([
+        parseSensibilidadeColuna(coluna.sensibilidade),
+        parseSensibilidadeColuna(atual?.sensibilidade),
+      ]);
+      const valoresPermitidos =
+        sensibilidade === "livre" &&
+        coluna.origem === "confirmado_usuario" &&
+        coluna.status !== "conflito" &&
+        Boolean(atual) &&
+        atual?.origem === "confirmado_usuario" &&
+        atual?.status !== "conflito";
+      return {
+        ...coluna,
+        sensibilidade,
+        perfil: valoresPermitidos ? coluna.perfil : null,
+        dicionario: valoresPermitidos ? coluna.dicionario : null,
+      };
+    };
+    const conhecimentoPublicado = persisted.conhecimentoPublicado
+      ? {
+          ...persisted.conhecimentoPublicado,
+          colunas: persisted.conhecimentoPublicado.colunas
+            .filter((col) => allowed(col.tabela))
+            .map(protegerColuna),
+          relacionamentos: persisted.conhecimentoPublicado.relacionamentos.filter(
+            (rel) => allowed(rel.origem) && allowed(rel.destino),
+          ),
+        }
+      : undefined;
     return {
       success: true,
-      skill: { ...persisted, escopo },
+      skill: { ...persisted, escopo, conhecimentoPublicado },
       pacote: {
         escopo,
-        colunas,
-        relacionamentos,
-        regras: notasSkill.filter((nota) => nota.tipo === "regra"),
-        metricas: notasSkill.filter((nota) => nota.tipo === "metrica"),
-        consultasExemplo: [...consultasExemplo],
+        colunas:
+          persisted.status === "publicada"
+            ? (conhecimentoPublicado?.colunas ?? [])
+            : colunas.map(protegerColuna),
+        relacionamentos:
+          persisted.status === "publicada"
+            ? [...(persisted.conhecimentoPublicado?.relacionamentos ?? [])].filter(
+                (rel) => allowed(rel.origem) && allowed(rel.destino),
+              )
+            : relacionamentos,
+        regras:
+          persisted.status === "publicada"
+            ? [...(persisted.conhecimentoPublicado?.regras ?? [])]
+            : notasSkill.filter((nota) => nota.tipo === "regra"),
+        metricas:
+          persisted.status === "publicada"
+            ? [...(persisted.conhecimentoPublicado?.metricas ?? [])]
+            : notasSkill.filter((nota) => nota.tipo === "metrica"),
+        consultasExemplo: consultasExemplo.filter(
+          (consulta) =>
+            consulta.status === "confirmada" &&
+            Boolean(consulta.publicacoes?.length) &&
+            consulta.publicacoes!.every(
+              (origin) =>
+                origin.skillId === persisted.id &&
+                origin.id === persisted.publicacaoAtivaId &&
+                origin.hash === persisted.publicacaoHash,
+            ),
+        ),
       },
       guiaDialeto: guiaDialeto(acesso.dialeto),
       escopoPadrao: acesso.escopoPadrao,
@@ -2125,6 +2276,30 @@ export class ConfirmarRelacionamento {
         autorUsuarioId: uid,
       });
       await podarRelacionamentosSubsetNoGrafo(this.grafo, acesso.id);
+      if (input.cardinalidade) {
+        for (const published of await this.skills.listPublicadas(acesso.id)) {
+          const licensed = matchRelacionamentoEscopo(
+            published.escopo.relacionamentos,
+            origemNome,
+            destinoNome,
+            pares,
+          );
+          const reversed = licensed?.tabelaOrigem.toLowerCase() !== origemNome.toLowerCase();
+          const cardinalidade =
+            reversed && input.cardinalidade === "1:N"
+              ? "N:1"
+              : reversed && input.cardinalidade === "N:1"
+                ? "1:N"
+                : input.cardinalidade;
+          if (licensed && licensed.cardinalidade !== cardinalidade) {
+            await this.skills.suspenderPublicacao(published.id);
+            await this.skills.update(published.id, {
+              status: "rascunho_revalidacao",
+              motivoRevalidacao: "Cardinalidade publicada alterada; valide o grão e republique.",
+            });
+          }
+        }
+      }
     });
     if (!skill) {
       return {
@@ -2269,6 +2444,7 @@ export class RemoverRelacionamento {
       updatedSkill = await this.skills.update(skill.id, {
         escopo: { ...skill.escopo, relacionamentos: nextRels },
       });
+      await this.skills.suspenderPublicacao(skill.id);
     }
     return {
       success: true,

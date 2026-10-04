@@ -1,14 +1,27 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import {
+  NodeStreamableHTTPServerTransport,
+  toNodeHandler,
+  toWebRequest,
+} from "@modelcontextprotocol/node";
+import {
+  McpServer,
+  isInitializeRequest,
+  isLegacyRequest,
+  createMcpHandler,
+} from "@modelcontextprotocol/server";
 import type { AppConfig } from "../../config/env.js";
 import { buildInfo } from "../../config/build-info.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { RateLimitStore } from "../http/rate-limit.js";
 import { wwwAuthenticate, readBearer } from "./mcp-auth.js";
-import { accountContext, currentClientIp } from "./account-context.js";
+import {
+  accountContext,
+  currentClientIp,
+  currentAccountId,
+  currentAcessoId,
+} from "./account-context.js";
 import { registerTools, type ToolUseCases } from "./register-tools.js";
 import { montarInstrucoesServidor } from "./server-instructions.js";
 import { createToolRunner } from "./tool-result.js";
@@ -16,7 +29,7 @@ import { syncSkillTools, type SkillCatalogPorts } from "./skill-tools.js";
 import { personaSessaoDeAcesso, type PersonaSessao } from "../../domain/entities/acesso.js";
 
 interface Session {
-  transport: StreamableHTTPServerTransport;
+  transport: NodeStreamableHTTPServerTransport;
   server: McpServer;
   lastActivityAt: number;
   bootstrap: boolean;
@@ -59,8 +72,19 @@ export const createMcpHttpHandler = (input: {
   handle: (req: Request, res: Response) => Promise<void>;
   sessions: Map<string, Session>;
   dispose: () => void;
+  invalidateAccess: (acessoId: string) => void;
 } => {
   const sessions = new Map<string, Session>();
+  const modernByAccess = new Map<
+    string,
+    {
+      uid: string | null;
+      aid: string | null;
+      handler: ReturnType<typeof createMcpHandler>;
+      node: ReturnType<typeof toNodeHandler>;
+      lastActivityAt: number;
+    }
+  >();
   const idleTimeoutMs = input.config.MCP_SESSION_IDLE_TIMEOUT_MS;
 
   const runner = (): ReturnType<typeof createToolRunner> =>
@@ -96,6 +120,13 @@ export const createMcpHttpHandler = (input: {
     for (const session of sessions.values()) {
       if (sessaoDeveReceberSkillsChanged(session, usuarioId, acessoId)) {
         await refreshSkillTools(session, usuarioId, acessoId);
+        session.server.sendResourceListChanged();
+      }
+    }
+    for (const entry of modernByAccess.values()) {
+      if (entry.uid === usuarioId && entry.aid === acessoId) {
+        entry.handler.bus.publish({ kind: "tools_list_changed" });
+        entry.handler.bus.publish({ kind: "resources_list_changed" });
       }
     }
   };
@@ -136,7 +167,7 @@ export const createMcpHttpHandler = (input: {
       },
     );
     const session: Session = {
-      transport: undefined as unknown as StreamableHTTPServerTransport,
+      transport: undefined as unknown as NodeStreamableHTTPServerTransport,
       server,
       lastActivityAt: Date.now(),
       bootstrap,
@@ -152,7 +183,7 @@ export const createMcpHttpHandler = (input: {
       clientIp: () => currentClientIp(),
       onSkillsChanged: notifyAcesso,
     });
-    const transport = new StreamableHTTPServerTransport({
+    const transport = new NodeStreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sid) => {
         sessions.set(sid, session);
@@ -170,6 +201,12 @@ export const createMcpHttpHandler = (input: {
 
   const sweepIdleSessions = (): void => {
     const now = Date.now();
+    for (const [key, entry] of modernByAccess) {
+      if (now - entry.lastActivityAt > idleTimeoutMs) {
+        modernByAccess.delete(key);
+        void entry.handler.close().catch(() => input.logger.warn("failed to close modern handler"));
+      }
+    }
     for (const [sessionId, session] of sessions) {
       if (now - session.lastActivityAt <= idleTimeoutMs) {
         continue;
@@ -187,7 +224,16 @@ export const createMcpHttpHandler = (input: {
   sweepTimer.unref();
 
   const handle = async (req: Request, res: Response): Promise<void> => {
+    if (req.method === "POST" && !req.is("application/json")) {
+      res.status(415).json({ error: "unsupported_media_type" });
+      return;
+    }
     const bearer = readBearer(req);
+    if (req.header("authorization") && !bearer) {
+      res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));
+      res.status(401).json({ error: "invalid_token" });
+      return;
+    }
     let usuarioId: string | null = null;
     let acessoId: string | null = null;
     if (bearer) {
@@ -204,6 +250,8 @@ export const createMcpHttpHandler = (input: {
       const allowed =
         req.method !== "POST" ||
         method === "initialize" ||
+        method === "server/discover" ||
+        method === "subscriptions/listen" ||
         method === "notifications/initialized" ||
         method === "tools/list" ||
         method === "prompts/list" ||
@@ -211,7 +259,8 @@ export const createMcpHttpHandler = (input: {
         method === "resources/list" ||
         method === "resources/templates/list" ||
         method === "resources/read" ||
-        (method === "tools/call" && tool === "registrar_acesso");
+        (method === "tools/call" &&
+          (tool === "registrar_acesso" || tool === "obter_treinamento_base"));
       if (!allowed) {
         res.setHeader("WWW-Authenticate", wwwAuthenticate(input.config));
         res.status(401).json({ error: "invalid_token" });
@@ -219,25 +268,54 @@ export const createMcpHttpHandler = (input: {
       }
     }
 
+    if (!(await isLegacyRequest(await toWebRequest(req, req.body)))) {
+      const key = `${usuarioId ?? "public"}:${acessoId ?? "public"}:${createHash("sha256")
+        .update(bearer ?? "")
+        .digest("hex")}`;
+      let entry = modernByAccess.get(key);
+      if (!entry) {
+        if (modernByAccess.size + sessions.size >= input.config.MCP_MAX_SESSIONS) {
+          res.status(429).json({ error: "session_limit" });
+          return;
+        }
+        const handler = createMcpHandler(
+          async () => {
+            const uid = currentAccountId() ?? null,
+              aid = currentAcessoId() ?? null;
+            const session = await createSession(!uid, uid, aid);
+            if (uid && aid) {
+              await refreshSkillTools(session, uid, aid);
+            }
+            return session.server;
+          },
+          { legacy: "reject", maxSubscriptions: input.config.MCP_MAX_SESSIONS_PER_ACCESS },
+        );
+        entry = {
+          uid: usuarioId,
+          aid: acessoId,
+          handler,
+          node: toNodeHandler(handler),
+          lastActivityAt: Date.now(),
+        };
+        modernByAccess.set(key, entry);
+      }
+      entry.lastActivityAt = Date.now();
+      const modernNode = entry.node;
+      await accountContext.run(
+        { usuarioId: usuarioId ?? undefined, acessoId: acessoId ?? undefined, clientIp: req.ip },
+        () => modernNode(req, res, req.body),
+      );
+      return;
+    }
+
     const sessionId = req.header("mcp-session-id") ?? undefined;
     const existing = sessionId ? sessions.get(sessionId) : undefined;
 
     const run = async (session: Session): Promise<void> => {
       session.lastActivityAt = Date.now();
-      const previousUsuarioId = session.usuarioId;
-      const previousAcessoId = session.acessoId;
-      if (usuarioId) {
-        session.usuarioId = usuarioId;
-      }
-      if (acessoId) {
-        session.acessoId = acessoId;
-      }
-      const swapped =
-        !session.bootstrap &&
-        Boolean(usuarioId && acessoId) &&
-        (usuarioId !== previousUsuarioId || acessoId !== previousAcessoId);
-      if (swapped && usuarioId && acessoId) {
-        await refreshSkillTools(session, usuarioId, acessoId);
+      if (session.usuarioId !== usuarioId || session.acessoId !== acessoId) {
+        res.status(403).json({ error: "session_access_mismatch" });
+        return;
       }
       await accountContext.run(
         {
@@ -265,6 +343,14 @@ export const createMcpHttpHandler = (input: {
     }
 
     if (req.method === "POST" && isInitializeRequest(req.body)) {
+      if (
+        sessions.size >= input.config.MCP_MAX_SESSIONS ||
+        [...sessions.values()].filter((s) => s.acessoId === acessoId).length >=
+          input.config.MCP_MAX_SESSIONS_PER_ACCESS
+      ) {
+        res.status(429).json({ error: "session_limit" });
+        return;
+      }
       const session = await createSession(!usuarioId, usuarioId, acessoId);
       await session.server.connect(session.transport);
       await run(session);
@@ -283,5 +369,40 @@ export const createMcpHttpHandler = (input: {
     });
   };
 
-  return { handle, sessions, dispose: () => clearInterval(sweepTimer) };
+  const invalidateAccess = (aid: string): void => {
+    for (const [id, session] of sessions) {
+      if (session.acessoId === aid) {
+        sessions.delete(id);
+        void session.transport
+          .close()
+          .catch(() => input.logger.warn("failed to close revoked session"));
+      }
+    }
+    for (const [key, entry] of modernByAccess) {
+      if (entry.aid === aid) {
+        modernByAccess.delete(key);
+        void entry.handler
+          .close()
+          .catch(() => input.logger.warn("failed to close revoked subscriptions"));
+      }
+    }
+  };
+  return {
+    handle,
+    sessions,
+    invalidateAccess,
+    dispose: () => {
+      clearInterval(sweepTimer);
+      for (const entry of modernByAccess.values()) {
+        void entry.handler.close().catch(() => input.logger.warn("failed to close modern handler"));
+      }
+      for (const session of sessions.values()) {
+        void session.transport
+          .close()
+          .catch(() => input.logger.warn("failed to close legacy transport"));
+      }
+      sessions.clear();
+      modernByAccess.clear();
+    },
+  };
 };

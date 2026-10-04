@@ -24,7 +24,7 @@ const crypto = new NodeCryptoAdapter(
 const agentId = "11111111-1111-4111-8111-111111111111";
 
 describe("treinar_com_sql enriquecer=completo", () => {
-  const setup = async () => {
+  const setup = async (classificadas = true) => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
     const usuarios = new InMemoryUsuarioRepository();
@@ -47,6 +47,28 @@ describe("treinar_com_sql enriquecer=completo", () => {
       dialeto: "sybase",
       clientToken: "tok-sql-123456",
     });
+    if (classificadas) {
+      const { tabela } = await grafo.mergeTabela({
+        acessoId: created.acessoId,
+        nome: "produto",
+        origem: "confirmado_usuario",
+        autorUsuarioId: created.usuarioId,
+      });
+      for (const nome of [
+        "codprod",
+        "codcli",
+        ...Array.from({ length: 17 }, (_, i) => `col${i + 1}`),
+      ]) {
+        await grafo.mergeColuna({
+          acessoId: created.acessoId,
+          tabelaId: tabela.id,
+          nome,
+          sensibilidade: "livre",
+          origem: "confirmado_usuario",
+          autorUsuarioId: created.usuarioId,
+        });
+      }
+    }
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
@@ -106,6 +128,23 @@ describe("treinar_com_sql enriquecer=completo", () => {
     expect(codigo?.tipo).toBe("int");
     expect(codigo?.formato).toBe("number");
     expect(codigo?.perfil?.candidatosDicionario?.length).toBeGreaterThan(0);
+  });
+
+  it("validação técnica de coluna nova não autoriza amostra ou mínimo/máximo", async () => {
+    const { plug, treinar, grafo, created } = await setup(false);
+    const queries: string[] = [];
+    plug.sqlImpl = async (sql) => {
+      queries.push(sql);
+      return { columns: [], rows: [] };
+    };
+    await treinar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      sql: "SELECT p.codprod FROM produto p WHERE p.codprod>0",
+      enriquecer: "completo",
+    });
+    expect(queries.some((sql) => /MIN\(|MAX\(|SELECT DISTINCT/i.test(sql))).toBe(false);
+    const table = await grafo.findTabelaByNome(created.acessoId, "produto");
+    expect((await grafo.findColuna(created.acessoId, table!.id, "codprod"))?.perfil).toBeNull();
   });
 
   it("falha de query de perfil vira aviso e mantém o grafo", async () => {
@@ -257,7 +296,7 @@ describe("treinar_com_sql enriquecer=completo", () => {
   it("falha isolada de uma coluna não impede o perfil das outras", async () => {
     const { plug, grafo, treinar, created } = await setup();
     plug.sqlImpl = async (sql: string) => {
-      if (/MIN\(nome\)/i.test(sql)) {
+      if (/MIN\(codcli\)/i.test(sql)) {
         throw new DomainError({
           code: ERROR_CODES.PLUG_SERVER_ERROR,
           message: "hub",

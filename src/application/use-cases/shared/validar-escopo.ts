@@ -9,12 +9,14 @@ import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import {
   collectColumnRefsLocal,
+  collectGuaranteedEqualities,
   parseSelect,
   temLimiteNoSelectExterno,
   temOrderByNoSelectExterno,
   type SqlAstSelect,
 } from "./sql-ast.js";
 import { hintComProximos } from "./sugestoes.js";
+import { resolvePhysicalJoinKey } from "./assert-fanout.js";
 import { sqlDeclaraLimiteExterno, sqlTemOrderByExterno } from "./sql-scan.js";
 
 export const GROUP_BY_MAX_EXPRESSIONS = 16;
@@ -58,7 +60,7 @@ const resolveTabela = (
   aliasOrName: string | null,
 ): { nome: string; skipEscopo: boolean } | null => {
   if (!aliasOrName) {
-    const fisicas = tabelasFisicas(ast);
+    const fisicas = ast.tabelas;
     if (fisicas.length === 1 && fisicas[0]) {
       return { nome: fisicas[0].nome, skipEscopo: fisicas[0].isCte || fisicas[0].isSubquery };
     }
@@ -169,6 +171,7 @@ const validarSelect = (
   escopo: EscopoSkill,
   cteNomes: ReadonlySet<string>,
   permitirStarSimples = false,
+  parents: readonly SqlAstSelect[] = [],
 ): void => {
   if (ast.temStar && !starSimplesInspecao(ast, permitirStarSimples)) {
     throw DomainError.pacote({
@@ -204,7 +207,8 @@ const validarSelect = (
       });
     }
   }
-  const fisicas = tabelasFisicas(ast);
+  const fisicas = ast.tabelas;
+  const correlated: string[] = [];
   for (const ref of collectColumnRefsLocal(ast)) {
     if (ref.column === "*") {
       continue;
@@ -217,14 +221,22 @@ const validarSelect = (
           hint: "Qualifique alias.coluna (ex.: p.codprod). Não deixe o validador adivinhar a tabela.",
         });
       }
-    } else if (!aliasConhecido(ast, cteNomes, ref.table)) {
+    } else if (
+      !aliasConhecido(ast, cteNomes, ref.table) &&
+      !parents.some((parent) => aliasConhecido(parent, new Set(), ref.table!))
+    ) {
       throw DomainError.pacote({
         code: ERROR_CODES.ALIAS_DESCONHECIDO,
         message: `Alias ${ref.table} não resolve para tabela deste SELECT.`,
         hint: "Use um alias declarado no FROM/JOIN ou o nome da tabela do pacote.",
       });
     }
-    const resolved = resolveTabela(ast, cteNomes, ref.table);
+    const owner =
+      ref.table && !aliasConhecido(ast, cteNomes, ref.table)
+        ? parents.find((parent) => aliasConhecido(parent, new Set(), ref.table!))
+        : ast;
+    if (owner !== ast && ref.table) correlated.push(ref.table);
+    const resolved = owner ? resolveTabela(owner, cteNomes, ref.table) : null;
     if (!resolved) {
       throw DomainError.pacote({
         code: ERROR_CODES.COLUNA_AMBIGUA,
@@ -233,6 +245,18 @@ const validarSelect = (
       });
     }
     if (resolved.skipEscopo) {
+      const source = ast.tabelas.find(
+        (t) => lower(t.alias ?? t.nome) === lower(ref.table ?? resolved.nome),
+      );
+      const output = source?.derived?.colunas.find(
+        (c) => lower((c.alias.length ? c.alias : c.column) ?? "") === lower(ref.column),
+      );
+      if (!output)
+        throw DomainError.pacote({
+          code: ERROR_CODES.COLUNA_FORA_DO_ESCOPO,
+          message: "Coluna ausente na projeção derivada.",
+          hint: "Use apenas as colunas explicitamente projetadas pela CTE ou subconsulta.",
+        });
       continue;
     }
     if (!colunaNoEscopo(escopo, resolved.nome, ref.column)) {
@@ -287,14 +311,25 @@ const validarSelect = (
           hint: "Declare FROM/JOIN com alias e ON alias.coluna = alias.coluna.",
         });
       }
-      if (leftTable.skipEscopo || rightTable.skipEscopo) {
-        continue;
-      }
+      const left = resolvePhysicalJoinKey(
+        ast.tabelas.find((t) => lower(t.alias ?? t.nome) === lower(eq.leftAlias)),
+        eq.leftColumn,
+      );
+      const right = resolvePhysicalJoinKey(
+        ast.tabelas.find((t) => lower(t.alias ?? t.nome) === lower(eq.rightAlias)),
+        eq.rightColumn,
+      );
+      if (!left || !right)
+        throw DomainError.pacote({
+          code: ERROR_CODES.JOIN_DESCONHECIDO,
+          message: "Origem física do JOIN derivado não demonstrada.",
+          hint: "Projete as chaves físicas sem transformação e use o relacionamento publicado completo.",
+        });
       eqs.push({
-        leftTable: leftTable.nome,
-        leftColumn: eq.leftColumn,
-        rightTable: rightTable.nome,
-        rightColumn: eq.rightColumn,
+        leftTable: left.table,
+        leftColumn: left.column,
+        rightTable: right.table,
+        rightColumn: right.column,
       });
     }
     if (eqs.length > 0 && !joinConjuntoConhecido(escopo, eqs)) {
@@ -308,9 +343,41 @@ const validarSelect = (
       });
     }
   }
+  if (correlated.length) {
+    const eqs = collectGuaranteedEqualities(ast.whereAst).flatMap((eq) => {
+      const table = (alias: string) =>
+        [ast, ...parents]
+          .flatMap((select) => select.tabelas)
+          .find((t) => lower(t.alias ?? t.nome) === lower(alias));
+      const left = resolvePhysicalJoinKey(table(eq.leftAlias), eq.leftColumn),
+        right = resolvePhysicalJoinKey(table(eq.rightAlias), eq.rightColumn);
+      return left &&
+        right &&
+        correlated.some((a) => lower(a) === lower(eq.leftAlias)) !==
+          correlated.some((a) => lower(a) === lower(eq.rightAlias))
+        ? [
+            {
+              leftTable: left.table,
+              leftColumn: left.column,
+              rightTable: right.table,
+              rightColumn: right.column,
+            },
+          ]
+        : [];
+    });
+    if (!joinConjuntoConhecido(escopo, eqs))
+      throw DomainError.pacote({
+        code: ERROR_CODES.JOIN_DESCONHECIDO,
+        message: "Correlação sem relacionamento publicado completo.",
+        hint: "Use EXISTS com todas as igualdades do relacionamento certificado, garantidas em cada alternativa lógica.",
+      });
+  }
   const cteProximo = new Set([...cteNomes, ...ast.cteNomes.map(lower)]);
   for (const sub of ast.subqueries) {
-    validarSelect(sub, escopo, new Set([...cteProximo, ...sub.cteNomes.map(lower)]), false);
+    validarSelect(sub, escopo, new Set([...cteProximo, ...sub.cteNomes.map(lower)]), false, [
+      ast,
+      ...parents,
+    ]);
   }
   for (const branch of ast.setBranches) {
     validarSelect(branch, escopo, new Set([...cteProximo, ...branch.cteNomes.map(lower)]), false);
@@ -322,7 +389,7 @@ const assertRecorte = (ast: SqlAstSelect): void => {
     throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_SEM_RECORTE,
       message: "Consulta sem recorte nem agregação.",
-      hint: "Adicione WHERE (período, empresa, status) ou agregue no banco (SUM/COUNT/GROUP BY/OVER). Não reenvie o mesmo SELECT sem recorte nem some linhas na IA.",
+      hint: "Adicione WHERE (período, empresa, status) ou agregue no banco (SUM/COUNT/GROUP BY). Não reenvie o mesmo SELECT sem recorte nem some linhas na IA.",
     });
   }
   for (const branch of ast.setBranches) {

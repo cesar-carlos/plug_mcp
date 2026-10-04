@@ -9,6 +9,20 @@ import type {
 } from "../entities/skill.js";
 
 export interface SkillRepositoryPort {
+  findPublicadaById(id: string): Promise<Skill | null>;
+  listPublicadas(acessoId: string): Promise<readonly Skill[]>;
+  buscarPublicadas(
+    acessoId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<Skill>[]>;
+  suspenderPublicacao(id: string): Promise<void>;
+  ativarPublicacao?(
+    id: string,
+    publicacaoId: string,
+    hash: string,
+    pacote?: Readonly<Record<string, unknown>>,
+  ): Promise<void>;
   create(input: NovaSkill): Promise<Skill>;
   update(
     id: string,

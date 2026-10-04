@@ -1,3 +1,7 @@
+import { DomainError } from "../../../domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
+import { identidadeConsulta } from "../../../domain/entities/consulta-fingerprint.js";
+import { skillDoSnapshot } from "../skill-publicada.js";
 import { randomUUID } from "node:crypto";
 import type { Acesso, NovoAcesso, StatusAcesso } from "../../../domain/entities/acesso.js";
 import type { NovoUsuarioMcp, UsuarioMcp } from "../../../domain/entities/usuario-mcp.js";
@@ -185,6 +189,18 @@ export class InMemoryAcessoRepository implements AcessoRepositoryPort {
       return;
     }
     this.rows.set(acessoId, { ...row, statusAcesso: status, updatedAt: now() });
+  }
+
+  async compareAndRotateToken(
+    acessoId: string,
+    expectedHash: string,
+    tokenHash: string,
+    tokenExpiresAt: Date | null,
+  ): Promise<boolean> {
+    const row = this.rows.get(acessoId);
+    if (row?.tokenHash !== expectedHash) return false;
+    this.rows.set(acessoId, { ...row, tokenHash, tokenExpiresAt, updatedAt: now() });
+    return true;
   }
 
   async updateClientToken(
@@ -688,6 +704,73 @@ export class InMemoryGrafoRepository implements GrafoRepositoryPort {
 
 export class InMemorySkillRepository implements SkillRepositoryPort {
   private readonly rows = new Map<string, Skill>();
+  private readonly publicadas = new Map<string, Skill>();
+
+  async findPublicadaById(skillId: string): Promise<Skill | null> {
+    const draft = this.rows.get(skillId),
+      published = this.publicadas.get(skillId);
+    return draft && published
+      ? { ...structuredClone(published), statusRascunho: draft.status }
+      : null;
+  }
+  async listPublicadas(acessoId: string): Promise<readonly Skill[]> {
+    return [...this.publicadas.values()]
+      .filter((row) => row.acessoId === acessoId && this.rows.has(row.id))
+      .map((row) => ({ ...structuredClone(row), statusRascunho: this.rows.get(row.id)?.status }));
+  }
+  async suspenderPublicacao(skillId: string): Promise<void> {
+    this.publicadas.delete(skillId);
+    const draft = this.rows.get(skillId);
+    if (draft) {
+      this.rows.set(skillId, { ...draft, publicacaoAtivaId: null });
+    }
+  }
+  async ativarPublicacao(
+    skillId: string,
+    publicacaoId: string,
+    hash: string,
+    pacote?: Readonly<Record<string, unknown>>,
+  ): Promise<void> {
+    const draft = this.rows.get(skillId);
+    if (!draft) {
+      throw new Error("skill not found");
+    }
+    const published = pacote
+      ? skillDoSnapshot(draft, {
+          id: publicacaoId,
+          pacote,
+          pacoteHash: hash,
+          skillVersao: draft.versao,
+        })
+      : {
+          ...structuredClone(draft),
+          status: "publicada" as const,
+          publicacaoAtivaId: publicacaoId,
+          publicacaoHash: hash,
+        };
+    this.publicadas.set(skillId, published);
+    this.rows.set(skillId, { ...draft, publicacaoAtivaId: publicacaoId });
+  }
+
+  async buscarPublicadas(
+    acessoId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<Skill>[]> {
+    return rankByTermsHits(
+      await this.listPublicadas(acessoId),
+      tokenizeQuery(query),
+      (item) =>
+        [
+          item.nome,
+          item.slug,
+          item.descricao,
+          ...item.params.map((param) => param.descricao),
+          ...item.escopo.metricasSaida.map((metric) => metric.definicao ?? metric.alias),
+        ].join(" "),
+      limite,
+    );
+  }
 
   async create(input: NovaSkill): Promise<Skill> {
     const row: Skill = {
@@ -739,10 +822,17 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
     const next: Skill = {
       ...row,
       ...patch,
+      status:
+        row.status === "publicada" && (patch.status === undefined || patch.status === "publicada")
+          ? "rascunho"
+          : (patch.status ?? row.status),
       versao: row.versao + 1,
       updatedAt: now(),
     };
     this.rows.set(skillId, next);
+    if (patch.status === "rascunho_revalidacao") {
+      await this.suspenderPublicacao(skillId);
+    }
     return next;
   }
 
@@ -753,6 +843,12 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
     }
     const next: Skill = { ...row, status, versao: versao ?? row.versao, updatedAt: now() };
     this.rows.set(skillId, next);
+    if (status === "publicada") {
+      await this.ativarPublicacao(skillId, id(), `memory:${next.versao}`);
+    }
+    if (status === "rascunho_revalidacao") {
+      await this.suspenderPublicacao(skillId);
+    }
     return next;
   }
 
@@ -781,6 +877,7 @@ export class InMemorySkillRepository implements SkillRepositoryPort {
   }
 
   async deleteById(id: string): Promise<boolean> {
+    this.publicadas.delete(id);
     return this.rows.delete(id);
   }
 
@@ -956,6 +1053,17 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   private readonly consultas: ConsultaAprendida[] = [];
   private readonly sinonimos: Sinonimo[] = [];
   private readonly lacunas: LacunaConsulta[] = [];
+  purgeCandidatasAntesDe(cutoff: Date): Promise<number> {
+    let removed = 0;
+    for (let i = this.consultas.length - 1; i >= 0; i--) {
+      const row = this.consultas[i];
+      if (row?.status === "candidata" && row.ultimaExecucao < cutoff) {
+        this.consultas.splice(i, 1);
+        removed++;
+      }
+    }
+    return Promise.resolve(removed);
+  }
 
   async salvarConsulta(input: {
     acessoId: string;
@@ -964,24 +1072,29 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     sql: string;
     paramsContrato: readonly ParametroSkill[];
     autorUsuarioId: string | null;
+    registroExecucao?: boolean;
+    status?: "candidata" | "confirmada";
+    publicacoes?: ConsultaAprendida["publicacoes"];
   }): Promise<ConsultaAprendida> {
+    const cutoff = Date.now() - 90 * 86400_000;
+    for (let i = this.consultas.length - 1; i >= 0; i--) {
+      const row = this.consultas[i];
+      if (row?.status === "candidata" && row.ultimaExecucao.getTime() < cutoff) {
+        this.consultas.splice(i, 1);
+      }
+    }
     const existing = this.consultas.find(
-      (row) => mesmoAcessoCatalogo(row.acessoId, input.acessoId) && row.sql === input.sql,
+      (row) =>
+        mesmoAcessoCatalogo(row.acessoId, input.acessoId) &&
+        identidadeConsulta(row) === identidadeConsulta(input),
     );
-    const mergedIds = [...new Set([...(existing?.skillIds ?? []), ...input.skillIds])];
     if (existing) {
-      const next: ConsultaAprendida = {
+      const next = {
         ...existing,
-        skillIds: mergedIds,
-        execucoes: existing.execucoes + 1,
-        ultimaExecucao: now(),
-        pergunta:
-          input.pergunta.trim().length > existing.pergunta.trim().length
-            ? input.pergunta
-            : existing.pergunta,
+        execucoes: existing.execucoes + (input.registroExecucao === false ? 0 : 1),
+        ultimaExecucao: input.registroExecucao === false ? existing.ultimaExecucao : now(),
       };
-      const idx = this.consultas.findIndex((row) => row.id === existing.id);
-      this.consultas[idx] = next;
+      this.consultas[this.consultas.findIndex((r) => r.id === existing.id)] = next;
       return next;
     }
     const row: ConsultaAprendida = {
@@ -991,15 +1104,59 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
       pergunta: input.pergunta,
       sql: input.sql,
       paramsContrato: input.paramsContrato,
-      execucoes: 1,
+      versao: 1,
+      execucoes: input.registroExecucao === false ? 0 : 1,
       ultimaExecucao: now(),
-      status: "ativa",
+      status: input.status ?? "candidata",
+      publicacoes: input.publicacoes ?? [],
+      confirmadaEm: input.status === "confirmada" ? now() : null,
       autorUsuarioId: input.autorUsuarioId,
     };
     this.consultas.push(row);
     return row;
   }
 
+  alterarEstado: AprendizadoRepositoryPort["alterarEstado"] = async (input) => {
+    const index = this.consultas.findIndex(
+      (r) => r.acessoId === input.acessoId && r.id === input.id,
+    );
+    const row = this.consultas[index];
+    if (
+      !row ||
+      (row.versao ?? 1) !== input.expectedVersion ||
+      (input.status === "confirmada" && row.status !== "candidata")
+    )
+      throw new DomainError({
+        code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+        message: "Candidata mudou.",
+        hint: "Gere novo preview.",
+      });
+    const next = {
+      ...row,
+      versao: (row.versao ?? 1) + 1,
+      status: input.status,
+      autorUsuarioId: input.autorUsuarioId,
+      confirmadaEm: input.status === "confirmada" ? now() : row.confirmadaEm,
+      motivoInativacao: input.motivo ?? null,
+    };
+    this.consultas[index] = next;
+    return next;
+  };
+
+  paginarConsultas: AprendizadoRepositoryPort["paginarConsultas"] = (input) => {
+    const rows = this.consultas
+      .filter(
+        (r) =>
+          r.acessoId === input.acessoId &&
+          (!input.skillId || r.skillIds.includes(input.skillId)) &&
+          (!input.estado || r.status === input.estado),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
+    return Promise.resolve({
+      total: rows.length,
+      consultas: rows.slice((input.pagina - 1) * input.limite, input.pagina * input.limite),
+    });
+  };
   async listarConsultas(acessoId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
     return this.consultas
       .filter((row) => mesmoAcessoCatalogo(row.acessoId, acessoId))
@@ -1014,7 +1171,10 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
   ): Promise<readonly ConsultaAprendida[]> {
     return this.consultas
       .filter(
-        (row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.skillIds.includes(skillId),
+        (row) =>
+          mesmoAcessoCatalogo(row.acessoId, acessoId) &&
+          row.skillIds.includes(skillId) &&
+          row.status === "confirmada",
       )
       .sort((a, b) => b.execucoes - a.execucoes)
       .slice(0, limite);
@@ -1035,7 +1195,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     const terms = tokenizeQuery(query);
     return rankByTermsHits(
       this.consultas.filter(
-        (row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.status === "ativa",
+        (row) => mesmoAcessoCatalogo(row.acessoId, acessoId) && row.status === "confirmada",
       ),
       terms,
       (row) => row.pergunta,
@@ -1112,6 +1272,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
     if (existing) {
       const next: LacunaConsulta = {
         ...existing,
+        ocorrencias: (existing.ocorrencias ?? 1) + 1,
         pergunta,
         contrato,
         status: "aberta",
@@ -1121,6 +1282,7 @@ export class InMemoryAprendizadoRepository implements AprendizadoRepositoryPort 
       return next;
     }
     const row: LacunaConsulta = {
+      ocorrencias: 1,
       id: id(),
       acessoId,
       pergunta,

@@ -18,6 +18,7 @@ import type { EscopoSkill } from "../../domain/entities/escopo.js";
 import type { PerfilColuna } from "../../domain/entities/escopo.js";
 import type { EscopoValidacaoRel } from "../../domain/entities/grafo.js";
 import type { AuditMetadata } from "../../domain/entities/audit-log.js";
+import type { SetupPurpose } from "../../domain/ports/setup-operation.port.js";
 import type {
   CategoriaAlertaOperacional,
   MetadadosAlertaOperacional,
@@ -70,6 +71,21 @@ export const acesso = pgTable(
     index("acesso_usuario_idx").on(t.usuarioId),
     index("acesso_agent_idx").on(t.agentId),
   ],
+);
+
+export const setupOperation = pgTable(
+  "setup_operation",
+  {
+    codeHash: text("code_hash").primaryKey(),
+    purpose: text("purpose").$type<SetupPurpose>().notNull(),
+    usuarioId: uuid("usuario_id").references(() => usuarioMcp.id, { onDelete: "cascade" }),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
+    bearerHash: text("bearer_hash"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    csrfHash: text("csrf_hash"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  },
+  (t) => [index("setup_operation_expiry_idx").on(t.expiresAt)],
 );
 
 export const mcpSetup = pgTable(
@@ -214,6 +230,7 @@ export const skill = pgTable(
     versao: integer("versao").notNull().default(1),
     pacoteVersao: integer("pacote_versao").notNull().default(2),
     status: text("status").notNull().default("rascunho"),
+    publicacaoAtivaId: uuid("publicacao_ativa_id"),
     motivoRevalidacao: text("motivo_revalidacao"),
     consultaSemantica: jsonb("consulta_semantica").$type<ConsultaSemantica | null>(),
     politicaConsulta: jsonb("politica_consulta").$type<PoliticaConsulta | null>(),
@@ -393,12 +410,20 @@ export const consultaAprendida = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
+    versao: integer("versao").notNull().default(1),
+    fingerprint: text("fingerprint"),
+    motivoInativacao: text("motivo_inativacao"),
     pergunta: text("pergunta").notNull(),
     sql: text("sql").notNull(),
     paramsContrato: jsonb("params_contrato").$type<ParametroSkill[]>().notNull().default([]),
     execucoes: integer("execucoes").notNull().default(1),
     ultimaExecucao: timestamp("ultima_execucao", { withTimezone: true }).notNull().defaultNow(),
-    status: text("status").notNull().default("ativa"),
+    status: text("status").notNull().default("candidata"),
+    publicacoes: jsonb("publicacoes")
+      .$type<{ skillId: string; id: string; hash: string }[]>()
+      .notNull()
+      .default([]),
+    confirmadaEm: timestamp("confirmada_em", { withTimezone: true }),
     autorUsuarioId: uuid("autor_usuario_id"),
     ...timestamps,
   },
@@ -439,6 +464,7 @@ export const lacunaConsulta = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
+    ocorrencias: integer("ocorrencias").notNull().default(1),
     pergunta: text("pergunta").notNull(),
     perguntaChave: text("pergunta_chave").notNull(),
     tipo: text("tipo").notNull().default("skill_gap"),

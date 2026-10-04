@@ -7,9 +7,13 @@ export interface ConsultaAprendida {
   readonly pergunta: string;
   readonly sql: string;
   readonly paramsContrato: readonly ParametroSkill[];
+  readonly versao?: number;
+  readonly motivoInativacao?: string | null;
   readonly execucoes: number;
   readonly ultimaExecucao: Date;
   readonly status: string;
+  readonly publicacoes?: readonly { skillId: string; id: string; hash: string }[];
+  readonly confirmadaEm?: Date | null;
   readonly autorUsuarioId: string | null;
 }
 
@@ -28,6 +32,7 @@ export const chavePerguntaLacuna = (pergunta: string): string =>
   pergunta.trim().toLowerCase().replace(/\s+/g, " ");
 
 export interface LacunaConsulta {
+  readonly ocorrencias?: number;
   readonly id: string;
   readonly acessoId: string | null;
   readonly pergunta: string;

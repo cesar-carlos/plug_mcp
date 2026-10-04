@@ -42,6 +42,7 @@ export const recusarSqlLivreFirebird = (): never => {
 };
 
 export interface SqlAstTabela {
+  readonly derived?: SqlAstSelect;
   readonly nome: string;
   readonly alias: string | null;
   readonly isCte: boolean;
@@ -49,6 +50,7 @@ export interface SqlAstTabela {
 }
 
 export interface SqlAstColuna {
+  readonly refs: readonly SqlAstColumnRef[];
   readonly expr: string;
   readonly alias: string;
   readonly table: string | null;
@@ -72,6 +74,7 @@ export interface SqlAstColumnRef {
 }
 
 export interface SqlAstSelect {
+  readonly whereAst: unknown;
   readonly sql: string;
   readonly database: ParserDatabase;
   readonly tabelas: readonly SqlAstTabela[];
@@ -135,12 +138,16 @@ const exprToSql = (node: unknown, database: ParserDatabase): string => {
   }
 };
 
-const collectEqualities = (node: unknown): JoinEqualityAst[] => {
+export const collectGuaranteedEqualities = (node: unknown): JoinEqualityAst[] => {
   if (!isRecord(node)) {
     return [];
   }
-  if (node.type === "binary_expr" && (node.operator === "AND" || node.operator === "OR")) {
-    return [...collectEqualities(node.left), ...collectEqualities(node.right)];
+  if (node.type === "binary_expr" && node.operator === "AND") {
+    return [...collectGuaranteedEqualities(node.left), ...collectGuaranteedEqualities(node.right)];
+  }
+  if (node.type === "binary_expr" && node.operator === "OR") {
+    const right = new Set(collectGuaranteedEqualities(node.right).map((eq) => JSON.stringify(eq)));
+    return collectGuaranteedEqualities(node.left).filter((eq) => right.has(JSON.stringify(eq)));
   }
   if (node.type === "binary_expr" && node.operator === "=") {
     const left = isRecord(node.left) ? node.left : null;
@@ -257,6 +264,7 @@ const collectFiltroRefs = (ast: Record<string, unknown>): SqlAstColumnRef[] => [
   ...collectRefsFromNode(ast.having),
   ...collectRefsFromNode(ast.groupby),
   ...collectRefsFromNode(ast.orderby),
+  ...collectFromOnNodes(ast.from).flatMap(collectRefsFromNode),
 ];
 
 const collectFromOnNodes = (from: unknown): unknown[] =>
@@ -345,6 +353,7 @@ const parseFromItem = (
   if (isRecord(from.expr) && from.expr.ast) {
     return {
       tabela: {
+        derived: fromSelectAst(from.expr.ast, "", database),
         nome: readString(from.as) ?? "_subquery",
         alias: readString(from.as),
         isCte: false,
@@ -356,7 +365,7 @@ const parseFromItem = (
             tabela: readString(from.as) ?? "_subquery",
             alias: readString(from.as),
             on: from.on ? exprToSql(from.on, database) : null,
-            equalities: collectEqualities(from.on),
+            equalities: collectGuaranteedEqualities(from.on),
           }
         : null,
     };
@@ -382,7 +391,7 @@ const parseFromItem = (
       tabela: nome,
       alias,
       on: from.on ? exprToSql(from.on, database) : null,
-      equalities: collectEqualities(from.on),
+      equalities: collectGuaranteedEqualities(from.on),
     },
   };
 };
@@ -400,7 +409,7 @@ const parseColumns = (
     }
     const exprNode = item.expr;
     const star = hasStar(exprNode);
-    const aggregate = hasAggr(exprNode) || hasWindow(exprNode);
+    const aggregate = hasAggr(exprNode) && !hasWindow(exprNode);
     const isColumnRef = isRecord(exprNode) && exprNode.type === "column_ref";
     const table = isColumnRef ? readString(exprNode.table) : null;
     const column = isColumnRef ? columnName(exprNode.column) : null;
@@ -413,6 +422,7 @@ const parseColumns = (
       temAgregacao = true;
     }
     colunas.push({
+      refs: collectRefsFromNode(exprNode),
       expr,
       alias,
       table,
@@ -481,8 +491,15 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
   const joins: SqlAstJoin[] = [];
   for (const item of asArray(ast.from)) {
     const parsed = parseFromItem(item, database, cteSet);
-    if (parsed.tabela && !parsed.tabela.isCte) {
-      tabelas.push(parsed.tabela);
+    if (parsed.tabela) {
+      const cte = asArray(ast.with).find(
+        (item) => cteName(item)?.toLowerCase() === parsed.tabela?.nome.toLowerCase(),
+      );
+      if (cte) {
+        tabelas.push({ ...parsed.tabela, derived: fromSelectAst(cteStmt(cte), sql, database) });
+      } else {
+        tabelas.push(parsed.tabela);
+      }
     }
     if (parsed.join) {
       joins.push(parsed.join);
@@ -502,6 +519,7 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
   const groupCols = groupByColumns(ast);
   const filtroRefs = collectFiltroRefs(ast);
   return {
+    whereAst: ast.where,
     sql,
     database,
     tabelas,
@@ -535,12 +553,19 @@ const tryAstify = (sql: string, database: ParserDatabase): unknown =>
   parser.astify(sql, { database });
 
 export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
+  if (sql.length > 100_000) {
+    throw DomainError.pacote({
+      code: ERROR_CODES.CONSULTA_ORCAMENTO,
+      message: "SQL excede o limite de 100 KB.",
+      hint: "Reduza a consulta.",
+    });
+  }
+  assertLexicalBudget(sql);
   const database = parserDatabaseForDialeto(dialeto);
   let ast: unknown;
   try {
     ast = tryAstify(sql, database);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "SQL inválido.";
+  } catch {
     const janela = /\bOVER\s*\(/i.test(sql);
     throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
@@ -548,8 +573,8 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
         ? "Não foi possível interpretar a função de janela (OVER) neste dialeto."
         : "Não foi possível interpretar o SQL neste dialeto.",
       hint: janela
-        ? `${message.slice(0, 180)}. Reescreva PARTITION BY / ORDER BY da janela no guia de dialeto do acesso.`
-        : `${message.slice(0, 180)}. Ajuste o SQL ao guia de dialeto do acesso.`,
+        ? "Reescreva PARTITION BY / ORDER BY da janela conforme o guia do dialeto do acesso."
+        : "Ajuste o SQL conforme o guia do dialeto do acesso.",
     });
   }
   const statements: unknown[] = Array.isArray(ast) ? ast : [ast];
@@ -568,7 +593,154 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
       hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
     });
   }
+  assertReadOnlyAst(first, dialeto);
   return fromSelectAst(first, sql, database);
+};
+
+/** Bound parser work before allocating a deeply nested AST. Ignore quotes/comments. */
+const assertLexicalBudget = (sql: string): void => {
+  let depth = 0,
+    tokens = 0;
+  const pieces =
+    sql.match(
+      /'(?:''|[^'])*'|"(?:""|[^"])*"|\[(?:\]\]|[^\]])*\]|--[^\r\n]*|\/\*[\s\S]*?\*\/|\(|\)|\w+|[^\s]/g,
+    ) ?? [];
+  for (const piece of pieces) {
+    if (piece.startsWith("--") || piece.startsWith("/*")) {
+      continue;
+    }
+    if (++tokens > 10_000 || (piece === "(" && ++depth > 64)) {
+      throw DomainError.pacote({
+        code: ERROR_CODES.CONSULTA_ORCAMENTO,
+        message: "SQL excede a complexidade permitida.",
+        hint: "Divida a consulta.",
+      });
+    }
+    if (piece === ")") {
+      depth--;
+    }
+  }
+};
+
+const SAFE_COMMON_FUNCTIONS = new Set(
+  "COUNT SUM AVG MIN MAX CAST COALESCE NULLIF ABS ROUND FLOOR CEILING CEIL POWER SQRT SIGN MOD CONCAT SUBSTRING TRIM LTRIM RTRIM UPPER LOWER REPLACE LEFT RIGHT LENGTH CHAR_LENGTH ROW_NUMBER RANK DENSE_RANK LAG LEAD FIRST_VALUE LAST_VALUE NTILE EXTRACT CURRENT_DATE CURRENT_TIMESTAMP".split(
+    " ",
+  ),
+);
+const SAFE_DIALECT_FUNCTIONS: Readonly<Record<Dialeto, ReadonlySet<string>>> = {
+  postgres: new Set(
+    "NOW DATE_TRUNC DATE_PART TO_CHAR TO_DATE TO_TIMESTAMP AGE GREATEST LEAST REGEXP_REPLACE STRING_AGG BOOL_AND BOOL_OR STDDEV VARIANCE".split(
+      " ",
+    ),
+  ),
+  mssql: new Set(
+    "ISNULL LEN CONVERT TRY_CONVERT TRY_CAST GETDATE GETUTCDATE SYSDATETIME DATEADD DATEDIFF DATEDIFF_BIG DATEPART DATENAME YEAR MONTH DAY EOMONTH DATEFROMPARTS FORMAT IIF STRING_AGG STDEV VAR".split(
+      " ",
+    ),
+  ),
+  sybase: new Set(
+    "ISNULL LEN CONVERT GETDATE DATEADD DATEDIFF DATEPART DATENAME YEAR MONTH DAY".split(" "),
+  ),
+  firebird: new Set("CHAR_LENGTH POSITION IIF DATEDIFF DATEADD EXTRACT LIST".split(" ")),
+};
+
+const functionName = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value.toUpperCase();
+  }
+  if (!isRecord(value)) {
+    return "";
+  }
+  const parts = asArray(value.name);
+  return [readString(value.schema), ...parts.map((part) => readString(part) ?? "")]
+    .filter(Boolean)
+    .join(".")
+    .toUpperCase();
+};
+
+const assertReadOnlyAst = (root: unknown, dialeto: Dialeto): void => {
+  const pending: { value: unknown; depth: number }[] = [{ value: root, depth: 0 }];
+  let count = 0;
+  while (pending.length > 0) {
+    const entry = pending.pop();
+    if (!entry) {
+      break;
+    }
+    if (++count > 20_000 || entry.depth > 64) {
+      throw DomainError.pacote({
+        code: ERROR_CODES.CONSULTA_ORCAMENTO,
+        message: "SQL excede a complexidade permitida.",
+        hint: "Divida a consulta.",
+      });
+    }
+    const node = entry.value;
+    if (isRecord(node)) {
+      if (node.type === "select") {
+        for (const from of asArray(node.from)) {
+          const item = isRecord(from) ? from : null;
+          if (
+            !item ||
+            item.db != null ||
+            (item.expr != null &&
+              !(isRecord(item.expr) && isRecord(item.expr.ast) && item.expr.ast.type === "select"))
+          ) {
+            throw DomainError.pacote({
+              code: ERROR_CODES.SQL_EFEITO_COLATERAL,
+              message: "Origem SQL não suportada no pacote.",
+              hint: "Use tabelas locais do pacote; acesso externo, funções no FROM e origens qualificadas exigem suporte explícito.",
+            });
+          }
+        }
+      }
+      const into = isRecord(node.into) ? node.into : null;
+      const write = [
+        "insert",
+        "update",
+        "delete",
+        "replace",
+        "create",
+        "drop",
+        "alter",
+        "call",
+        "exec",
+      ].includes(String(node.type).toLowerCase());
+      if (
+        write ||
+        (into && (into.expr != null || into.position != null)) ||
+        node.for != null ||
+        node.locking_read != null
+      ) {
+        throw DomainError.pacote({
+          code: ERROR_CODES.SQL_EFEITO_COLATERAL,
+          message: "A consulta contém escrita ou bloqueio explícito.",
+          hint: "Use somente SELECT de leitura, sem INTO, DML, DDL ou FOR UPDATE.",
+        });
+      }
+      if (node.type === "function" || node.type === "aggr_func" || node.type === "window_func") {
+        const name = functionName(node.name);
+        if (
+          !["NOT", "EXISTS"].includes(name) &&
+          !SAFE_COMMON_FUNCTIONS.has(name) &&
+          !SAFE_DIALECT_FUNCTIONS[dialeto].has(name)
+        ) {
+          throw DomainError.pacote({
+            code: ERROR_CODES.SQL_EFEITO_COLATERAL,
+            message: "Função SQL não autorizada para leitura.",
+            hint: "Use as funções seguras documentadas no guia do dialeto; UDFs e funções desconhecidas são recusadas.",
+          });
+        }
+      }
+      for (const child of Object.values(node)) {
+        if (child !== null && typeof child === "object") {
+          pending.push({ value: child, depth: entry.depth + 1 });
+        }
+      }
+    } else if (Array.isArray(node)) {
+      for (const child of node) {
+        pending.push({ value: child, depth: entry.depth + 1 });
+      }
+    }
+  }
 };
 
 export const tryParseSelect = (sql: string, dialeto?: Dialeto): SqlAstSelect | null => {
@@ -673,4 +845,9 @@ export const walkSelectTree = (select: SqlAstSelect, visit: (item: SqlAstSelect)
   for (const branch of select.setBranches) {
     walkSelectTree(branch, visit);
   }
+};
+
+export const astParaCuradoria = (sql: string, dialeto: Dialeto): unknown => {
+  parseSelect(sql, dialeto);
+  return tryAstify(sql, parserDatabaseForDialeto(dialeto));
 };

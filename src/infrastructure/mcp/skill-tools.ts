@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { obterTreinamentoBase } from "../../application/use-cases/shared/treinamento-base.js";
+import { ResourceTemplate } from "@modelcontextprotocol/server";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Skill, TipoParametroSkill } from "../../domain/entities/skill.js";
 import { DIALETOS, isDialeto, type Dialeto } from "../../domain/entities/dialeto.js";
 import { personaSessaoDeAcesso, type Acesso } from "../../domain/entities/acesso.js";
@@ -30,7 +31,7 @@ export const listPublishedSkillsForUsuario = async (
   if (!acesso) {
     return [];
   }
-  return (await ports.skills.listByAcesso(acesso.id)).filter((item) => item.status === "publicada");
+  return ports.skills.listPublicadas(acesso.id);
 };
 
 export const skillToolName = (skill: Skill, all: readonly Skill[]): string => {
@@ -103,7 +104,7 @@ export const syncSkillTools = async (input: {
         title: skill.nome,
         description:
           `${skill.nome}. ${skill.descricao} Executa somente sqlModelo; consulta elaborada usa consultar_dados. Omita acessoId — o Bearer já amarra esta persona.`.trim(),
-        inputSchema: shape,
+        inputSchema: z.object(shape),
         annotations: queryAnnotations,
       },
       async (args: Record<string, unknown>) => {
@@ -139,7 +140,7 @@ export const syncSkillTools = async (input: {
 };
 
 export const PRE_TREINO_PROMPT_DESCRIPTION =
-  "Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR deste acesso (sybase/mssql/postgres/firebird; identifique o GDBR e emita SQL compatível — treino+IA, o hub não reescreve dialeto; resources guia://paginacao, guia://dialeto/{dialeto}, skill://{acessoId}/{slug}). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e do grafo deste acesso e, com Bearer, da persona deste acesso (chapéu depois do SQL; o Bearer já amarra um acesso; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
+  "Base comum SQL + plug_server versionada (guia://treinamento-base e obter_treinamento_base); instruções de sessão, sem treino de pesos. Pre-treino de sessão: especialista em SQL do plug-server no dialeto do GDBR deste acesso (sybase/mssql/postgres/firebird; identifique o GDBR e emita SQL compatível — treino+IA, o hub não reescreve dialeto; resources guia://paginacao, guia://dialeto/{dialeto}, skill://{acessoId}/{slug}). Papel (atendimento, vendedor, financeiro, gestor, consultor, etc.) vem das skills treinadas e do grafo deste acesso e, com Bearer, da persona deste acesso (chapéu depois do SQL; o Bearer já amarra um acesso; relê o banco). Reaplique em chat novo na mesma conexão MCP.";
 
 export const CONSULTAR_COM_SKILL_PROMPT_DESCRIPTION =
   "Fluxo de consulta via plug-server: ler obter_skill / skill:// e guia://dialeto do acesso; SQL no pacote publicado (fail-closed). Firebird: só consulta exemplo. Não invente tabela, coluna nem JOIN.";
@@ -253,6 +254,29 @@ export const envelopeSkillResource = (
 };
 
 export const registerGuias = (server: McpServer): void => {
+  for (const [name, modulo] of [
+    ["treinamento-base", undefined],
+    ["sql", "sql"],
+    ["plug-server", "plug-server"],
+  ] as const) {
+    server.registerResource(
+      `guia-${name}`,
+      `guia://${name}`,
+      {
+        description: `Base comum: ${name}; orienta, não autoriza dados.`,
+        mimeType: "application/json",
+      },
+      (uri) => ({
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(obterTreinamentoBase({ modulo })),
+          },
+        ],
+      }),
+    );
+  }
   server.registerResource(
     "guia-paginacao",
     GUIA_PAGINACAO_URI,
@@ -315,10 +339,10 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
     "consultar_com_skill",
     {
       description: CONSULTAR_COM_SKILL_PROMPT_DESCRIPTION,
-      argsSchema: {
+      argsSchema: z.object({
         pergunta: z.string(),
         acessoId: z.string().optional(),
-      },
+      }),
     },
     ({ pergunta, acessoId }) => ({
       messages: [
@@ -332,7 +356,7 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
               `Pergunta: ${pergunta}`,
               acessoId ? `acessoId: ${acessoId}` : "O Bearer já amarra o acesso; omita acessoId.",
               "Estrutura: obter_skill ou skill:// (pacote = autoridade). Firebird: consultar_dados sem sql.",
-              "Passos: resources guia://paginacao / guia://dialeto → buscar_contexto (reuse consultasAprendidas[].id em obter_skill.consultasExemplo; se houver consultaSemanticaSugerida, prefira consultar_dados.consultaSemantica) → listar_skills / obter_skill → validar_consulta se o SQL for novo → consultar_dados(skillIds, sql, params, pergunta). Se o usuário ensinou regra/dicionário, envie aprendizado[] ou chame registrar_aprendizado.",
+              "Passos: resources guia://paginacao / guia://dialeto → buscar_contexto (reuse consultasAprendidas[].id em obter_skill.consultasExemplo; se houver consultaSemanticaSugerida, prefira consultar_dados.consultaSemantica) → listar_skills / obter_skill → validar_consulta se o SQL for novo → consultar_dados(skillIds, sql, params, pergunta). Se o usuário ensinou regra/dicionário, chame registrar_aprendizado explicitamente; aprendizado[] apenas sinaliza pendência.",
               "Se consultaPermitida for false ou gap.code SKILL_GAP, não chame consultar_dados. Oriente treinar_com_sql → criar_skill → validar_skill → publicar_skill.",
               "Não invente tabela, coluna nem JOIN. SELECT livre só no allowlist do pacote.",
             ].join("\n"),
@@ -346,9 +370,9 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
     "cadastrar_skill",
     {
       description: CADASTRAR_SKILL_PROMPT_DESCRIPTION,
-      argsSchema: {
+      argsSchema: z.object({
         objetivo: z.string(),
-      },
+      }),
     },
     ({ objetivo }) => ({
       messages: [
@@ -367,7 +391,7 @@ export const registerSkillWorkflowPrompts = (server: McpServer): void => {
               "3) Se houver placeholders :nome/@nome, peça significado e tipo (string/number/integer/decimal/date/datetime/boolean) → atualizar_skill com params[{ nome, descricao, tipo }].",
               "4) Se fluxoTreino indicar conflitos, chame resolver_conflito.",
               "5) validar_skill (une o sqlModelo ao escopo persistido; envelope vazio). atualizar_skill com SQL novo une o AST ao pacote (grafo inferido não entra).",
-              "6) Mostre o resumo e o diffPublicacao; só chame publicar_skill com confirmadoPeloUsuario: true e o mesmo confirmacaoHash se o usuário confirmar. Hash ausente/obsoleto gera novo preview e nunca publica.",
+              "6) Mostre o resumo e o diffPublicacao; só chame publicar_skill com confirmadoPeloUsuario: true e o mesmo confirmacaoHash se o usuário confirmar. Hash ausente devolve preview; hash obsoleto é recusado e exige novo preview.",
               "Não consulte o ERP pelo grafo. A consulta depois usa só a skill publicada.",
             ].join("\n"),
           },

@@ -79,6 +79,7 @@ describe.skipIf(!dbUrl)("FTS conhecimento (Postgres)", () => {
       expect(notas.some((hit) => hit.item.skillId === skill.id)).toBe(true);
 
       await aprendizado.salvarConsulta({
+        status: "confirmada",
         acessoId,
         skillIds: [skill.id],
         pergunta: "lista de itens do catalogo",

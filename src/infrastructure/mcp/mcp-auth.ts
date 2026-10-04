@@ -3,7 +3,7 @@ import type { Request } from "express";
 import { timingSafeEqual } from "node:crypto";
 
 export const wwwAuthenticate = (config: AppConfig): string =>
-  `Bearer realm="se7e-mcp", resource="${config.mcpResourceUrl}", error="invalid_token", error_description="Obtain the token at GET /setup/{code} after registrar_acesso"`;
+  `Bearer realm="se7e-mcp", resource="${config.mcpResourceUrl}", error="invalid_token", error_description="Complete the browser form after registrar_acesso; token shown once after POST"`;
 
 export const isMcpTokenExpired = (
   usuario: { tokenExpiresAt?: Date | null },

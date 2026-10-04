@@ -5,10 +5,13 @@ const source = process.env.DATABASE_URL;
 if (!source || process.env.CI !== "true") {
   throw new Error("test:migrations only runs with DATABASE_URL in CI");
 }
-const base = new URL(source);
 const admin = new URL(source);
 admin.pathname = "/postgres";
-const names = ["se7e_mcp_migration_fresh_ci", "se7e_mcp_migration_upgrade_ci"];
+const names = [
+  "se7e_mcp_migration_fresh_ci",
+  "se7e_mcp_migration_upgrade_ci",
+  "se7e_mcp_migration_current_ci",
+];
 
 const databaseUrl = (name: string): string => {
   const url = new URL(source);
@@ -27,9 +30,9 @@ const recreate = async (name: string): Promise<void> => {
   }
 };
 
-const assert = (condition: unknown, message: string): asserts condition => {
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
-};
+}
 
 const seedPreGovernanca = async (url: string): Promise<void> => {
   const client = new pg.Client({ connectionString: url });
@@ -43,7 +46,7 @@ const seedPreGovernanca = async (url: string): Promise<void> => {
       [user.rows[0]!.id],
     );
     const skill = await client.query<{ id: string }>(
-      "INSERT INTO skill (acesso_id,slug,nome,descricao,sql_modelo,params,escopo,status,autor_usuario_id) VALUES ($1,'legada','Legada','skill legada','SELECT 1', '[]','{}','publicada',$2) RETURNING id",
+      "INSERT INTO skill (acesso_id,slug,nome,descricao,sql_modelo,params,escopo,status,autor_usuario_id) VALUES ($1,'legada','Legada','skill legada','SELECT SUM(1) total', '[]','{}','publicada',$2) RETURNING id",
       [acesso.rows[0]!.id, user.rows[0]!.id],
     );
     await client.query(
@@ -55,6 +58,14 @@ const seedPreGovernanca = async (url: string): Promise<void> => {
       [user.rows[0]!.id, acesso.rows[0]!.id],
     );
     assert(Boolean(skill.rows[0]), "failed to seed published skill");
+    await client.query(
+      "INSERT INTO skill(acesso_id,slug,nome,descricao,sql_modelo,params,escopo,status,autor_usuario_id) VALUES($1,'insegura','Unsafe','synthetic','SELECT pg_sleep(1)','[]','{}','publicada',$2)",
+      [acesso.rows[0]!.id, user.rows[0]!.id],
+    );
+    await client.query(
+      "INSERT INTO mcp_setup(code,token,acesso_id,expires_at) VALUES('legacy-pending','legacy-plaintext',$1,now()+interval '1 day')",
+      [acesso.rows[0]!.id],
+    );
   } finally {
     await client.end();
   }
@@ -84,6 +95,26 @@ const verify = async (url: string, upgrade: boolean): Promise<void> => {
       "SELECT conname FROM pg_constraint WHERE conname IN ('anotacao_grafo_vigencia_check','alerta_operacional_status_check')",
     );
     assert(constraints.rowCount === 2, "required constraints missing");
+    const unsafe = await client.query(
+      "SELECT publicacao_ativa_id,status FROM skill WHERE slug='insegura'",
+    );
+    if (upgrade) {
+      const bearer = await client.query(
+        "SELECT token_hash FROM acesso WHERE client_token_hash='legacy-client'",
+      );
+      assert(
+        bearer.rows[0]?.token_hash === "legacy-token",
+        "existing Bearer changed during migration",
+      );
+    }
+    if (unsafe.rowCount)
+      assert(
+        unsafe.rows[0].publicacao_ativa_id === null &&
+          unsafe.rows[0].status === "rascunho_revalidacao",
+        "unsafe baseline must be suspended",
+      );
+    const pending = await client.query("SELECT count(*)::int n FROM mcp_setup");
+    assert(pending.rows[0].n === 0, "legacy pending setups must be invalidated");
     if (upgrade) {
       const legacy = await client.query<{ fonte_tipo: string; status: string }>(
         "SELECT fonte_tipo,status FROM anotacao_grafo WHERE titulo='Nota legada'",
@@ -93,9 +124,26 @@ const verify = async (url: string, upgrade: boolean): Promise<void> => {
         "legacy governance backfill failed",
       );
       const snapshots = await client.query<{ count: string }>(
-        "SELECT count(*)::text AS count FROM skill_publicacao",
+        "SELECT count(*)::text AS count FROM skill_publicacao p JOIN skill s ON s.id=p.skill_id WHERE s.slug='legada'",
       );
-      assert(Number(snapshots.rows[0]?.count) === 1, "published snapshot backfill failed");
+      assert(
+        Number(snapshots.rows[0]?.count) === 2,
+        "historical snapshot and technical baseline must both survive",
+      );
+      const active = await client.query<{ origem: string; conhecimento: boolean }>(
+        "SELECT p.origem,(p.pacote ? 'conhecimentoPublicado') AS conhecimento FROM skill s JOIN skill_publicacao p ON p.id=s.publicacao_ativa_id WHERE s.slug='legada'",
+      );
+      assert(
+        active.rows[0]?.origem === "migracao" && active.rows[0].conhecimento,
+        "technical baseline must be the active authority",
+      );
+      let immutable = false;
+      try {
+        await client.query("UPDATE skill_publicacao SET pacote='{}'");
+      } catch {
+        immutable = true;
+      }
+      assert(immutable, "publication snapshots must reject updates");
     }
   } finally {
     await client.end();
@@ -114,6 +162,36 @@ try {
   await applyMigrations({ databaseUrl: upgrade });
   await applyMigrations({ databaseUrl: upgrade });
   await verify(upgrade, true);
+  const current = databaseUrl(names[2]!);
+  await applyMigrations({ databaseUrl: current, through: "0027_operacoes_notificacoes.sql" });
+  await seedPreGovernanca(current);
+  await applyMigrations({ databaseUrl: current, through: "0031_publicacao_imutavel.sql" });
+  const prior = new pg.Client({ connectionString: current });
+  await prior.connect();
+  await prior.query(
+    "INSERT INTO consulta_aprendida(acesso_id,pergunta,sql,execucoes,status) SELECT id,'exemplo legado sintético','SELECT SUM(1) total',7,'candidata' FROM acesso LIMIT 1",
+  );
+  await prior.end();
+  await applyMigrations({ databaseUrl: current });
+  const upgraded = new pg.Client({ connectionString: current });
+  await upgraded.connect();
+  const preserved = await upgraded.query(
+    "SELECT status,versao,fingerprint,execucoes,confirmada_em FROM consulta_aprendida WHERE pergunta='exemplo legado sintético'",
+  );
+  assert(
+    preserved.rows[0]?.status === "candidata" &&
+      preserved.rows[0]?.versao === 1 &&
+      preserved.rows[0]?.fingerprint === null &&
+      preserved.rows[0]?.execucoes === 7 &&
+      preserved.rows[0]?.confirmada_em === null,
+    "0031 upgrade must not invent confirmation/executions",
+  );
+  assert(
+    (await upgraded.query("SELECT count(*)::int n FROM treinamento_revisao")).rows[0].n === 0,
+    "migration must not invent reports",
+  );
+  await upgraded.end();
+  await verify(current, false);
 } finally {
   const client = new pg.Client({ connectionString: admin.toString() });
   await client.connect();

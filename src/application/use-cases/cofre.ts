@@ -49,6 +49,7 @@ export const expiryFromTtlDays = (ttlDays: number, now = new Date()): Date | nul
 
 export interface SetupCodeStore {
   issue(token: string, ttlMs?: number): { code: string; expiresAt: Date };
+  consume?(code: string): string | null;
 }
 
 export const mintMcpToken = (
@@ -135,6 +136,7 @@ export class RegistrarAcesso {
     dialeto?: string;
     clientToken?: string;
     nomeAmigavel?: string;
+    recuperarAcesso?: boolean;
   }): Promise<{
     success: true;
     usuarioId: string;
@@ -249,6 +251,38 @@ export class RegistrarAcesso {
       };
     }
 
+    if (input.recuperarAcesso === true) {
+      const found = await this.acessos.findByUsuarioAgentTokenHash(
+        existing.id,
+        agentId,
+        clientTokenHash,
+      );
+      if (found) {
+        const minted = mintMcpToken(this.crypto, this.tokenTtlDays);
+        const codes = await persistMintedSetup(
+          minted.token,
+          this.setup,
+          this.publicBaseUrl,
+          this.setupPersistent,
+          found.id,
+        );
+        await this.usuarios.updateCredenciais(
+          existing.id,
+          this.crypto.encrypt(email),
+          this.crypto.encrypt(senha),
+        );
+        await this.acessos.updateTokenHash(found.id, minted.tokenHash, minted.tokenExpiresAt);
+        await this.afterPersist(existing.id, hub, agentId, clientToken, statusAcesso);
+        return {
+          success: true,
+          usuarioId: existing.id,
+          acessoId: found.id,
+          statusAcesso,
+          ...codes,
+          hint: "Recuperação confirmada no navegador. Configure o novo Bearer desta persona.",
+        };
+      }
+    }
     const senhaAtual = this.crypto.decrypt(existing.senhaEnc);
     if (!equalText(senhaAtual, senha)) {
       throw new DomainError({
@@ -535,6 +569,14 @@ export class AtualizarCredencialPlug {
         hint: "São as credenciais do plug-server, não um login MCP.",
       });
     }
+    const existing = await this.usuarios.findById(uid);
+    if (existing?.emailHash !== this.crypto.sha256Hex(email)) {
+      throw new DomainError({
+        code: ERROR_CODES.PERMISSION_DENIED,
+        message: "Credencial pertence a outra identidade.",
+        hint: "Use o e-mail vinculado ao acesso.",
+      });
+    }
     const tokens = await this.plug.login(email, senha);
     await this.usuarios.updateCredenciais(
       uid,
@@ -594,6 +636,7 @@ export class AtualizarDialeto {
         continue;
       }
       await this.skills.setStatus(skill.id, "rascunho");
+      await this.skills.suspenderPublicacao(skill.id);
       skillsRebaixadas += 1;
     }
     return { success: true, dialetoAnterior, dialeto: dialetoRaw, skillsRebaixadas };
@@ -697,7 +740,10 @@ export class RotacionarTokenMcp {
     private readonly setupPersistent?: McpSetupRepositoryPort,
   ) {}
 
-  async execute(usuarioId: string | undefined): Promise<{
+  async execute(
+    usuarioId: string | undefined,
+    expectedBearerHash?: string,
+  ): Promise<{
     success: true;
     setupCode: string;
     setupUrl: string;
@@ -705,6 +751,14 @@ export class RotacionarTokenMcp {
   }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, undefined, uid);
+    const expected = expectedBearerHash ?? acesso.tokenHash;
+    if (acesso.tokenHash !== expected) {
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "A operação de rotação está desatualizada.",
+        hint: "Gere uma nova URL de rotação com o Bearer vigente.",
+      });
+    }
     const minted = await mintMcpSetup(
       this.crypto,
       this.setup,
@@ -713,12 +767,27 @@ export class RotacionarTokenMcp {
       this.setupPersistent,
       acesso.id,
     );
-    await this.acessos.updateTokenHash(acesso.id, minted.tokenHash, minted.tokenExpiresAt);
+    if (
+      !(await this.acessos.compareAndRotateToken(
+        acesso.id,
+        expected,
+        minted.tokenHash,
+        minted.tokenExpiresAt,
+      ))
+    ) {
+      this.setup.consume?.(minted.setupCode);
+      await this.setupPersistent?.consume(minted.setupCode);
+      throw new DomainError({
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: "Outra rotação foi concluída primeiro.",
+        hint: "Use o Bearer emitido pela operação concluída e gere outra URL se necessário.",
+      });
+    }
     return {
       success: true,
       setupCode: minted.setupCode,
       setupUrl: minted.setupUrl,
-      hint: `Abra setupUrl no navegador e copie o Bearer antes de reiniciar o processo. O código one-shot vale ${String(MCP_SETUP_TTL_DAYS)} dias (memória e mcp_setup). O Bearer anterior desta persona já é inválido.`,
+      hint: "Entrega interna ao navegador: código válido por 15 minutos. A rotação foi concluída e o Bearer anterior desta persona é inválido.",
     };
   }
 }

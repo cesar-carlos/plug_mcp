@@ -272,6 +272,14 @@ describe("BuscarContexto", () => {
     });
     await skills.setStatus(published.id, "publicada");
     await aprendizado.salvarConsulta({
+      status: "confirmada",
+      publicacoes: [
+        {
+          skillId: published.id,
+          id: (await skills.findPublicadaById(published.id))!.publicacaoAtivaId!,
+          hash: (await skills.findPublicadaById(published.id))!.publicacaoHash!,
+        },
+      ],
       acessoId: created.acessoId,
       skillIds: [published.id],
       pergunta: "faturamento no período",

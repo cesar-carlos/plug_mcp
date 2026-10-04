@@ -6,39 +6,42 @@ Não há login próprio, Authorization Server, catálogo pronto com seed, nem Cl
 
 ## Requisitos
 
-- Node.js 24.19.0+ (LTS Krypton; `.nvmrc`)
+- Node.js 24.21.0 ou patch posterior da linha 24 LTS (Krypton; `.nvmrc`; Node 25/26 fora do runtime suportado).
 - PostgreSQL (produção). Testes unitários usam repositórios in-memory. `npm run db:migrate` exige privilégio `CREATE EXTENSION` para `unaccent`, `btree_gin` e `pg_trgm` (FTS).
-- Redis opcional (rate limit + cache de policy)
+- Servidor Redis 7 opcional (`redis:7-alpine` no Docker e na CI): rate limit, cache e coordenação de consultas. O pacote npm `redis` 6.3.0 é o cliente Node e tem versionamento independente. [Configuração e diagnóstico](docs/operations/redis.md).
 
 ## Setup
 
 ### Produção neste servidor (PM2)
 
-Postgres e Redis ficam no Docker. O processo Node é gerenciado pelo PM2 (mesmo daemon de `plug_server` / Chatwoot), em `fork` com 1 instância — sessões MCP são in-memory e não suportam cluster.
+Postgres fica no Docker; Redis é opcional e precisa de `REDIS_URL` configurada para ser usado pelo Node. Prepare o `.env` com banco, hub e chave do cofre antes de iniciar. O processo Node é gerenciado pelo PM2 (mesmo daemon de `plug_server` / Chatwoot), em `fork` com 1 instância — sessões MCP são in-memory e não suportam cluster.
 
 ```bash
 nvm use
-npm install
+npm ci
 npm run build
-docker compose up -d postgres redis
+docker compose up -d postgres
+npm run db:migrate
 pm2 start ecosystem.config.cjs
 pm2 save
 ```
 
-O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Para o container Node em vez do PM2: `docker compose --profile container up --build -d mcp`.
+O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Para Redis no PM2, siga o [guia de Redis 7](docs/operations/redis.md): o Compose padrão não publica sua porta no host. Para executar o MCP em container, o Compose configura `REDIS_URL=redis://redis:6379`; aplique as migrações antes da primeira inicialização e use `docker compose --profile container up --build -d mcp`.
 
 ### Local (Node + Postgres no Docker)
 
 ```bash
 cp .env.example .env
 nvm use
-docker compose up -d postgres redis
-npm install
+docker compose up -d postgres
+npm ci
 npm run db:migrate
 npm run dev
 ```
 
 O Compose publica o Postgres na porta `5433` do host (para não colidir com um Postgres local na `5432`). Ajuste `DATABASE_URL` no `.env` para essa porta.
+
+O `.env.example` mantém `REDIS_URL` vazio; assim rate limit, cache e singleflight são locais ao processo. Iniciar um container Redis por si só não ativa seu uso pelo MCP. Para Node/PM2 no host, use o [overlay de porta local](docs/operations/redis.md). No Windows com nvm-windows, execute `nvm use 24.21.0` explicitamente.
 
 Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fechar numa skill publicada — é ela que a IA usa na consulta.
 
@@ -46,32 +49,37 @@ Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fecha
 - Matriz de erros: `GET http://127.0.0.1:3333/docs/mcp/error-mapping.md` (mesmo path de `error.documentationUrl`).
 - Ready: `GET http://127.0.0.1:3333/ready` (`database: ok|skipped|error`; 503 se o banco falhar)
 - MCP: `POST http://127.0.0.1:3333/mcp`
-- Token MCP (one-shot): `GET http://127.0.0.1:3333/setup/{code}`
+- Formulário público: `GET http://127.0.0.1:3333/setup/{code}`
 
 ## Bootstrap
 
-Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. Stub `kind: anexo` em `consultar_dados`: use `exportar_anexo`. `buscar_contexto` não devolve SQL — use `obter_skill`. Skill em treino que cobre a pergunta: `blockingReason SKILL_NOT_PUBLISHED`. Sem skill capaz: `SKILL_GAP` (a busca por termos não prova ausência — `listar_skills`). Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). `MCP_ALLOWED_ORIGINS` não vazio recusa Origin estranho com 403. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
+Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. Stub `kind: anexo` em `consultar_dados`: use `exportar_anexo`. `buscar_contexto` não devolve SQL — use `obter_skill`. Sem publicação ativa utilizável, skill em treino que cobre a pergunta retorna `blockingReason SKILL_NOT_PUBLISHED`; editar um rascunho mantém a publicação anterior. Sem skill capaz: `SKILL_GAP` (a busca por termos não prova ausência — `listar_skills`). Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). Origin ausente é aceito para clientes nativos; Origin `null` ou desconhecido é recusado. `MCP_ALLOWED_ORIGINS` vazio usa `PUBLIC_BASE_URL`; Host e proxy também exigem configuração explícita. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
 
 1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
-2. `registrar_acesso` recebe e-mail/senha do Client, `agentId`, dialeto e `client_token`. **Não devolve o token MCP.**
-3. A tool devolve `setupCode` + `setupUrl`. O usuário abre a URL, copia o token e cola em `Authorization: Bearer`.
-4. Demais tools exigem Bearer. Novos acessos: `adicionar_acesso` (sem senha de novo; emite outro Bearer via `setupUrl` e **não** troca esta sessão).
+2. `registrar_acesso({})` retorna uma URL. E-mail/senha do Client, `agentId`, dialeto e `client_token` são preenchidos somente no navegador.
+3. A tool devolve `setupUrl` + `expiresAt`. GET mostra formulário; POST confirmado/CSRF reautentica no hub e mostra o Bearer uma vez. Validade do código: 15 minutos.
+4. Demais tools exigem Bearer. Novos acessos: `adicionar_acesso({})` (formulário reautenticado; outro Bearer via `setupUrl`; não troca esta sessão).
 
 ## Scripts
 
-| Script                       | Função                                                     |
-| ---------------------------- | ---------------------------------------------------------- |
-| `npm run dev`                | `tsx watch`                                                |
-| `npm test`                   | Vitest in-memory                                           |
-| `npm run test:live`          | plug-server real (`E2E_*`)                                 |
-| `npm run lint` / `format`    | ESLint + Prettier                                          |
-| `npm run release:check`      | Gate local: lint, formatação, tipos, testes e build        |
-| `npm run db:migrate`         | Aplica `drizzle/*.sql`                                     |
-| `npm run test:migrations`    | Certifica banco limpo e upgrade `0023` em DB efêmero de CI |
-| `npm run worker:operacoes`   | Processa SLO, revisões e outbox de webhook (requer banco)  |
-| `npm run db:backfill-escopo` | Preenche `skill.escopo` vazio a partir do `sql_modelo`     |
+| Script                       | Função                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `npm run dev`                | `tsx watch`                                                              |
+| `npm test`                   | Unitários, contratos e integrações; PostgreSQL/Redis quando configurados |
+| `npm run test:live`          | plug-server real (`E2E_*`)                                               |
+| `npm run lint` / `format`    | ESLint + Prettier                                                        |
+| `npm run release:check`      | Compilador 7, lint, formatação, tipos, testes e build                    |
+| `npm run db:migrate`         | Aplica `drizzle/*.sql`                                                   |
+| `npm run test:migrations`    | Banco novo, upgrades `0023`/`0027` e reaplicação em DB efêmero de CI     |
+| `npm run runtime:check`      | Servidor, worker e componentes nativos em banco CI isolado               |
+| `npm run test:evaluation`    | Avaliação determinística dos 100 cenários sintéticos                     |
+| `npm run evaluate:consumer`  | Avaliação explícita com adaptador/modelo de IA configurados              |
+| `npm run worker:operacoes`   | Processa SLO, revisões e outbox de webhook (requer banco)                |
+| `npm run db:backfill-escopo` | Preenche `skill.escopo` vazio a partir do `sql_modelo`                   |
 
-Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.19.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
+Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.21.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
+
+Para rodar todas as integrações, configure bancos exclusivos de teste em `DATABASE_URL` e `REDIS_URL`. `CI=true` exige PostgreSQL e impede omissão silenciosa do FTS; migrações e avaliação exigem banco efêmero de CI. Sem as URLs, as integrações correspondentes são ignoradas; isso não certifica bancos reais. Consulte as [verificações executadas](docs/product/implementation-plan.md).
 
 ### Contratos e consulta inteligente
 
@@ -94,3 +102,5 @@ Ver [docs/clients/connecting-clients.md](docs/clients/connecting-clients.md).
 3. Hub REST — [docs/plug-server/communication.md](docs/plug-server/communication.md) (adapter: [rest-integration.md](docs/plug-server/rest-integration.md))
 4. Modelo e FTS — [docs/data/data-model.md](docs/data/data-model.md)
 5. Índice — [`docs/README.md`](docs/README.md). Changelog — [`CHANGELOG.md`](CHANGELOG.md). Histórico das três camadas — [docs/proposta-arquitetura-mcp-se7e.md](docs/proposta-arquitetura-mcp-se7e.md)
+
+TypeScript 7 compila e checa tipos; a API TypeScript 6 é usada apenas pelas ferramentas de lint. `npm run compiler:check` confirma o compilador real. Dependências são fixadas pelo lockfile e instaladas por `npm ci`, sem force/legacy-peer-deps. CI inclui Windows, Linux, Redis/PostgreSQL e musl x64/arm64. [Escopo e verificações](docs/product/implementation-plan.md), [cadastro/rotação](docs/auth/vault-and-mcp-token.md).

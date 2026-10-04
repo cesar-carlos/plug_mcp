@@ -14,6 +14,7 @@ import * as schema from "../schema.js";
 import type { Db } from "./db.js";
 
 const toSkill = (row: typeof schema.skill.$inferSelect): Skill => ({
+  publicacaoAtivaId: row.publicacaoAtivaId,
   id: row.id,
   acessoId: row.acessoId,
   slug: row.slug,
@@ -68,8 +69,16 @@ export class DrizzleSkillPublicacaoRepository implements SkillPublicacaoReposito
     input: Parameters<SkillPublicacaoRepositoryPort["publishAtomically"]>[0],
   ): Promise<{ skill: Skill; publicacao: SkillPublicacao }> {
     return this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select()
+        .from(schema.skill)
+        .where(and(eq(schema.skill.id, input.skillId), eq(schema.skill.acessoId, input.acessoId)))
+        .for("update");
       const latest = await tx
-        .select({ versao: schema.skillPublicacao.publicacaoVersao })
+        .select({
+          versao: schema.skillPublicacao.publicacaoVersao,
+          hash: schema.skillPublicacao.pacoteHash,
+        })
         .from(schema.skillPublicacao)
         .where(
           and(
@@ -79,6 +88,20 @@ export class DrizzleSkillPublicacaoRepository implements SkillPublicacaoReposito
         )
         .orderBy(desc(schema.skillPublicacao.publicacaoVersao))
         .limit(1);
+      if (
+        !locked ||
+        (input.expectedActiveId !== undefined &&
+          locked.publicacaoAtivaId !== input.expectedActiveId) ||
+        (input.expectedBaseHash !== undefined &&
+          (latest[0]?.hash ?? null) !== input.expectedBaseHash)
+      ) {
+        throw new DomainError({
+          code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+          message: "A publicação base mudou.",
+          hint: "Gere um novo preview.",
+        });
+      }
+      await input.validarTestesAtuais?.();
       const [skill] = await tx
         .update(schema.skill)
         .set({
@@ -97,7 +120,7 @@ export class DrizzleSkillPublicacaoRepository implements SkillPublicacaoReposito
         .returning();
       if (!skill) {
         throw new DomainError({
-          code: ERROR_CODES.VALIDATION_ERROR,
+          code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
           message: "A skill mudou desde o preview de publicação.",
           hint: "Chame publicar_skill sem confirmação para revisar o diff atual.",
         });
@@ -115,7 +138,14 @@ export class DrizzleSkillPublicacaoRepository implements SkillPublicacaoReposito
           autorUsuarioId: input.autorUsuarioId,
         })
         .returning();
-      return { skill: toSkill(skill), publicacao: toPublicacao(publication!) };
+      await tx
+        .update(schema.skill)
+        .set({ publicacaoAtivaId: publication!.id })
+        .where(eq(schema.skill.id, skill.id));
+      return {
+        skill: { ...toSkill(skill), publicacaoAtivaId: publication!.id },
+        publicacao: toPublicacao(publication!),
+      };
     });
   }
 }

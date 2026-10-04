@@ -1,34 +1,27 @@
 ---
-description: "Segurança: cofre, token MCP, client_token e isolamento de cache"
+description: "Cofre, operações de navegador, autorização vigente e isolamento"
 globs: ["src/**/*.ts"]
 alwaysApply: false
 ---
 
 # Segurança
 
-Três segredos distintos — nunca misturar:
+Nunca exponha senha, client_token, JWT, Bearer ou códigos de operação em tools/logs/erros/telemetria. Tools de credenciais recebem objeto vazio estrito, retornam setupUrl/expiresAt; formulário recebe segredos.
 
-1. E-mail/senha do Client no plug-server (AES-256-GCM em `usuario_mcp`).
-2. `client_token` por acesso (AES-256-GCM). Autoridade SQL. Nunca em tool/log/modelo.
-3. Token MCP opaco (hash SHA-256 em `acesso.token_hash`, `timingSafeEqual`). Um por acesso. Nunca na resposta de tool.
+GET /setup só mostra formulário. POST exige CSRF, Origin, finalidade, vínculo, identidade no hub e confirmação. Código aleatório >=256 bits, hash persistido, TTL 15 minutos e claim atômico único. no-store/no-referrer/frame-ancestors none. Rotação mantém Bearer anterior até conclusão e invalida sessões/handles/cache; falha de cache não perde o novo Bearer. 0029 invalida setups legados, preserva Bearers.
 
-`registrar_acesso` devolve `setupCode`/`setupUrl`. O token só aparece em `GET /setup/:code` (HTML, one-shot; dual-write memória + `mcp_setup`, TTL 7 dias). Persona do acesso não pode trazer senha, `client_token` ou JWT no texto (`atualizar_persona` recusa).
+Cofre AES-256-GCM v2 com key ID/AAD, leitura v1 e keyring para rotação. Bearer somente hash SHA-256 por acesso, JWTs do hub somente memória. Sem AS, JWT próprio, cookie de sessão ou Client de serviço.
 
-Não há Authorization Server, JWT de conta MCP, cookie de sessão, nem Client de serviço no `.env`.
+Toda entrega revalida JWT Client, ClientAgentAccess e policy do client_token. Cache hit, exportação e consulta em andamento não entregam dados com autorização antiga/autoridade indisponível. Recorte/token/publicação/sensibilidade alterados bloqueiam. Preserve source, sem retry cego.
 
-Pino redact: `password`, `senha`, `client_token`, `access_token`, `refresh_token`, `authorization`, `cookie`.
+SQL somente leitura em toda AST, limites antes do parser e funções seguras explícitas; UDFs/desconhecidas/efeitos colaterais recusados. Recortes físicos dominam AND/OR/UNION/CTE/subqueries; presença de parâmetro não prova isolamento. JOIN composto exige todas as igualdades garantidas. Origem/grão/cardinalidade devem demonstrar ausência de fanout; não corrigir com SUM(DISTINCT valor).
 
-Este processo não emite JWT de conta, não faz DCR e não usa cookie de sessão.
+Inspeção expande STAR para projeção classificada livre e omite pessoal/segredo/inferido. Metadados descobrem colunas sem valores; treino/perfil/dicionário também respeitam classificação. Binário de inspeção é stub sem handle. Handle de consulta vincula usuário/acesso, hashes de token, origem física e publicações exatas; exportação revalida antes/depois da conversão. TTL, cap de quantidade e ANEXO_MAX_BYTES_PER_ACCESS/PROCESS limitam memória.
 
-403 de Client pending/blocked → `CLIENT_NOT_ACTIVE`, não senha errada.
-`CREDENTIAL_STALE` quando o hub recusa a senha cifrada → `atualizar_credencial_plug`.
+Cache mcp:query:acesso:{acessoId}: inclui usuário/token/policy e pares ordenados skill/publicação/hash, SQL/params canônicos. Não cachear erro/anexo. Redis renova/libera lease só pelo proprietário via Lua; timeout de concorrente não dispara SQL com lease vigente. Redis indisponível desativa otimização, não autorização.
 
-## Portões de autorização
+Auditoria allowlist de IDs/origem/contagens/cache/paginação/truncamento/estágio/duração, nunca conteúdo. Timings amostrados. Webhook HTTPS público sem query/user-info, DNS revalidado por entrega, HMAC/outbox/lease; somente IDs/agregados e segredos cifrados.
 
-Segredos armazenados não são autorização. Cada consulta passa por três portões independentes: JWT do Client no hub, `ClientAgentAccess` para o `agentId` e policy do `client_token` no `plug_agente`. O pacote da skill recorta o que a IA pode pedir; a policy recorta o que o hub executa. Preserve a origem ao mapear falhas (`CLIENT_NOT_ACTIVE`, `AGENT_ACCESS_PENDING`, `ACCESS_REVOKED`, `PERMISSION_DENIED`, `INVALID_SQL`). Não faça retry cego nem exponha policy ou tokens.
+Sessão legada imutável por usuário/acesso; contexto moderno por requisição. Origin ausente para nativos, null/desconhecido recusado, Host validado e TRUST_PROXY explícito. Notificações/assinaturas só do acesso dono. Persona não licencia SQL.
 
-Cache de resultado (`mcp:query:acesso:{acessoId}:{hash}`) inclui `usuarioId`, hash do token, fingerprint da policy e versões da skill. Não compartilhe só por `agentId`. Deriva/`deleteByPrefix` limpa **só** o prefixo daquele acesso. Backfill de cutover também. Resultado com stub de anexo **não** entra nesse cache; handle HMAC (`id:usuarioId`) + TTL em memória (1 instância, clock injetável nos testes, cap 64 por `usuarioId`; inspeção não faz `put`). `exportar_anexo` recusa handle de outro usuário/`acessoId`, origem `inspecionar_consulta` (legado) e coluna pessoal/segredo. `acessoId` omitido usa o acesso do Bearer; handle de persona irmã → recusa. `notifications/tools/list_changed` só para sessões do mesmo `usuarioId` **e** `acessoId`. Logs da conversão sem dump de bytes.
-
-`audit_log.metadata` é uma allowlist tipada: IDs de skill, origem, modo agregado/detalhe, contagens, paginação, truncamento, cache, estágio/origem de erro e durações. Nunca grave SQL, pergunta, parâmetros, resultados, senha, JWT, `client_token` ou conteúdo de anotações. Timings do hub são opcionais e amostrados (`PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` entre 0 e 100).
-
-Operação: `alerta_operacional` e webhook são isolados por `acesso_id`. A URL e o segredo ficam cifrados; jamais retorná-los, logá-los ou passá-los ao hub. Aceite só HTTPS sem user-info/query/fragmento e bloqueie loopback, RFC1918, link-local, multicast, documentação e DNS que resolva para IP não público em cada entrega. Payload externo: ID idempotente, timestamp, IDs e métricas agregadas permitidas — nunca SQL, pergunta, parâmetros, resultados ou textos de anotações.
+Curadoria: AST compartilhado para captura/aprovação/exportação, constantes aprovadas vinculadas fisicamente e classificadas livres; parâmetros/recortes concretos, PII e segredos não persistem. Confirmação ligada ao acesso/revisão/publicações com CAS em transação. Feedback guarda correção segura fora da auditoria. Importação não ativa publicação; relatórios só runner confiável.

@@ -1,3 +1,5 @@
+import { escopoFromSqlModelo } from "../../src/application/use-cases/shared/escopo-from-modelo.js";
+import { parseSqlModelo } from "../../src/application/use-cases/shared/sql-modelo.js";
 import { describe, expect, it } from "vitest";
 import { BuscarContexto, ConsultarDados } from "../../src/application/use-cases/consultar.js";
 import {
@@ -77,34 +79,44 @@ const setup = async () => {
 };
 
 describe("aprendizado e escala", () => {
-  it("salvar_consulta exige confirmação e reusa SQL", async () => {
+  it("salvar_consulta gera preview e confirmação não conta como execução", async () => {
     const { acessos, skills, aprendizado, created } = await setup();
+    const sql = "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod=:codigo";
     const skill = await skills.create({
       acessoId: created.acessoId,
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      sqlModelo: sql,
+      escopo: escopoFromSqlModelo(parseSqlModelo(sql)),
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
     const salvar = new SalvarConsulta(acessos, skills, aprendizado);
-    await expect(
-      salvar.execute(created.usuarioId, {
-        acessoId: created.acessoId,
-        skillId: skill.id,
-        pergunta: "produto por codigo",
-        sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
-      }),
-    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
-    const saved = await salvar.execute(created.usuarioId, {
+    const preview = await salvar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       skillId: skill.id,
       pergunta: "produto por codigo",
-      sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
-      confirmadoPeloUsuario: true,
+      sql,
     });
-    expect(saved.consulta.execucoes).toBe(1);
+    expect(preview.confirmacaoPendente).toBe(true);
+    expect(preview.consulta.status).toBe("candidata");
+    const saved = await salvar.execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      consultaAprendidaId: preview.consulta.id,
+      confirmadoPeloUsuario: true,
+      confirmacaoHash: preview.confirmacaoHash,
+    });
+    expect(saved.consulta.status).toBe("confirmada");
+    expect(saved.consulta.execucoes).toBe(0);
+    await expect(
+      salvar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        consultaAprendidaId: preview.consulta.id,
+        confirmadoPeloUsuario: true,
+        confirmacaoHash: preview.confirmacaoHash,
+      }),
+    ).rejects.toMatchObject({ code: "CONFIRMACAO_DESATUALIZADA" });
   });
 
   it("buscar_contexto devolve consultas aprendidas, expande sinônimo e grava lacuna", async () => {
@@ -120,6 +132,14 @@ describe("aprendizado e escala", () => {
     });
     await skills.setStatus(skill.id, "publicada");
     await aprendizado.salvarConsulta({
+      status: "confirmada",
+      publicacoes: [
+        {
+          skillId: skill.id,
+          id: (await skills.findPublicadaById(skill.id))!.publicacaoAtivaId!,
+          hash: (await skills.findPublicadaById(skill.id))!.publicacaoHash!,
+        },
+      ],
       acessoId: created.acessoId,
       skillIds: [skill.id],
       pergunta: "duplicatas da carteira",
@@ -254,7 +274,7 @@ describe("aprendizado e escala", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -385,7 +405,7 @@ describe("aprendizado e escala", () => {
     expect(calls).toBe(2);
   });
 
-  it("consultar_dados grava o SQL e regra na mesma chamada", async () => {
+  it("consulta técnica não confirma regras e omite captura com literais", async () => {
     const { plug, acessos, grafo, skills, anotacoes, aprendizado, audit, created, sessions } =
       await setup();
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });
@@ -394,7 +414,7 @@ describe("aprendizado e escala", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -422,14 +442,13 @@ describe("aprendizado e escala", () => {
         },
       ],
     });
-    expect(result.aprendizadoGravado?.nova).toBe(true);
-    expect(result.aprendizadoGravado?.perguntaUsada).toBe("quais produtos existem");
-    expect(result.aprendizadoGravado?.itens).toBe(1);
+    expect(result.aprendizadoGravado).toBeUndefined();
+    expect(result.avisos.some((aviso) => aviso.code === "APRENDIZADO_IGNORADO")).toBe(true);
     const learned = await aprendizado.buscarConsultas(created.acessoId, "quais produtos", 5);
-    expect(learned).toHaveLength(1);
+    expect(learned).toHaveLength(0);
     const notas = await anotacoes.list(created.acessoId);
     expect(notas.some((nota) => nota.tipo === "regra" && nota.titulo === "Produto ativo")).toBe(
-      true,
+      false,
     );
   });
 

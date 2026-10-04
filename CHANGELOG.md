@@ -11,6 +11,34 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Added — treinamento compartilhado e curadoria
+
+- Base SQL + plug_server versionada, recursos e tool públicos, contrato empacotado/hash e gate de consistência.
+- Curadoria paginada, aprovação por ID/múltiplas skills com preview/hash/CAS, inativação explícita, dedup por contrato/publicações e contagem de execução separada.
+- Grão/chaves, constantes de negócio, metadados semânticos de métricas, feedback/revisão e diagnóstico consolidado.
+- Casos sintéticos versionados, runner PostgreSQL separado e gates graduais de testes obrigatórios; templates/datasets confirmados sem autoridade herdada.
+- Avaliador consome descoberta/resources/schemas reais, compara tipos/decimais exatos e registra ferramentas/duração/consumo; variantes explícitas sem alteração automática de invariantes.
+- Migrações 0032/0033 preservam histórico e acrescentam CAS/revisões/recorrência, sem confirmação ou certificação retroativa.
+
+### Changed — atualização e autoridade publicada
+
+- Documentação de setup/runtime revisada: Redis 7 separado do cliente npm 6.3.0, conexão host/container, overlay restrito a loopback e diagnóstico; modelo de dados alinhado a aprendizado governado, inspeção protegida e auditoria sem conteúdo sensível.
+- Node 24.21 LTS, TypeScript 7 real (API 6 apenas para lint), SDK MCP v2 modular, Express 5/Zod 4/ESLint 10/Vitest 5 e dependências npm estáveis; lockfile e CI Windows/Linux/musl x64/arm64.
+- Nova consulta ao npm atualiza `@types/node` para 26.6.4 e remove a exclusão de majors desse pacote no Dependabot; runtime permanece Node 24 LTS e novas APIs exigem compatibilidade com ele.
+- Publicação ativa imutável separada da edição: consulta/resources usam snapshot, rascunho não interrompe a publicação anterior. Publish com CAS e confirmação ligada à versão/base; alterações de segurança/cardinalidade suspendem pacotes afetados.
+- Aprendizado automático gera candidatas parametrizadas; reuso exige confirmação humana e publicações vigentes. Legados sem evidência viram candidatas, retenção 90 dias e falha de captura não perde consulta.
+
+### Security — isolamento e cofre
+
+- Credenciais somente no navegador: tools de cadastro/manutenção recusam argumentos, retornam URL; GET não consome nem emite Bearer, POST exige CSRF/reautenticação/vínculo, código hash de 256 bits/15 minutos. Rotação invalida Bearer anterior só na conclusão. Envelope AES-GCM v2 com key ID e recriptografia verificável.
+- Recortes obrigatórios por lógica da AST, SQL somente leitura com funções permitidas e limites de complexidade, ambiguidade/fanout recusados. Inspeção/perfil omitem valores não classificados/pessoais/segredos; anexos vinculam origem física/publicações, quotas de bytes e autorização revalidada.
+- Três portões vigentes em cache/exportação/entrega; Redis lease com proprietário e renovação atômicos, sem consulta concorrente após timeout com lease válido. Sessão MCP legada fixa; protocolo 2026-07-28 por requisição, Origin/Host/proxy configurados.
+
+### Added — avaliação e migração
+
+- 100 cenários sintéticos versionados, resultados PostgreSQL, harness explícito de IA consumidora com modelo registrado e critérios 100% segurança/lacuna e 95% suportados. Ensaio do harness não certifica modelo.
+- Migrações 0028–0031: baseline técnico/suspensão de pacotes inseguros, setups legados invalidados, candidatos governados e snapshots imutáveis. Ensaios de banco novo e upgrades 0023/0027. Dependabot por PR, sem merge automático de majors.
+
 ### Added — operação confiável
 
 - Migrations `0027`: caixa de alertas por acesso, webhook cifrado e outbox com lease/retry/dead-letter.
@@ -32,7 +60,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 ### Added
 
 - Token MCP **por acesso** (`acesso.token_hash`): cada `CLIENT_TOKEN` ganha um Bearer distinto. `registrar_acesso` com e-mail existente + senha correta + token novo emite outro setup; `adicionar_acesso` devolve `setupUrl` da persona nova **sem** trocar a sessão atual. Migration `0023_token_por_acesso.sql`: o acesso mais antigo herda o Bearer; extras ganham `mcp_setup` (TTL 7 dias).
-- `registrar_acesso` / `adicionar_acesso` / `rotacionar_token_mcp` gravam o código one-shot em memória **e** em `mcp_setup` (TTL 7 dias). Restart antes de `GET /setup/{code}` não trava a persona — o hash já está em `acesso.token_hash`. `listar_acessos` sem sessão ALS recusa (`VALIDATION_ERROR`) em vez de listar todos os chapéus.
+- Entrega persistida legada em mcp_setup foi substituída por setup_operation; 0029 invalida códigos pendentes, preservando Bearers existentes.
 
 ### Changed
 

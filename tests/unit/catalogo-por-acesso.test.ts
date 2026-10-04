@@ -677,7 +677,7 @@ describe("catálogo isolado por acesso (client_token)", () => {
         pergunta: "lista produtos",
         consultaAprendidaId: gravada.id,
       }),
-    ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
+    ).rejects.toMatchObject({ code: ERROR_CODES.APRENDIZADO_NAO_CONFIRMADO });
   });
 
   it("UUID de coluna do acesso A não muta o grafo do B", async () => {

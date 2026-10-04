@@ -317,7 +317,7 @@ const fluxoComConflitos = async (
   skill: Skill | null,
   conflitosPendentes: number,
 ): Promise<FluxoSkillResult> => {
-  let treinado = false;
+  let treinado: boolean;
   if (skill) {
     const modelo = parseSqlModelo(skill.sqlModelo);
     const missing = await missingGraphTables(

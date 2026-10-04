@@ -13,6 +13,7 @@ import {
   QUERY_CELL_MAX_CHARS,
   type AnexoStub,
   type OrigemAnexoHandle,
+  type AnexoProveniencia,
 } from "../../../domain/entities/anexo.js";
 import { analisarCelulaBinaria } from "./detectar-celula-binaria.js";
 
@@ -24,6 +25,7 @@ export interface SanitizarLinhasConsultaInput {
   readonly acessoId: string;
   readonly origem: OrigemAnexoHandle;
   readonly lookupSensibilidade?: (coluna: string) => SensibilidadeColuna | null;
+  readonly proveniencia?: (coluna: string) => AnexoProveniencia | undefined;
 }
 
 export interface SanitizarLinhasConsultaResult {
@@ -101,7 +103,9 @@ export const sanitizarLinhasConsulta = (
         );
       }
       const sensibilidade = input.lookupSensibilidade?.(key) ?? inferirSensibilidadeColuna(key);
+      const provenance = input.proveniencia?.(key);
       const omitirHandle =
+        !provenance ||
         input.origem === "inspecionar_consulta" ||
         sensibilidade === "pessoal" ||
         sensibilidade === "segredo";
@@ -116,6 +120,7 @@ export const sanitizarLinhasConsulta = (
         );
       }
       const handle = input.anexos.put({
+        proveniencia: provenance,
         usuarioId: input.usuarioId,
         acessoId: input.acessoId,
         bytes: extracted.bytes,

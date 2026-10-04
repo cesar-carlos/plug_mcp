@@ -1,6 +1,10 @@
+import { createHash } from "node:crypto";
+import { DomainError } from "../../../domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
+import { identidadeConsulta } from "../../../domain/entities/consulta-fingerprint.js";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { and, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { tokenizeQuery } from "../busca-termos.js";
+import { and, count, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { rankByTermsHits, tokenizeQuery } from "../busca-termos.js";
 import type { Db } from "./db.js";
 import {
   condicaoFtsOuIlike,
@@ -71,8 +75,8 @@ import type {
 } from "../../../domain/entities/aprendizado.js";
 import { chavePerguntaLacuna } from "../../../domain/entities/aprendizado.js";
 import type { AprendizadoRepositoryPort } from "../../../domain/ports/aprendizado-repository.port.js";
-import type { ParametroSkill } from "../../../domain/entities/skill.js";
 import { asAcessoId } from "../as-acesso-id.js";
+import { skillDoSnapshot } from "../skill-publicada.js";
 
 const toUsuario = (row: typeof schema.usuarioMcp.$inferSelect): UsuarioMcp => ({
   id: row.id,
@@ -234,6 +238,20 @@ export class DrizzleAcessoRepository implements AcessoRepositoryPort {
       .update(schema.acesso)
       .set({ statusAcesso: status, updatedAt: new Date() })
       .where(eq(schema.acesso.id, id));
+  }
+
+  async compareAndRotateToken(
+    id: string,
+    expectedHash: string,
+    tokenHash: string,
+    tokenExpiresAt: Date | null,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(schema.acesso)
+      .set({ tokenHash, tokenExpiresAt, updatedAt: new Date() })
+      .where(and(eq(schema.acesso.id, id), eq(schema.acesso.tokenHash, expectedHash)))
+      .returning({ id: schema.acesso.id });
+    return rows.length === 1;
   }
 
   async updateClientToken(
@@ -409,7 +427,7 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
       await tx.execute(
         sql`select acesso_id from grafo_lock where acesso_id = ${acessoId}::uuid for update`,
       );
-      return grafoTx.run(tx as unknown as Db, fn);
+      return grafoTx.run(tx, fn);
     });
   }
 
@@ -956,6 +974,64 @@ export class DrizzleGrafoRepository implements GrafoRepositoryPort {
 export class DrizzleSkillRepository implements SkillRepositoryPort {
   constructor(private readonly db: Db) {}
 
+  async findPublicadaById(id: string): Promise<Skill | null> {
+    const [row] = await this.db
+      .select({ draft: schema.skill, publication: schema.skillPublicacao })
+      .from(schema.skill)
+      .innerJoin(
+        schema.skillPublicacao,
+        and(
+          eq(schema.skill.publicacaoAtivaId, schema.skillPublicacao.id),
+          eq(schema.skill.id, schema.skillPublicacao.skillId),
+          eq(schema.skill.acessoId, schema.skillPublicacao.acessoId),
+        ),
+      )
+      .where(eq(schema.skill.id, id))
+      .limit(1);
+    return row ? skillDoSnapshot(this.toSkill(row.draft), row.publication) : null;
+  }
+  async listPublicadas(acessoId: string): Promise<readonly Skill[]> {
+    const rows = await this.db
+      .select({ draft: schema.skill, publication: schema.skillPublicacao })
+      .from(schema.skill)
+      .innerJoin(
+        schema.skillPublicacao,
+        and(
+          eq(schema.skill.publicacaoAtivaId, schema.skillPublicacao.id),
+          eq(schema.skill.id, schema.skillPublicacao.skillId),
+          eq(schema.skill.acessoId, schema.skillPublicacao.acessoId),
+        ),
+      )
+      .where(eq(schema.skill.acessoId, acessoId));
+    return rows.map((row) => skillDoSnapshot(this.toSkill(row.draft), row.publication));
+  }
+  async suspenderPublicacao(id: string): Promise<void> {
+    await this.db
+      .update(schema.skill)
+      .set({ publicacaoAtivaId: null, updatedAt: new Date() })
+      .where(eq(schema.skill.id, id));
+  }
+
+  async buscarPublicadas(
+    acessoId: string,
+    query: string,
+    limite: number,
+  ): Promise<readonly HitBusca<Skill>[]> {
+    return rankByTermsHits(
+      await this.listPublicadas(acessoId),
+      tokenizeQuery(query),
+      (item) =>
+        [
+          item.nome,
+          item.slug,
+          item.descricao,
+          ...item.params.map((param) => param.descricao),
+          ...item.escopo.metricasSaida.map((metric) => metric.definicao ?? metric.alias),
+        ].join(" "),
+      limite,
+    );
+  }
+
   async create(input: NovaSkill): Promise<Skill> {
     const [row] = await this.db
       .insert(schema.skill)
@@ -1009,6 +1085,12 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
       .update(schema.skill)
       .set({
         ...rest,
+        ...(patch.status === "rascunho_revalidacao" ? { publicacaoAtivaId: null } : {}),
+        ...(patch.status === undefined || patch.status === "publicada"
+          ? {
+              status: sql`CASE WHEN ${schema.skill.status} = 'publicada' THEN 'rascunho' ELSE ${schema.skill.status} END`,
+            }
+          : {}),
         ...(params !== undefined ? { params: [...params] } : {}),
         ...(escopo !== undefined ? { escopo } : {}),
         versao: sql`${schema.skill.versao} + 1`,
@@ -1024,6 +1106,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
       .update(schema.skill)
       .set({
         status,
+        ...(status === "rascunho_revalidacao" ? { publicacaoAtivaId: null } : {}),
         ...(versao !== undefined ? { versao } : {}),
         updatedAt: new Date(),
       })
@@ -1118,6 +1201,7 @@ export class DrizzleSkillRepository implements SkillRepositoryPort {
 
   private toSkill(row: typeof schema.skill.$inferSelect): Skill {
     return {
+      publicacaoAtivaId: row.publicacaoAtivaId,
       id: row.id,
       acessoId: asAcessoId(row.acessoId),
       slug: row.slug,
@@ -1409,11 +1493,16 @@ const toConsultaAprendida = (
   paramsContrato: parseParametroSkillList(row.paramsContrato),
   execucoes: row.execucoes,
   ultimaExecucao: row.ultimaExecucao,
+  versao: row.versao,
+  motivoInativacao: row.motivoInativacao,
   status: row.status,
+  publicacoes: row.publicacoes,
+  confirmadaEm: row.confirmadaEm,
   autorUsuarioId: row.autorUsuarioId,
 });
 
 const toLacuna = (row: typeof schema.lacunaConsulta.$inferSelect): LacunaConsulta => ({
+  ocorrencias: row.ocorrencias,
   id: row.id,
   acessoId: asAcessoId(row.acessoId),
   pergunta: row.pergunta,
@@ -1424,6 +1513,18 @@ const toLacuna = (row: typeof schema.lacunaConsulta.$inferSelect): LacunaConsult
 });
 
 export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
+  async purgeCandidatasAntesDe(cutoff: Date): Promise<number> {
+    const deleted = await this.db
+      .delete(schema.consultaAprendida)
+      .where(
+        and(
+          eq(schema.consultaAprendida.status, "candidata"),
+          lt(schema.consultaAprendida.ultimaExecucao, cutoff),
+        ),
+      )
+      .returning({ id: schema.consultaAprendida.id });
+    return deleted.length;
+  }
   constructor(private readonly db: Db) {}
 
   private async skillIdsOf(consultaIds: readonly string[]): Promise<Map<string, string[]>> {
@@ -1450,67 +1551,137 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
     return rows.map((row) => toConsultaAprendida(row, ids.get(row.id) ?? []));
   }
 
-  async salvarConsulta(input: {
-    acessoId: string;
-    skillIds: readonly string[];
-    pergunta: string;
-    sql: string;
-    paramsContrato: readonly ParametroSkill[];
-    autorUsuarioId: string | null;
-  }): Promise<ConsultaAprendida> {
-    const [existing] = await this.db
-      .select()
-      .from(schema.consultaAprendida)
-      .where(
-        and(
-          eq(schema.consultaAprendida.acessoId, input.acessoId),
-          eq(schema.consultaAprendida.sql, input.sql),
-        ),
+  async salvarConsulta(
+    input: Parameters<AprendizadoRepositoryPort["salvarConsulta"]>[0],
+  ): Promise<ConsultaAprendida> {
+    const fingerprint = createHash("sha256").update(identidadeConsulta(input)).digest("hex");
+    const row = await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.acessoId + fingerprint},0))`,
+      );
+      const [existing] = await tx
+        .select()
+        .from(schema.consultaAprendida)
+        .where(
+          and(
+            eq(schema.consultaAprendida.acessoId, input.acessoId),
+            eq(schema.consultaAprendida.fingerprint, fingerprint),
+          ),
+        )
+        .for("update");
+      if (existing) {
+        const [updated] = await tx
+          .update(schema.consultaAprendida)
+          .set({
+            execucoes: existing.execucoes + (input.registroExecucao === false ? 0 : 1),
+            ultimaExecucao: input.registroExecucao === false ? existing.ultimaExecucao : new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.consultaAprendida.id, existing.id))
+          .returning();
+        return updated!;
+      }
+      const [created] = await tx
+        .insert(schema.consultaAprendida)
+        .values({
+          acessoId: input.acessoId,
+          fingerprint,
+          pergunta: input.pergunta,
+          sql: input.sql,
+          paramsContrato: [...input.paramsContrato],
+          execucoes: input.registroExecucao === false ? 0 : 1,
+          status: input.status ?? "candidata",
+          publicacoes: [...(input.publicacoes ?? [])],
+          confirmadaEm: input.status === "confirmada" ? new Date() : null,
+          autorUsuarioId: input.autorUsuarioId,
+        })
+        .returning();
+      if (input.skillIds.length)
+        await tx
+          .insert(schema.consultaAprendidaSkill)
+          .values(input.skillIds.map((skillId) => ({ consultaId: created!.id, skillId })))
+          .onConflictDoNothing();
+      return created!;
+    });
+    return (await this.hydrate([row]))[0]!;
+  }
+  alterarEstado: AprendizadoRepositoryPort["alterarEstado"] = async (input) => {
+    const row = await this.db.transaction(async (tx) => {
+      for (const pub of [...(input.status === "confirmada" ? input.publicacoes : [])].sort((a, b) =>
+        a.skillId.localeCompare(b.skillId),
+      )) {
+        const [skill] = await tx
+          .select()
+          .from(schema.skill)
+          .where(and(eq(schema.skill.id, pub.skillId), eq(schema.skill.acessoId, input.acessoId)))
+          .for("update");
+        const [snapshot] = await tx
+          .select()
+          .from(schema.skillPublicacao)
+          .where(eq(schema.skillPublicacao.id, pub.id));
+        if (skill?.publicacaoAtivaId !== pub.id || snapshot?.pacoteHash !== pub.hash)
+          throw new DomainError({
+            code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+            message: "Publicação mudou.",
+            hint: "Gere novo preview.",
+          });
+      }
+      const [old] = await tx
+        .select()
+        .from(schema.consultaAprendida)
+        .where(
+          and(
+            eq(schema.consultaAprendida.id, input.id),
+            eq(schema.consultaAprendida.acessoId, input.acessoId),
+          ),
+        )
+        .for("update");
+      if (
+        old?.versao !== input.expectedVersion ||
+        (input.status === "confirmada" && old.status !== "candidata")
       )
-      .limit(1);
-    if (existing) {
-      const [row] = await this.db
+        throw new DomainError({
+          code: ERROR_CODES.CONFIRMACAO_DESATUALIZADA,
+          message: "Candidata mudou.",
+          hint: "Gere novo preview.",
+        });
+      const [updated] = await tx
         .update(schema.consultaAprendida)
         .set({
-          execucoes: existing.execucoes + 1,
-          ultimaExecucao: new Date(),
-          pergunta:
-            input.pergunta.trim().length > existing.pergunta.trim().length
-              ? input.pergunta
-              : existing.pergunta,
-          updatedAt: new Date(),
+          status: input.status,
+          versao: old.versao + 1,
+          autorUsuarioId: input.autorUsuarioId,
+          confirmadaEm: input.status === "confirmada" ? new Date() : old.confirmadaEm,
+          motivoInativacao: input.motivo ?? null,
         })
-        .where(eq(schema.consultaAprendida.id, existing.id))
+        .where(eq(schema.consultaAprendida.id, old.id))
         .returning();
-      if (input.skillIds.length > 0) {
-        await this.db
-          .insert(schema.consultaAprendidaSkill)
-          .values(input.skillIds.map((skillId) => ({ consultaId: existing.id, skillId })))
-          .onConflictDoNothing();
-      }
-      const [hydrated] = await this.hydrate([row!]);
-      return hydrated!;
-    }
-    const [row] = await this.db
-      .insert(schema.consultaAprendida)
-      .values({
-        acessoId: input.acessoId,
-        pergunta: input.pergunta,
-        sql: input.sql,
-        paramsContrato: [...input.paramsContrato],
-        autorUsuarioId: input.autorUsuarioId,
-      })
-      .returning();
-    if (input.skillIds.length > 0) {
-      await this.db
-        .insert(schema.consultaAprendidaSkill)
-        .values(input.skillIds.map((skillId) => ({ consultaId: row!.id, skillId })))
-        .onConflictDoNothing();
-    }
-    const [hydrated] = await this.hydrate([row!]);
-    return hydrated!;
-  }
+      return updated!;
+    });
+    return (await this.hydrate([row]))[0]!;
+  };
 
+  paginarConsultas: AprendizadoRepositoryPort["paginarConsultas"] = async (input) => {
+    const filter = and(
+      eq(schema.consultaAprendida.acessoId, input.acessoId),
+      input.estado ? eq(schema.consultaAprendida.status, input.estado) : undefined,
+      input.skillId
+        ? sql`EXISTS (SELECT 1 FROM consulta_aprendida_skill cas WHERE cas.consulta_id=${schema.consultaAprendida.id} AND cas.skill_id=${input.skillId})`
+        : undefined,
+    );
+    const count = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(schema.consultaAprendida)
+      .where(filter);
+    const rows = await this.db
+      .select()
+      .from(schema.consultaAprendida)
+      .where(filter)
+      .orderBy(schema.consultaAprendida.id)
+      .limit(input.limite)
+      .offset((input.pagina - 1) * input.limite);
+    return { total: count[0]?.total ?? 0, consultas: await this.hydrate(rows) };
+  };
   async listarConsultas(acessoId: string, limite: number): Promise<readonly ConsultaAprendida[]> {
     const rows = await this.db
       .select()
@@ -1541,6 +1712,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
         and(
           eq(schema.consultaAprendida.acessoId, acessoId),
           inArray(schema.consultaAprendida.id, ids),
+          eq(schema.consultaAprendida.status, "confirmada"),
         ),
       )
       .orderBy(desc(schema.consultaAprendida.execucoes))
@@ -1587,7 +1759,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
       .where(
         and(
           eq(schema.consultaAprendida.acessoId, acessoId),
-          eq(schema.consultaAprendida.status, "ativa"),
+          eq(schema.consultaAprendida.status, "confirmada"),
           busca,
         ),
       )
@@ -1677,6 +1849,7 @@ export class DrizzleAprendizadoRepository implements AprendizadoRepositoryPort {
           schema.lacunaConsulta.perguntaChave,
         ],
         set: {
+          ocorrencias: sql`${schema.lacunaConsulta.ocorrencias} + 1`,
           pergunta,
           contrato,
           status: "aberta",

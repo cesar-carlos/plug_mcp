@@ -2,7 +2,7 @@ import { DomainError, ERROR_SOURCE } from "../../../domain/errors/domain-error.j
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import type { ParametroSkill } from "../../../domain/entities/skill.js";
-import { tryParseSelect, walkSelectTree, type SqlAstSelect } from "./sql-ast.js";
+import { parseSelect, tryParseSelect, walkSelectTree, type SqlAstSelect } from "./sql-ast.js";
 import {
   extractNamedParams,
   rewriteAtParamsToColon,
@@ -117,7 +117,7 @@ export const parseSqlModelo = (raw: string, dialeto?: Dialeto): SqlModelo => {
       hint: "Não coloque FIRST/TOP/LIMIT no sqlModelo. A amostra FIRST é wrap do servidor. Depois de publicar, consultar_dados e inspecionar_consulta só rodam a consulta exemplo (sem sql). Treino não é DIALECT_UNSUPPORTED.",
     });
   }
-  const ast = tryParseSelect(sql, dialeto);
+  const ast = dialeto ? parseSelect(sql, dialeto) : tryParseSelect(sql);
   if (!ast) {
     throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,

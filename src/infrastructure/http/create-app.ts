@@ -59,6 +59,12 @@ export const createExpressApp = (input: {
 }): { app: Express; dispose: () => void } => {
   const app = express();
   app.disable("x-powered-by");
+  if (input.config.TRUST_PROXY) {
+    app.set(
+      "trust proxy",
+      input.config.TRUST_PROXY.split(",").map((item) => item.trim()),
+    );
+  }
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -82,14 +88,27 @@ export const createExpressApp = (input: {
       pinoHttp({
         logger: input.pino,
         autoLogging: { ignore: (req: { url?: string }) => req.url === "/health" },
+        serializers: {
+          req: (req: { method?: string; url?: string }) => ({
+            method: req.method,
+            url: req.url?.startsWith("/setup/") ? "/setup/[redacted]" : req.url?.split("?")[0],
+          }),
+        },
       }),
     );
   }
   app.use(
     cors({
-      origin: input.config.allowedOrigins.length > 0 ? [...input.config.allowedOrigins] : true,
+      origin: [...input.config.allowedOrigins],
       methods: ["GET", "POST", "DELETE"],
-      allowedHeaders: ["Content-Type", "Authorization", "Mcp-Session-Id", "mcp-protocol-version"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Mcp-Session-Id",
+        "mcp-protocol-version",
+        "mcp-method",
+        "mcp-name",
+      ],
       exposedHeaders: ["Mcp-Session-Id", "mcp-protocol-version"],
     }),
   );
@@ -108,18 +127,35 @@ export const createExpressApp = (input: {
   app.use(express.urlencoded({ extended: false }));
 
   app.use((req, res, next) => {
-    if (req.path !== "/mcp") {
-      next();
-      return;
-    }
-    const allowed = input.config.allowedOrigins;
-    if (allowed.length === 0) {
+    if (req.path !== "/mcp" && !req.path.startsWith("/setup/")) {
       next();
       return;
     }
     const origin = req.header("origin");
-    if (origin && !allowed.includes(origin)) {
+    if (origin && (origin === "null" || !input.config.allowedOrigins.includes(origin))) {
       res.status(403).json({ error: "origin_not_allowed" });
+      return;
+    }
+    const configured = input.config.MCP_ALLOWED_HOSTS.split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+    const allowedHosts = configured.length
+      ? configured
+      : [new URL(input.config.PUBLIC_BASE_URL).host.toLowerCase()];
+    const host = req.header("host")?.toLowerCase();
+    let hostname = "";
+    try {
+      hostname = new URL(`http://${host ?? ""}`).hostname;
+    } catch {
+      /* host inválido */
+    }
+    if (
+      !host ||
+      !allowedHosts.some(
+        (allowed) => allowed === host || (!allowed.includes(":") && allowed === hostname),
+      )
+    ) {
+      res.status(403).json({ error: "host_not_allowed" });
       return;
     }
     next();
@@ -172,18 +208,61 @@ export const createExpressApp = (input: {
       });
   });
 
-  app.get("/setup/:code", (req, res) => {
-    void consumeSetupToken(input.setup, input.setupPersistent, req.params.code ?? "")
-      .then((token) => {
-        if (!token) {
-          res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
-          return;
-        }
-        res.type("html").send(setupTokenHtml(token));
-      })
-      .catch(() => {
-        res.status(404).type("html").send("<p>Código inválido ou já usado.</p>");
-      });
+  const setupLimiter = createRateLimiter({
+    windowMs: input.config.MCP_RATE_LIMIT_WINDOW_MS,
+    max: input.config.MCP_BOOTSTRAP_RATE_LIMIT_MAX,
+    keyGenerator: (req) => `setup:${req.ip ?? "unknown"}`,
+    store: input.mcpRateLimitStore,
+  });
+  app.use("/setup", setupLimiter, (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    next();
+  });
+  app.get("/setup/:code", async (req, res) => {
+    const form = await input.useCases.setupOperations?.form(req.params.code ?? "");
+    if (!form) {
+      res.status(404).type("html").send("<p>Operação inválida ou expirada. Gere outra URL.</p>");
+      return;
+    }
+    const newAccess = form.purpose === "registrar" || form.purpose === "adicionar";
+    res
+      .type("html")
+      .send(
+        `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Operação do cofre MCP</title></head><body><h1>Operação do cofre MCP</h1><p>Use as credenciais do Client existente no hub. Esta operação expira em 15 minutos e será consumida na confirmação.</p><form method="post" action="/setup/${encodeURIComponent(req.params.code ?? "")}"><input type="hidden" name="csrf" value="${form.csrf}"><label>E-mail <input type="email" name="email" autocomplete="username" required></label><label>Senha do hub <input type="password" name="senha" autocomplete="current-password" required></label>${newAccess ? '<label>Agente (UUID) <input name="agentId" required></label><label>Dialeto <select name="dialeto"><option>mssql</option><option>sybase</option><option>postgres</option><option>firebird</option></select></label><label>client_token <input type="password" name="clientToken" autocomplete="off" required></label><label>Nome <input name="nomeAmigavel"></label>' : ""}${form.purpose === "registrar" ? '<label><input type="checkbox" name="recuperar" value="sim">Recuperar acesso existente e substituir seu Bearer</label>' : ""}<label><input type="checkbox" name="confirmado" value="sim" required>Confirmo esta operação no acesso informado</label><button type="submit">Confirmar</button></form></body></html>`,
+      );
+  });
+  app.post("/setup/:code", async (req, res) => {
+    if (req.header("origin") !== new URL(input.config.PUBLIC_BASE_URL).origin) {
+      res.status(403).type("html").send("<p>Origem não autorizada.</p>");
+      return;
+    }
+    try {
+      const form = Object.fromEntries(
+        Object.entries(req.body as Record<string, unknown>).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
+        ),
+      );
+      const result = await input.useCases.setupOperations?.complete(req.params.code ?? "", form);
+      if (!result) {
+        res.status(404).send("Operação indisponível.");
+        return;
+      }
+      res
+        .type("html")
+        .send(
+          result.token
+            ? setupTokenHtml(result.token)
+            : "<p>Credenciais atualizadas no hub e no cofre.</p>",
+        );
+    } catch {
+      res
+        .status(400)
+        .type("html")
+        .send(
+          "<p>Operação não concluída. Verifique as credenciais no hub e gere uma nova URL.</p>",
+        );
+    }
   });
 
   const mcp = createMcpHttpHandler({
@@ -194,7 +273,7 @@ export const createExpressApp = (input: {
     rateLimit: input.mcpRateLimitStore,
     resolveBearer: async (token) => {
       const acesso = await input.acessos.findByTokenHash(input.crypto.sha256Hex(token));
-      if (!acesso || isMcpTokenExpired(acesso)) {
+      if (!acesso || acesso.statusAcesso === "revoked" || isMcpTokenExpired(acesso)) {
         return null;
       }
       return { usuarioId: acesso.usuarioId, acessoId: acesso.id };
@@ -226,9 +305,32 @@ export const createExpressApp = (input: {
       mcpRateLimiter(req, res, next);
     },
     (req, res) => {
-      void mcp.handle(req, res);
+      void mcp.handle(req, res).catch(() => {
+        if (!res.headersSent) {
+          res.status(500).json({ error: "mcp_request_failed" });
+        }
+      });
     },
   );
 
-  return { app, dispose: mcp.dispose };
+  app.use(
+    (
+      _error: unknown,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      if (!res.headersSent) {
+        res.status(400).json({ error: "invalid_request" });
+      }
+    },
+  );
+  const unbindInvalidation = input.useCases.setupOperations?.onInvalidation(mcp.invalidateAccess);
+  return {
+    app,
+    dispose: () => {
+      unbindInvalidation?.();
+      mcp.dispose();
+    },
+  };
 };

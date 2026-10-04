@@ -53,7 +53,7 @@ describe("mcp_setup persistente", () => {
     expect(await persist.consume("old")).toBeNull();
   });
 
-  it("GET /setup memória-then-persist é one-shot; restart (memória vazia) ainda consome mcp_setup", async () => {
+  it("GET não revela Bearer de setup legado; armazenamento antigo só é consumível internamente", async () => {
     const persist = new InMemoryMcpSetupRepository();
     const memory = new SetupCodeStore();
     const issued = memory.issue("tok-restart", MCP_SETUP_TTL_MS);
@@ -99,8 +99,9 @@ describe("mcp_setup persistente", () => {
     });
     try {
       const first = await request(app).get(`/setup/${codeHttp}`);
-      expect(first.status).toBe(200);
-      expect(first.text).toContain("tok-http");
+      expect(first.status).toBe(404);
+      expect(first.text).not.toContain("tok-http");
+      expect(first.headers["cache-control"]).toBe("no-store");
       const second = await request(app).get(`/setup/${codeHttp}`);
       expect(second.status).toBe(404);
     } finally {

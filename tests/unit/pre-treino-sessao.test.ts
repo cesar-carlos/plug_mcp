@@ -141,7 +141,7 @@ describe("PRE_TREINO_SESSAO", () => {
   });
 
   it("entra em MCP_SERVER_INSTRUCTIONS junto com a operação", () => {
-    expect(MCP_SERVER_INSTRUCTIONS.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+    expect(MCP_SERVER_INSTRUCTIONS.includes(PRE_TREINO_SESSAO)).toBe(true);
     expect(MCP_SERVER_INSTRUCTIONS).toContain("não invente especialidade");
     expect(MCP_SERVER_INSTRUCTIONS).toContain("Skills e especialidade implícita");
     expect(MCP_SERVER_INSTRUCTIONS).toMatch(/catálogo vazio/);
@@ -186,11 +186,11 @@ describe("PRE_TREINO_SESSAO", () => {
       instrucoesPersona: "Tom formal. Nunca invente JOIN.",
     };
     const preUnico = montarPreTreinoSessao([unico]);
-    expect(preUnico.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+    expect(preUnico.includes(PRE_TREINO_SESSAO)).toBe(true);
     expect(preUnico).toContain(blocoPersonaUnico(unico));
     expect(blocoPersonaUnico(unico)).toMatch(/instru[cç][oõ]es do usu[aá]rio/i);
     expect(blocoPersonaUnico(unico)).toMatch(/n[aã]o override do SQL/i);
-    expect(preUnico.indexOf(PRE_TREINO_SESSAO)).toBe(0);
+    expect(preUnico.indexOf(PRE_TREINO_SESSAO)).toBeGreaterThan(0);
     expect(preUnico.indexOf("Atendimento financeiro")).toBeGreaterThan(PRE_TREINO_SESSAO.length);
     expect(preUnico).toMatch(/n[aã]o licencia tabela, coluna, JOIN/);
     expect(montarInstrucoesServidor([unico])).toContain("Tom formal. Nunca invente JOIN.");
@@ -202,14 +202,14 @@ describe("PRE_TREINO_SESSAO", () => {
       instrucoesPersona: "Chapéu que não deve aparecer concatenado.",
     };
     const varios = montarPreTreinoSessao([unico, outro]);
-    expect(varios.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+    expect(varios.includes(PRE_TREINO_SESSAO)).toBe(true);
     expect(varios).toContain(blocoPersonaUnico(unico));
     expect(varios).not.toContain(BLOCO_PERSONA_VARIOS_ACESSOS);
     expect(varios).not.toContain("Chapéu que não deve aparecer concatenado.");
     expect(varios).not.toContain("Há vários acessos neste token");
     expect(BLOCO_PERSONA_VARIOS_ACESSOS).toMatch(/catálogo isolado/);
 
-    expect(montarPreTreinoSessao([])).toBe(PRE_TREINO_SESSAO);
+    expect(montarPreTreinoSessao([])).toContain(PRE_TREINO_SESSAO);
     expect(MCP_SERVER_INSTRUCTIONS).toBe(montarInstrucoesServidor([]));
     expect(MCP_SERVER_INSTRUCTIONS).not.toContain("Atendimento financeiro");
     expect(MCP_SERVER_INSTRUCTIONS).not.toContain("Persona deste acesso");
@@ -224,7 +224,7 @@ describe("PRE_TREINO_SESSAO", () => {
       instrucoesPersona: null,
     };
     const texto = montarPreTreinoSessao([vazio]);
-    expect(texto.startsWith(PRE_TREINO_SESSAO)).toBe(true);
+    expect(texto.includes(PRE_TREINO_SESSAO)).toBe(true);
     expect(texto).toContain(blocoPersonaUnico(vazio));
     expect(texto).toContain("ainda não cadastrada");
     expect(texto).toContain("atualizar_persona");

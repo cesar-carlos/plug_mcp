@@ -351,7 +351,11 @@ export const aplicarDerivaEsquema = async (input: {
       skillsAfetadas: [],
     };
   }
-  const all = await input.skills.listByAcesso(input.acessoId);
+  const [drafts, active] = await Promise.all([
+    input.skills.listByAcesso(input.acessoId),
+    input.skills.listPublicadas(input.acessoId),
+  ]);
+  const all = [...active, ...drafts.filter((draft) => !active.some((pub) => pub.id === draft.id))];
   // A schema signature may change for an unused/additive field. Only a
   // removal or incompatible change that the published package actually uses
   // is blocking; compatible drift remains informational.
@@ -443,7 +447,11 @@ export const aplicarDerivaTabelaNoGrafo = async (input: {
       skillsAfetadas: [],
     };
   }
-  const all = await input.skills.listByAcesso(input.acessoId);
+  const [drafts, active] = await Promise.all([
+    input.skills.listByAcesso(input.acessoId),
+    input.skills.listPublicadas(input.acessoId),
+  ]);
+  const all = [...active, ...drafts.filter((draft) => !active.some((pub) => pub.id === draft.id))];
   // Keep the complete mapped signature so additive fields are visible in the
   // diagnostic delta even when they are not licensed by a published package.
   // Licensed columns are checked separately below, including removals.

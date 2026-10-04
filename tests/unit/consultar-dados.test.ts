@@ -1,3 +1,4 @@
+import { freezeFixturePublication } from "../helpers/freeze-publication.js";
 import { describe, expect, it } from "vitest";
 import { ConsultarDados } from "../../src/application/use-cases/consultar.js";
 import { RegistrarAcesso } from "../../src/application/use-cases/cofre.js";
@@ -66,7 +67,7 @@ describe("ConsultarDados", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista produtos",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -97,7 +98,7 @@ describe("ConsultarDados", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista produtos",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await expect(
@@ -252,7 +253,7 @@ describe("ConsultarDados", () => {
       slug: "tz",
       nome: "Tz",
       descricao: "Tz",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -275,7 +276,7 @@ describe("ConsultarDados", () => {
       slug: "lista",
       nome: "Lista",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -368,7 +369,7 @@ describe("ConsultarDados", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -396,7 +397,7 @@ describe("ConsultarDados", () => {
       slug: "lista",
       nome: "Lista",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -421,7 +422,7 @@ describe("ConsultarDados", () => {
       slug: "lista-ordenada",
       nome: "Lista",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p ORDER BY p.codprod",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -462,7 +463,7 @@ describe("ConsultarDados", () => {
       slug: "lista-paginada",
       nome: "Lista",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p ORDER BY p.codprod",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -513,7 +514,8 @@ describe("ConsultarDados", () => {
       slug: "lista-top",
       nome: "Lista",
       descricao: "Lista",
-      sqlModelo: "SELECT TOP 10 p.codprod AS codigo FROM produto p ORDER BY p.codprod",
+      sqlModelo:
+        "SELECT TOP 10 p.codprod AS codigo FROM produto p WHERE p.codprod > 0 ORDER BY p.codprod",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -568,7 +570,7 @@ describe("ConsultarDados", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -681,6 +683,7 @@ describe("ConsultarDados avisos de anotação", () => {
       texto: "Amostra limitada para treinamento",
       autorUsuarioId: created.usuarioId,
     });
+    await freezeFixturePublication(skills, pagar, grafo, anotacoes);
     plug.sqlImpl = async () => ({
       columns: ["valor"],
       rows: [{ valor: 10 }],
@@ -806,6 +809,14 @@ describe("ConsultarDados avisos de anotação", () => {
     });
     await skills.setStatus(skill.id, "publicada");
     const gravada = await aprendizado.salvarConsulta({
+      status: "confirmada",
+      publicacoes: [
+        {
+          skillId: skill.id,
+          id: (await skills.findPublicadaById(skill.id))!.publicacaoAtivaId!,
+          hash: (await skills.findPublicadaById(skill.id))!.publicacaoHash!,
+        },
+      ],
       acessoId: created.acessoId,
       skillIds: [skill.id],
       pergunta: "produto 1",

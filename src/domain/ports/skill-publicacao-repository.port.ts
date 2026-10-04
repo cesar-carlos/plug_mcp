@@ -19,7 +19,10 @@ export interface SkillPublicacaoRepositoryPort {
   publishAtomically(input: {
     acessoId: string;
     skillId: string;
+    validarTestesAtuais?: () => Promise<void>;
     expectedSkillVersion: number;
+    expectedActiveId?: string | null;
+    expectedBaseHash?: string | null;
     pacote: Readonly<Record<string, unknown>>;
     pacoteHash: string;
     politicaConsulta: PoliticaConsulta;

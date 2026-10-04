@@ -1,4 +1,5 @@
 import type { PoliticaConsulta } from "../../../domain/entities/politica-consulta.js";
+import { TREINAMENTO_BASE } from "./treinamento-base.js";
 import {
   aliasesMetricas,
   type ConsultaSemantica,
@@ -10,6 +11,11 @@ import type { SqlAstSelect } from "./sql-ast.js";
 export type OrigemConsulta = "sql" | "semantica" | "aprendida" | "modelo";
 
 export interface PlanoConsulta {
+  readonly treinamentoBase?: typeof TREINAMENTO_BASE;
+  readonly publicacoes?: readonly { skillId: string; id: string | null; hash: string | null }[];
+  readonly aplicacaoSemantica:
+    | "IR: dimensoesPermitidas, tratamentoNulos e round; demais metadados documentais"
+    | "SQL: metadados semânticos documentais; validadores de segurança e fanout ativos";
   readonly origem: OrigemConsulta;
   readonly dialeto: string;
   /** Política efetivamente combinada das skills publicadas desta consulta. */
@@ -38,6 +44,7 @@ export const montarPlanoConsulta = (input: {
   origem: OrigemConsulta;
   dialeto: string;
   skillIds: readonly string[];
+  publicacoes?: PlanoConsulta["publicacoes"];
   tabelas: readonly string[];
   ast: SqlAstSelect | null;
   consultaSemantica?: ConsultaSemantica | null;
@@ -53,7 +60,13 @@ export const montarPlanoConsulta = (input: {
   const pageSize = input.paginacao?.pageSize;
   const paginada = page != null && pageSize != null;
   return {
+    treinamentoBase: TREINAMENTO_BASE,
+    aplicacaoSemantica:
+      input.origem === "semantica"
+        ? "IR: dimensoesPermitidas, tratamentoNulos e round; demais metadados documentais"
+        : "SQL: metadados semânticos documentais; validadores de segurança e fanout ativos",
     origem: input.origem,
+    publicacoes: input.publicacoes,
     dialeto: input.dialeto,
     politicaAplicada: input.politica ? { ...input.politica } : null,
     skillIds: [...input.skillIds],

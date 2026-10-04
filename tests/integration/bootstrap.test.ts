@@ -8,7 +8,7 @@ import { parseMcpPayload } from "../helpers/mcp-rpc.js";
 const agentId = "11111111-1111-4111-8111-111111111111";
 
 describe("bootstrap MCP", () => {
-  it("initialize e registrar_acesso sem Bearer; token só no GET /setup", async () => {
+  it("initialize sem Bearer e cadastro por URL de formulário, sem segredo nas tools", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
     const { app, close } = await compose(testConfig(), { plug });
@@ -79,7 +79,7 @@ describe("bootstrap MCP", () => {
       expect(toolsList.status).toBeLessThan(500);
       const toolsResult = parseMcpPayload(toolsList).result as { tools?: { name: string }[] };
       const toolNames = toolsResult.tools?.map((tool) => tool.name) ?? [];
-      expect(toolNames).toEqual(["registrar_acesso"]);
+      expect(toolNames).toEqual(["obter_treinamento_base", "registrar_acesso"]);
       expect(toolNames).not.toContain("consultar_dados");
       expect(toolNames).not.toContain("exportar_anexo");
       expect(toolNames).not.toContain("criar_skill");

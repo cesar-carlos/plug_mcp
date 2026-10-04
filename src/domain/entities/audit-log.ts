@@ -1,4 +1,5 @@
 export interface AuditMetadata {
+  readonly publicacoes?: readonly { skillId: string; id: string; hash: string }[];
   readonly origem?: "sql" | "semantica" | "aprendida" | "modelo" | "busca";
   readonly skillIds?: readonly string[];
   readonly agregado?: boolean;

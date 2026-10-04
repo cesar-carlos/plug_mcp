@@ -15,6 +15,7 @@ import {
   InMemoryUsuarioRepository,
 } from "../../src/infrastructure/persistence/memory/memory-cofre.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
+import { freezeFixturePublication } from "../helpers/freeze-publication.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -72,7 +73,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
       slug: "produtos",
       nome: "Produtos",
       descricao: "Lista",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     expect(skill.escopo).toEqual(escopoVazio());
@@ -89,12 +90,12 @@ describe("obter_skill pacote e backfill de escopo", () => {
       skillId: skill.id,
     });
     expect(result.pacote.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
-    expect(result.pacote.consultasExemplo).toHaveLength(1);
+    expect(result.pacote.consultasExemplo).toHaveLength(0);
     const reloaded = await skills.findById(skill.id);
     expect(reloaded?.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
   });
 
-  it("validar_consulta liga placeholders a null", async () => {
+  it("validar_consulta exige e liga os parâmetros reais", async () => {
     const { plug, acessos, skills, created, sessions } = await setup();
     const skill = await skills.create({
       acessoId: created.acessoId,
@@ -110,9 +111,10 @@ describe("obter_skill pacote e backfill de escopo", () => {
       acessoId: created.acessoId,
       skillId: skill.id,
       sql: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod = :codigo",
+      params: { codigo: 7 },
     });
     expect(result.valido).toBe(true);
-    expect(plug.lastParams).toEqual({ codigo: null });
+    expect(plug.lastParams).toEqual({ codigo: 7 });
   });
 
   it("validar_consulta recusa TOP no SELECT externo com options.page", async () => {
@@ -172,7 +174,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
     expect(pagina.valido).toBe(true);
   });
 
-  it("consultar_dados persiste escopo vazio", async () => {
+  it("consultar_dados preserva o snapshot sem backfill em leitura", async () => {
     const { plug, acessos, skills, created, sessions } = await setup();
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });
     const skill = await skills.create({
@@ -180,7 +182,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
       slug: "lista",
       nome: "Lista",
       descricao: "Produtos",
-      sqlModelo: "SELECT p.codprod AS codigo FROM produto p",
+      sqlModelo: "SELECT p.codprod AS codigo FROM produto p WHERE p.codprod > 0",
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
@@ -200,7 +202,7 @@ describe("obter_skill pacote e backfill de escopo", () => {
       pergunta: "consulta de teste",
     });
     const reloaded = await skills.findById(skill.id);
-    expect(reloaded?.escopo.tabelas.map((t) => t.toLowerCase())).toContain("produto");
+    expect(reloaded?.escopo).toEqual(escopoVazio());
   });
 
   it("pacote só autoriza colunas do escopo", async () => {
@@ -241,5 +243,58 @@ describe("obter_skill pacote e backfill de escopo", () => {
     });
     expect(result.pacote.colunas.map((col) => col.nome.toLowerCase())).toEqual(["codprod"]);
     expect(result.pacote.colunas.some((col) => col.nome.toLowerCase() === "secreto")).toBe(false);
+  });
+
+  it("restrição atual remove valores do snapshot e do rascunho sem alterar o histórico", async () => {
+    const { skills, grafo, obter, created } = await setup();
+    const { tabela } = await grafo.mergeTabela({
+      acessoId: created.acessoId,
+      nome: "produto",
+      origem: "confirmado_usuario",
+      autorUsuarioId: created.usuarioId,
+    });
+    await grafo.mergeColuna({
+      acessoId: created.acessoId,
+      tabelaId: tabela.id,
+      nome: "codprod",
+      tipo: "int",
+      origem: "confirmado_usuario",
+      sensibilidade: "livre",
+      perfil: { min: 123, max: 999 },
+      dicionario: "123=exemplo",
+      autorUsuarioId: created.usuarioId,
+    });
+    const skill = await skills.create({
+      acessoId: created.acessoId,
+      slug: "perfil-seguro",
+      nome: "Perfil",
+      descricao: "Perfil",
+      sqlModelo: "SELECT p.codprod FROM produto p WHERE p.codprod > 0",
+      autorUsuarioId: created.usuarioId,
+    });
+    await obter.execute(created.usuarioId, { skillId: skill.id });
+    await freezeFixturePublication(skills, (await skills.findById(skill.id))!, grafo);
+    await grafo.mergeColuna({
+      acessoId: created.acessoId,
+      tabelaId: tabela.id,
+      nome: "codprod",
+      origem: "confirmado_usuario",
+      sensibilidade: "pessoal",
+      autorUsuarioId: created.usuarioId,
+    });
+    for (const revisao of ["publicada", "rascunho"] as const) {
+      const result = await obter.execute(created.usuarioId, { skillId: skill.id, revisao });
+      expect(result.pacote.colunas[0]).toMatchObject({
+        perfil: null,
+        dicionario: null,
+        sensibilidade: "pessoal",
+      });
+      if (revisao === "publicada") {
+        expect(result.skill.conhecimentoPublicado?.colunas[0]?.perfil).toBeNull();
+      }
+    }
+    expect(
+      (await skills.findPublicadaById(skill.id))?.conhecimentoPublicado?.colunas[0]?.perfil,
+    ).toEqual({ min: 123, max: 999 });
   });
 });

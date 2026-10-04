@@ -101,7 +101,7 @@ export class DomainError extends Error {
     return new DomainError({
       code: ERROR_CODES.UNAUTHENTICATED,
       message: "Token MCP ausente ou inválido.",
-      hint: "Chame registrar_acesso sem Bearer, abra o setupCode em GET /setup/{code}, copie o token e envie Authorization: Bearer.",
+      hint: "Chame registrar_acesso({}) sem Bearer, abra setupUrl e confirme o formulário no navegador. Copie o Bearer mostrado uma vez na conclusão do POST.",
     });
   }
 

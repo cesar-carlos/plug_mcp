@@ -1,3 +1,4 @@
+import { freezeFixturePublication } from "../helpers/freeze-publication.js";
 import { describe, expect, it } from "vitest";
 import {
   InspecionarConsulta,
@@ -24,8 +25,30 @@ const crypto = new NodeCryptoAdapter(
 );
 const agentId = "11111111-1111-4111-8111-111111111111";
 
+const classificar = async (grafo: InMemoryGrafoRepository, acessoId: string, usuarioId: string) => {
+  for (const [nome, coluna] of [
+    ["cliente", "codcli"],
+    ["produto", "codprod"],
+  ]) {
+    const { tabela } = await grafo.mergeTabela({
+      acessoId,
+      nome: nome!,
+      origem: "confirmado_usuario",
+      autorUsuarioId: usuarioId,
+    });
+    await grafo.mergeColuna({
+      acessoId,
+      tabelaId: tabela.id,
+      nome: coluna!,
+      tipo: "int",
+      sensibilidade: "livre",
+      origem: "confirmado_usuario",
+      autorUsuarioId: usuarioId,
+    });
+  }
+};
 describe("inspecionar_consulta", () => {
-  it("teto 100, amostra crua e recusa sem finalidade", async () => {
+  it("teto 100, projeção segura e recusa sem finalidade", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentId);
     const usuarios = new InMemoryUsuarioRepository();
@@ -49,6 +72,7 @@ describe("inspecionar_consulta", () => {
       dialeto: "mssql",
       clientToken: "tok-sql-123456",
     });
+    await classificar(grafo, created.acessoId, created.usuarioId);
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
@@ -78,6 +102,19 @@ describe("inspecionar_consulta", () => {
         senha: "segredo-raw",
       })),
     });
+    const valuesImpl = plug.sqlImpl;
+    plug.sqlImpl = async (input) =>
+      /column_name/i.test(input)
+        ? {
+            columns: ["column_name", "data_type", "is_nullable"],
+            rows: [
+              { column_name: "codprod", data_type: "int", is_nullable: "NO" },
+              { column_name: "codcli", data_type: "int", is_nullable: "NO" },
+              { column_name: "nome", data_type: "varchar", is_nullable: "YES" },
+              { column_name: "ativo", data_type: "bit", is_nullable: "NO" },
+            ],
+          }
+        : valuesImpl(input);
     const inspecionar = new InspecionarConsulta(
       acessos,
       skills,
@@ -95,14 +132,14 @@ describe("inspecionar_consulta", () => {
       }),
     ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
 
-    const comSegredo = await inspecionar.execute(created.usuarioId, {
-      acessoId: created.acessoId,
-      skillId: skill.id,
-      sql: "SELECT c.codcli, c.senha FROM cliente c WHERE c.codcli > 0",
-      finalidade: "amostra_estrutura",
-    });
-    expect(comSegredo.rows[0]?.senha).toBe("segredo-raw");
-    expect(comSegredo.colunasMascaradas).toEqual([]);
+    await expect(
+      inspecionar.execute(created.usuarioId, {
+        acessoId: created.acessoId,
+        skillId: skill.id,
+        sql: "SELECT c.codcli,c.senha FROM cliente c WHERE c.codcli>0",
+        finalidade: "amostra_estrutura",
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODES.PRIVACIDADE_NEGADA });
 
     plug.sqlImpl = async () => ({
       columns: ["codcli", "nome"],
@@ -119,18 +156,15 @@ describe("inspecionar_consulta", () => {
     const result = await inspecionar.execute(created.usuarioId, {
       acessoId: created.acessoId,
       skillId: skill.id,
-      sql: "SELECT c.codcli, c.nome FROM cliente c WHERE c.codcli > 0",
+      sql: "SELECT c.codcli FROM cliente c WHERE c.codcli > 0",
       finalidade: "amostra_estrutura",
     });
     expect(result.maxRowsApplied).toBe(INSPECAO_MAX_ROWS);
     expect(result.rowCount).toBeLessThanOrEqual(INSPECAO_MAX_ROWS);
-    expect(result.rows[0]?.nome).toBe("Pessoa");
+    expect(result.rows[0]?.nome).toBeUndefined();
     expect(result.colunasMascaradas).toEqual([]);
     expect(audit.entries.every((entry) => !String(entry.sqlEnviado).includes("Pessoa"))).toBe(true);
-    expect(result.columnsMetadata).toEqual([
-      { name: "codcli", type: "int", nullable: false },
-      { name: "nome", type: "varchar", nullable: true },
-    ]);
+    expect(result.columnsMetadata).toEqual([{ name: "codcli", type: "int", nullable: false }]);
   });
 
   it("Firebird inspeciona só a consulta exemplo, sem SQL livre", async () => {
@@ -158,12 +192,13 @@ describe("inspecionar_consulta", () => {
       dialeto: "firebird",
       clientToken: "tok-sql-firebird",
     });
+    await classificar(grafo, created.acessoId, created.usuarioId);
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
       remember: () => undefined,
     };
-    const sqlModelo = "SELECT c.codcli, c.nome FROM cliente c WHERE c.codcli > 0";
+    const sqlModelo = "SELECT c.codcli FROM cliente c WHERE c.codcli > 0";
     const skill = await skills.create({
       acessoId: created.acessoId,
       slug: "clientes-fb",
@@ -178,6 +213,19 @@ describe("inspecionar_consulta", () => {
       columns: ["codcli", "nome"],
       rows: [{ codcli: 1, nome: "Pessoa" }],
     });
+    const valuesImpl = plug.sqlImpl;
+    plug.sqlImpl = async (input) =>
+      /column_name/i.test(input)
+        ? {
+            columns: ["column_name", "data_type", "is_nullable"],
+            rows: [
+              { column_name: "codprod", data_type: "int", is_nullable: "NO" },
+              { column_name: "codcli", data_type: "int", is_nullable: "NO" },
+              { column_name: "nome", data_type: "varchar", is_nullable: "YES" },
+              { column_name: "ativo", data_type: "bit", is_nullable: "NO" },
+            ],
+          }
+        : valuesImpl(input);
     const inspecionar = new InspecionarConsulta(
       acessos,
       skills,
@@ -203,7 +251,7 @@ describe("inspecionar_consulta", () => {
     });
     expect(result.maxRowsApplied).toBe(INSPECAO_MAX_ROWS);
     expect(result.rowCount).toBe(1);
-    expect(result.rows[0]?.nome).toBe("Pessoa");
+    expect(result.rows[0]?.nome).toBeUndefined();
     expect(plug.lastSql).toMatch(/cliente/i);
   });
 
@@ -231,6 +279,7 @@ describe("inspecionar_consulta", () => {
       dialeto: "mssql",
       clientToken: "tok-sql-123456",
     });
+    await classificar(grafo, created.acessoId, created.usuarioId);
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
@@ -257,6 +306,19 @@ describe("inspecionar_consulta", () => {
     });
     await skills.setStatus(validada.id, "validada");
     plug.sqlImpl = async () => ({ columns: ["codigo"], rows: [{ codigo: 1 }] });
+    const valuesImpl = plug.sqlImpl;
+    plug.sqlImpl = async (input) =>
+      /column_name/i.test(input)
+        ? {
+            columns: ["column_name", "data_type", "is_nullable"],
+            rows: [
+              { column_name: "codprod", data_type: "int", is_nullable: "NO" },
+              { column_name: "codcli", data_type: "int", is_nullable: "NO" },
+              { column_name: "nome", data_type: "varchar", is_nullable: "YES" },
+              { column_name: "ativo", data_type: "bit", is_nullable: "NO" },
+            ],
+          }
+        : valuesImpl(input);
     const inspecionar = new InspecionarConsulta(
       acessos,
       skills,
@@ -305,6 +367,7 @@ describe("inspecionar_consulta", () => {
       dialeto: "mssql",
       clientToken: "tok-sql-123456",
     });
+    await classificar(grafo, created.acessoId, created.usuarioId);
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
@@ -330,6 +393,19 @@ describe("inspecionar_consulta", () => {
       ],
       rows: [{ codcli: 1, nome: "Pessoa", ativo: true }],
     });
+    const valuesImpl = plug.sqlImpl;
+    plug.sqlImpl = async (input) =>
+      /column_name/i.test(input)
+        ? {
+            columns: ["column_name", "data_type", "is_nullable"],
+            rows: [
+              { column_name: "codprod", data_type: "int", is_nullable: "NO" },
+              { column_name: "codcli", data_type: "int", is_nullable: "NO" },
+              { column_name: "nome", data_type: "varchar", is_nullable: "YES" },
+              { column_name: "ativo", data_type: "bit", is_nullable: "NO" },
+            ],
+          }
+        : valuesImpl(input);
     const inspecionar = new InspecionarConsulta(
       acessos,
       skills,
@@ -346,8 +422,8 @@ describe("inspecionar_consulta", () => {
       finalidade: "amostra_estrutura",
     });
     expect(plug.lastSql).toMatch(/TOP\s+100/i);
-    expect(result.rows[0]?.nome).toBe("Pessoa");
-    expect(result.colunasNovasNoGrafo).toEqual(expect.arrayContaining(["codcli", "nome", "ativo"]));
+    expect(result.rows[0]?.nome).toBeUndefined();
+    expect(result.colunasNovasNoGrafo).toEqual(expect.arrayContaining(["nome", "ativo"]));
     expect(result.hint).toMatch(/confirmar_coluna/);
     expect(result.hint).not.toMatch(/republicar/);
     const tabela = await grafo.findTabelaByNome(created.acessoId, "cliente");
@@ -382,6 +458,7 @@ describe("inspecionar_consulta", () => {
       dialeto: "mssql",
       clientToken: "tok-sql-123456",
     });
+    await classificar(grafo, created.acessoId, created.usuarioId);
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
@@ -415,6 +492,19 @@ describe("inspecionar_consulta", () => {
       columns: ["codprod"],
       rows: [{ codprod: 9 }],
     });
+    const valuesImpl = plug.sqlImpl;
+    plug.sqlImpl = async (input) =>
+      /column_name/i.test(input)
+        ? {
+            columns: ["column_name", "data_type", "is_nullable"],
+            rows: [
+              { column_name: "codprod", data_type: "int", is_nullable: "NO" },
+              { column_name: "codcli", data_type: "int", is_nullable: "NO" },
+              { column_name: "nome", data_type: "varchar", is_nullable: "YES" },
+              { column_name: "ativo", data_type: "bit", is_nullable: "NO" },
+            ],
+          }
+        : valuesImpl(input);
     const inspecionar = new InspecionarConsulta(
       acessos,
       skills,
@@ -459,6 +549,7 @@ describe("inspecionar_consulta", () => {
       dialeto: "mssql",
       clientToken: "tok-sql-123456",
     });
+    await classificar(grafo, created.acessoId, created.usuarioId);
     const sessions = {
       getAccessToken: async () => "access-test",
       invalidate: () => undefined,
@@ -475,6 +566,19 @@ describe("inspecionar_consulta", () => {
       autorUsuarioId: created.usuarioId,
     });
     await skills.setStatus(skill.id, "publicada");
+    const valuesImpl = plug.sqlImpl;
+    plug.sqlImpl = async (input) =>
+      /column_name/i.test(input)
+        ? {
+            columns: ["column_name", "data_type", "is_nullable"],
+            rows: [
+              { column_name: "codprod", data_type: "int", is_nullable: "NO" },
+              { column_name: "codcli", data_type: "int", is_nullable: "NO" },
+              { column_name: "nome", data_type: "varchar", is_nullable: "YES" },
+              { column_name: "ativo", data_type: "bit", is_nullable: "NO" },
+            ],
+          }
+        : valuesImpl(input);
     const inspecionar = new InspecionarConsulta(
       acessos,
       skills,
@@ -564,6 +668,7 @@ describe("descobrir_tabela", () => {
       origem: "inferido",
       autorUsuarioId: created.usuarioId,
     });
+    await freezeFixturePublication(skills, skill, grafo);
     const descobrir = new DescobrirTabela(acessos, skills, grafo, plug, sessions, crypto);
     const result = await descobrir.execute(created.usuarioId, {
       acessoId: created.acessoId,
@@ -664,6 +769,7 @@ describe("descobrir_tabela", () => {
       origem: "inferido",
       autorUsuarioId: created.usuarioId,
     });
+    await freezeFixturePublication(skills, skill, grafo);
     const descobrir = new DescobrirTabela(acessos, skills, grafo, plug, sessions, crypto);
     const result = await descobrir.execute(created.usuarioId, {
       acessoId: created.acessoId,

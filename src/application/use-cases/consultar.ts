@@ -1,3 +1,6 @@
+import { capturaSqlSegura, textoSeguro } from "./shared/curadoria-segura.js";
+import { maxSensibilidade, parseSensibilidadeColuna } from "../../domain/entities/privacidade.js";
+import type { PreparedQuery } from "./shared/prepared-query.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { ConsultaAprendida } from "../../domain/entities/aprendizado.js";
@@ -42,7 +45,11 @@ import { assertOrcamentoConsulta } from "./shared/assert-orcamento.js";
 import type { PlanoConsulta, OrigemConsulta } from "./shared/planejar-consulta.js";
 import { montarPlanoConsulta } from "./shared/planejar-consulta.js";
 import { avisosKpiDesalinhado } from "./shared/avisos-kpi.js";
-import { lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
+import {
+  lookupSensibilidadeGrafo,
+  mascararLinhas,
+  mascararParams,
+} from "./shared/mascarar-linhagem.js";
 import { aplicarDerivaTabelaNoGrafo } from "./shared/schema-drift.js";
 import { sincronizarEscopoComGrafo } from "./shared/sincronizar-escopo.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
@@ -53,7 +60,6 @@ import {
   expandirInListas,
   parseSqlModelo,
   sqlValidacaoVazia,
-  bindParamsForValidation,
   sqlParaOdbc,
   type SqlModelo,
 } from "./shared/sql-modelo.js";
@@ -70,7 +76,7 @@ import {
   mesclarParamsEscopo,
   avisosPlaceholderEscopo,
 } from "./shared/escopo-filtro.js";
-import { queryCacheKey, policyFingerprint } from "./shared/query-cache-key.js";
+import { queryCacheKey, policyFingerprint, canonicalJson } from "./shared/query-cache-key.js";
 import {
   ancoraConsultaSemantica,
   ancoraSqlModelo,
@@ -86,11 +92,7 @@ import {
   hintSqlNaoClassificavel,
   isSqlClassificationDenial,
 } from "./shared/sql-classification-hint.js";
-import {
-  persistirConsultaExecutada,
-  persistirItensAprendizado,
-  type ItemAprendizadoInput,
-} from "./shared/persistir-aprendizado.js";
+import type { ItemAprendizadoInput } from "./shared/persistir-aprendizado.js";
 import {
   fluxoForAcessoSkill,
   pickSkillInProgress,
@@ -192,6 +194,7 @@ const hintConsultasAprendidas = (
 };
 
 interface AprendizadoGravado {
+  readonly estado?: string;
   readonly consultaId: string;
   readonly execucoes: number;
   readonly nova: boolean;
@@ -266,6 +269,7 @@ const unirContratosParams = (skills: readonly Skill[]): Skill["params"] => {
 
 const gravarAprendizadoDaConsulta = async (input: {
   extras: {
+    acessos?: AcessoRepositoryPort;
     grafo?: GrafoRepositoryPort;
     aprendizado?: AprendizadoRepositoryPort;
     anotacoes?: AnotacaoGrafoRepositoryPort;
@@ -273,6 +277,7 @@ const gravarAprendizadoDaConsulta = async (input: {
   };
   acessoId: string;
   skillIds: readonly string[];
+  publicacoes: NonNullable<ConsultaAprendida["publicacoes"]>;
   pergunta: string;
   sql: string;
   paramsContrato: Skill["params"];
@@ -283,45 +288,68 @@ const gravarAprendizadoDaConsulta = async (input: {
   if (!input.extras.aprendizado) {
     return { avisos };
   }
-  const consulta = await persistirConsultaExecutada({
-    aprendizado: input.extras.aprendizado,
-    acessoId: input.acessoId,
-    skillIds: input.skillIds,
-    pergunta: input.pergunta,
-    sql: input.sql,
-    paramsContrato: input.paramsContrato,
-    autorUsuarioId: input.autorUsuarioId,
-  });
-  let itens = 0;
-  if (input.itens.length > 0 && input.extras.anotacoes && input.extras.grafo) {
-    const extra = await persistirItensAprendizado({
+  try {
+    const access = await input.extras.skills?.findById(input.skillIds[0] ?? "");
+    const published = await Promise.all(
+      input.skillIds.map((id) => input.extras.skills!.findPublicadaById(id)),
+    );
+    const dialect = (await input.extras.acessos?.findById(input.acessoId))?.dialeto;
+    if (
+      !textoSeguro(input.pergunta) ||
+      !access ||
+      !dialect ||
+      !capturaSqlSegura(
+        input.sql,
+        dialect,
+        published.filter((s): s is Skill => s !== null),
+      )
+    )
+      return {
+        avisos: [
+          {
+            code: "APRENDIZADO_IGNORADO",
+            message: "Captura omitida: valores concretos ou constantes não aprovadas.",
+          },
+        ],
+      };
+    const consulta = await input.extras.aprendizado.salvarConsulta({
       acessoId: input.acessoId,
+      skillIds: input.skillIds,
+      pergunta: input.pergunta,
+      sql: input.sql,
+      paramsContrato: input.paramsContrato,
       autorUsuarioId: input.autorUsuarioId,
-      itens: input.itens,
-      grafo: input.extras.grafo,
-      anotacoes: input.extras.anotacoes,
-      aprendizado: input.extras.aprendizado,
-      skills: input.extras.skills,
-      strictMetricas: false,
+      status: "candidata",
+      publicacoes: input.publicacoes,
     });
-    avisos.push(...extra.avisos);
-    itens = extra.anotacoes.length + extra.sinonimos;
-  } else if (input.itens.length > 0) {
-    avisos.push({
-      code: "APRENDIZADO_IGNORADO",
-      message: "Itens de aprendizado não gravados: grafo/anotações indisponíveis.",
-    });
+    if (input.itens.length) {
+      avisos.push({
+        code: "APRENDIZADO_PENDENTE",
+        message:
+          "Conhecimento de negócio exige confirmação explícita por registrar_aprendizado; a execução não o confirma.",
+      });
+    }
+    return {
+      gravado: {
+        estado: consulta.status,
+        consultaId: consulta.id,
+        execucoes: consulta.execucoes,
+        nova: consulta.execucoes === 1,
+        perguntaUsada: consulta.pergunta,
+        itens: 0,
+      },
+      avisos,
+    };
+  } catch {
+    return {
+      avisos: [
+        {
+          code: "APRENDIZADO_IGNORADO",
+          message: "A consulta funcionou, mas a captura candidata não pôde ser persistida.",
+        },
+      ],
+    };
   }
-  return {
-    gravado: {
-      consultaId: consulta.id,
-      execucoes: consulta.execucoes,
-      nova: consulta.execucoes === 1,
-      perguntaUsada: consulta.pergunta,
-      itens,
-    },
-    avisos,
-  };
 };
 
 const allowedByPolicy = (table: string, policy: ClientTokenPolicy): boolean => {
@@ -391,7 +419,9 @@ export class ConsultarDados {
       params?: Record<string, unknown>;
       options?: { max_rows?: number; page?: number; page_size?: number; timeout_ms?: number };
     },
+    modo: "consultar_dados" | "validar_consulta" = "consultar_dados",
   ): Promise<{
+    consultaExecucaoId?: string;
     success: true;
     skillId: string;
     skillIds: string[];
@@ -438,7 +468,7 @@ export class ConsultarDados {
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
-        tool: "consultar_dados",
+        tool: modo,
         sqlEnviado: `skills:${skillIds.join(",") || "resolucao"}`,
         sucesso: false,
         codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
@@ -492,11 +522,29 @@ export class ConsultarDados {
           acesso.id,
           consultaAprendidaId,
         );
-        if (encontrada?.status !== "ativa") {
+        if (encontrada?.status !== "confirmada") {
           throw new DomainError({
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: "Consulta aprendida não encontrada ou inativa.",
+            code: ERROR_CODES.APRENDIZADO_NAO_CONFIRMADO,
+            message: "Consulta aprendida não confirmada ou inativa.",
             hint: "Reuse o id de buscar_contexto em obter_skill.consultasExemplo e consulte de novo.",
+          });
+        }
+        if (
+          !encontrada.publicacoes?.length ||
+          encontrada.publicacoes.some(
+            (origin) =>
+              !allowlist.some(
+                (pub) =>
+                  pub.id === origin.skillId &&
+                  pub.publicacaoAtivaId === origin.id &&
+                  pub.publicacaoHash === origin.hash,
+              ),
+          )
+        ) {
+          throw new DomainError({
+            code: ERROR_CODES.APRENDIZADO_NAO_CONFIRMADO,
+            message: "Confirmação não corresponde ao pacote vigente.",
+            hint: "Revalide e confirme a candidata no pacote atual.",
           });
         }
         return encontrada;
@@ -556,7 +604,13 @@ export class ConsultarDados {
         };
       });
     }
-    const perguntaUsada = input.pergunta?.trim() ?? "";
+    const perguntaInformada = input.pergunta?.trim() ?? "";
+    const perguntaUsada =
+      perguntaInformada.length > 0
+        ? perguntaInformada
+        : modo === "validar_consulta"
+          ? "Validação"
+          : "";
     if (!perguntaUsada) {
       const error = new DomainError({
         code: ERROR_CODES.VALIDATION_ERROR,
@@ -612,10 +666,10 @@ export class ConsultarDados {
       sqlExecutar = ancora.sqlModelo;
       modelo = await preflight(() => parseSqlModelo(sqlExecutar, acesso.dialeto), ids);
       atribuidas = [ancora];
-      const astModelo = tryParseSelect(sqlExecutar, acesso.dialeto);
-      if (astModelo) {
-        await preflight(() => assertFanoutSeguro(astModelo, escopoConsulta), ids);
-      }
+      await preflight(() => {
+        const astModelo = validarSqlNoEscopo(sqlExecutar, acesso.dialeto, escopoConsulta);
+        assertFanoutSeguro(astModelo, escopoConsulta);
+      }, ids);
     }
     const skill = atribuidas[0]!;
     const contratoBase = unirContratosParams(atribuidas);
@@ -631,7 +685,35 @@ export class ConsultarDados {
             return [...map.values()];
           })()
         : contratoBase;
-    const colunasDasTabelas: Record<string, string[]> = {};
+    const colunasDasTabelas: Record<string, string[]> = Object.fromEntries(
+      Object.entries(escopoConsulta.colunasPorTabela).map(([table, columns]) => [
+        table,
+        [...columns],
+      ]),
+    );
+    const lookupRestricoes = async () => {
+      const current = this.extras.grafo
+        ? await lookupSensibilidadeGrafo(
+            this.extras.grafo,
+            acesso.id,
+            modelo.tabelas.map((table) => table.nome),
+          )
+        : () => null;
+      const published = atribuidas.flatMap((item) => item.conhecimentoPublicado?.colunas ?? []);
+      return (table: string | null, column: string): SensibilidadeColuna | null => {
+        const live = current(table, column);
+        const frozen = published
+          .filter(
+            (col) =>
+              col.nome.toLowerCase() === column.toLowerCase() &&
+              (!table || col.tabela.toLowerCase() === table.toLowerCase()),
+          )
+          .map((col) => parseSensibilidadeColuna(col.sensibilidade));
+        return live !== null || frozen.length
+          ? maxSensibilidade([...(live ? [live] : []), ...frozen])
+          : null;
+      };
+    };
     const columnHints = new Map<string, ColumnMetadataHint>();
     let lookupAnexo: ((coluna: string) => SensibilidadeColuna | null) | undefined;
     if (this.extras.grafo) {
@@ -658,6 +740,12 @@ export class ConsultarDados {
         }
       }, ids);
     }
+    await preflight(async () => {
+      const ast = tryParseSelect(sqlExecutar, acesso.dialeto);
+      const lookup = await lookupRestricoes();
+      if (ast) assertPrivacidadeAntesDoHub({ ast, lookup, negar: ["pessoal", "segredo"] });
+      lookupAnexo = (coluna) => lookup(null, coluna);
+    }, ids);
     await preflight(() =>
       exigirFiltroEscopoPadrao({
         sql: sqlExecutar,
@@ -674,9 +762,23 @@ export class ConsultarDados {
       }),
     );
     if (this.extras.anotacoes) {
-      const notas = await this.extras.anotacoes.list(acesso.id, undefined, undefined, {
-        ativasEm: diaNoFusoDoAcesso(acesso.timezone),
-      });
+      const notas = [
+        ...new Map(
+          atribuidas
+            .flatMap((item) => [
+              ...(item.conhecimentoPublicado?.regras ?? []),
+              ...(item.conhecimentoPublicado?.metricas ?? []),
+            ])
+            .map((nota) => [nota.id, nota]),
+        ).values(),
+      ];
+      const diaVigente = diaNoFusoDoAcesso(acesso.timezone).toISOString().slice(0, 10);
+      const notasVigentes = notas.filter(
+        (nota) =>
+          nota.status !== "obsoleta" &&
+          (!nota.vigenteDe || nota.vigenteDe <= diaVigente) &&
+          (!nota.vigenteAte || nota.vigenteAte >= diaVigente),
+      );
       const tabelasSql = new Set(modelo.tabelas.map((tabela) => tabela.nome.toLowerCase()));
       const aliasesSql = [
         ...modelo.tabelas.flatMap((tabela) => (tabela.alias ? [tabela.alias] : [])),
@@ -692,7 +794,7 @@ export class ConsultarDados {
       }
       avisos.push(
         ...coletarAvisosAnotacaoConsulta({
-          notas,
+          notas: notasVigentes,
           skillIds,
           tabelasSql,
           tabelaNomePorId,
@@ -755,6 +857,11 @@ export class ConsultarDados {
       dialeto: acesso.dialeto,
       skillIds: atribuidas.map((item) => item.id),
       tabelas: modelo.tabelas.map((item) => item.nome),
+      publicacoes: atribuidas.map((item) => ({
+        skillId: item.id,
+        id: item.publicacaoAtivaId ?? null,
+        hash: item.publicacaoHash ?? null,
+      })),
       ast: astOrcamento,
       consultaSemantica,
       politica: politicaConsulta,
@@ -821,8 +928,150 @@ export class ConsultarDados {
     const asOf = asOfInfo.asOf;
     const itensAprendizado = input.aprendizado ?? [];
     const astLivre = tryParseSelect(sqlExecutar, acesso.dialeto);
+    const mascararSaida = async (
+      rows: readonly Record<string, unknown>[],
+      columns: readonly string[],
+    ): Promise<Record<string, unknown>[]> => {
+      const lookup = await lookupRestricoes();
+      const masked = mascararLinhas({ rows, columns, ast: astLivre, sessaoId: acesso.id, lookup });
+      for (const count of astLivre?.colunas.filter(
+        (col) =>
+          col.isAggregate &&
+          /\bCOUNT\s*\(/i.test(col.expr) &&
+          !/\b(SUM|AVG|MIN|MAX)\s*\(/i.test(col.expr),
+      ) ?? []) {
+        const name = count.alias || count.column;
+        if (name)
+          masked.rows.forEach((row, index) => {
+            row[name] = rows[index]?.[name];
+          });
+      }
+      return masked.rows;
+    };
     await preflight(() => exigirPaginacaoEstavel(sqlExecutar, astLivre, { page, pageSize }), ids);
     const sqlNoFio = sqlParaOdbc(sqlExecutar);
+    const prepared: PreparedQuery = {
+      sql: sqlNoFio,
+      params,
+      acessoId: acesso.id,
+      usuarioId: uid,
+      publicacoes: planoConsulta.publicacoes ?? [],
+      maxRows,
+      timeoutMs: orcamento.timeoutMs,
+      planoConsulta,
+    };
+    const assertAutorizacaoAtual = async (): Promise<void> => {
+      const local = await this.acessos.findById(acesso.id);
+      const current = local
+        ? await refreshAndRequireAcessoAprovado(this.acessos, this.plug, this.sessions, local, uid)
+        : null;
+      if (
+        current?.usuarioId !== uid ||
+        current.clientTokenHash !== acesso.clientTokenHash ||
+        current.tokenHash !== acesso.tokenHash ||
+        canonicalJson(current.escopoPadrao) !== canonicalJson(acesso.escopoPadrao) ||
+        current.timezone !== acesso.timezone ||
+        current.statusAcesso !== "approved"
+      ) {
+        throw new DomainError({
+          code: ERROR_CODES.ACCESS_REVOKED,
+          message: "Autorização do acesso mudou durante a operação.",
+          hint: "Autentique o acesso novamente.",
+        });
+      }
+      for (const origin of atribuidas) {
+        const active = await this.skills.findPublicadaById(origin.id);
+        if (
+          !active ||
+          active.publicacaoAtivaId !== origin.publicacaoAtivaId ||
+          active.publicacaoHash !== origin.publicacaoHash
+        ) {
+          throw new DomainError({
+            code: ERROR_CODES.SKILL_NOT_PUBLISHED,
+            message: "A publicação usada na consulta mudou.",
+            hint: "Prepare a consulta novamente com o pacote vigente.",
+          });
+        }
+      }
+      const fresh = await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.getClientTokenPolicy({ accessToken, agentId: acesso.agentId, clientToken }),
+      );
+      if (modelo.tabelas.some((table) => !allowedByPolicy(table.nome, fresh))) {
+        throw new DomainError({
+          code: ERROR_CODES.PERMISSION_DENIED,
+          message: "A policy vigente não autoriza a consulta.",
+          hint: "Revise a autorização no hub.",
+        });
+      }
+      if (astLivre) {
+        const lookup = await lookupRestricoes();
+        assertPrivacidadeAntesDoHub({ ast: astLivre, lookup, negar: ["pessoal", "segredo"] });
+      }
+      const finalLocal = await this.acessos.findById(acesso.id);
+      if (
+        finalLocal?.tokenHash !== acesso.tokenHash ||
+        finalLocal.clientTokenHash !== acesso.clientTokenHash ||
+        finalLocal.statusAcesso !== "approved" ||
+        canonicalJson(finalLocal.escopoPadrao) !== canonicalJson(acesso.escopoPadrao)
+      )
+        throw new DomainError({
+          code: ERROR_CODES.ACCESS_REVOKED,
+          message: "Autorização local mudou antes da entrega.",
+          hint: "Prepare novamente a operação no acesso vigente.",
+        });
+    };
+    if (modelo.tabelas.some((table) => !allowedByPolicy(table.nome, policy))) {
+      throw new DomainError({
+        code: ERROR_CODES.PERMISSION_DENIED,
+        message: "Tabela não autorizada pela policy vigente.",
+        hint: "Revise a autorização no hub.",
+      });
+    }
+    if (modo === "validar_consulta") {
+      await withHubAuth(this.sessions, uid, (accessToken) =>
+        this.plug.executeSql({
+          accessToken,
+          agentId: acesso.agentId,
+          clientToken,
+          sql: sqlValidacaoVazia(acesso.dialeto, prepared.sql),
+          params: { ...prepared.params },
+          options: { maxRows: 1, timeoutMs: prepared.timeoutMs },
+        }),
+      );
+      await assertAutorizacaoAtual();
+      await this.audit.append({
+        usuarioId: uid,
+        acessoId: acesso.id,
+        tool: modo,
+        sqlEnviado: `skills:${atribuidas.map((item) => item.id).join(",")}`,
+        sucesso: true,
+        codigoErro: null,
+        linhasRetornadas: 0,
+        duracaoMs: Date.now() - started,
+        metadata: { skillIds: atribuidas.map((item) => item.id), stage: "hub", cacheHit: false },
+      });
+      return {
+        success: true,
+        skillId: skill.id,
+        skillIds: atribuidas.map((item) => item.id),
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        maxRowsApplied: maxRows,
+        truncated: false,
+        sqlExecutado: sqlNoFio,
+        paramsUsados: mascararParams(params, inferirSensibilidadeColuna, acesso.id),
+        asOf,
+        recorte,
+        escopoAplicado: {
+          empresa: acesso.escopoPadrao?.empresa,
+          filial: acesso.escopoPadrao?.filial,
+          consolidado: !acesso.escopoPadrao?.empresa && !acesso.escopoPadrao?.filial,
+        },
+        avisos,
+        planoConsulta,
+      };
+    }
     const cacheable = Boolean(astLivre?.temAgregacao && this.extras.cache && !paginar);
     const cacheKey = queryCacheKey({
       usuarioId: uid,
@@ -831,6 +1080,7 @@ export class ConsultarDados {
       agentId: acesso.agentId,
       skillIds: atribuidas.map((item) => item.id),
       skillVersoes: atribuidas.map((item) => item.versao),
+      publicacoes: planoConsulta.publicacoes,
       sql: sqlNoFio,
       params,
       maxRows,
@@ -846,17 +1096,23 @@ export class ConsultarDados {
       parsed: CachedQueryPayload,
       coalescencia?: { role: "leader" | "waiter"; waitMs: number },
     ) => {
+      await assertAutorizacaoAtual();
       const loop = await gravarAprendizadoDaConsulta({
-        extras: { ...this.extras, skills: this.skills },
+        extras: { ...this.extras, skills: this.skills, acessos: this.acessos },
         acessoId: acesso.id,
         skillIds: atribuidas.map((item) => item.id),
+        publicacoes: atribuidas.flatMap((item) =>
+          item.publicacaoAtivaId && item.publicacaoHash
+            ? [{ skillId: item.id, id: item.publicacaoAtivaId, hash: item.publicacaoHash }]
+            : [],
+        ),
         pergunta: perguntaUsada,
         sql: sqlNoFio,
         paramsContrato: contratoParams,
         autorUsuarioId: uid,
         itens: itensAprendizado,
       });
-      await this.audit.append({
+      const execucaoCache = await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "consultar_dados",
@@ -867,6 +1123,11 @@ export class ConsultarDados {
         duracaoMs: Date.now() - started,
         metadata: {
           origem: origemConsulta,
+          publicacoes: atribuidas.flatMap((item) =>
+            item.publicacaoAtivaId && item.publicacaoHash
+              ? [{ skillId: item.id, id: item.publicacaoAtivaId, hash: item.publicacaoHash }]
+              : [],
+          ),
           skillIds: atribuidas.map((item) => item.id),
           agregado: true,
           cacheHit: true,
@@ -884,17 +1145,20 @@ export class ConsultarDados {
             : {}),
         },
       });
+      const protectedCacheRows = await mascararSaida(parsed.rows, parsed.columns);
+      await assertAutorizacaoAtual();
       return {
+        consultaExecucaoId: execucaoCache.id,
         success: true as const,
         skillId: skill.id,
         skillIds: atribuidas.map((item) => item.id),
         columns: parsed.columns,
-        rows: parsed.rows,
+        rows: protectedCacheRows,
         rowCount: parsed.rows.length,
         maxRowsApplied: maxRows,
         truncated: parsed.truncated,
         sqlExecutado: sqlNoFio,
-        paramsUsados: params,
+        paramsUsados: mascararParams(params, inferirSensibilidadeColuna, acesso.id),
         asOf: parsed.asOf,
         recorte,
         columnsMetadata: normalizeColumnsMetadata(
@@ -919,6 +1183,49 @@ export class ConsultarDados {
         planoConsulta,
       };
     };
+    const provenienciaAnexo = (name: string) => {
+      const selected = astLivre?.colunas.find(
+        (column) =>
+          ((column.alias.length > 0 ? column.alias : column.column) ?? "").toLowerCase() ===
+          name.toLowerCase(),
+      );
+      if (selected?.refs.length !== 1) {
+        return undefined;
+      }
+      const ref = selected.refs[0]!;
+      const table = ref.table
+        ? astLivre?.tabelas.find(
+            (table) => (table.alias ?? table.nome).toLowerCase() === ref.table?.toLowerCase(),
+          )
+        : astLivre?.tabelas.length === 1
+          ? astLivre.tabelas[0]
+          : undefined;
+      const origins =
+        table && !table.isCte && !table.isSubquery
+          ? atribuidas
+              .filter((skill) =>
+                Object.entries(skill.escopo.colunasPorTabela).some(
+                  ([physical, cols]) =>
+                    physical.toLowerCase() === table.nome.toLowerCase() &&
+                    cols.some((col) => col.toLowerCase() === ref.column.toLowerCase()),
+                ),
+              )
+              .flatMap((skill) =>
+                skill.publicacaoAtivaId && skill.publicacaoHash
+                  ? [{ skillId: skill.id, id: skill.publicacaoAtivaId, hash: skill.publicacaoHash }]
+                  : [],
+              )
+          : [];
+      return table && origins.length
+        ? {
+            tabela: table.nome,
+            coluna: ref.column,
+            bearerHash: acesso.tokenHash,
+            clientTokenHash: acesso.clientTokenHash,
+            publicacoes: origins,
+          }
+        : undefined;
+    };
     const salvarResultadoNoCache = async (result: SqlExecuteResult): Promise<void> => {
       if (!cacheable || !this.extras.cache) return;
       const pageRows = result.rows.slice(0, maxRows);
@@ -940,12 +1247,14 @@ export class ConsultarDados {
         ),
       );
       if (temAnexo) return;
+      await assertAutorizacaoAtual();
       const sanitizadas = sanitizarLinhasConsulta({
         rows: pageRows,
         columnTypes,
         usuarioId: uid,
         acessoId: acesso.id,
         origem: "consultar_dados",
+        proveniencia: provenienciaAnexo,
         lookupSensibilidade: (coluna) =>
           lookupAnexo?.(coluna) ?? inferirSensibilidadeColuna(coluna),
       });
@@ -953,7 +1262,7 @@ export class ConsultarDados {
         cacheKey,
         JSON.stringify({
           columns,
-          rows: sanitizadas.rows,
+          rows: await mascararSaida(sanitizadas.rows, columns),
           asOf,
           servidoEm: asOf,
           truncated: result.rows.length > maxRows || result.truncated === true,
@@ -978,8 +1287,8 @@ export class ConsultarDados {
             accessToken,
             agentId: acesso.agentId,
             clientToken,
-            sql: sqlNoFio,
-            params,
+            sql: prepared.sql,
+            params: { ...prepared.params },
             options: {
               maxRows: fetchMax,
               page: paginar ? input.options?.page : undefined,
@@ -1057,6 +1366,7 @@ export class ConsultarDados {
       const columnTypes = new Map<string, string | null>(
         columnsMetadata.map((item) => [item.name.toLowerCase(), item.type]),
       );
+      await assertAutorizacaoAtual();
       const sanitizadas = sanitizarLinhasConsulta({
         rows: pageRows,
         columnTypes,
@@ -1064,12 +1374,13 @@ export class ConsultarDados {
         usuarioId: uid,
         acessoId: acesso.id,
         origem: "consultar_dados",
+        proveniencia: provenienciaAnexo,
         lookupSensibilidade: (coluna) =>
           lookupAnexo?.(coluna) ?? inferirSensibilidadeColuna(coluna),
       });
-      const rows = sanitizadas.rows;
+      const rows = await mascararSaida(sanitizadas.rows, columns);
       const avisoAnexo = avisoAnexos(sanitizadas.anexos, "consultar_dados");
-      await this.audit.append({
+      const execucao = await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
         tool: "consultar_dados",
@@ -1080,6 +1391,11 @@ export class ConsultarDados {
         duracaoMs: Date.now() - started,
         metadata: {
           origem: origemConsulta,
+          publicacoes: atribuidas.flatMap((item) =>
+            item.publicacaoAtivaId && item.publicacaoHash
+              ? [{ skillId: item.id, id: item.publicacaoAtivaId, hash: item.publicacaoHash }]
+              : [],
+          ),
           skillIds: atribuidas.map((item) => item.id),
           agregado: Boolean(astLivre?.temAgregacao),
           cacheHit: false,
@@ -1124,16 +1440,23 @@ export class ConsultarDados {
         );
       }
       const loop = await gravarAprendizadoDaConsulta({
-        extras: { ...this.extras, skills: this.skills },
+        extras: { ...this.extras, skills: this.skills, acessos: this.acessos },
         acessoId: acesso.id,
         skillIds: atribuidas.map((item) => item.id),
+        publicacoes: atribuidas.flatMap((item) =>
+          item.publicacaoAtivaId && item.publicacaoHash
+            ? [{ skillId: item.id, id: item.publicacaoAtivaId, hash: item.publicacaoHash }]
+            : [],
+        ),
         pergunta: perguntaUsada,
         sql: sqlNoFio,
         paramsContrato: contratoParams,
         autorUsuarioId: uid,
         itens: itensAprendizado,
       });
+      await assertAutorizacaoAtual();
       return {
+        consultaExecucaoId: execucao.id,
         success: true,
         skillId: skill.id,
         skillIds: atribuidas.map((item) => item.id),
@@ -1143,7 +1466,7 @@ export class ConsultarDados {
         maxRowsApplied: maxRows,
         truncated,
         sqlExecutado: sqlNoFio,
-        paramsUsados: params,
+        paramsUsados: mascararParams(params, inferirSensibilidadeColuna, acesso.id),
         asOf,
         recorte,
         columnsMetadata,
@@ -1207,32 +1530,43 @@ export class ConsultarDados {
 }
 
 export class ValidarConsulta {
+  private readonly consultar: ConsultarDados;
   constructor(
-    private readonly acessos: AcessoRepositoryPort,
-    private readonly skills: SkillRepositoryPort,
-    private readonly plug: PlugServerGatewayPort,
-    private readonly sessions: UsuarioPlugSessionPort,
-    private readonly crypto: CryptoPort,
-    private readonly options: {
+    acessos: AcessoRepositoryPort,
+    skills: SkillRepositoryPort,
+    plug: PlugServerGatewayPort,
+    sessions: UsuarioPlugSessionPort,
+    crypto: CryptoPort,
+    options: {
       defaultMaxRows?: number;
       absoluteMaxRows?: number;
       grafo?: GrafoRepositoryPort;
       audit?: AuditLogPort;
       timingsSamplePercent?: number;
+      aprendizado?: AprendizadoRepositoryPort;
     } = {},
-  ) {}
-
+  ) {
+    const audit: AuditLogPort = options.audit ?? {
+      append: (entry) => Promise.resolve({ ...entry, id: "unpersisted", createdAt: new Date() }),
+      listByUsuario: () => Promise.resolve([]),
+      listByAcesso: () => Promise.resolve([]),
+      purgeOlderThan: () => Promise.resolve(0),
+    };
+    this.consultar = new ConsultarDados(
+      acessos,
+      skills,
+      plug,
+      sessions,
+      crypto,
+      audit,
+      options.defaultMaxRows ?? 500,
+      options.absoluteMaxRows ?? 5000,
+      options,
+    );
+  }
   async execute(
     usuarioId: string | undefined,
-    input: {
-      acessoId?: string;
-      skillId?: string;
-      skillIds?: string[];
-      sql?: string;
-      consultaSemantica?: unknown;
-      params?: Record<string, unknown>;
-      options?: { max_rows?: number; page?: number; page_size?: number; timeout_ms?: number };
-    },
+    input: Parameters<ConsultarDados["execute"]>[1],
   ): Promise<{
     success: true;
     valido: true;
@@ -1241,260 +1575,14 @@ export class ValidarConsulta {
     avisos: { code: string; message: string }[];
     planoConsulta: PlanoConsulta;
   }> {
-    const uid = requireUsuario(usuarioId);
-    const started = Date.now();
-    const acesso = await refreshAndRequireAcessoAprovado(
-      this.acessos,
-      this.plug,
-      this.sessions,
-      await requireAcesso(this.acessos, input.acessoId, uid, {
-        skills: this.skills,
-        skillId: input.skillId,
-        skillIds: input.skillIds,
-      }),
-      uid,
-    );
-    const ids = idsSkillDaChamada(input);
-    const sqlInformado = input.sql?.trim() ?? "";
-    const consultaSemantica = parseConsultaSemantica(input.consultaSemantica);
-    const registrarFalhaPreflight = async (error: unknown, skillIds = ids): Promise<void> => {
-      await this.options.audit?.append({
-        usuarioId: uid,
-        acessoId: acesso.id,
-        tool: "validar_consulta",
-        sqlEnviado: `skills:${skillIds.join(",") || "resolucao"}`,
-        sucesso: false,
-        codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
-        linhasRetornadas: null,
-        duracaoMs: Date.now() - started,
-        metadata: {
-          origem: consultaSemantica ? "semantica" : "sql",
-          skillIds,
-          cacheHit: false,
-          stage: "preflight",
-          ...(error instanceof DomainError && error.source
-            ? { errorSource: origemErroAuditoria(error.source) }
-            : {}),
-        },
-      });
-    };
-    const preflight = async <T>(work: () => Promise<T> | T, skillIds = ids): Promise<T> => {
-      try {
-        return await work();
-      } catch (error) {
-        await registrarFalhaPreflight(error, skillIds);
-        throw error;
-      }
-    };
-    if ((sqlInformado.length > 0 ? 1 : 0) + (consultaSemantica ? 1 : 0) !== 1) {
-      const error = new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Informe exatamente um entre sql e consultaSemantica.",
-        hint: "skillId é opcional: omitido usa todas as publicadas deste acesso.",
-      });
-      await registrarFalhaPreflight(error);
-      throw error;
-    }
-    if (acesso.dialeto === "firebird") {
-      await preflight(() => recusarSqlLivreFirebird());
-    }
-    const allowlist = await preflight(() => resolverSkillsConsulta(this.skills, acesso.id, ids));
-    const escopo = uniaoEscoposPublicados(allowlist);
-    let sql = sqlInformado;
-    let ancora: Skill | null = null;
-    if (consultaSemantica) {
-      await preflight(() => {
-        if (
-          consultaSemantica.limite != null &&
-          (input.options?.page != null || input.options?.page_size != null)
-        ) {
-          throw new DomainError({
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: "consultaSemantica.limite não combina com paginação.",
-            hint: "Use limite ou options.page/page_size, não os dois.",
-          });
-        }
-        ancora = ancoraConsultaSemantica(allowlist, aliasesMetricas(consultaSemantica), ids);
-        sql = compilarConsultaSemantica(
-          consultaSemantica,
-          escopoDaSkillPublicada(ancora),
-          {
-            empresa: Boolean(acesso.escopoPadrao?.empresa),
-            filial: Boolean(acesso.escopoPadrao?.filial),
-          },
-          { dialeto: acesso.dialeto, maxLimite: this.options.absoluteMaxRows ?? 5_000 },
-        ).sql;
-      });
-    }
-    const ast = await preflight(() =>
-      validarSqlNoEscopo(sql, acesso.dialeto, escopo, {
-        page: input.options?.page,
-        pageSize: input.options?.page_size,
-      }),
-    );
-    if (this.options.grafo) {
-      const columnHints = new Map<string, ColumnMetadataHint>();
-      const colunasDasTabelas: Record<string, string[]> = {};
-      await preflight(async () => {
-        for (const tabela of ast.tabelas) {
-          const found = await this.options.grafo!.findTabelaByNome(acesso.id, tabela.nome);
-          if (!found) continue;
-          const colunas = await this.options.grafo!.listColunas(acesso.id, found.id);
-          colunasDasTabelas[tabela.nome] = colunas.map((item) => item.nome);
-          mergeColumnHints(columnHints, colunas);
-        }
-        applySelectAliasHints(columnHints, ast.colunas);
-        const lookup = await lookupSensibilidadeGrafo(
-          this.options.grafo!,
-          acesso.id,
-          ast.tabelas.map((item) => item.nome),
-        );
-        assertPrivacidadeAntesDoHub({ ast, lookup, negar: ["segredo", "pessoal"] });
-        exigirFiltroEscopoPadrao({
-          sql: ast.sql,
-          colunasDasTabelas,
-          escopoPadrao: acesso.escopoPadrao,
-          dialeto: acesso.dialeto,
-        });
-      }, ids);
-    }
-    await preflight(() => {
-      assertFanoutSeguro(ast, escopo);
-      assertParPaginacao({ page: input.options?.page, pageSize: input.options?.page_size });
-      exigirPaginacaoEstavel(sql, ast, {
-        page: input.options?.page,
-        pageSize: input.options?.page_size,
-      });
-    }, ids);
-    const atribuidas = await preflight(
-      () => (ancora ? [ancora] : atribuirSkillsPorSql(allowlist, ast.sql, acesso.dialeto)),
-      ids,
-    );
-    const maxRowsSolicitado = Math.min(
-      Math.max(1, input.options?.max_rows ?? this.options.defaultMaxRows ?? 500),
-      this.options.absoluteMaxRows ?? 5_000,
-    );
-    const politica = politicaMaisRestrita(atribuidas);
-    let orcamento: ReturnType<typeof assertOrcamentoConsulta>;
-    try {
-      orcamento = assertOrcamentoConsulta({
-        ast,
-        politica,
-        maxRows: maxRowsSolicitado,
-        timeoutMs: input.options?.timeout_ms,
-      });
-    } catch (error) {
-      await registrarFalhaPreflight(
-        error,
-        atribuidas.map((item) => item.id),
-      );
-      throw error;
-    }
-    if (input.options?.page_size !== undefined && input.options.page_size > orcamento.maxRows) {
-      const error = new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "page_size não pode exceder max_rows.",
-        hint: `Use page_size <= ${String(orcamento.maxRows)}.`,
-      });
-      await registrarFalhaPreflight(
-        error,
-        atribuidas.map((item) => item.id),
-      );
-      throw error;
-    }
-    const expandido = expandirInListas(
-      ast.sql,
-      mesclarParamsEscopo(input.params ?? {}, acesso.escopoPadrao),
-    );
-    const solicitarTimings =
-      (this.options.timingsSamplePercent ?? 10) > 0 &&
-      Math.random() * 100 < (this.options.timingsSamplePercent ?? 10);
-    try {
-      const result = await withHubAuth(this.sessions, uid, (accessToken) =>
-        this.plug.executeSql({
-          accessToken,
-          agentId: acesso.agentId,
-          clientToken: this.crypto.decrypt(acesso.clientTokenEnc),
-          sql: sqlValidacaoVazia(acesso.dialeto, sqlParaOdbc(expandido.sql)),
-          params: bindParamsForValidation(expandido.sql, expandido.params),
-          options: {
-            maxRows: 1,
-            timeoutMs: orcamento.timeoutMs ?? input.options?.timeout_ms,
-            requestServerTimings: solicitarTimings,
-          },
-        }),
-      );
-      await this.options.audit?.append({
-        usuarioId: uid,
-        acessoId: acesso.id,
-        tool: "validar_consulta",
-        sqlEnviado: `skills:${atribuidas.map((item) => item.id).join(",")}`,
-        sucesso: true,
-        codigoErro: null,
-        linhasRetornadas: 0,
-        duracaoMs: Date.now() - started,
-        metadata: {
-          origem: consultaSemantica ? "semantica" : "sql",
-          skillIds: atribuidas.map((item) => item.id),
-          agregado: ast.temAgregacao,
-          cacheHit: false,
-          tabelas: ast.tabelas.length,
-          paginada: Boolean(input.options?.page && input.options.page_size),
-          maxRows: orcamento.maxRows,
-          stage: "hub",
-          timingsSolicitados: solicitarTimings,
-          timingsDevolvidos: Boolean(result.serverTimings),
-          ...(result.serverTimings ? { timings: result.serverTimings } : {}),
-          ...(result.sqlHandlingMode ? { sqlHandlingMode: result.sqlHandlingMode } : {}),
-          ...(result.maxRowsHandling ? { maxRowsHandling: result.maxRowsHandling } : {}),
-          ...(result.effectiveMaxRows != null ? { effectiveMaxRows: result.effectiveMaxRows } : {}),
-        },
-      });
-    } catch (error) {
-      await this.options.audit?.append({
-        usuarioId: uid,
-        acessoId: acesso.id,
-        tool: "validar_consulta",
-        sqlEnviado: `skills:${atribuidas.map((item) => item.id).join(",")}`,
-        sucesso: false,
-        codigoErro: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
-        linhasRetornadas: null,
-        duracaoMs: Date.now() - started,
-        metadata: {
-          origem: consultaSemantica ? "semantica" : "sql",
-          skillIds: atribuidas.map((item) => item.id),
-          agregado: ast.temAgregacao,
-          cacheHit: false,
-          tabelas: ast.tabelas.length,
-          maxRows: orcamento.maxRows,
-          stage: "hub",
-          timingsSolicitados: solicitarTimings,
-          timingsDevolvidos: false,
-          ...(error instanceof DomainError && error.source
-            ? { errorSource: origemErroAuditoria(error.source) }
-            : {}),
-        },
-      });
-      throw error;
-    }
+    const result = await this.consultar.execute(usuarioId, input, "validar_consulta");
     return {
       success: true,
       valido: true,
-      dialeto: acesso.dialeto,
-      tabelas: [...ast.tabelas.map((tabela) => tabela.nome)],
-      avisos: coletarAvisosValidacao(ast),
-      planoConsulta: montarPlanoConsulta({
-        origem: consultaSemantica ? "semantica" : "sql",
-        dialeto: acesso.dialeto,
-        skillIds: atribuidas.map((item) => item.id),
-        tabelas: ast.tabelas.map((item) => item.nome),
-        ast,
-        consultaSemantica,
-        politica,
-        maxRows: orcamento.maxRows,
-        maxRowsSolicitado,
-        paginacao: { page: input.options?.page, pageSize: input.options?.page_size },
-      }),
+      dialeto: result.planoConsulta.dialeto,
+      tabelas: [...result.planoConsulta.tabelas],
+      avisos: result.avisos,
+      planoConsulta: result.planoConsulta,
     };
   }
 }
@@ -1869,7 +1957,7 @@ export class BuscarContexto {
       todas,
     ] = await Promise.all([
       this.grafo.buscar(acesso.id, query, 12),
-      this.skills.buscar(acesso.id, query, 8, "publicada"),
+      this.skills.buscarPublicadas(acesso.id, query, 8),
       this.skills.buscar(acesso.id, query, 8, ["rascunho", "validada", "rascunho_revalidacao"]),
       this.anotacoes.buscar(acesso.id, query, 8, {
         ativasEm: diaNoFusoDoAcesso(acesso.timezone),
@@ -1877,12 +1965,31 @@ export class BuscarContexto {
       this.aprendizado
         ? this.aprendizado.buscarConsultas(acesso.id, query, 5)
         : Promise.resolve([]),
-      this.skills.listByAcesso(acesso.id),
+      Promise.all([
+        this.skills.listByAcesso(acesso.id),
+        this.skills.listPublicadas(acesso.id),
+      ]).then(([drafts, active]) => [
+        ...active,
+        ...drafts.filter((draft) => !active.some((pub) => pub.id === draft.id)),
+      ]),
     ]);
     const tabelas = tabelasHits.map((hit) => hit.item);
     const notas = notasHits.map((hit) => hit.item);
     const consultasAprendidas = consultasHits
       .map((hit) => hit.item)
+      .filter(
+        (item) =>
+          item.status === "confirmada" &&
+          Boolean(item.publicacoes?.length) &&
+          item.publicacoes!.every((origin) =>
+            todas.some(
+              (skill) =>
+                skill.id === origin.skillId &&
+                skill.publicacaoAtivaId === origin.id &&
+                skill.publicacaoHash === origin.hash,
+            ),
+          ),
+      )
       .filter((item) => consultaAprendidaRelevante(query, item.pergunta));
     const skillsPorSinonimo = resolverSkillsPorSinonimos(query, sinonimos, todas);
     const skillsPublicadas = unirSkills(

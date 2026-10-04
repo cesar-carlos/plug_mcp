@@ -94,7 +94,14 @@ export const linhagemColunas = (
     }
     map.set(
       name,
-      origensDaExpr(ast, coluna.expr, coluna.table, coluna.column, coluna.isExpression),
+      coluna.refs.length
+        ? coluna.refs.map((ref) => ({
+            table:
+              resolverNomeFisico(ast, ref.table) ??
+              (ast.tabelas.length === 1 ? (ast.tabelas[0]?.nome ?? null) : null),
+            column: ref.column,
+          }))
+        : origensDaExpr(ast, coluna.expr, coluna.table, coluna.column, coluna.isExpression),
     );
   }
   return map;
@@ -205,7 +212,10 @@ export const lookupSensibilidadeGrafo = async (
     const cols = await grafo.listColunas(acessoId, tabela.id);
     for (const coluna of cols) {
       map.set(`${tabela.nome.toLowerCase()}.${coluna.nome.toLowerCase()}`, coluna.sensibilidade);
-      map.set(coluna.nome.toLowerCase(), coluna.sensibilidade);
+      map.set(
+        coluna.nome.toLowerCase(),
+        maxSensibilidade([map.get(coluna.nome.toLowerCase()) ?? "livre", coluna.sensibilidade]),
+      );
     }
   }
   return (tabela, coluna) => {

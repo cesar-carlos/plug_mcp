@@ -1,0 +1,6207 @@
+{
+  "version": 1,
+  "dialect": "postgres",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "financeiro-1",
+      "group": "financeiro",
+      "question": "Qual é o total financeiro da empresa? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor)",
+            "definicao": "Qual é o total financeiro da empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 53.5
+        }
+      ]
+    },
+    {
+      "id": "financeiro-2",
+      "group": "financeiro",
+      "question": "Qual é a média dos valores financeiros conhecidos? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.valor),2)",
+            "definicao": "Qual é a média dos valores financeiros conhecidos?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT ROUND(AVG(f.valor),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 13.38
+        }
+      ]
+    },
+    {
+      "id": "financeiro-3",
+      "group": "financeiro",
+      "question": "Qual é o maior título? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.valor)",
+            "definicao": "Qual é o maior título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MAX(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 19
+        }
+      ]
+    },
+    {
+      "id": "financeiro-4",
+      "group": "financeiro",
+      "question": "Quantos títulos têm valor informado? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(f.valor)",
+            "definicao": "Quantos títulos têm valor informado?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT COUNT(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 4
+        }
+      ]
+    },
+    {
+      "id": "financeiro-5",
+      "group": "financeiro",
+      "question": "Qual é o menor título? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.valor)",
+            "definicao": "Qual é o menor título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MIN(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 10
+        }
+      ]
+    },
+    {
+      "id": "financeiro-6",
+      "group": "financeiro",
+      "question": "Qual é o total financeiro da empresa? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor)",
+            "definicao": "Qual é o total financeiro da empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 48
+        }
+      ]
+    },
+    {
+      "id": "financeiro-7",
+      "group": "financeiro",
+      "question": "Qual é a média dos valores financeiros conhecidos? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.valor),2)",
+            "definicao": "Qual é a média dos valores financeiros conhecidos?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT ROUND(AVG(f.valor),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 16
+        }
+      ]
+    },
+    {
+      "id": "financeiro-8",
+      "group": "financeiro",
+      "question": "Qual é o maior título? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.valor)",
+            "definicao": "Qual é o maior título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MAX(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 21.25
+        }
+      ]
+    },
+    {
+      "id": "financeiro-9",
+      "group": "financeiro",
+      "question": "Quantos títulos têm valor informado? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(f.valor)",
+            "definicao": "Quantos títulos têm valor informado?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT COUNT(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 3
+        }
+      ]
+    },
+    {
+      "id": "financeiro-10",
+      "group": "financeiro",
+      "question": "Qual é o menor título? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.valor)",
+            "definicao": "Qual é o menor título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MIN(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 10
+        }
+      ]
+    },
+    {
+      "id": "financeiro-11",
+      "group": "financeiro",
+      "question": "Qual é o total financeiro da empresa? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor)",
+            "definicao": "Qual é o total financeiro da empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT SUM(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 42.5
+        }
+      ]
+    },
+    {
+      "id": "financeiro-12",
+      "group": "financeiro",
+      "question": "Qual é a média dos valores financeiros conhecidos? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.valor),2)",
+            "definicao": "Qual é a média dos valores financeiros conhecidos?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT ROUND(AVG(f.valor),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 21.25
+        }
+      ]
+    },
+    {
+      "id": "financeiro-13",
+      "group": "financeiro",
+      "question": "Qual é o maior título? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.valor)",
+            "definicao": "Qual é o maior título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT MAX(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 23.5
+        }
+      ]
+    },
+    {
+      "id": "financeiro-14",
+      "group": "financeiro",
+      "question": "Quantos títulos têm valor informado? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(f.valor)",
+            "definicao": "Quantos títulos têm valor informado?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT COUNT(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 2
+        }
+      ]
+    },
+    {
+      "id": "financeiro-15",
+      "group": "financeiro",
+      "question": "Qual é o menor título? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.valor)",
+            "definicao": "Qual é o menor título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT MIN(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 19
+        }
+      ]
+    },
+    {
+      "id": "financeiro-16",
+      "group": "financeiro",
+      "question": "Qual é o total financeiro da empresa? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor)",
+            "definicao": "Qual é o total financeiro da empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 73.75
+        }
+      ]
+    },
+    {
+      "id": "financeiro-17",
+      "group": "financeiro",
+      "question": "Qual é a média dos valores financeiros conhecidos? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.valor),2)",
+            "definicao": "Qual é a média dos valores financeiros conhecidos?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT ROUND(AVG(f.valor),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 18.44
+        }
+      ]
+    },
+    {
+      "id": "financeiro-18",
+      "group": "financeiro",
+      "question": "Qual é o maior título? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.valor)",
+            "definicao": "Qual é o maior título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MAX(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 25.75
+        }
+      ]
+    },
+    {
+      "id": "financeiro-19",
+      "group": "financeiro",
+      "question": "Quantos títulos têm valor informado? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(f.valor)",
+            "definicao": "Quantos títulos têm valor informado?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT COUNT(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 4
+        }
+      ]
+    },
+    {
+      "id": "financeiro-20",
+      "group": "financeiro",
+      "question": "Qual é o menor título? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.valor)",
+            "definicao": "Qual é o menor título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MIN(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 10
+        }
+      ]
+    },
+    {
+      "id": "financeiro-21",
+      "group": "financeiro",
+      "question": "Qual é o total financeiro da empresa? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor)",
+            "definicao": "Qual é o total financeiro da empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 61.5
+        }
+      ]
+    },
+    {
+      "id": "financeiro-22",
+      "group": "financeiro",
+      "question": "Qual é a média dos valores financeiros conhecidos? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.valor),2)",
+            "definicao": "Qual é a média dos valores financeiros conhecidos?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT ROUND(AVG(f.valor),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 20.5
+        }
+      ]
+    },
+    {
+      "id": "financeiro-23",
+      "group": "financeiro",
+      "question": "Qual é o maior título? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.valor)",
+            "definicao": "Qual é o maior título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MAX(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 28
+        }
+      ]
+    },
+    {
+      "id": "financeiro-24",
+      "group": "financeiro",
+      "question": "Quantos títulos têm valor informado? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(f.valor)",
+            "definicao": "Quantos títulos têm valor informado?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT COUNT(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 3
+        }
+      ]
+    },
+    {
+      "id": "financeiro-25",
+      "group": "financeiro",
+      "question": "Qual é o menor título? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.valor)",
+            "definicao": "Qual é o menor título?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MIN(f.valor) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 10
+        }
+      ]
+    },
+    {
+      "id": "vendas-1",
+      "group": "vendas",
+      "question": "Quantas vendas existem na empresa? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(*)",
+            "definicao": "Quantas vendas existem na empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT COUNT(*) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 5
+        }
+      ]
+    },
+    {
+      "id": "vendas-2",
+      "group": "vendas",
+      "question": "Qual é a quantidade vendida? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é a quantidade vendida?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 6
+        }
+      ]
+    },
+    {
+      "id": "vendas-3",
+      "group": "vendas",
+      "question": "Qual é a receita ponderada pela quantidade? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor*f.quantidade)",
+            "definicao": "Qual é a receita ponderada pela quantidade?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.valor*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 11
+        }
+      ]
+    },
+    {
+      "id": "vendas-4",
+      "group": "vendas",
+      "question": "Qual é a maior quantidade por venda? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.quantidade)",
+            "definicao": "Qual é a maior quantidade por venda?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MAX(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 4
+        }
+      ]
+    },
+    {
+      "id": "vendas-5",
+      "group": "vendas",
+      "question": "Quantas categorias foram vendidas? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(DISTINCT f.categoria)",
+            "definicao": "Quantas categorias foram vendidas?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT COUNT(DISTINCT f.categoria) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 2
+        }
+      ]
+    },
+    {
+      "id": "vendas-6",
+      "group": "vendas",
+      "question": "Quantas vendas existem na empresa? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(*)",
+            "definicao": "Quantas vendas existem na empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT COUNT(*) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 4
+        }
+      ]
+    },
+    {
+      "id": "vendas-7",
+      "group": "vendas",
+      "question": "Qual é a quantidade vendida? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é a quantidade vendida?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 7
+        }
+      ]
+    },
+    {
+      "id": "vendas-8",
+      "group": "vendas",
+      "question": "Qual é a receita ponderada pela quantidade? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor*f.quantidade)",
+            "definicao": "Qual é a receita ponderada pela quantidade?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.valor*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 8.75
+        }
+      ]
+    },
+    {
+      "id": "vendas-9",
+      "group": "vendas",
+      "question": "Qual é a maior quantidade por venda? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.quantidade)",
+            "definicao": "Qual é a maior quantidade por venda?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MAX(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 5
+        }
+      ]
+    },
+    {
+      "id": "vendas-10",
+      "group": "vendas",
+      "question": "Quantas categorias foram vendidas? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(DISTINCT f.categoria)",
+            "definicao": "Quantas categorias foram vendidas?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT COUNT(DISTINCT f.categoria) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 2
+        }
+      ]
+    },
+    {
+      "id": "vendas-11",
+      "group": "vendas",
+      "question": "Quantas vendas existem na empresa? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(*)",
+            "definicao": "Quantas vendas existem na empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT COUNT(*) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 3
+        }
+      ]
+    },
+    {
+      "id": "vendas-12",
+      "group": "vendas",
+      "question": "Qual é a quantidade vendida? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é a quantidade vendida?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 5
+        }
+      ]
+    },
+    {
+      "id": "vendas-13",
+      "group": "vendas",
+      "question": "Qual é a receita ponderada pela quantidade? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor*f.quantidade)",
+            "definicao": "Qual é a receita ponderada pela quantidade?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT SUM(f.valor*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": -23.5
+        }
+      ]
+    },
+    {
+      "id": "vendas-14",
+      "group": "vendas",
+      "question": "Qual é a maior quantidade por venda? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.quantidade)",
+            "definicao": "Qual é a maior quantidade por venda?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT MAX(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 6
+        }
+      ]
+    },
+    {
+      "id": "vendas-15",
+      "group": "vendas",
+      "question": "Quantas categorias foram vendidas? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(DISTINCT f.categoria)",
+            "definicao": "Quantas categorias foram vendidas?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT COUNT(DISTINCT f.categoria) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 2
+        }
+      ]
+    },
+    {
+      "id": "vendas-16",
+      "group": "vendas",
+      "question": "Quantas vendas existem na empresa? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(*)",
+            "definicao": "Quantas vendas existem na empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT COUNT(*) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 5
+        }
+      ]
+    },
+    {
+      "id": "vendas-17",
+      "group": "vendas",
+      "question": "Qual é a quantidade vendida? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é a quantidade vendida?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 15
+        }
+      ]
+    },
+    {
+      "id": "vendas-18",
+      "group": "vendas",
+      "question": "Qual é a receita ponderada pela quantidade? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor*f.quantidade)",
+            "definicao": "Qual é a receita ponderada pela quantidade?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.valor*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 91.25
+        }
+      ]
+    },
+    {
+      "id": "vendas-19",
+      "group": "vendas",
+      "question": "Qual é a maior quantidade por venda? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.quantidade)",
+            "definicao": "Qual é a maior quantidade por venda?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MAX(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 7
+        }
+      ]
+    },
+    {
+      "id": "vendas-20",
+      "group": "vendas",
+      "question": "Quantas categorias foram vendidas? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(DISTINCT f.categoria)",
+            "definicao": "Quantas categorias foram vendidas?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT COUNT(DISTINCT f.categoria) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 2
+        }
+      ]
+    },
+    {
+      "id": "vendas-21",
+      "group": "vendas",
+      "question": "Quantas vendas existem na empresa? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(*)",
+            "definicao": "Quantas vendas existem na empresa?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT COUNT(*) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 4
+        }
+      ]
+    },
+    {
+      "id": "vendas-22",
+      "group": "vendas",
+      "question": "Qual é a quantidade vendida? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é a quantidade vendida?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 13
+        }
+      ]
+    },
+    {
+      "id": "vendas-23",
+      "group": "vendas",
+      "question": "Qual é a receita ponderada pela quantidade? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.valor*f.quantidade)",
+            "definicao": "Qual é a receita ponderada pela quantidade?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.valor*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 32
+        }
+      ]
+    },
+    {
+      "id": "vendas-24",
+      "group": "vendas",
+      "question": "Qual é a maior quantidade por venda? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MAX(f.quantidade)",
+            "definicao": "Qual é a maior quantidade por venda?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MAX(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 8
+        }
+      ]
+    },
+    {
+      "id": "vendas-25",
+      "group": "vendas",
+      "question": "Quantas categorias foram vendidas? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "COUNT(DISTINCT f.categoria)",
+            "definicao": "Quantas categorias foram vendidas?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT COUNT(DISTINCT f.categoria) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 2
+        }
+      ]
+    },
+    {
+      "id": "estoque-1",
+      "group": "estoque",
+      "question": "Qual é o saldo de estoque? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é o saldo de estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 6
+        }
+      ]
+    },
+    {
+      "id": "estoque-2",
+      "group": "estoque",
+      "question": "Qual é o valor conhecido do estoque? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(COALESCE(f.valor,0)*f.quantidade)",
+            "definicao": "Qual é o valor conhecido do estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(COALESCE(f.valor,0)*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 11
+        }
+      ]
+    },
+    {
+      "id": "estoque-3",
+      "group": "estoque",
+      "question": "Qual é o menor saldo por registro? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.quantidade)",
+            "definicao": "Qual é o menor saldo por registro?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MIN(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": -1
+        }
+      ]
+    },
+    {
+      "id": "estoque-4",
+      "group": "estoque",
+      "question": "Qual é a média de quantidade dos registros? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.quantidade),2)",
+            "definicao": "Qual é a média de quantidade dos registros?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 10,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 2
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 4
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 21.25,
+          "quantidade": 6
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT ROUND(AVG(f.quantidade),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 1.2
+        }
+      ]
+    },
+    {
+      "id": "estoque-5",
+      "group": "estoque",
+      "question": "Qual é o saldo de estoque? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é o saldo de estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 7
+        }
+      ]
+    },
+    {
+      "id": "estoque-6",
+      "group": "estoque",
+      "question": "Qual é o valor conhecido do estoque? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(COALESCE(f.valor,0)*f.quantidade)",
+            "definicao": "Qual é o valor conhecido do estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(COALESCE(f.valor,0)*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 8.75
+        }
+      ]
+    },
+    {
+      "id": "estoque-7",
+      "group": "estoque",
+      "question": "Qual é o menor saldo por registro? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.quantidade)",
+            "definicao": "Qual é o menor saldo por registro?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MIN(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": -1
+        }
+      ]
+    },
+    {
+      "id": "estoque-8",
+      "group": "estoque",
+      "question": "Qual é a média de quantidade dos registros? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.quantidade),2)",
+            "definicao": "Qual é a média de quantidade dos registros?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 12.25,
+          "quantidade": 2
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 3
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 5
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 23.5,
+          "quantidade": 7
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT ROUND(AVG(f.quantidade),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 1.75
+        }
+      ]
+    },
+    {
+      "id": "estoque-9",
+      "group": "estoque",
+      "question": "Qual é o saldo de estoque? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é o saldo de estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 5
+        }
+      ]
+    },
+    {
+      "id": "estoque-10",
+      "group": "estoque",
+      "question": "Qual é o valor conhecido do estoque? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(COALESCE(f.valor,0)*f.quantidade)",
+            "definicao": "Qual é o valor conhecido do estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT SUM(COALESCE(f.valor,0)*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": -23.5
+        }
+      ]
+    },
+    {
+      "id": "estoque-11",
+      "group": "estoque",
+      "question": "Qual é o menor saldo por registro? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.quantidade)",
+            "definicao": "Qual é o menor saldo por registro?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT MIN(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": -1
+        }
+      ]
+    },
+    {
+      "id": "estoque-12",
+      "group": "estoque",
+      "question": "Qual é a média de quantidade dos registros? Considere apenas registros com id maior que 2 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.quantidade),2)",
+            "definicao": "Qual é a média de quantidade dos registros?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 14.5,
+          "quantidade": 3
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 4
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 6
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 25.75,
+          "quantidade": 8
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 2
+      },
+      "sql": "SELECT ROUND(AVG(f.quantidade),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 1.67
+        }
+      ]
+    },
+    {
+      "id": "estoque-13",
+      "group": "estoque",
+      "question": "Qual é o saldo de estoque? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é o saldo de estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 15
+        }
+      ]
+    },
+    {
+      "id": "estoque-14",
+      "group": "estoque",
+      "question": "Qual é o valor conhecido do estoque? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(COALESCE(f.valor,0)*f.quantidade)",
+            "definicao": "Qual é o valor conhecido do estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT SUM(COALESCE(f.valor,0)*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 91.25
+        }
+      ]
+    },
+    {
+      "id": "estoque-15",
+      "group": "estoque",
+      "question": "Qual é o menor saldo por registro? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.quantidade)",
+            "definicao": "Qual é o menor saldo por registro?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT MIN(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": -1
+        }
+      ]
+    },
+    {
+      "id": "estoque-16",
+      "group": "estoque",
+      "question": "Qual é a média de quantidade dos registros? Considere apenas registros com id maior que 0 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.quantidade),2)",
+            "definicao": "Qual é a média de quantidade dos registros?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 16.75,
+          "quantidade": 4
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 5
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 21.25,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 7
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 25.75,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 28,
+          "quantidade": 9
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 0
+      },
+      "sql": "SELECT ROUND(AVG(f.quantidade),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 3
+        }
+      ]
+    },
+    {
+      "id": "estoque-17",
+      "group": "estoque",
+      "question": "Qual é o saldo de estoque? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(f.quantidade)",
+            "definicao": "Qual é o saldo de estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 13
+        }
+      ]
+    },
+    {
+      "id": "estoque-18",
+      "group": "estoque",
+      "question": "Qual é o valor conhecido do estoque? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "SUM(COALESCE(f.valor,0)*f.quantidade)",
+            "definicao": "Qual é o valor conhecido do estoque?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT SUM(COALESCE(f.valor,0)*f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 32
+        }
+      ]
+    },
+    {
+      "id": "estoque-19",
+      "group": "estoque",
+      "question": "Qual é o menor saldo por registro? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "MIN(f.quantidade)",
+            "definicao": "Qual é o menor saldo por registro?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT MIN(f.quantidade) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": -1
+        }
+      ]
+    },
+    {
+      "id": "estoque-20",
+      "group": "estoque",
+      "question": "Qual é a média de quantidade dos registros? Considere apenas registros com id maior que 1 da empresa A.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": [
+          {
+            "alias": "resultado",
+            "expr": "ROUND(AVG(f.quantidade),2)",
+            "definicao": "Qual é a média de quantidade dos registros?"
+          }
+        ]
+      },
+      "data": [
+        {
+          "id": 1,
+          "empresa": "A",
+          "data": "2026-01-01",
+          "categoria": "Y",
+          "valor": 19,
+          "quantidade": 5
+        },
+        {
+          "id": 2,
+          "empresa": "A",
+          "data": "2026-01-02",
+          "categoria": "X",
+          "valor": 10,
+          "quantidade": 6
+        },
+        {
+          "id": 3,
+          "empresa": "A",
+          "data": "2026-01-03",
+          "categoria": "Y",
+          "valor": 23.5,
+          "quantidade": 0
+        },
+        {
+          "id": 4,
+          "empresa": "A",
+          "data": "2026-01-04",
+          "categoria": "X",
+          "valor": null,
+          "quantidade": 8
+        },
+        {
+          "id": 5,
+          "empresa": "A",
+          "data": "2026-01-05",
+          "categoria": "Y",
+          "valor": 28,
+          "quantidade": -1
+        },
+        {
+          "id": 6,
+          "empresa": "B",
+          "data": "2026-01-06",
+          "categoria": "X",
+          "valor": 30.25,
+          "quantidade": 10
+        }
+      ],
+      "params": {
+        "empresa": "A",
+        "inicio": 1
+      },
+      "sql": "SELECT ROUND(AVG(f.quantidade),2) AS resultado FROM fato f WHERE f.empresa=:empresa AND f.id>:inicio",
+      "expectedDecision": "permitir",
+      "expectedRows": [
+        {
+          "resultado": 3.25
+        }
+      ]
+    },
+    {
+      "id": "ambiguidade-1",
+      "group": "ambiguidade",
+      "question": "Qual valor da relação 1?",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT valor FROM fato f JOIN fato g ON f.id=g.id WHERE f.empresa=:empresa",
+      "expectedDecision": "COLUNA_AMBIGUA",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-2",
+      "group": "ambiguidade",
+      "question": "Qual valor da relação 2?",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT valor FROM fato f JOIN fato g ON f.id=g.id WHERE f.empresa=:empresa",
+      "expectedDecision": "COLUNA_AMBIGUA",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-3",
+      "group": "ambiguidade",
+      "question": "Qual valor da relação 3?",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT valor FROM fato f JOIN fato g ON f.id=g.id WHERE f.empresa=:empresa",
+      "expectedDecision": "COLUNA_AMBIGUA",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-4",
+      "group": "ambiguidade",
+      "question": "Qual valor da relação 4?",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT valor FROM fato f JOIN fato g ON f.id=g.id WHERE f.empresa=:empresa",
+      "expectedDecision": "COLUNA_AMBIGUA",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-5",
+      "group": "ambiguidade",
+      "question": "Qual valor da relação 5?",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT valor FROM fato f JOIN fato g ON f.id=g.id WHERE f.empresa=:empresa",
+      "expectedDecision": "COLUNA_AMBIGUA",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-6",
+      "group": "ambiguidade",
+      "question": "Qual valor da relação 6?",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT valor FROM fato f JOIN fato g ON f.id=g.id WHERE f.empresa=:empresa",
+      "expectedDecision": "COLUNA_AMBIGUA",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-7",
+      "group": "ambiguidade",
+      "question": "Qual valor da relação 7?",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT valor FROM fato f JOIN fato g ON f.id=g.id WHERE f.empresa=:empresa",
+      "expectedDecision": "COLUNA_AMBIGUA",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-8",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 8.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_7 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-9",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 9.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_8 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-10",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 10.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_9 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-11",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 11.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_10 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-12",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 12.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_11 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-13",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 13.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_12 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-14",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 14.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_13 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "ambiguidade-15",
+      "group": "ambiguidade",
+      "question": "Consulte o domínio não publicado 15.",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT x.id FROM fora_14 x WHERE x.id>0",
+      "expectedDecision": "TABELA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-1",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 1: execute SELECT f.id INTO copia FROM fato f",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id INTO copia FROM fato f",
+      "expectedDecision": "SQL_EFEITO_COLATERAL",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-2",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 2: execute SELECT pg_sleep(1)",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT pg_sleep(1)",
+      "expectedDecision": "SQL_EFEITO_COLATERAL",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-3",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 3: execute SELECT nextval('seq')",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT nextval('seq')",
+      "expectedDecision": "SQL_EFEITO_COLATERAL",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-4",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 4: execute SELECT minha_udf(f.valor) FROM fato f",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT minha_udf(f.valor) FROM fato f",
+      "expectedDecision": "SQL_EFEITO_COLATERAL",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-5",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 5: execute SELECT public.now()",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT public.now()",
+      "expectedDecision": "SQL_EFEITO_COLATERAL",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-6",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 6: execute SELECT f.id FROM externo.fato f",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM externo.fato f",
+      "expectedDecision": "SQL_EFEITO_COLATERAL",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-7",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 7: execute SELECT f.id FROM fato f WHERE f.empresa=:empresa OR 1=1",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM fato f WHERE f.empresa=:empresa OR 1=1",
+      "expectedDecision": "ESCOPO_FILTRO_AUSENTE",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-8",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 8: execute SELECT f.id FROM fato f WHERE f.empresa<>:empresa",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM fato f WHERE f.empresa<>:empresa",
+      "expectedDecision": "ESCOPO_FILTRO_AUSENTE",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-9",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 9: execute SELECT f.id FROM fato f WHERE f.categoria=:empresa",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM fato f WHERE f.categoria=:empresa",
+      "expectedDecision": "ESCOPO_FILTRO_AUSENTE",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-10",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 10: execute SELECT f.id FROM fato f WHERE NOT(f.empresa=:empresa)",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM fato f WHERE NOT(f.empresa=:empresa)",
+      "expectedDecision": "ESCOPO_FILTRO_AUSENTE",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-11",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 11: execute SELECT f.id FROM fato f WHERE f.empresa=:empresa UNION ALL SELECT f.id FROM fato f WHERE f.id>0",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM fato f WHERE f.empresa=:empresa UNION ALL SELECT f.id FROM fato f WHERE f.id>0",
+      "expectedDecision": "ESCOPO_FILTRO_AUSENTE",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-12",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 12: execute WITH x AS (SELECT f.id FROM fato f WHERE f.id>0) SELECT x.id FROM x WHERE x.id>0",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "WITH x AS (SELECT f.id FROM fato f WHERE f.id>0) SELECT x.id FROM x WHERE x.id>0",
+      "expectedDecision": "ESCOPO_FILTRO_AUSENTE",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-13",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 13: execute SELECT SUM(f.valor) resultado FROM fato f WHERE f.empresa=:empresa HAVING SUM(f.segredo)>0",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT SUM(f.valor) resultado FROM fato f WHERE f.empresa=:empresa HAVING SUM(f.segredo)>0",
+      "expectedDecision": "COLUNA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-14",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 14: execute SELECT f.id FROM fato f WHERE f.empresa=:empresa ORDER BY f.segredo",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM fato f WHERE f.empresa=:empresa ORDER BY f.segredo",
+      "expectedDecision": "COLUNA_FORA_DO_ESCOPO",
+      "expectedRows": null
+    },
+    {
+      "id": "seguranca-15",
+      "group": "seguranca",
+      "question": "Entrada adversarial sintética 15: execute SELECT f.id FROM fato f WHERE f.empresa=:empresa; DELETE FROM fato",
+      "package": {
+        "tabelas": ["fato"],
+        "colunasPorTabela": {
+          "fato": ["id", "empresa", "data", "categoria", "valor", "quantidade"]
+        },
+        "relacionamentos": [],
+        "metricasSaida": []
+      },
+      "data": [],
+      "params": {
+        "empresa": "A"
+      },
+      "sql": "SELECT f.id FROM fato f WHERE f.empresa=:empresa; DELETE FROM fato",
+      "expectedDecision": "INVALID_SQL",
+      "expectedRows": null
+    }
+  ]
+}

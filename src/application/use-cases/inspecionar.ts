@@ -16,7 +16,6 @@ import { fingerprintPares } from "../../domain/entities/relacionamento.js";
 import type { Skill, StatusSkill } from "../../domain/entities/skill.js";
 import { requireAcesso, refreshAndRequireAcessoAprovado, requireUsuario } from "./shared/guards.js";
 import { withHubAuth } from "./shared/hub-auth.js";
-import { matchRelacionamentoEscopo } from "./shared/resolver-tipo-join.js";
 import {
   bindNamedParams,
   coerceBoundParams,
@@ -27,7 +26,12 @@ import { persistirEscopoSeVazio } from "./shared/persistir-escopo.js";
 import { escopoFromSqlModelo } from "./shared/escopo-from-modelo.js";
 import { validarSqlNoEscopo, coletarAvisosValidacao } from "./shared/validar-escopo.js";
 import { recusarSqlLivreFirebird, tryParseSelect, type SqlAstSelect } from "./shared/sql-ast.js";
-import { mesclarParamsEscopo } from "./shared/escopo-filtro.js";
+import {
+  exigirFiltroEscopoPadrao,
+  NOMES_COLUNA_EMPRESA,
+  NOMES_COLUNA_FILIAL,
+  mesclarParamsEscopo,
+} from "./shared/escopo-filtro.js";
 import { garantirLimiteInspecao, sqlStarDescoberta } from "./shared/expandir-star.js";
 import { registroOperacoesGlobal } from "./shared/progresso-operacao.js";
 import {
@@ -35,7 +39,12 @@ import {
   assinaturaTabela,
   type DeltaAssinaturaSchema,
 } from "./shared/schema-drift.js";
-import { isIdentificadorSql } from "./shared/schema-introspection.js";
+import {
+  cell,
+  sqlDescreverTabela,
+  DESCREVER_TABELA_MAX_ROWS,
+  isIdentificadorSql,
+} from "./shared/schema-introspection.js";
 import {
   applySelectAliasHints,
   mergeColumnHints,
@@ -45,7 +54,7 @@ import {
 } from "./shared/columns-metadata.js";
 import type { AnexoHandlePort } from "../../domain/ports/anexo-handle.port.js";
 import { avisoAnexos, sanitizarLinhasConsulta } from "./shared/sanitizar-linhas-consulta.js";
-import { lookupSensibilidadeGrafo } from "./shared/mascarar-linhagem.js";
+import { lookupSensibilidadeGrafo, mascararLinhas } from "./shared/mascarar-linhagem.js";
 
 export const INSPECAO_MAX_ROWS = 100;
 export const FINALIDADES_INSPECAO = [
@@ -155,6 +164,7 @@ export class InspecionarConsulta {
     maxRowsApplied: number;
     truncated: boolean;
     colunasMascaradas: readonly string[];
+    colunasOmitidas: readonly string[];
     colunasNovasNoGrafo: readonly string[];
     columnsMetadata?: readonly ColumnMetadataItem[];
     sqlExecutado: string;
@@ -248,7 +258,7 @@ export class InspecionarConsulta {
       }
       sql = ancora.sqlModelo.trim();
     }
-    let ast: SqlAstSelect | null = null;
+    let ast: SqlAstSelect | null;
     if (acesso.dialeto === "firebird") {
       ast = tryParseSelect(sql);
     } else {
@@ -259,18 +269,196 @@ export class InspecionarConsulta {
     const tabelasSql = ast
       ? ast.tabelas.map((tabela) => tabela.nome)
       : parseSqlModelo(sql).tabelas.map((tabela) => tabela.nome);
+    const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
+    const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
+      this.plug.getClientTokenPolicy({ accessToken, agentId: acesso.agentId, clientToken }),
+    );
+    if (
+      tabelasSql.some(
+        (table) =>
+          !policy.allTables &&
+          !policy.tables.some((allowed) => allowed.toLowerCase() === table.toLowerCase()),
+      )
+    ) {
+      throw new DomainError({
+        code: ERROR_CODES.PERMISSION_DENIED,
+        message: "Inspeção fora da policy vigente.",
+        hint: "Revise a autorização no hub.",
+      });
+    }
     const columnHints = new Map<string, ColumnMetadataHint>();
+    const omitted: string[] = [];
+    let discovered: string[] = [];
+    const safeColumns = new Map<string, Set<string>>();
+    const colsByTable: Record<string, string[]> = {};
     for (const tabelaNome of tabelasSql) {
-      const found = await this.grafo.findTabelaByNome(acesso.id, tabelaNome);
+      const found =
+        (await this.grafo.findTabelaByNome(acesso.id, tabelaNome)) ??
+        (
+          await this.grafo.mergeTabela({
+            acessoId: acesso.id,
+            nome: tabelaNome,
+            origem: "inferido",
+            autorUsuarioId: uid,
+          })
+        ).tabela;
       if (!found) {
         continue;
       }
+      if (ast?.temStar) {
+        const metadata = await withHubAuth(this.sessions, uid, (accessToken) =>
+          this.plug.executeSql({
+            accessToken,
+            agentId: acesso.agentId,
+            clientToken,
+            sql: sqlDescreverTabela(acesso.dialeto, false),
+            params: { tabela: tabelaNome },
+            options: { maxRows: DESCREVER_TABELA_MAX_ROWS },
+          }),
+        );
+        const columns = metadata.rows.flatMap((row) => {
+          const name = cell(row, "column_name");
+          return name && isIdentificadorSql(name)
+            ? [
+                {
+                  name,
+                  type: cell(row, "data_type"),
+                  nullable: cell(row, "is_nullable")?.toLowerCase() === "yes",
+                },
+              ]
+            : [];
+        });
+        discovered = await persistirColunasInspecao({
+          grafo: this.grafo,
+          acessoId: acesso.id,
+          autorUsuarioId: uid,
+          ast,
+          columns: columns.map((col) => col.name),
+          metadata: columns,
+        });
+      }
       const cols = await this.grafo.listColunas(acesso.id, found.id);
+      colsByTable[tabelaNome] = cols.map((col) => col.nome);
       mergeColumnHints(columnHints, cols);
+      const safe = cols.filter(
+        (col) =>
+          col.origem === "confirmado_usuario" &&
+          col.status === "vigente" &&
+          col.sensibilidade !== "pessoal" &&
+          col.sensibilidade !== "segredo" &&
+          isIdentificadorSql(col.nome),
+      );
+      safeColumns.set(tabelaNome.toLowerCase(), new Set(safe.map((col) => col.nome.toLowerCase())));
+      omitted.push(
+        ...cols.filter((col) => !safe.some((item) => item.id === col.id)).map((col) => col.nome),
+      );
     }
-    if (ast) {
-      applySelectAliasHints(columnHints, ast.colunas);
+    if (ast?.temStar) {
+      const table = ast.tabelas[0];
+      if (
+        !table ||
+        ast.tabelas.length !== 1 ||
+        ast.colunas.length !== 1 ||
+        ast.subqueries.length ||
+        ast.setBranches.length
+      ) {
+        throw new DomainError({
+          code: ERROR_CODES.PRIVACIDADE_NEGADA,
+          message: "Descoberta exige uma tabela e projeção simples.",
+          hint: "Use tabela para descobrir metadados; confirme as colunas antes de amostrar valores.",
+        });
+      }
+      const safe = [...(safeColumns.get(table.nome.toLowerCase()) ?? [])];
+      if (!safe.length) {
+        return {
+          success: true,
+          finalidade,
+          columns: [],
+          rows: [],
+          rowCount: 0,
+          maxRowsApplied: INSPECAO_MAX_ROWS,
+          truncated: false,
+          colunasMascaradas: [],
+          colunasOmitidas: [...new Set(omitted)],
+          colunasNovasNoGrafo: discovered,
+          sqlExecutado: "",
+          avisos: [
+            {
+              code: "INSPECAO_METADADOS",
+              message:
+                "Somente metadados: confirme classificação e sensibilidade antes de amostrar valores.",
+            },
+          ],
+        };
+      }
+      sql = sql.replace(
+        /^(\s*SELECT(?:\s+DISTINCT)?(?:\s+TOP\s+\(?\d+\)?)?\s+)(?:[\w]+\.)?\*/i,
+        (_match, prefix: string) =>
+          prefix + safe.map((col) => (table.alias ?? table.nome) + "." + col).join(", "),
+      );
+      if (!sqlInformado && acesso.escopoPadrao) {
+        const predicates: string[] = [];
+        for (const param of ["empresa", "filial"] as const) {
+          if (acesso.escopoPadrao[param] === undefined) {
+            continue;
+          }
+          const configured =
+            acesso.escopoPadrao.bindings?.filter(
+              (binding) =>
+                binding.param === param &&
+                binding.tabela.toLowerCase() === table.nome.toLowerCase(),
+            ) ?? [];
+          const columns = configured.length
+            ? configured.map((binding) => binding.coluna)
+            : (colsByTable[table.nome] ?? []).filter((col) =>
+                (param === "empresa" ? NOMES_COLUNA_EMPRESA : NOMES_COLUNA_FILIAL).some(
+                  (candidate) => candidate.toLowerCase() === col.toLowerCase(),
+                ),
+              );
+          if (columns.length === 1 && isIdentificadorSql(columns[0]!)) {
+            predicates.push((table.alias ?? table.nome) + "." + columns[0] + " = :" + param);
+          }
+        }
+        if (predicates.length) {
+          sql =
+            sql.replace(/\s+LIMIT\s+\d+\s*$/i, "") +
+            " WHERE " +
+            predicates.join(" AND ") +
+            (acesso.dialeto === "postgres" ? " LIMIT 100" : "");
+        }
+      }
+      ast = tryParseSelect(sql, acesso.dialeto);
     }
+    if (!ast) {
+      throw new DomainError({
+        code: ERROR_CODES.PRIVACIDADE_NEGADA,
+        message: "Projeção não demonstrável.",
+        hint: "Use colunas físicas classificadas.",
+      });
+    }
+    for (const ref of ast.colunas.flatMap((col) => col.refs)) {
+      const table = ref.table
+        ? ast.tabelas.find(
+            (item) => (item.alias ?? item.nome).toLowerCase() === ref.table?.toLowerCase(),
+          )
+        : ast.tabelas.length === 1
+          ? ast.tabelas[0]
+          : undefined;
+      if (!table || !safeColumns.get(table.nome.toLowerCase())?.has(ref.column.toLowerCase())) {
+        throw new DomainError({
+          code: ERROR_CODES.PRIVACIDADE_NEGADA,
+          message: "Amostra contém coluna sem classificação segura.",
+          hint: "Confirme a coluna sem expor valores; dados pessoais e segredos ficam fora da projeção.",
+        });
+      }
+    }
+    exigirFiltroEscopoPadrao({
+      sql,
+      colunasDasTabelas: colsByTable,
+      escopoPadrao: acesso.escopoPadrao,
+      dialeto: acesso.dialeto,
+    });
+    applySelectAliasHints(columnHints, ast.colunas);
     const contrato = (skillsPassadas.length > 0 ? skillsPassadas : elegiveis).flatMap(
       (item) => item.params,
     );
@@ -279,7 +467,6 @@ export class InspecionarConsulta {
       contrato,
     );
     const timeoutMs = Math.min(input.options?.timeout_ms ?? 15_000, 15_000);
-    const clientToken = this.crypto.decrypt(acesso.clientTokenEnc);
     const skillAudit = skillsPassadas[0] ?? elegiveis[0]!;
     try {
       const result = await withHubAuth(this.sessions, uid, (accessToken) =>
@@ -292,11 +479,84 @@ export class InspecionarConsulta {
           options: { maxRows: INSPECAO_MAX_ROWS, timeoutMs },
         }),
       );
-      const columns =
+      const assertEntrega = async (): Promise<void> => {
+        const current = await refreshAndRequireAcessoAprovado(
+          this.acessos,
+          this.plug,
+          this.sessions,
+          await requireAcesso(this.acessos, acesso.id, uid),
+          uid,
+        );
+        if (
+          current.tokenHash !== acesso.tokenHash ||
+          current.clientTokenHash !== acesso.clientTokenHash ||
+          JSON.stringify(current.escopoPadrao) !== JSON.stringify(acesso.escopoPadrao)
+        ) {
+          throw new DomainError({
+            code: ERROR_CODES.ACCESS_REVOKED,
+            message: "Autorização mudou durante a inspeção.",
+            hint: "Prepare a inspeção novamente.",
+          });
+        }
+        const freshPolicy = await withHubAuth(this.sessions, uid, (accessToken) =>
+          this.plug.getClientTokenPolicy({ accessToken, agentId: acesso.agentId, clientToken }),
+        );
+        if (
+          tabelasSql.some(
+            (table) =>
+              !freshPolicy.allTables &&
+              !freshPolicy.tables.some((allowed) => allowed.toLowerCase() === table.toLowerCase()),
+          )
+        ) {
+          throw new DomainError({
+            code: ERROR_CODES.PERMISSION_DENIED,
+            message: "Policy revogada durante a inspeção.",
+            hint: "Revise a autorização no hub.",
+          });
+        }
+        for (const ref of ast.colunas.flatMap((col) => col.refs)) {
+          const table = ref.table
+            ? ast.tabelas.find(
+                (item) => (item.alias ?? item.nome).toLowerCase() === ref.table?.toLowerCase(),
+              )
+            : ast.tabelas.length === 1
+              ? ast.tabelas[0]
+              : undefined;
+          const physical = table ? await this.grafo.findTabelaByNome(acesso.id, table.nome) : null;
+          const column = physical
+            ? await this.grafo.findColuna(acesso.id, physical.id, ref.column)
+            : null;
+          if (
+            column?.origem !== "confirmado_usuario" ||
+            column.status !== "vigente" ||
+            ["pessoal", "segredo"].includes(column.sensibilidade)
+          ) {
+            throw new DomainError({
+              code: ERROR_CODES.PRIVACIDADE_NEGADA,
+              message: "Classificação mudou durante a inspeção.",
+              hint: "Inspecione apenas colunas classificadas para amostra.",
+            });
+          }
+        }
+      };
+      await assertEntrega();
+      const returnedColumns =
         result.columns.length > 0
           ? result.columns
           : (result.columnsMetadata?.map((item) => item.name) ?? []);
-      const rows = result.rows.slice(0, INSPECAO_MAX_ROWS);
+      const outputNames = new Set(
+        ast.colunas.map((col) =>
+          ((col.alias.length > 0 ? col.alias : col.column) ?? "").toLowerCase(),
+        ),
+      );
+      const columns = returnedColumns.filter((name) => outputNames.has(name.toLowerCase()));
+      const rows = result.rows
+        .slice(0, INSPECAO_MAX_ROWS)
+        .map((row) =>
+          Object.fromEntries(
+            Object.entries(row).filter(([name]) => outputNames.has(name.toLowerCase())),
+          ),
+        );
       const columnsMetadata = normalizeColumnsMetadata(
         columns,
         result.columnsMetadata,
@@ -315,9 +575,16 @@ export class InspecionarConsulta {
         origem: "inspecionar_consulta",
         lookupSensibilidade: (coluna) => lookup(null, coluna),
       });
-      const rowsSanitizadas = sanitizadas.rows;
+      const masked = mascararLinhas({
+        rows: sanitizadas.rows,
+        columns,
+        ast,
+        sessaoId: acesso.id,
+        lookup,
+      });
+      const rowsSanitizadas = masked.rows;
       const avisoAnexo = avisoAnexos(sanitizadas.anexos, "inspecionar_consulta");
-      const colunasNovasNoGrafo = await persistirColunasInspecao({
+      const newOutputColumns = await persistirColunasInspecao({
         grafo: this.grafo,
         acessoId: acesso.id,
         autorUsuarioId: uid,
@@ -325,6 +592,7 @@ export class InspecionarConsulta {
         columns,
         metadata: columnsMetadata,
       });
+      const colunasNovasNoGrafo = [...new Set([...discovered, ...newOutputColumns])];
       await this.audit.append({
         usuarioId: uid,
         acessoId: acesso.id,
@@ -335,6 +603,7 @@ export class InspecionarConsulta {
         linhasRetornadas: rows.length,
         duracaoMs: Date.now() - started,
       });
+      await assertEntrega();
       return {
         success: true,
         finalidade,
@@ -343,8 +612,9 @@ export class InspecionarConsulta {
         rowCount: rowsSanitizadas.length,
         maxRowsApplied: INSPECAO_MAX_ROWS,
         truncated: result.rows.length >= INSPECAO_MAX_ROWS || result.truncated === true,
-        colunasMascaradas: [],
-        colunasNovasNoGrafo,
+        colunasMascaradas: masked.colunasMascaradas,
+        colunasOmitidas: [...new Set(omitted)],
+        colunasNovasNoGrafo: [...new Set([...discovered, ...colunasNovasNoGrafo])],
         columnsMetadata,
         sqlExecutado: sqlParaOdbc(sql),
         avisos: [
@@ -352,7 +622,7 @@ export class InspecionarConsulta {
           {
             code: "INSPECAO",
             message:
-              "Amostra crua, sem cache e sem consulta_aprendida. Não use para KPI. Origem inferido não licencia SQL de negócio.",
+              "Amostra de colunas classificadas, sem dados pessoais ou segredos, sem cache e sem consulta_aprendida. Não use para KPI. Origem inferido não licencia SQL de negócio.",
           },
           ...(avisoAnexo ? [avisoAnexo] : []),
         ],
@@ -429,9 +699,7 @@ export class DescobrirTabela {
         hint: "descobrir_tabela lista só estruturas de skills publicadas, sem linhas.",
       });
     }
-    const publicadas = (await this.skills.listByAcesso(acesso.id)).filter(
-      (skill) => skill.status === "publicada",
-    );
+    const publicadas = await this.skills.listPublicadas(acesso.id);
     const noEscopo = publicadas.some((skill) =>
       skill.escopo.tabelas.some((nome) => nome.toLowerCase() === tabelaNome.toLowerCase()),
     );
@@ -474,55 +742,52 @@ export class DescobrirTabela {
       );
       return (entry?.[1] ?? []).some((item) => item.toLowerCase() === coluna.toLowerCase());
     };
-    const tabela = await this.grafo.findTabelaByNome(acesso.id, tabelaNome);
-    if (!tabela) {
-      throw new DomainError({
-        code: ERROR_CODES.VALIDATION_ERROR,
-        message: "Tabela ainda não está no grafo.",
-        hint: "Treine com mapear_tabela / treinar_com_sql.",
-      });
-    }
-    const colunas = await this.grafo.listColunas(acesso.id, tabela.id);
-    const rels = await this.grafo.listRelacionamentos(acesso.id);
-    const tabelas = await this.grafo.listTabelas(acesso.id);
-    const nomeById = new Map(tabelas.map((item) => [item.id, item.nome]));
+    const frozen = publicadas
+      .flatMap((skill) => skill.conhecimentoPublicado?.colunas ?? [])
+      .filter(
+        (col) => col.tabela.toLowerCase() === tabelaNome.toLowerCase() && colunasDoPacote(col.nome),
+      );
+    const unique = [...new Map(frozen.map((col) => [col.nome.toLowerCase(), col])).values()];
+    const currentTable = await this.grafo.findTabelaByNome(acesso.id, tabelaNome);
+    const currentColumns = currentTable
+      ? await this.grafo.listColunas(acesso.id, currentTable.id)
+      : [];
     return {
       success: true,
-      tabela: tabela.nome,
-      colunas: colunas
-        .filter((coluna) => isIdentificadorSql(coluna.nome) && colunasDoPacote(coluna.nome))
-        .map((coluna) => ({
-          nome: coluna.nome,
-          tipo: coluna.tipo,
-          nullable: coluna.nullable,
-          papel: coluna.papel,
-          sensibilidade: coluna.sensibilidade,
-          chave: coluna.papel === "chave",
-        })),
-      relacionamentos: rels
-        .filter((rel) => rel.tabelaOrigemId === tabela.id || rel.tabelaDestinoId === tabela.id)
-        .map((rel) => ({
-          origemNome: nomeById.get(rel.tabelaOrigemId) ?? "",
-          destinoNome: nomeById.get(rel.tabelaDestinoId) ?? "",
-          destino:
-            rel.tabelaOrigemId === tabela.id
-              ? (nomeById.get(rel.tabelaDestinoId) ?? "")
-              : (nomeById.get(rel.tabelaOrigemId) ?? ""),
-          pares: [...rel.pares],
-          cardinalidade: rel.cardinalidade,
-        }))
+      tabela: tabelaNome,
+      colunas: unique
+        .filter((col) => isIdentificadorSql(col.nome))
+        .map((col) => {
+          const current = currentColumns.find(
+            (item) => item.nome.toLowerCase() === col.nome.toLowerCase(),
+          );
+          const sensibilidade =
+            current?.sensibilidade === "segredo" || current?.sensibilidade === "pessoal"
+              ? current.sensibilidade
+              : col.sensibilidade;
+          return {
+            nome: col.nome,
+            tipo: col.tipo,
+            nullable: col.nullable,
+            papel: col.papel,
+            sensibilidade,
+            chave: col.papel === "chave",
+          };
+        }),
+      relacionamentos: pacote.relacionamentos
         .filter(
           (rel) =>
-            rel.origemNome &&
-            rel.destinoNome &&
-            matchRelacionamentoEscopo(
-              pacote.relacionamentos,
-              rel.origemNome,
-              rel.destinoNome,
-              rel.pares,
-            ),
+            rel.tabelaOrigem.toLowerCase() === tabelaNome.toLowerCase() ||
+            rel.tabelaDestino.toLowerCase() === tabelaNome.toLowerCase(),
         )
-        .map(({ destino, pares, cardinalidade }) => ({ destino, pares, cardinalidade })),
+        .map((rel) => ({
+          destino:
+            rel.tabelaOrigem.toLowerCase() === tabelaNome.toLowerCase()
+              ? rel.tabelaDestino
+              : rel.tabelaOrigem,
+          pares: [...rel.pares],
+          cardinalidade: rel.cardinalidade ?? null,
+        })),
     };
   }
 }
