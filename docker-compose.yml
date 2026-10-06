@@ -28,6 +28,7 @@ services:
   mcp:
     profiles: ["container"]
     restart: unless-stopped
+    image: ghcr.io/cesar-carlos/plug_mcp:${GIT_SHA:-local}
     build:
       context: .
       args:

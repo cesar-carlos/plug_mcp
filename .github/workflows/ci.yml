@@ -95,6 +95,9 @@ jobs:
   native-musl:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -112,7 +115,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v4
-      - run: docker build --platform linux/${{ matrix.arch }} -t se7e-native .
+      - run: docker build --platform linux/${{ matrix.arch }} --build-arg GIT_SHA=${{ github.sha }} -t se7e-native .
       - run: docker run --rm --platform linux/${{ matrix.arch }} --entrypoint node se7e-native --input-type=module -e "import sharp from 'sharp'; import { fileTypeFromBuffer } from 'file-type'; const png=await sharp({create:{width:2,height:2,channels:3,background:'red'}}).png().toBuffer(); if((await fileTypeFromBuffer(png))?.mime!=='image/png') process.exit(1);"
       - name: Packaged migrations, server and worker
         run: >-
@@ -122,3 +125,26 @@ jobs:
           -e PLUG_SERVER_BASE_URL=http://plug-server.test
           -v ${{ github.workspace }}/scripts/smoke-runtime.mjs:/app/smoke-runtime.mjs:ro
           --entrypoint node se7e-native smoke-runtime.mjs --migrate
+      - id: changes
+        name: Decide se a imagem de produção deve ser publicada
+        if: matrix.arch == 'amd64' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" --jq '.files[].filename' \
+            | bash scripts/should-publish-production.sh; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish production image
+        if: steps.changes.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]'):${GITHUB_SHA}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag se7e-native "$image"
+          docker push "$image"

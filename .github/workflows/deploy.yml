@@ -10,9 +10,6 @@ concurrency:
   group: production-mcp
   cancel-in-progress: false
 
-permissions:
-  contents: none
-
 jobs:
   publish:
     if: >-
@@ -20,21 +17,74 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+      statuses: write
     steps:
-      - name: Publish MCP container
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - id: gate
+        name: Decide se há alteração de runtime
         env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if git show --pretty=format: --name-only "$SHA" | bash scripts/should-publish-production.sh; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: deploy
+        name: Publish the CI image
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST_KEY: ${{ secrets.DEPLOY_HOST_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]'):${SHA}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          docker pull "$image"
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
-          ssh -i ~/.ssh/deploy_key \
+          docker save "$image" | ssh -i ~/.ssh/deploy_key \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            "${DEPLOY_USER}@${DEPLOY_HOST}"
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "deploy ${SHA}"
+
+      - name: Report production status
+        if: always()
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ steps.gate.outputs.publish }}
+          OUTCOME: ${{ steps.deploy.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$PUBLISH" != "true" ]; then
+            state=success
+            desc="Sem alteração de runtime"
+          elif [ "$OUTCOME" = "success" ]; then
+            state=success
+            desc="Container MCP publicado"
+          else
+            state=failure
+            desc="Publicação do MCP falhou"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="$state" \
+            -f context="production/mcp" \
+            -f description="$desc" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

@@ -17,12 +17,12 @@ OAuth opcional delega um acesso existente ao ChatGPT por token MCP no navegador.
 O processo MCP é o serviço `mcp` do Compose, perfil `container`, publicado só em `127.0.0.1:3333`. Postgres e Redis seguem nos serviços já existentes; o container usa `postgres:5432` e `redis:6379` na rede interna. A chave do cofre e a URL do hub vêm do `.env`. O entrypoint aplica as migrações pendentes antes de escutar. Sessões MCP continuam na memória do processo.
 
 ```bash
-GIT_SHA=$(git rev-parse --short HEAD) docker compose --profile container up --build -d --no-deps mcp
+GIT_SHA=$(git rev-parse HEAD) docker compose --profile container up --build -d --no-deps mcp
 ```
 
 `--no-deps` não recria Postgres nem Redis. O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Não suba `se7e-mcp` no PM2: o mesmo daemon segue com `plug_server`, Chatwoot e `evogo-qrcode`, e outro processo na 3333 toma a porta do proxy. Para Redis no host, o guia continua em [operations/redis.md](docs/operations/redis.md).
 
-Push na `main` do GitHub, depois que o workflow `ci` termina com sucesso, dispara `deploy`. Ele entra por SSH com uma chave restrita a `scripts/deploy-production.sh` e executa o comando acima. A chave e o host ficam nos secrets `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` e `DEPLOY_HOST_KEY`. O `.env` não vai no repositório. Cada publicação recria só o container `mcp` e derruba as sessões que estavam na memória dele.
+Push na `main` do GitHub, depois que o workflow `ci` termina com sucesso, dispara `deploy` só se o commit altera o runtime (`src/`, `drizzle/`, `Dockerfile`, `docker-entrypoint.sh`, `package.json`, `package-lock.json`, `docker-compose.yml`, `docs/mcp/error-mapping.md` ou os workflows de CI/deploy). O CI publica a imagem `linux/amd64` já testada em `ghcr.io/cesar-carlos/plug_mcp:<sha>`. O deploy baixa essa imagem e envia por SSH o SHA exato que passou no CI. A chave só executa `/usr/local/sbin/plug-mcp-deploy`, cópia de `scripts/deploy-production.sh` instalada fora do Git: um commit não troca o que a chave pode fazer. Atualizar esse script exige copiá-lo de novo para `/usr/local/sbin`. O servidor confere `/health` e `/ready`; se falhar, volta a imagem anterior. O resultado aparece no commit como status `production/mcp` e em `/var/log/plug-mcp-deploy.log`. Secrets: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_HOST_KEY`. O `.env` não vai no repositório. Cada publicação recria só o container `mcp` e derruba as sessões que estavam na memória dele.
 
 ### Local (Node + Postgres no Docker)
 
