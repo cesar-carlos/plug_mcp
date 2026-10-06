@@ -8,6 +8,10 @@ Status: implementação local; instalação e homologação real do piloto depen
 
 Um acesso/persona/catalogo pode ter várias concessões. CIMD identifica cliente OAuth, não workspace. Distribuição privada e allowlist de acessos delimitam o piloto; não há garantia criptográfica de workspace. Sem DCR, OIDC, login social, novas contas ou JWT próprio. mTLS é evolução posterior no proxy, não substitui OAuth.
 
+Na implantação por Compose, o serviço `mcp` repassa explicitamente as três variáveis `CHATGPT_OAUTH_*` do ambiente ou `.env`. O `.env` não é copiado para a imagem nem carregado pelo entrypoint; uma variável usada apenas no arquivo do host não chega automaticamente ao container. Após alterar a configuração, recrie o serviço conforme o [procedimento de produção](../../README.md#produção-neste-servidor-container); reiniciar o mesmo container mantém o ambiente anterior. Os defaults continuam `false`, `[]` e `{}`.
+
+Se `/health` e `/ready` respondem 200, mas `/mcp/chatgpt` e os dois endpoints de discovery OAuth respondem 404, confira a versão implantada e o repasse da flag ao container. Com OAuth habilitado, discovery deve responder 200 e `/mcp/chatgpt` sem credencial deve responder 401. Allowlists vazias permitem essa descoberta, mas recusam novas autorizações; configure somente os acessos e valores CIMD/redirect reais antes de conectar a persona.
+
 ## HTTP e navegador
 
 `/mcp` preserva bootstrap e Bearer manual. `/mcp/chatgpt` exige OAuth desde initialize; Bearer manual não é aceito. Discovery: `/.well-known/oauth-protected-resource/mcp/chatgpt` e `/.well-known/oauth-authorization-server`.

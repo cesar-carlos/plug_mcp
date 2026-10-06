@@ -41,6 +41,9 @@ services:
       GIT_SHA: ${GIT_SHA:-unknown}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://mcp.se7esistemassinop.com.br}
+      CHATGPT_OAUTH_ENABLED: ${CHATGPT_OAUTH_ENABLED:-false}
+      CHATGPT_OAUTH_ACCESS_IDS: "${CHATGPT_OAUTH_ACCESS_IDS:-[]}"
+      CHATGPT_OAUTH_CLIENTS: "${CHATGPT_OAUTH_CLIENTS:-{}}"
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/se7e_mcp
       REDIS_URL: redis://redis:6379
       MCP_ENCRYPTION_KEY: ${MCP_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
