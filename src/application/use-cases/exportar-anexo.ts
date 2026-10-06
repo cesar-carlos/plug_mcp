@@ -1,4 +1,5 @@
 import { DomainError } from "../../domain/errors/domain-error.js";
+import { assertConsumerAuthorized, currentConsumerAuth } from "../session-context.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.port.js";
 import type { AnexoConverterPort } from "../../domain/ports/anexo-converter.port.js";
@@ -109,6 +110,8 @@ export class ExportarAnexo {
     }
     const source = record.proveniencia;
     const assertCurrent = async (): Promise<void> => {
+      await assertConsumerAuthorized();
+      const auth = currentConsumerAuth();
       const current = await refreshAndRequireAcessoAprovado(
         this.acessos,
         this.plug,
@@ -119,7 +122,8 @@ export class ExportarAnexo {
       if (
         !source?.publicacoes.length ||
         source.bearerHash !== current.tokenHash ||
-        source.clientTokenHash !== current.clientTokenHash
+        source.clientTokenHash !== current.clientTokenHash ||
+        (source.grantId ?? null) !== (auth?.kind === "oauth" ? auth.grantId : null)
       ) {
         throw origemInvalida(
           "Autorização de origem inválida. Consulte novamente no pacote vigente.",

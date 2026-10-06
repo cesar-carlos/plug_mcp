@@ -1,6 +1,9 @@
 import type { PersonaSessao } from "../../domain/entities/acesso.js";
 import { RESUMO_BASE } from "../../application/use-cases/shared/treinamento-base.js";
 
+export const CHATGPT_INSTRUCOES =
+  "Conexão ChatGPT: use get_profile e obter_contexto_sessao para conferir persona/dialeto. OAuth delega exatamente um acesso e não amplia publicação ou policy. Segredos somente no navegador, nunca na conversa. Erro OAuth pede reconexão; falha hub/SQL/transporte preserva sua origem. Revogar conexão exige confirmação humana e encerra apenas esta concessão; após comprovante terminal, não repetir a mutação.";
+
 /**
  * Pre-treino estático (chão comum: SQL no dialeto do GDBR daquele agentId + resources;
  * identificar GDBR e emitir SQL compatível é treino + IA — o hub não reescreve dialeto;

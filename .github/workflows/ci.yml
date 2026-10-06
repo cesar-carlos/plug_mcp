@@ -67,6 +67,12 @@ jobs:
       - run: npm run db:migrate
       - name: Release gate
         run: npm run release:check
+      - name: Install Chromium for OAuth browser tests
+        run: npx playwright install --with-deps chromium
+      - name: OAuth HTTPS browser and ephemeral PostgreSQL
+        run: npm run test:chatgpt:browser
+        env:
+          NODE_ENV: test
       - run: npm run runtime:check
         env:
           CI: "true"

@@ -3,13 +3,11 @@ import {
   DrizzleTreinamentoRepository,
   MemoryTreinamentoRepository,
 } from "../infrastructure/persistence/treinamento.js";
-import type { TreinamentoRepositoryPort } from "../domain/ports/treinamento-repository.port.js";
 import { SetupOperations } from "../application/use-cases/setup-operation.js";
 import {
   MemorySetupOperations,
   DrizzleSetupOperations,
 } from "../infrastructure/persistence/setup-operation.js";
-import type { SetupOperationRepositoryPort } from "../domain/ports/setup-operation.port.js";
 import type { AppConfig } from "../config/env.js";
 import {
   AdicionarAcesso,
@@ -78,7 +76,6 @@ import type { LoggerPort } from "../domain/ports/logger.port.js";
 import type { PlugServerGatewayPort } from "../domain/ports/plug-server-gateway.port.js";
 import type { QueryResultCachePort } from "../domain/ports/query-result-cache.port.js";
 import type { QuerySingleflightPort } from "../domain/ports/query-singleflight.port.js";
-import type { SkillPublicacaoRepositoryPort } from "../domain/ports/skill-publicacao-repository.port.js";
 import { NodeCryptoAdapter } from "../infrastructure/crypto/node-crypto.adapter.js";
 import { createExpressApp } from "../infrastructure/http/create-app.js";
 import { MemoryRateLimitStore, type RateLimitStore } from "../infrastructure/http/rate-limit.js";
@@ -109,7 +106,6 @@ import {
 import { InMemorySkillPublicacaoRepository } from "../infrastructure/persistence/memory/memory-skill-publicacao.js";
 import { InMemoryOperacoesRepository } from "../infrastructure/persistence/memory/memory-operacoes.js";
 import { DrizzleOperacoesRepository } from "../infrastructure/persistence/drizzle/drizzle-operacoes.js";
-import type { OperacoesRepositoryPort } from "../domain/ports/operacoes-repository.port.js";
 import { OperacoesWorker } from "../infrastructure/operacoes/webhook-worker.js";
 import { PublicHttpsWebhookDestination } from "../infrastructure/operacoes/webhook-destination.js";
 import {
@@ -130,6 +126,23 @@ import {
 import { CachedPlugGateway } from "../infrastructure/plug-server/policy-cache.js";
 import { PlugServerRestAdapter } from "../infrastructure/plug-server/plug-server-rest.adapter.js";
 import { UsuarioTokenManager } from "../infrastructure/plug-server/usuario-token-manager.js";
+import { createHash } from "node:crypto";
+import { ChatGptOAuth, type OAuthPolicy } from "../application/use-cases/chatgpt-oauth.js";
+import type { OAuthClientPort, OAuthStorePort } from "../domain/ports/oauth.port.js";
+import { MemoryOAuthStore, PostgresOAuthStore } from "../infrastructure/persistence/oauth-store.js";
+import { CimdClient } from "../infrastructure/oauth/cimd-client.js";
+import type pg from "pg";
+import type {
+  AuthorizedRepositories,
+  AuthorizedUnitOfWorkPort,
+} from "../domain/ports/authorized-unit-of-work.port.js";
+import {
+  PostgresAuthorizedUnitOfWork,
+  MemoryAuthorizedUnitOfWork,
+  authorizedRepositories,
+} from "../infrastructure/persistence/authorized-unit-of-work.js";
+import { createDrizzleRepositories } from "../infrastructure/persistence/drizzle/repositories.js";
+import { consumerAuthorizedGateway } from "../infrastructure/plug-server/consumer-authorized-gateway.js";
 
 export interface Composition {
   app: ReturnType<typeof createExpressApp>["app"];
@@ -143,6 +156,7 @@ export interface Composition {
 export interface ComposeOverrides {
   plug?: PlugServerGatewayPort;
   logger?: LoggerPort;
+  oauthClient?: OAuthClientPort;
 }
 
 export const compose = async (
@@ -163,19 +177,25 @@ export const compose = async (
   const setup = new SetupCodeStore();
   const disposers: (() => Promise<void> | void)[] = [];
 
-  let usuarios: InMemoryUsuarioRepository | DrizzleUsuarioRepository;
-  let acessos: InMemoryAcessoRepository | DrizzleAcessoRepository;
-  let grafo: InMemoryGrafoRepository | DrizzleGrafoRepository;
-  let skills: InMemorySkillRepository | DrizzleSkillRepository;
-  let anotacoes: InMemoryAnotacaoGrafoRepository | DrizzleAnotacaoGrafoRepository;
-  let audit: InMemoryAuditLog | DrizzleAuditLog;
-  let aprendizado: InMemoryAprendizadoRepository | DrizzleAprendizadoRepository;
-  let setupOperationsStore: SetupOperationRepositoryPort;
-  let treinamentoRepo: TreinamentoRepositoryPort;
-  let publicacoes: SkillPublicacaoRepositoryPort;
-  let operacoes: OperacoesRepositoryPort;
+  let usuarios: AuthorizedRepositories["usuarios"];
+  let acessos: AuthorizedRepositories["acessos"];
+  let grafo: AuthorizedRepositories["grafo"];
+  let skills: AuthorizedRepositories["skills"];
+  let anotacoes: AuthorizedRepositories["anotacoes"];
+  let audit: AuthorizedRepositories["audit"];
+  let aprendizado: AuthorizedRepositories["aprendizado"];
+  let setupOperationsStore: AuthorizedRepositories["setup"];
+  let treinamentoRepo: AuthorizedRepositories["treinamento"];
+  let publicacoes: AuthorizedRepositories["publicacoes"];
+  let operacoes: AuthorizedRepositories["operacoes"];
   let readinessCheck: (() => Promise<boolean>) | undefined;
-  let dbPool: { query: (sql: string) => Promise<unknown> } | undefined;
+  let dbPool: pg.Pool | undefined;
+  const oauthPolicy: OAuthPolicy = {
+    issuer: config.PUBLIC_BASE_URL,
+    resource: `${config.PUBLIC_BASE_URL}/mcp/chatgpt`,
+    accesses: config.CHATGPT_OAUTH_ACCESS_IDS,
+    clients: config.CHATGPT_OAUTH_CLIENTS,
+  };
 
   if (config.DATABASE_URL) {
     const { db, pool } = createDb(config.DATABASE_URL);
@@ -208,6 +228,62 @@ export const compose = async (
     operacoes = new InMemoryOperacoesRepository();
   }
 
+  const oauthStore: OAuthStorePort | undefined = config.CHATGPT_OAUTH_ENABLED
+    ? dbPool
+      ? new PostgresOAuthStore(dbPool)
+      : new MemoryOAuthStore(acessos)
+    : undefined;
+  const oauth = oauthStore
+    ? new ChatGptOAuth(
+        oauthStore,
+        crypto,
+        acessos,
+        overrides.oauthClient ?? new CimdClient(config.CHATGPT_OAUTH_CLIENTS),
+        oauthPolicy,
+        (verifier) => createHash("sha256").update(verifier).digest("base64url"),
+      )
+    : undefined;
+  const baseRepositories: AuthorizedRepositories = {
+    usuarios,
+    acessos,
+    grafo,
+    skills,
+    anotacoes,
+    audit,
+    aprendizado,
+    setup: setupOperationsStore,
+    treinamento: treinamentoRepo,
+    publicacoes,
+    operacoes,
+  };
+  const unitOfWork: AuthorizedUnitOfWorkPort | undefined = oauthStore
+    ? dbPool
+      ? new PostgresAuthorizedUnitOfWork(dbPool, oauthPolicy, createDrizzleRepositories)
+      : new MemoryAuthorizedUnitOfWork(baseRepositories, oauthStore, oauthPolicy)
+    : undefined;
+  if (unitOfWork) {
+    const repositories = authorizedRepositories(baseRepositories, unitOfWork);
+    ({ usuarios, acessos, grafo, skills, anotacoes, audit, aprendizado, publicacoes, operacoes } =
+      repositories);
+    setupOperationsStore = repositories.setup;
+    treinamentoRepo = repositories.treinamento;
+  }
+  if (oauthStore) {
+    try {
+      await oauth?.reconcile();
+    } catch (error) {
+      for (const disposer of [...disposers].reverse()) await disposer();
+      throw error;
+    }
+    const cleanup = setInterval(() => {
+      void oauth
+        ?.reconcile()
+        .then(() => oauthStore.purgeExpired(Date.now()))
+        .catch(() => logger.warn("OAuth cleanup unavailable"));
+    }, 60_000);
+    cleanup.unref();
+    disposers.push(() => clearInterval(cleanup));
+  }
   let mcpRateLimitStore: RateLimitStore = new MemoryRateLimitStore();
   let policyKv:
     | {
@@ -219,19 +295,34 @@ export const compose = async (
   let querySingleflight: QuerySingleflightPort = new MemoryQuerySingleflight();
   if (config.REDIS_URL.length > 0) {
     const { createClient } = await import("redis");
-    const redis = createClient({ url: config.REDIS_URL });
-    await redis.connect();
-    mcpRateLimitStore = new RedisRateLimitStore(redis);
-    policyKv = redis;
-    queryCache = new RedisQueryResultCache(redis);
-    querySingleflight = new RedisQuerySingleflight(
-      redis,
-      config.QUERY_CACHE_SINGLEFLIGHT_LEASE_MS,
-      config.QUERY_CACHE_SINGLEFLIGHT_WAIT_MS,
-    );
-    disposers.push(async () => {
-      await redis.quit();
+    const redis = createClient({
+      url: config.REDIS_URL,
+      ...(config.CHATGPT_OAUTH_ENABLED
+        ? { socket: { connectTimeout: 5000, reconnectStrategy: false }, disableOfflineQueue: true }
+        : {}),
     });
+    redis.on("error", () => logger.warn("Redis unavailable"));
+    try {
+      await redis.connect();
+      mcpRateLimitStore = new RedisRateLimitStore(
+        redis,
+        config.CHATGPT_OAUTH_ENABLED ? new MemoryRateLimitStore() : undefined,
+      );
+      policyKv = redis;
+      queryCache = new RedisQueryResultCache(redis);
+      querySingleflight = new RedisQuerySingleflight(
+        redis,
+        config.QUERY_CACHE_SINGLEFLIGHT_LEASE_MS,
+        config.QUERY_CACHE_SINGLEFLIGHT_WAIT_MS,
+      );
+      disposers.push(async () => {
+        if (redis.isOpen) await redis.quit();
+      });
+    } catch (error) {
+      if (redis.isOpen) redis.destroy();
+      if (!config.CHATGPT_OAUTH_ENABLED) throw error;
+      logger.warn("Redis unavailable at startup; using local quotas and cache");
+    }
   }
 
   let plugInner: PlugServerGatewayPort;
@@ -252,7 +343,9 @@ export const compose = async (
       config.PLUG_SERVER_HTTP_TIMEOUT_MS,
     );
   }
-  const plug = overrides.plug ? plugInner : new CachedPlugGateway(plugInner, { kv: policyKv });
+  const plug = consumerAuthorizedGateway(
+    overrides.plug ? plugInner : new CachedPlugGateway(plugInner, { kv: policyKv }),
+  );
   const sessions = new UsuarioTokenManager(usuarios, crypto, plug, logger);
   const anexoHandles = new MemoryAnexoHandleStore(config.MCP_ENCRYPTION_KEY, undefined, undefined, {
     acessoBytes: config.ANEXO_MAX_BYTES_PER_ACCESS,
@@ -306,12 +399,16 @@ export const compose = async (
     ),
     listarAcessos: new ListarAcessos(acessos),
     verificarAcesso: new VerificarAcesso(acessos, plug, sessions, crypto, logger),
-    removerAcesso: new RemoverAcesso(acessos, {
-      grafo,
-      skills,
-      anotacoes,
-      aprendizado,
-    }),
+    removerAcesso: new RemoverAcesso(
+      acessos,
+      {
+        grafo,
+        skills,
+        anotacoes,
+        aprendizado,
+      },
+      unitOfWork,
+    ),
     atualizarCredencialPlug: new AtualizarCredencialPlug(usuarios, sessions, plug, crypto),
     rotacionarTokenMcp: new RotacionarTokenMcp(
       acessos,
@@ -504,6 +601,7 @@ export const compose = async (
         );
       }
     },
+    oauth,
   );
 
   const { app, dispose } = createExpressApp({
@@ -517,6 +615,7 @@ export const compose = async (
     pino,
     mcpRateLimitStore,
     readinessCheck,
+    oauth,
   });
   disposers.push(dispose);
 

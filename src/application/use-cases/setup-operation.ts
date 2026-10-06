@@ -11,7 +11,13 @@ import type {
 } from "../../domain/ports/plug-server-gateway.port.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
-import { sessionContext } from "../session-context.js";
+import {
+  sessionContext,
+  currentConsumerAuth,
+  assertConsumerAuthorized,
+} from "../session-context.js";
+import type { ConsumerAuth } from "../../domain/entities/consumer-auth.js";
+import type { ConsumerAuthorizationPort } from "../../domain/ports/oauth.port.js";
 import { requireAcesso, requireUsuario } from "./shared/guards.js";
 
 export interface SetupCompletion {
@@ -40,6 +46,7 @@ export class SetupOperations {
       form: Record<string, string>,
     ) => Promise<SetupCompletion>,
     private readonly invalidate: (acessoId: string) => Promise<void> = () => Promise.resolve(),
+    private readonly authorization?: ConsumerAuthorizationPort,
   ) {}
 
   async begin(
@@ -51,6 +58,8 @@ export class SetupOperations {
         ? null
         : await requireAcesso(this.acessos, undefined, requireUsuario(usuarioId));
     const code = this.crypto.randomToken(32);
+    await assertConsumerAuthorized();
+    const auth = currentConsumerAuth();
     const expiresAt = new Date(Date.now() + 15 * 60_000);
     await this.store.purgeExpired(new Date());
     await this.store.create({
@@ -62,6 +71,7 @@ export class SetupOperations {
       expiresAt,
       csrfHash: null,
       claimedAt: null,
+      oauthGrantId: auth?.kind === "oauth" ? auth.grantId : null,
     });
     return {
       success: true,
@@ -76,8 +86,21 @@ export class SetupOperations {
     if (!operation || operation.claimedAt || operation.expiresAt <= new Date()) {
       return null;
     }
+    let auth: ConsumerAuth | undefined;
+    if (operation.oauthGrantId) {
+      try {
+        if (!this.authorization) return null;
+        auth = await this.authorization.assertGrant(operation.oauthGrantId);
+      } catch {
+        return null;
+      }
+    }
     const csrf = this.crypto.randomToken(32);
-    if (!(await this.store.setCsrf(hash, this.crypto.sha256Hex(csrf), new Date()))) {
+    if (
+      !(await sessionContext.run({ auth }, () =>
+        this.store.setCsrf(hash, this.crypto.sha256Hex(csrf), new Date()),
+      ))
+    ) {
       return null;
     }
     return { purpose: operation.purpose, csrf };
@@ -87,14 +110,17 @@ export class SetupOperations {
     if (form.confirmado !== "sim" || !form.csrf) {
       throw this.invalid();
     }
-    const operation = await this.store.claim(
-      this.crypto.sha256Hex(code),
-      this.crypto.sha256Hex(form.csrf),
-      new Date(),
+    const csrf = form.csrf;
+    const pending = await this.store.find(this.crypto.sha256Hex(code));
+    if (!pending) throw this.invalid();
+    const auth = pending.oauthGrantId
+      ? await this.authorization?.assertGrant(pending.oauthGrantId)
+      : undefined;
+    if (pending.oauthGrantId && !auth) throw this.invalid();
+    const operation = await sessionContext.run({ auth }, () =>
+      this.store.claim(this.crypto.sha256Hex(code), this.crypto.sha256Hex(csrf), new Date()),
     );
-    if (!operation) {
-      throw this.invalid();
-    }
+    if (!operation || operation.oauthGrantId !== pending.oauthGrantId) throw this.invalid();
     if (operation.usuarioId) {
       const acesso = operation.acessoId ? await this.acessos.findById(operation.acessoId) : null;
       const usuario = await this.usuarios.findById(operation.usuarioId);
@@ -107,15 +133,29 @@ export class SetupOperations {
         throw this.invalid();
       }
       // Reautenticação no hub, sem sessão de navegador ou autenticação própria.
-      const tokens = await this.plug.login(form.email!, form.senha ?? "");
-      const status = await this.plug.getAgentAccessStatus(tokens.accessToken, acesso.agentId);
-      if (status.state === "revoked") {
-        throw this.invalid();
-      }
+      const tokens = await sessionContext.run(
+        {
+          auth,
+          authorize:
+            auth && this.authorization ? () => this.authorization!.assert(auth) : undefined,
+        },
+        async () => {
+          const tokens = await this.plug.login(form.email!, form.senha ?? "");
+          const status = await this.plug.getAgentAccessStatus(tokens.accessToken, acesso.agentId);
+          if (status.state === "revoked") throw this.invalid();
+          await assertConsumerAuthorized();
+          return tokens;
+        },
+      );
       this.sessions.remember(operation.usuarioId, tokens);
     }
     const result = await sessionContext.run(
-      { usuarioId: operation.usuarioId ?? undefined, acessoId: operation.acessoId ?? undefined },
+      {
+        usuarioId: operation.usuarioId ?? undefined,
+        acessoId: operation.acessoId ?? undefined,
+        auth,
+        authorize: auth && this.authorization ? () => this.authorization!.assert(auth) : undefined,
+      },
       () =>
         this.completeOperation(operation.purpose, operation.usuarioId ?? undefined, {
           ...form,

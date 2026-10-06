@@ -1,4 +1,5 @@
 import { capturaSqlSegura, textoSeguro } from "./shared/curadoria-segura.js";
+import { assertConsumerAuthorized, currentConsumerAuth } from "../session-context.js";
 import { maxSensibilidade, parseSensibilidadeColuna } from "../../domain/entities/privacidade.js";
 import type { PreparedQuery } from "./shared/prepared-query.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
@@ -961,6 +962,7 @@ export class ConsultarDados {
       planoConsulta,
     };
     const assertAutorizacaoAtual = async (): Promise<void> => {
+      await assertConsumerAuthorized();
       const local = await this.acessos.findById(acesso.id);
       const current = local
         ? await refreshAndRequireAcessoAprovado(this.acessos, this.plug, this.sessions, local, uid)
@@ -1221,6 +1223,10 @@ export class ConsultarDados {
             tabela: table.nome,
             coluna: ref.column,
             bearerHash: acesso.tokenHash,
+            grantId:
+              currentConsumerAuth()?.kind === "oauth"
+                ? (currentConsumerAuth() as { grantId: string }).grantId
+                : undefined,
             clientTokenHash: acesso.clientTokenHash,
             publicacoes: origins,
           }

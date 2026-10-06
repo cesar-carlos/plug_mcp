@@ -1,4 +1,6 @@
+import type { AuthorizedUnitOfWorkPort } from "../../domain/ports/authorized-unit-of-work.port.js";
 import { timingSafeEqual } from "node:crypto";
+import { currentConsumerAuth, sessionContext } from "../session-context.js";
 import { isDialeto, type Dialeto } from "../../domain/entities/dialeto.js";
 import {
   INSTRUCOES_PERSONA_MAX_CHARS,
@@ -530,6 +532,7 @@ export class RemoverAcesso {
       readonly anotacoes: Pick<AnotacaoGrafoRepositoryPort, "deleteByAcesso">;
       readonly aprendizado: Pick<AprendizadoRepositoryPort, "deleteByAcesso">;
     },
+    private readonly unitOfWork?: AuthorizedUnitOfWorkPort,
   ) {}
 
   async execute(
@@ -538,11 +541,23 @@ export class RemoverAcesso {
   ): Promise<{ success: true }> {
     const uid = requireUsuario(usuarioId);
     const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
-    await this.catalog.aprendizado.deleteByAcesso(acesso.id);
-    await this.catalog.anotacoes.deleteByAcesso(acesso.id);
-    await this.catalog.skills.deleteByAcesso(acesso.id);
-    await this.catalog.grafo.deleteByAcesso(acesso.id);
-    await this.acessos.deleteById(acesso.id);
+    const remove = async (
+      catalog: typeof this.catalog,
+      acessos: AcessoRepositoryPort,
+    ): Promise<void> => {
+      await catalog.aprendizado.deleteByAcesso(acesso.id);
+      await catalog.anotacoes.deleteByAcesso(acesso.id);
+      await catalog.skills.deleteByAcesso(acesso.id);
+      await catalog.grafo.deleteByAcesso(acesso.id);
+      await acessos.deleteById(acesso.id);
+    };
+    if (this.unitOfWork)
+      await this.unitOfWork.run(currentConsumerAuth(), (r) => remove(r, r.acessos));
+    else await remove(this.catalog, this.acessos);
+    if (currentConsumerAuth()?.kind === "oauth") {
+      const context = sessionContext.getStore();
+      if (context) context.terminal = true;
+    }
     return { success: true };
   }
 }

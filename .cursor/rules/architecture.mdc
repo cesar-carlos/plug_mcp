@@ -19,3 +19,9 @@ Identidade: Bearer opaco → SHA-256 → `acesso.token_hash`. ALS na borda MCP c
 Plug-server: `PlugServerGatewayPort` (login/refresh/getClientTokenPolicy/executeSql). JWT do hub por usuário (`UsuarioTokenManager`). Cache de policy em memória e Redis. Canal do MCP: só REST (`POST /agents/commands`). Socket `/agents` é do `plug_agente`. Socket/relay de consumer fora de escopo.
 
 Grafo por `acesso_id` com lock. Leitura filtrada pela policy do `client_token` daquele acesso. Consulta autorizada pelo **pacote publicado**, não pelo grafo. Cache de query isolado por usuário, acesso, fingerprint da policy e versões da skill — nunca só `agentId`.
+
+## Delegação ChatGPT opcional
+
+OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
+
+Gravações OAuth usam AuthorizedUnitOfWorkPort com ports vinculados à transação. Classificar explicitamente todos os métodos de repositório (leitura/gravação/manutenção); sem Proxy de pg ou heurística sobre SQL. Reutilizar escopo vigente, autorizar antes de alterar e revalidar prazo antes do commit. Rede do hub fora da transação. Casos de uso não importam pg/Drizzle/adapters de persistência.

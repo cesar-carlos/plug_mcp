@@ -83,6 +83,7 @@ export interface AnexoRecord {
 }
 
 export interface AnexoProveniencia {
+  readonly grantId?: string;
   readonly tabela: string;
   readonly coluna: string;
   readonly bearerHash: string;

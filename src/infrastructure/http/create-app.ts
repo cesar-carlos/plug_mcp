@@ -11,7 +11,13 @@ import type { AcessoRepositoryPort } from "../../domain/ports/acesso-repository.
 import type { SkillRepositoryPort } from "../../domain/ports/skill-repository.port.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import type { McpSetupRepositoryPort } from "../../domain/ports/mcp-setup-repository.port.js";
-import { createMcpHttpHandler } from "../mcp/mcp-http.js";
+import { createMcpHttpHandler, McpSessionQuota } from "../mcp/mcp-http.js";
+import type { ChatGptOAuth } from "../../application/use-cases/chatgpt-oauth.js";
+import { registerOAuthRoutes } from "./oauth-routes.js";
+import { chatGptOAuthChallenge } from "../oauth/challenge.js";
+import { sessionContext } from "../../application/session-context.js";
+import { isDomainError } from "../../domain/errors/domain-error.js";
+import { verifyBearerToken, OAuthError as SdkOAuthError } from "@modelcontextprotocol/server";
 import type { ToolUseCases } from "../mcp/register-tools.js";
 import { isMcpTokenExpired } from "../mcp/mcp-auth.js";
 import { ERROR_MAPPING_DOC_PATH } from "../../domain/errors/error-next-action.js";
@@ -56,6 +62,7 @@ export const createExpressApp = (input: {
   pino?: PinoLogger;
   mcpRateLimitStore?: RateLimitStore;
   readinessCheck?: () => Promise<boolean>;
+  oauth?: ChatGptOAuth;
 }): { app: Express; dispose: () => void } => {
   const app = express();
   app.disable("x-powered-by");
@@ -124,15 +131,28 @@ export const createExpressApp = (input: {
     }),
   );
   app.use(express.json({ limit: "2mb" }));
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: false, limit: "16kb", parameterLimit: 32 }));
 
   app.use((req, res, next) => {
-    if (req.path !== "/mcp" && !req.path.startsWith("/setup/")) {
+    if (
+      req.path !== "/mcp" &&
+      req.path !== "/mcp/chatgpt" &&
+      !req.path.startsWith("/oauth/") &&
+      !req.path.startsWith("/.well-known/") &&
+      !req.path.startsWith("/setup/")
+    ) {
       next();
       return;
     }
     const origin = req.header("origin");
-    if (origin && (origin === "null" || !input.config.allowedOrigins.includes(origin))) {
+    const browserForm =
+      req.path === "/oauth/authorize/authenticate" ||
+      req.path === "/oauth/authorize/consent" ||
+      req.path.startsWith("/setup/");
+    const originAllowed = browserForm
+      ? origin === new URL(input.config.PUBLIC_BASE_URL).origin
+      : origin !== undefined && input.config.allowedOrigins.includes(origin);
+    if (origin && (origin === "null" || !originAllowed)) {
       res.status(403).json({ error: "origin_not_allowed" });
       return;
     }
@@ -167,6 +187,8 @@ export const createExpressApp = (input: {
       bearer_methods_supported: ["header"],
     });
   });
+  if (input.oauth)
+    registerOAuthRoutes(app, input.oauth, input.config, input.logger, input.mcpRateLimitStore);
 
   app.get("/health", (_req, res) => {
     const info = buildInfo();
@@ -226,6 +248,7 @@ export const createExpressApp = (input: {
       return;
     }
     const newAccess = form.purpose === "registrar" || form.purpose === "adicionar";
+    res.setHeader("Referrer-Policy", "same-origin");
     res
       .type("html")
       .send(
@@ -265,20 +288,96 @@ export const createExpressApp = (input: {
     }
   });
 
+  const quota = new McpSessionQuota();
   const mcp = createMcpHttpHandler({
     config: input.config,
     useCases: input.useCases,
     logger: input.logger,
     catalog: { acessos: input.acessos, skills: input.skills },
     rateLimit: input.mcpRateLimitStore,
+    quota,
     resolveBearer: async (token) => {
       const acesso = await input.acessos.findByTokenHash(input.crypto.sha256Hex(token));
       if (!acesso || acesso.statusAcesso === "revoked" || isMcpTokenExpired(acesso)) {
         return null;
       }
-      return { usuarioId: acesso.usuarioId, acessoId: acesso.id };
+      return {
+        usuarioId: acesso.usuarioId,
+        acessoId: acesso.id,
+        auth: {
+          kind: "manual" as const,
+          usuarioId: acesso.usuarioId,
+          acessoId: acesso.id,
+          sourceHash: acesso.tokenHash,
+        },
+      };
     },
   });
+  const oauth = input.oauth;
+  const chatgpt = oauth
+    ? createMcpHttpHandler({
+        config: input.config,
+        useCases: input.useCases,
+        logger: input.logger,
+        catalog: { acessos: input.acessos, skills: input.skills },
+        rateLimit: input.mcpRateLimitStore,
+        quota,
+        oauth,
+        resolveBearer: async (token) => {
+          const auth = await oauth.resolve(token);
+          if (auth?.kind !== "oauth") return null;
+          await verifyBearerToken(`Bearer ${token}`, {
+            expectedResource: new URL(oauth.policy.resource),
+            requiredScopes: ["se7e:access"],
+            verifier: {
+              verifyAccessToken: () =>
+                Promise.resolve({
+                  token,
+                  clientId: "chatgpt",
+                  scopes: ["se7e:access"],
+                  expiresAt: Math.floor(auth.expiresAt / 1000),
+                  resource: new URL(oauth.policy.resource),
+                }),
+            },
+          });
+          return { usuarioId: auth.usuarioId, acessoId: auth.acessoId, auth };
+        },
+      })
+    : undefined;
+  const unbindRevocation = oauth?.onRevocation((id) => {
+    const context = sessionContext.getStore();
+    if (context?.auth?.kind === "oauth" && context.auth.grantId === id && context.onComplete)
+      context.onComplete.push(() => chatgpt?.invalidateGrant(id));
+    else chatgpt?.invalidateGrant(id);
+  });
+  if (chatgpt)
+    app.all(
+      "/mcp/chatgpt",
+      createRateLimiter({
+        windowMs: input.config.MCP_RATE_LIMIT_WINDOW_MS,
+        max: input.config.MCP_RATE_LIMIT_MAX,
+        keyGenerator: (req) => `chatgpt:${req.ip ?? "unknown"}`,
+        store: input.mcpRateLimitStore,
+      }),
+      async (req, res) => {
+        try {
+          await chatgpt.handle(req, res);
+        } catch (error) {
+          if (!res.headersSent) {
+            if (
+              error instanceof SdkOAuthError ||
+              (isDomainError(error) && error.stage === "oauth")
+            ) {
+              res.setHeader(
+                "WWW-Authenticate",
+                chatGptOAuthChallenge(input.config.PUBLIC_BASE_URL, true),
+              );
+              res.status(401).json({ error: "invalid_token" });
+            } else res.status(503).json({ error: "temporarily_unavailable" });
+          }
+        }
+      },
+    );
 
   const mcpRateLimiter = createRateLimiter({
     windowMs: input.config.MCP_RATE_LIMIT_WINDOW_MS,
@@ -325,12 +424,17 @@ export const createExpressApp = (input: {
       }
     },
   );
-  const unbindInvalidation = input.useCases.setupOperations?.onInvalidation(mcp.invalidateAccess);
+  const unbindInvalidation = input.useCases.setupOperations?.onInvalidation((id) => {
+    mcp.invalidateAccess(id);
+    chatgpt?.invalidateAccess(id);
+  });
   return {
     app,
     dispose: () => {
       unbindInvalidation?.();
+      unbindRevocation?.();
       mcp.dispose();
+      chatgpt?.dispose();
     },
   };
 };

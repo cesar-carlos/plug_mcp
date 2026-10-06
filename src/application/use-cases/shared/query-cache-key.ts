@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { currentConsumerAuth } from "../../session-context.js";
 
 export const QUERY_CACHE_PREFIX = "mcp:query:";
 
@@ -30,8 +31,10 @@ export const queryCacheKey = (input: {
   escopoFilial?: string;
   policyFingerprint?: string;
 }): string => {
+  const auth = currentConsumerAuth();
   const payload = canonicalJson({
     usuarioId: input.usuarioId,
+    ...(auth?.kind === "oauth" ? { grantId: auth.grantId, sourceHash: auth.sourceHash } : {}),
     acessoId: input.acessoId,
     clientTokenHash: input.clientTokenHash,
     agentId: input.agentId,

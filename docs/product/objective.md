@@ -42,7 +42,7 @@ Regras de tabela/operação: só no plug-server / `plug_agente`. O MCP não cria
 
 ## Fora de escopo
 
-Authorization Server próprio, JWT de conta MCP, Client de serviço no `.env`, catálogo pronto (`Fonte` / seed `vendas`). Socket/relay de consumer.
+Authorization Server para novas contas e JWT de conta MCP, Client de serviço no `.env`, catálogo pronto (`Fonte` / seed `vendas`). Socket/relay de consumer.
 
 Índice e ordem de leitura: [../README.md](../README.md). O _porquê_ das três camadas (histórico): [../proposta-arquitetura-mcp-se7e.md](../proposta-arquitetura-mcp-se7e.md).
 
@@ -69,3 +69,7 @@ Credenciais são informadas somente no navegador; tools recusam segredos e retor
 ## Camadas de treinamento
 
 A base comum versionada SQL + plug_server orienta todas as personas; publicação ativa e três portões autorizam; persona personaliza. Curadoria tem preview/hash/CAS por chat. Testes de negócio obrigatórios bloqueiam apenas nova publicação; avaliação fica em runner separado. Templates importam rascunhos, datasets contêm apenas casos sintéticos aprovados; fine-tuning de pesos não integra o servidor. Contrato detalhado: [training.md](training.md).
+
+## Conexão ChatGPT
+
+[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.

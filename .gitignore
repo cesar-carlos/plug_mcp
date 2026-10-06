@@ -6,3 +6,6 @@ coverage/
 logs/
 .DS_Store
 drizzle/meta/
+plugins/se7e-chatgpt/build/
+test-results/
+playwright-report/

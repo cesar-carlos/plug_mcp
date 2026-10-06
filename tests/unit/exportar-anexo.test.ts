@@ -36,6 +36,8 @@ import { MemoryQueryResultCache } from "../../src/infrastructure/cache/query-res
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 import { stubSessions } from "../helpers/stub-sessions.js";
 import { newAdicionarAcesso } from "../helpers/adicionar-acesso.js";
+import { sessionContext } from "../../src/application/session-context.js";
+import type { ConsumerAuth } from "../../src/domain/entities/consumer-auth.js";
 
 const crypto = new NodeCryptoAdapter(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -216,6 +218,50 @@ describe("exportar_anexo", () => {
     expect(mcp.content.some((item) => item.type === "image")).toBe(true);
     expect(mcp.structuredContent).not.toHaveProperty("data");
     expect(JSON.stringify(mcp.structuredContent ?? {})).not.toContain("data");
+
+    const current = await acessos.findById(created.acessoId);
+    if (!current) throw new Error("missing synthetic access");
+    const auth: ConsumerAuth = {
+      kind: "oauth",
+      usuarioId: created.usuarioId,
+      acessoId: created.acessoId,
+      sourceHash: current.tokenHash,
+      grantId: "synthetic-grant-one",
+      expiresAt: Date.now() + 60_000,
+    };
+    const fromOAuth = await sessionContext.run(
+      { auth, usuarioId: created.usuarioId, acessoId: created.acessoId },
+      () =>
+        consultar.execute(created.usuarioId, {
+          pergunta: "mostra a foto",
+          skillId: skill.id,
+          params: { codigo: 1 },
+        }),
+    );
+    const oauthHandle = (fromOAuth.rows[0]?.foto as { handle: string }).handle;
+    const exportOAuth = () =>
+      exportar.execute(created.usuarioId, { handle: oauthHandle, mimeDestino: "image/jpeg" });
+    // Refresh da mesma concessão preserva o handle; nova concessão e manual não o herdam.
+    const allowed = await sessionContext.run(
+      {
+        auth: { ...auth, tokenHash: "refreshed-token-reference", expiresAt: Date.now() + 120_000 },
+        usuarioId: created.usuarioId,
+        acessoId: created.acessoId,
+      },
+      exportOAuth,
+    );
+    expect(allowed.mime).toBe("image/jpeg");
+    await expect(
+      sessionContext.run(
+        {
+          auth: { ...auth, grantId: "synthetic-grant-two" },
+          usuarioId: created.usuarioId,
+          acessoId: created.acessoId,
+        },
+        exportOAuth,
+      ),
+    ).rejects.toMatchObject({ code: ERROR_CODES.MIDIA_ORIGEM_INVALIDA });
+    await expect(exportOAuth()).rejects.toMatchObject({ code: ERROR_CODES.MIDIA_ORIGEM_INVALIDA });
 
     await expect(
       exportar.execute(created.usuarioId, {

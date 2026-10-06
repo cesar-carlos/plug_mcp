@@ -1,6 +1,6 @@
 # Cofre e token MCP
 
-O usuário já é Client no plug-server. O MCP mantém Bearer manual, sem OAuth, contas no hub ou cookies de autenticação próprios. Um client_token identifica um acesso, uma persona, um catálogo e um Bearer. A senha autentica; não particiona o catálogo.
+O usuário já é Client no plug-server. O MCP mantém Bearer manual, com OAuth opcional para delegação ChatGPT, sem novas contas no hub ou sessão persistente de login. Um client_token identifica um acesso, uma persona, um catálogo e um Bearer. A senha autentica; não particiona o catálogo.
 
 ## Cadastro e manutenção no navegador
 
@@ -10,7 +10,7 @@ registrar_acesso (bootstrap), adicionar_acesso, atualizar_credencial_plug e rota
 2. Preencha as credenciais no formulário e confirme. POST verifica finalidade, expiração, CSRF, Origin, identidade no hub e vínculo com o acesso. Operações autenticadas reautenticam o mesmo Client.
 3. O Bearer aparece uma única vez na conclusão do POST. Copie-o para Authorization: Bearer e reconecte. O banco guarda apenas seu hash.
 
-Código aleatório de 256 bits, hash SHA-256 em setup_operation e validade de 15 minutos. Claim atômico impede replay; código vencido/CSRF incorreto é recusado. POST autorizado que falha exige nova URL. Páginas usam no-store, no-referrer e CSP frame-ancestors 'none'. Logs suprimem códigos, corpos e segredos.
+Código aleatório de 256 bits, hash SHA-256 em setup_operation e validade de 15 minutos. Claim atômico impede replay; código vencido/CSRF incorreto é recusado. POST autorizado que falha exige nova URL. Respostas usam no-store e CSP frame-ancestors 'none'. Formulários usam Referrer-Policy same-origin para preservar Origin do POST; demais respostas usam no-referrer, sem referência externa. Logs suprimem códigos, corpos e segredos.
 
 Rotação mantém o Bearer anterior enquanto o formulário não concluir. Na conclusão, sessões, handles e caches do acesso são invalidados. Adicionar acesso cria catálogo vazio sem trocar a sessão atual. Recuperação: registrar_acesso → formulário → opção recuperar → autenticação do mesmo Client e identificação do trio existente. O formulário de credenciais também reautentica no hub.
 
@@ -33,3 +33,7 @@ Novas cifras usam AES-256-GCM v2 com identificador de chave e AAD. MCP_ENCRYPTIO
 Faça backup e ensaie restauração; configure a nova chave/ID mantendo as anteriores; rode npm run vault:rotate (verificação e rollback), depois npm run vault:rotate -- --apply. O script bloqueia linhas, verifica decrypt/encrypt/decrypt e faz compare-and-swap em uma transação. Falha reverte tudo sem imprimir conteúdo. Ensaie primeiro num banco CI efêmero. Mantenha chaves antigas até testar restauração dos backups; só então retire as desnecessárias.
 
 Auditoria guarda IDs, contagens, estágio, origem e duração, nunca SQL, pergunta, parâmetros, resultados ou segredos.
+
+## Conexão ChatGPT
+
+[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.

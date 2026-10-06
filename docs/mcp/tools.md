@@ -177,3 +177,7 @@ Cadastro e protocolos: [cofre](../auth/vault-and-mcp-token.md) e [clientes](../c
 Tools autenticadas: `listar_consultas_aprendidas` (skill/estado/página), `obter_consulta_aprendida`, `inativar_consulta_aprendida`, `confirmar_grao`, `confirmar_constante_negocio`, `registrar_feedback_consulta`, `revisar_feedback_consulta`, `diagnosticar_treinamento`, CRUD versionado `*_caso_teste`, `listar_relatorios_avaliacao`, `exportar_template_skill`, `importar_template_skill`, `exportar_dataset_treinamento`.
 
 Mudança compatível de campos, incompatível de fluxo: `salvar_consulta` aceita ID ou preparação legada e múltiplas skills. Sem `confirmacaoHash` retorna preview, mesmo com booleano true; confirmação humana exige segunda chamada. Aprovação não conta execução. Templates/datasets, grão/constantes, casos e inativação seguem preview/hash. Para criação de caso reenviar casoId/versão 0 do preview. Nenhuma tool grava relatório aprovado. [Contrato e exemplos completos](../product/training.md).
+
+## Conexão ChatGPT
+
+[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.

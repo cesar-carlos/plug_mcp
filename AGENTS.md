@@ -136,3 +136,9 @@ Captura segura gera candidata, nunca licença de reuso. Confirmação humana por
 ## Base comum e curadoria versionada
 
 Base canônica: `shared/treinamento-base.ts`, guias públicos e obter_treinamento_base; ref/hash do contrato fixados. `salvar_consulta` é preview/hash/CAS, aprovar não incrementa execução; inativação não é revertida por captura. Grão de origem não é GROUP BY nem prova automática de unicidade. Casos sintéticos obrigatórios precisam de relatório atual do runner separado; ausência avisa. IA não grava aprovação de relatório. Templates criam rascunhos sem autoridade; datasets separam famílias e não mineram auditoria. Atualizar docs/product/training.md, schemas/runtime/rules/testes juntos.
+
+## Delegação ChatGPT opcional
+
+OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
+
+Gravações OAuth passam pelo AuthorizedUnitOfWorkPort, com repositórios vinculados à mesma transação e efeitos classificados por método. Adapters não interceptam SQL nem usam Proxy de pg. Acessos existentes envolvidos são declarados e bloqueados em ordem de ID antes da concessão e dos registros de negócio; rede do hub permanece fora da transação. Validar TLS/DNS nativo e formulários no Chromium; chatgpt:check é somente leitura e não comprova instalação no ChatGPT.

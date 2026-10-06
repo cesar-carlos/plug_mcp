@@ -7,7 +7,7 @@ import type {
   PlugServerGatewayPort,
   UsuarioPlugSessionPort,
 } from "../../../domain/ports/plug-server-gateway.port.js";
-import { currentAcessoId } from "../../session-context.js";
+import { currentAcessoId, assertConsumerAuthorized } from "../../session-context.js";
 import { withHubAuth } from "./hub-auth.js";
 
 export interface BindAcessoHint {
@@ -30,6 +30,7 @@ export const requireAcesso = async (
   usuarioId: string,
   _hint?: BindAcessoHint,
 ): Promise<Acesso> => {
+  await assertConsumerAuthorized();
   const bound = currentAcessoId()?.trim();
   const requested = acessoId?.trim();
   if (bound && requested && requested !== bound) {

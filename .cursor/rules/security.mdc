@@ -8,9 +8,9 @@ alwaysApply: false
 
 Nunca exponha senha, client_token, JWT, Bearer ou códigos de operação em tools/logs/erros/telemetria. Tools de credenciais recebem objeto vazio estrito, retornam setupUrl/expiresAt; formulário recebe segredos.
 
-GET /setup só mostra formulário. POST exige CSRF, Origin, finalidade, vínculo, identidade no hub e confirmação. Código aleatório >=256 bits, hash persistido, TTL 15 minutos e claim atômico único. no-store/no-referrer/frame-ancestors none. Rotação mantém Bearer anterior até conclusão e invalida sessões/handles/cache; falha de cache não perde o novo Bearer. 0029 invalida setups legados, preserva Bearers.
+GET /setup só mostra formulário. POST exige CSRF, Origin, finalidade, vínculo, identidade no hub e confirmação. Código aleatório >=256 bits, hash persistido, TTL 15 minutos e claim atômico único. no-store/frame-ancestors none; páginas de formulário same-origin preservam Origin do POST, demais respostas no-referrer. Rotação mantém Bearer anterior até conclusão e invalida sessões/handles/cache; falha de cache não perde o novo Bearer. 0029 invalida setups legados, preserva Bearers.
 
-Cofre AES-256-GCM v2 com key ID/AAD, leitura v1 e keyring para rotação. Bearer somente hash SHA-256 por acesso, JWTs do hub somente memória. Sem AS, JWT próprio, cookie de sessão ou Client de serviço.
+Cofre AES-256-GCM v2 com key ID/AAD, leitura v1 e keyring para rotação. Bearer somente hash SHA-256 por acesso, JWTs do hub somente memória. Authorization Server opcional e delimitado para ChatGPT; sem JWT próprio, sessão persistente de login ou Client de serviço. Cookie temporário somente da transação OAuth.
 
 Toda entrega revalida JWT Client, ClientAgentAccess e policy do client_token. Cache hit, exportação e consulta em andamento não entregam dados com autorização antiga/autoridade indisponível. Recorte/token/publicação/sensibilidade alterados bloqueiam. Preserve source, sem retry cego.
 
@@ -25,3 +25,9 @@ Auditoria allowlist de IDs/origem/contagens/cache/paginação/truncamento/estág
 Sessão legada imutável por usuário/acesso; contexto moderno por requisição. Origin ausente para nativos, null/desconhecido recusado, Host validado e TRUST_PROXY explícito. Notificações/assinaturas só do acesso dono. Persona não licencia SQL.
 
 Curadoria: AST compartilhado para captura/aprovação/exportação, constantes aprovadas vinculadas fisicamente e classificadas livres; parâmetros/recortes concretos, PII e segredos não persistem. Confirmação ligada ao acesso/revisão/publicações com CAS em transação. Feedback guarda correção segura fora da auditoria. Importação não ativa publicação; relatórios só runner confiável.
+
+## Delegação ChatGPT opcional
+
+OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
+
+CIMD fixa IP/família com lookup compatível all/scalar, nova conexão sem pooling, SNI/hostname e TLS validados. Formulários usam same-origin para manter Origin exato; redirects no-referrer, sem Referer externo. CSP permite callback previamente validado. securitySchemes deve existir no JSON principal de tools/list e _meta; desafios de tools incluem error/descrição fixa. Transações autorizadas substituem inspeção de SQL no pool.

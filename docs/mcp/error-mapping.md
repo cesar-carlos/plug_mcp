@@ -196,3 +196,7 @@ Recusas SQL acima preservam source=sql quando geradas no pacote; confirmação/a
 | `CONFIRMACAO_DESATUALIZADA` | CAS/hash/publicação/testes mudaram              | Obter novo preview; não repetir hash antigo  |
 
 Esses erros bloqueiam a nova publicação e preservam a autoridade anterior. Os envelopes continuam `code/message/hint/source`; relatórios distinguem `aprovado`, `reprovado`, `indisponivel`.
+
+## Conexão ChatGPT
+
+[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.

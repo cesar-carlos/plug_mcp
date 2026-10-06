@@ -11,7 +11,11 @@ alwaysApply: false
 - GET /setup/:code mostra formulário e não consome; POST valida CSRF, Origin, finalidade/vínculo e identidade no hub, conclui uma vez e mostra Bearer. Código hash de 256 bits/15 minutos.
 - `GET /.well-known/oauth-protected-resource` público: metadata do recurso **sem** Authorization Server (só `bearer_methods_supported: header`).
 - `POST|GET|DELETE /mcp` Streamable HTTP. CORS expõe `Mcp-Session-Id` e `mcp-protocol-version`. Origin inválido → 403.
-- Sem rotas de Authorization Server, sem cookie de sessão.
+- Rotas OAuth opcionais para /mcp/chatgpt; cookie temporário de transação, sem login persistente. /mcp mantém seu contrato.
 - Rate limit: bootstrap por IP; autenticado por hash do Bearer. Redis se `REDIS_URL`.
 - `helmet` ligado; não comprimir `text/event-stream`.
 - `compose().close()` fecha sweep de sessões, pool Postgres, Redis e os dois `http(s).Agent` do hub (`destroyHubHttpAgents`).
+
+## Delegação ChatGPT opcional
+
+OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.

@@ -51,7 +51,7 @@ npm ls redis --depth=0
 
 ## Uso e limites
 
-Com `REDIS_URL` vazio, rate limit, cache e singleflight ficam em memória. Com URL configurada, `compose()` conecta ao Redis durante a inicialização: uma URL inacessível pode impedir o startup. A tolerância a falhas do lease em consultas não implica fallback universal de conexão ou rate limit.
+Com `REDIS_URL` vazio, rate limit, cache e singleflight ficam em memória. Com URL configurada e OAuth desligado, `compose()` mantém a conexão Redis durante a inicialização: uma URL inacessível pode impedir o startup. No piloto OAuth, a conexão tem limite de 5s e falha usa quotas/cache locais; falha posterior de rate limit preserva contadores locais já consumidos. Não há fila offline nem reconexão automática nesse modo: recuperar coordenação distribuída exige reiniciar. A autoridade OAuth permanece no PostgreSQL.
 
 Redis coordena rate limit, caches auxiliares e resultados agregados, além de leases de consultas iguais entre processos. Não replica sessões MCP nem guarda bytes dos handles de anexos. Uma instalação com clientes legados mantém sessão no processo; usar Redis não habilita cluster PM2.
 

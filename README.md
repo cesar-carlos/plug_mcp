@@ -2,7 +2,7 @@
 
 Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + base de conhecimento**: guarda e-mail/senha (só autenticação — **não** particiona o catálogo), `agentId` e `client_token`, emite **um token MCP opaco por acesso**, e dá à IA o pacote da skill publicada **daquele acesso**. **1 `client_token` = 1 persona = 1 catálogo isolado = 1 Bearer.** Mesmo e-mail/`agentId` + outro token (`adicionar_acesso` / `registrar_acesso`) começa vazio e ganha outro Bearer. Tools omitem `acessoId`. Resource `skill://{acessoId}/{slug}`. Cache `mcp:query:acesso:{acessoId}:`. Hub SQL continua `agentId` + `client_token` daquele acesso. A **base comum** de todo consumidor: SQL no plug_server, dialeto do acesso, resources (`guia://`, `skill://`, `persona://`) e estrutura pelas skills publicadas (consultas dinâmicas no pacote, fail-closed). Sem embeddings. Persona no acesso oriente tom/uso e **não** recorta skills **neste acesso** (outro token = outro catálogo) nem licencia SQL. O domínio (atendimento, pagamentos, KPI/gestão, etc.) é o que o usuário treinou e publicou neste acesso, mais o chapéu da persona.
 
-Não há login próprio, Authorization Server, catálogo pronto com seed, nem Client de serviço no `.env`.
+OAuth opcional delega um acesso existente ao ChatGPT por token MCP no navegador. Sem novas contas, catálogo pronto com seed ou Client de serviço no `.env`.
 
 ## Requisitos
 
@@ -104,3 +104,13 @@ Ver [docs/clients/connecting-clients.md](docs/clients/connecting-clients.md).
 5. Índice — [`docs/README.md`](docs/README.md). Changelog — [`CHANGELOG.md`](CHANGELOG.md). Histórico das três camadas — [docs/proposta-arquitetura-mcp-se7e.md](docs/proposta-arquitetura-mcp-se7e.md)
 
 TypeScript 7 compila e checa tipos; a API TypeScript 6 é usada apenas pelas ferramentas de lint. `npm run compiler:check` confirma o compilador real. Dependências são fixadas pelo lockfile e instaladas por `npm ci`, sem force/legacy-peer-deps. CI inclui Windows, Linux, Redis/PostgreSQL e musl x64/arm64. [Escopo e verificações](docs/product/implementation-plan.md), [cadastro/rotação](docs/auth/vault-and-mcp-token.md).
+
+## Plugin privado do ChatGPT
+
+OAuth integrado opcional para um acesso existente, token somente no navegador. Flag CHATGPT_OAUTH_ENABLED desligada por padrão. Configuração, instalação, segurança, testes e rollback: [contrato ChatGPT](docs/auth/chatgpt-oauth.md). Fonte do pacote: [plugins/se7e-chatgpt](plugins/se7e-chatgpt/README.md).
+
+### Verificação antes do piloto ChatGPT
+
+Execute `npm run chatgpt:check -- --stage=prepare --json` após preparar PostgreSQL/HTTPS. Depois da configuração real da conexão, execute `npm run chatgpt:check -- --stage=pilot --package=<diretorio> --connection-id=<ID_REAL> --json`. O comando é somente leitura e separa prontidão automática de homologação no ChatGPT. Veja [OAuth](docs/auth/chatgpt-oauth.md) e [validação](docs/operations/chatgpt-validation.md).
+
+`test:chatgpt:https` usa TLS real; `test:chatgpt:browser` usa Chromium e um banco efêmero próprio, exigindo NODE_ENV=test e DATABASE_URL de CI. Instale Chromium com `npx playwright install chromium`. O gate `node:check` exige a faixa de engines antes de release:check.

@@ -12,6 +12,41 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   PUBLIC_BASE_URL: z.string().url().default("http://127.0.0.1:3333"),
   DATABASE_URL: z.string().optional(),
+  CHATGPT_OAUTH_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  CHATGPT_OAUTH_ACCESS_IDS: z
+    .string()
+    .default("[]")
+    .transform((value, ctx): string[] => {
+      try {
+        return z.array(z.string().uuid()).parse(JSON.parse(value));
+      } catch {
+        ctx.addIssue({ code: "custom", message: "Allowlist de acessos OAuth inválida." });
+        return [];
+      }
+    }),
+  CHATGPT_OAUTH_CLIENTS: z
+    .string()
+    .default("{}")
+    .transform((value, ctx): Record<string, string[]> => {
+      try {
+        const clients = z
+          .record(z.string().url(), z.array(z.string().url()))
+          .parse(JSON.parse(value));
+        for (const [id, redirects] of Object.entries(clients))
+          for (const raw of [id, ...redirects]) {
+            const url = new URL(raw);
+            if (url.protocol !== "https:" || url.username || url.password || url.hash)
+              throw new Error("invalid_url");
+          }
+        return clients;
+      } catch {
+        ctx.addIssue({ code: "custom", message: "Allowlist de clientes OAuth inválida." });
+        return {};
+      }
+    }),
   MCP_ENCRYPTION_KEY: z.string().min(32),
   MCP_ENCRYPTION_KEY_ID: z
     .string()
@@ -129,6 +164,25 @@ export const loadConfig = (overrides: Record<string, string | undefined> = {}): 
   const merged = { ...process.env, ...overrides };
   const parsed = envSchema.parse(merged);
   const publicBase = stripTrailingSlash(parsed.PUBLIC_BASE_URL);
+  if (parsed.CHATGPT_OAUTH_ENABLED) {
+    const url = new URL(publicBase);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname !== "/"
+    )
+      throw new Error("OAuth exige PUBLIC_BASE_URL HTTPS canônica, sem path/query/credenciais.");
+    if (!parsed.DATABASE_URL && parsed.NODE_ENV !== "test")
+      throw new Error("OAuth exige PostgreSQL.");
+    if (
+      parsed.DATABASE_URL &&
+      !["postgres:", "postgresql:"].includes(new URL(parsed.DATABASE_URL).protocol)
+    )
+      throw new Error("OAuth exige URL PostgreSQL.");
+  }
   return {
     ...parsed,
     PUBLIC_BASE_URL: publicBase,

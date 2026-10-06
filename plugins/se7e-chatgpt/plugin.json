@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "se7e",
+  "version": "0.1.0",
+  "description": "Consulta, treinamento e administração Se7e no catálogo da persona conectada."
+}

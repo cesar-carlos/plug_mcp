@@ -19,6 +19,7 @@ import type { PerfilColuna } from "../../domain/entities/escopo.js";
 import type { EscopoValidacaoRel } from "../../domain/entities/grafo.js";
 import type { AuditMetadata } from "../../domain/entities/audit-log.js";
 import type { SetupPurpose } from "../../domain/ports/setup-operation.port.js";
+import type { OAuthRecords } from "../../domain/ports/oauth.port.js";
 import type {
   CategoriaAlertaOperacional,
   MetadadosAlertaOperacional,
@@ -73,6 +74,87 @@ export const acesso = pgTable(
   ],
 );
 
+export const oauthGrant = pgTable(
+  "oauth_grant",
+  {
+    id: text("id").primaryKey(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    grantId: text("grant_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    data: jsonb("data").$type<OAuthRecords["grant"]>().notNull(),
+  },
+  (t) => [
+    index("oauth_grant_access_idx").on(t.acessoId),
+    index("oauth_grant_expiry_idx").on(t.expiresAt),
+  ],
+);
+
+export const oauthTransaction = pgTable(
+  "oauth_transaction",
+  {
+    id: text("id").primaryKey(),
+    acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
+    grantId: text("grant_id").references(() => oauthGrant.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    data: jsonb("data").$type<OAuthRecords["transaction"]>().notNull(),
+  },
+  (t) => [index("oauth_transaction_expiry_idx").on(t.expiresAt)],
+);
+
+export const oauthCode = pgTable(
+  "oauth_code",
+  {
+    id: text("id").primaryKey(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    grantId: text("grant_id").references(() => oauthGrant.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    data: jsonb("data").$type<OAuthRecords["code"]>().notNull(),
+  },
+  (t) => [index("oauth_code_expiry_idx").on(t.expiresAt)],
+);
+
+export const oauthAccessToken = pgTable(
+  "oauth_access_token",
+  {
+    id: text("id").primaryKey(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    grantId: text("grant_id")
+      .notNull()
+      .references(() => oauthGrant.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    data: jsonb("data").$type<OAuthRecords["access"]>().notNull(),
+  },
+  (t) => [
+    index("oauth_access_grant_idx").on(t.grantId),
+    index("oauth_access_expiry_idx").on(t.expiresAt),
+  ],
+);
+
+export const oauthRefreshToken = pgTable(
+  "oauth_refresh_token",
+  {
+    id: text("id").primaryKey(),
+    acessoId: uuid("acesso_id")
+      .notNull()
+      .references(() => acesso.id, { onDelete: "cascade" }),
+    grantId: text("grant_id")
+      .notNull()
+      .references(() => oauthGrant.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    data: jsonb("data").$type<OAuthRecords["refresh"]>().notNull(),
+  },
+  (t) => [
+    index("oauth_refresh_grant_idx").on(t.grantId),
+    index("oauth_refresh_expiry_idx").on(t.expiresAt),
+  ],
+);
+
 export const setupOperation = pgTable(
   "setup_operation",
   {
@@ -81,6 +163,7 @@ export const setupOperation = pgTable(
     usuarioId: uuid("usuario_id").references(() => usuarioMcp.id, { onDelete: "cascade" }),
     acessoId: uuid("acesso_id").references(() => acesso.id, { onDelete: "cascade" }),
     bearerHash: text("bearer_hash"),
+    oauthGrantId: text("oauth_grant_id").references(() => oauthGrant.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     csrfHash: text("csrf_hash"),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),

@@ -5,8 +5,13 @@ import { absoluteErrorMappingUrl } from "../../domain/errors/error-next-action.j
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { AppConfig } from "../../config/env.js";
 import type { RateLimitStore } from "../http/rate-limit.js";
-import { wwwAuthenticate } from "./mcp-auth.js";
 import { currentAccountId, currentClientIp } from "./account-context.js";
+import { chatGptOAuthChallenge } from "../oauth/challenge.js";
+import {
+  assertConsumerAuthorized,
+  currentConsumerAuth,
+  sessionContext,
+} from "../../application/session-context.js";
 
 export type ToolContent =
   | { type: "text"; text: string }
@@ -91,13 +96,27 @@ export const errorResult = (
   logger?: LoggerPort,
   tool?: string,
 ): ToolResult => {
+  let authCause: DomainError | undefined;
+  let cause: unknown = error;
+  for (let depth = 0; depth < 5; depth++) {
+    if (isDomainError(cause) && cause.stage === "oauth") {
+      authCause = cause;
+      break;
+    }
+    cause = cause instanceof Error ? cause.cause : undefined;
+  }
   const domain = isDomainError(error)
     ? error
-    : (() => {
+    : (authCause ??
+      (() => {
         logger?.error("tool failed with unexpected error", {
           tool,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
+          ...(currentConsumerAuth()?.kind === "oauth"
+            ? { stage: "oauth_operation" }
+            : {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              }),
         });
         return new DomainError({
           code: ERROR_CODES.INTERNAL_ERROR,
@@ -106,7 +125,7 @@ export const errorResult = (
           retryable: true,
           source: ERROR_SOURCE.mcp,
         });
-      })();
+      })());
   const json = domain.toJson();
   const documentationUrl = json.error.documentationUrl
     ? absoluteErrorMappingUrl(config.PUBLIC_BASE_URL, json.error.documentationUrl)
@@ -115,10 +134,12 @@ export const errorResult = (
     ? { success: false as const, error: { ...json.error, documentationUrl } }
     : json;
   const meta: Record<string, unknown> = {};
-  if (domain.code === ERROR_CODES.UNAUTHENTICATED) {
-    meta["mcp/www_authenticate"] = [
-      `${wwwAuthenticate(config)}, error="invalid_token", error_description="Login required"`,
-    ];
+  if (
+    domain.code === ERROR_CODES.UNAUTHENTICATED &&
+    currentConsumerAuth()?.kind === "oauth" &&
+    domain.stage === "oauth"
+  ) {
+    meta["mcp/www_authenticate"] = [chatGptOAuthChallenge(config.PUBLIC_BASE_URL, true)];
   }
   return {
     content: [{ type: "text", text: JSON.stringify(payload) }],
@@ -157,7 +178,9 @@ export const createToolRunner = (
 ): ToolRunner => {
   return async (tool: string, fn: () => Promise<unknown>): Promise<ToolResult> => {
     if (extra?.rateLimit) {
-      const principal = currentAccountId() ?? currentClientIp() ?? extra.clientIp?.() ?? "anon";
+      const auth = currentConsumerAuth();
+      const principal =
+        auth?.acessoId ?? currentAccountId() ?? currentClientIp() ?? extra.clientIp?.() ?? "anon";
       const hit = await extra.rateLimit.hit(
         `tool:${principal}:${tool}`,
         config.MCP_RATE_LIMIT_WINDOW_MS,
@@ -181,7 +204,25 @@ export const createToolRunner = (
       }
     }
     try {
+      await assertConsumerAuthorized();
+      const auth = currentConsumerAuth();
+      if (extra?.rateLimit && auth?.kind === "oauth") {
+        const hit = await extra.rateLimit.hit(
+          `tool:grant:${auth.grantId}:${tool}`,
+          config.MCP_RATE_LIMIT_WINDOW_MS,
+          maxForTool(config, tool),
+        );
+        if (!hit.allowed)
+          throw new DomainError({
+            code: ERROR_CODES.RATE_LIMITED,
+            message: "Limite da conexão.",
+            hint: "Aguarde antes de repetir.",
+            source: "mcp",
+            stage: "rate_limit",
+          });
+      }
       const value = await fn();
+      if (!sessionContext.getStore()?.terminal) await assertConsumerAuthorized();
       return jsonResult(value);
     } catch (error) {
       return errorResult(error, config, logger, tool);

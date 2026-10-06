@@ -8,6 +8,7 @@ export interface SetupOperation {
   readonly expiresAt: Date;
   readonly csrfHash: string | null;
   readonly claimedAt: Date | null;
+  readonly oauthGrantId?: string | null;
 }
 export interface SetupOperationRepositoryPort {
   create(operation: SetupOperation): Promise<void>;

@@ -1,6 +1,6 @@
 # Se7e MCP Server — Documentação
 
-O MCP **não** cadastra User/Client/Agent e **não** tem Authorization Server próprio. O usuário já é Client no plug-server. O MCP guarda as quatro credenciais (e-mail, senha cifrada, `agentId`, `client_token`), emite **um token MCP opaco por acesso** e dá à IA uma **base de conhecimento**.
+O MCP **não** cadastra User/Client/Agent e pode habilitar autorização OAuth delimitada para delegar um acesso existente ao ChatGPT. O usuário já é Client no plug-server. O MCP guarda as quatro credenciais (e-mail, senha cifrada, `agentId`, `client_token`), emite **um token MCP opaco por acesso** e dá à IA uma **base de conhecimento**.
 
 Norte: [product/objective.md](product/objective.md). Tools: [mcp/tools.md](mcp/tools.md). Erros: [mcp/error-mapping.md](mcp/error-mapping.md). Hub: [plug-server/communication.md](plug-server/communication.md). Histórico: [`../CHANGELOG.md`](../CHANGELOG.md).
 
@@ -21,6 +21,8 @@ Norte: [product/objective.md](product/objective.md). Tools: [mcp/tools.md](mcp/t
 | [`clients/`](clients)           | [connecting-clients.md](clients/connecting-clients.md)                                                                                                                          | Bearer do token MCP; `initialize` / prompt `pre_treino`                                                                                                                                                                                                                                                                                                               |
 
 ## Como ler
+
+Integração opcional com ChatGPT: [delegação OAuth e pacote privado](auth/chatgpt-oauth.md), com [registro de validação e homologação](operations/chatgpt-validation.md).
 
 Instalação e versões: [README do projeto](../README.md). Redis 7, cliente npm, conexão Node/PM2 versus container, configuração opcional e diagnóstico: [operations/redis.md](operations/redis.md). O [overlay de porta local](operations/redis-host.compose.yml) complementa o Compose padrão sem alterar sua rede interna.
 

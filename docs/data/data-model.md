@@ -1,6 +1,6 @@
 # Modelo de dados
 
-Não há tabela de senha de conta MCP, cliente de Authorization Server nem catálogo pronto.
+Não há tabela de senha de conta MCP, nova conta OAuth nem catálogo pronto.
 
 ## Cofre
 
@@ -62,3 +62,7 @@ Cofre usa envelope criptográfico v2 key ID/AAD; leitura v1 e keyring anteriores
 ## Revisões de treinamento (0032/0033)
 
 `consulta_aprendida`: versão CAS, fingerprint SHA-256 por SQL/contrato/publicações, motivo de inativação. `treinamento_revisao`: acesso, skill opcional, tipo caso/feedback/relatório, ID+versão, JSON versionado, autor/data; UPDATE proibido. Casos e feedback evoluem por append; relatórios são criados pelo runner. `lacuna_consulta.ocorrencias` conta recorrência sem ampliar conteúdo de auditoria. Histórico/publicações existentes permanecem intactos.
+
+## Conexão ChatGPT
+
+[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.

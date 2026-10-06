@@ -11,6 +11,20 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Fixed — compatibilidade e validação do piloto ChatGPT
+
+- CIMD com IP fixado, callback DNS all/scalar, família explícita, TLS/SNI e conexão nova; regressões com HTTPS nativo.
+- securitySchemes principal e _meta no tools/list legado/moderno; desafios OAuth com descrição fixa e descoberta sem erro de token quando não há credencial.
+- Formulários compatíveis com Origin do Chromium, callback externo sem Referer e CSP restrita ao destino validado.
+- Unidade de trabalho autorizada substitui Proxy/regex SQL; rollback, publicação/remoção/rotação e revogação concorrente em PostgreSQL.
+- Chromium/HTTPS/PostgreSQL efêmero no CI e comando read-only chatgpt:check; gate explícito de Node compatível.
+
+### Added — plugin ChatGPT privado e delegação OAuth
+
+- Endpoint opcional `/mcp/chatgpt`, autorização por token MCP no navegador, CIMD/PKCE S256, credenciais opacas com rotação/replay e revogação por acesso/concessão; migração aditiva 0034.
+- Perfil estável, contexto de sessão e revogação própria; catálogo compartilhado com metadata OAuth, guards de entrega/mutação, cache/anexos/setup vinculados à concessão e quotas de sessões compartilhadas.
+- Pacote privado/portátil com duas skills, montagem sem credenciais e comando local de rollback. Piloto real depende de HTTPS e conexão privada cadastrada; testes locais não o certificam.
+
 ### Fixed — integração das branches de CI
 
 - Mescladas as atualizações para `actions/checkout` v7, `actions/setup-node` v7 e `docker/setup-qemu-action` v4, preservando todas nos conflitos do workflow.

@@ -30,4 +30,8 @@ Resposta de tool: `jsonResult` / `errorResult` via `createToolRunner`. Erro: `{ 
 
 Erro de consulta: `code`/`message`/`hint`/`source` — `sql`/`sql_engine` corrige no pacote; `plug_server_http` + `invalid_payload` / `PLUG_SERVER_ERROR` (inclui rede `ECONNREFUSED`, HTTP 400, JSON-RPC `-326xx`) **não** reescreve o SQL; 429/503 ≠ policy. SQL recusado não persiste. `McpServer.version` vem de `buildInfo().version`.
 
-Origin inválido → 403. Token MCP pode ter TTL (`token_expires_at`). Rate limit por tool além do HTTP. 1 instância PM2 (sessão in-memory). Sem Authorization Server / OAuth. Sem Socket/relay. Metadata `/.well-known/oauth-protected-resource` **sem** AS.
+Origin inválido → 403. Token MCP pode ter TTL (`token_expires_at`). Rate limit por tool além do HTTP. 1 instância PM2 (sessão in-memory). OAuth opcional somente no endpoint /mcp/chatgpt; /mcp permanece manual. Sem Socket/relay. Metadata `/.well-known/oauth-protected-resource` **sem** AS.
+
+## Delegação ChatGPT opcional
+
+OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.

@@ -14,17 +14,29 @@ export interface RedisEvalClient {
 }
 
 export class RedisRateLimitStore implements RateLimitStore {
-  constructor(private readonly redis: RedisEvalClient) {}
+  constructor(
+    private readonly redis: RedisEvalClient,
+    private readonly localFallback?: RateLimitStore,
+  ) {}
 
   async hit(key: string, windowMs: number, max: number): Promise<RateLimitHit> {
-    const raw = await this.redis.eval(HIT_SCRIPT, {
-      keys: [`mcp:rl:${key}`],
-      arguments: [String(windowMs)],
-    });
-    const pair = Array.isArray(raw) ? raw : [raw, windowMs];
-    const count = Number(pair[0]);
-    const ttl = Number(pair[1]);
-    const retryAfterMs = ttl > 0 ? ttl : windowMs;
-    return { allowed: count <= max, retryAfterMs };
+    const local = await this.localFallback?.hit(key, windowMs, max);
+    if (local && !local.allowed) return local;
+    try {
+      const raw = await this.redis.eval(HIT_SCRIPT, {
+        keys: [`mcp:rl:${key}`],
+        arguments: [String(windowMs)],
+      });
+      const pair = Array.isArray(raw) ? raw : [raw, windowMs];
+      const count = Number(pair[0]);
+      const ttl = Number(pair[1]);
+      if (!Number.isFinite(count) || !Number.isFinite(ttl))
+        throw new Error("invalid rate limit response");
+      const retryAfterMs = ttl > 0 ? ttl : windowMs;
+      return { allowed: count <= max, retryAfterMs };
+    } catch (error) {
+      if (local) return local;
+      throw error;
+    }
   }
 }

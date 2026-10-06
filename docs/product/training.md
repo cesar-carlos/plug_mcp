@@ -55,3 +55,7 @@ Não há jobs de fine-tuning, GPUs, treinamento de pesos ou modelos por persona 
 ## Migração e operação
 
 Migrações novas: `0032` adiciona versão/fingerprint/estado de curadoria e revisões de casos/feedback/relatórios; `0033` acrescenta recorrência de lacunas. Não inventam confirmação, teste ou relatório retroativo. `test:migrations` cobre banco novo, upgrade desde 0023 e estado anterior 0031, preservando snapshots e Bearers. Execute backup/restauração e homologação piloto antes de produção; mudanças locais não constituem liberação.
+
+## Conexão ChatGPT
+
+[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.

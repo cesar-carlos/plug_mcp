@@ -19,3 +19,5 @@ Antes de concluir mudança de produção:
 5. `CHANGELOG.md` (Unreleased), `docs/` e as rules desta pasta se comportamento, contrato, tools, erros ou env mudaram (ver `changelog_and_docs`)
 
 Não reintroduzir login próprio do MCP, JWT de conta, Client de serviço no `.env`, catálogo pronto, nem devolver token MCP na tool. Cutover de pacote: `npm run db:backfill-escopo` reconstrói AST, associa aprendizado e rebaixa publicadas — não pule a revalidação.
+
+OAuth opcional: atualizar docs/auth/chatgpt-oauth.md, rules/runtime/testes coordenadamente. Aceite local, homologação HTTPS e piloto ChatGPT são marcos separados. Sem credenciais ou IDs reais, não afirmar instalação/homologação.

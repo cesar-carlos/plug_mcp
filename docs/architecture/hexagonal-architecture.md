@@ -32,3 +32,9 @@ Escrita do grafo com `withAcessoLock(acessoId)`. Grafo, skills e aprendizado por
 _Porquê_ das três camadas (histórico): [proposta-arquitetura-mcp-se7e.md](../proposta-arquitetura-mcp-se7e.md).
 
 PreparedQuery tipado concentra preparação compartilhada de validar/consultar. SkillRepositoryPort distingue revisão editável e snapshot ativo; SkillPublicacaoRepositoryPort faz publicação transacional com CAS. SetupOperationRepositoryPort armazena hashes e reclama POST atomically; segredos entram somente pelo formulário. CryptoPort continua abstraindo envelope versionado/rotação.
+
+## Conexão ChatGPT
+
+[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+
+AuthorizedUnitOfWorkPort entrega ports transacionais, sem tipos de Drizzle/PostgreSQL no domínio. O adapter PostgreSQL bloqueia acessos em ordem de ID, depois a concessão e os registros de negócio; revalida prazos antes do commit. Repositórios têm efeitos classificados explicitamente, sem interceptação de SQL. Operações de remoção usam uma transação multirrepositório. Nenhuma chamada ao hub é permitida com essa transação aberta; etapas persistidas em torno de chamadas externas são autorizadas separadamente.

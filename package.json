@@ -2,7 +2,7 @@
   "name": "se7e-mcp-server",
   "version": "0.2.0",
   "private": true,
-  "description": "Servidor MCP Se7e: cofre de credenciais do Client e cat\u00e1logo de skills isolado por acesso",
+  "description": "Servidor MCP Se7e: cofre de credenciais do Client e catálogo de skills isolado por acesso",
   "type": "module",
   "engines": {
     "node": ">=24.21.0 <25"
@@ -16,12 +16,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "release:check": "npm run compiler:check && npm run training:check && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
+    "release:check": "npm run node:check && npm run compiler:check && npm run training:check && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts",
-    "test:migrations": "tsx scripts/verify-migrations.ts",
+    "test:migrations": "tsx scripts/verify-migrations.ts && tsx scripts/verify-oauth-postgres.ts --ci",
     "db:backfill-escopo": "tsx --env-file-if-exists=.env src/infrastructure/persistence/backfill-escopo.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "compiler:check": "node scripts/check-compiler.mjs",
@@ -30,7 +30,13 @@
     "evaluate:consumer": "tsx scripts/evaluate-consumer.ts",
     "vault:rotate": "tsx --env-file-if-exists=.env scripts/rotate-encryption.ts",
     "evaluate:skills": "tsx scripts/evaluate-skills.ts",
-    "training:check": "tsx scripts/check-training-base.ts"
+    "training:check": "tsx scripts/check-training-base.ts",
+    "plugin:package": "tsx --env-file-if-exists=.env scripts/package-chatgpt-plugin.ts",
+    "oauth:revoke": "tsx --env-file-if-exists=.env scripts/revoke-chatgpt-oauth.ts",
+    "node:check": "node scripts/check-node-version.mjs",
+    "test:chatgpt:https": "vitest run tests/integration/cimd-https.test.ts",
+    "test:chatgpt:browser": "playwright test",
+    "chatgpt:check": "tsx --env-file-if-exists=.env scripts/check-chatgpt-readiness.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/core": "^2.3.0",
@@ -43,6 +49,7 @@
     "express": "^5.2.1",
     "file-type": "^22.1.1",
     "helmet": "^8.3.0",
+    "ipaddr.js": "^2.5.0",
     "node-sql-parser": "^5.4.0",
     "pdfkit": "^0.20.2",
     "pg": "^8.23.1",
@@ -55,6 +62,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/client": "^2.3.0",
+    "@playwright/test": "^1.63.0",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

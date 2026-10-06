@@ -20,4 +20,8 @@ drizzle/0008_cofre_grafo.sql … 0023_token_por_acesso.sql
 
 Novo caso de uso → `use-cases/` + `register-tools.ts` + `compose.ts` + teste + `docs/mcp/tools.md` + `CHANGELOG.md` (Unreleased) + rule `catalog`/`mcp_protocol` se o contrato mudar.
 
-Novo port → `domain/ports`. Adapter só em `infrastructure`. Sem OAuth, sem seed Fonte, sem embeddings. Cutover de pacote: `npm run db:backfill-escopo`.
+Novo port → `domain/ports`. Adapter só em `infrastructure`. OAuth delimitado por ports/aplicação/adapters; sem seed Fonte ou embeddings. Cutover de pacote: `npm run db:backfill-escopo`.
+
+## Delegação ChatGPT opcional
+
+OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
