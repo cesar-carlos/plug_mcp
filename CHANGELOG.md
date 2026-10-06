@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Added
+
+- Push na `main`, após o CI verde, publica o container MCP por SSH. A chave só executa `scripts/deploy-production.sh` e recria o serviço `mcp`, sem Postgres, Redis nem os outros processos do host.
+
 ### Changed
 
 - Neste servidor o MCP de produção passou a ser o serviço `mcp` do Compose (perfil `container`), em `127.0.0.1:3333`, com `restart: unless-stopped`. O PM2 deixa de subir `se7e-mcp`, para não disputar a porta com o Nginx.

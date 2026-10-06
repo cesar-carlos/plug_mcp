@@ -22,6 +22,8 @@ GIT_SHA=$(git rev-parse --short HEAD) docker compose --profile container up --bu
 
 `--no-deps` não recria Postgres nem Redis. O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Não suba `se7e-mcp` no PM2: o mesmo daemon segue com `plug_server`, Chatwoot e `evogo-qrcode`, e outro processo na 3333 toma a porta do proxy. Para Redis no host, o guia continua em [operations/redis.md](docs/operations/redis.md).
 
+Push na `main` do GitHub, depois que o workflow `ci` termina com sucesso, dispara `deploy`. Ele entra por SSH com uma chave restrita a `scripts/deploy-production.sh` e executa o comando acima. A chave e o host ficam nos secrets `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` e `DEPLOY_HOST_KEY`. O `.env` não vai no repositório. Cada publicação recria só o container `mcp` e derruba as sessões que estavam na memória dele.
+
 ### Local (Node + Postgres no Docker)
 
 ```bash
