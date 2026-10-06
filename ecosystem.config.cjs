@@ -1,11 +1,9 @@
 /**
- * Produção neste host: Postgres/Redis no Docker, processo Node no PM2.
+ * Fallback de processo no host. Neste servidor a produção é o serviço
+ * `mcp` do Compose (perfil `container`) em 127.0.0.1:3333.
+ * Não iniciar este app enquanto o container estiver no ar: os dois
+ * disputam a mesma porta e o Nginx deixa de alcançar o MCP.
  * Sessões MCP são in-memory — fork com 1 instância (não usar cluster).
- *
- *   nvm use
- *   npm run build
- *   pm2 start ecosystem.config.cjs
- *   pm2 save
  */
 const { execSync } = require("node:child_process");
 const fs = require("node:fs");

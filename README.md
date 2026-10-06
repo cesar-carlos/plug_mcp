@@ -12,21 +12,15 @@ OAuth opcional delega um acesso existente ao ChatGPT por token MCP no navegador.
 
 ## Setup
 
-### Produção neste servidor (PM2)
+### Produção neste servidor (container)
 
-Postgres fica no Docker; Redis é opcional e precisa de `REDIS_URL` configurada para ser usado pelo Node. Prepare o `.env` com banco, hub e chave do cofre antes de iniciar. O processo Node é gerenciado pelo PM2 (mesmo daemon de `plug_server` / Chatwoot), em `fork` com 1 instância — sessões MCP são in-memory e não suportam cluster.
+O processo MCP é o serviço `mcp` do Compose, perfil `container`, publicado só em `127.0.0.1:3333`. Postgres e Redis seguem nos serviços já existentes; o container usa `postgres:5432` e `redis:6379` na rede interna. A chave do cofre e a URL do hub vêm do `.env`. O entrypoint aplica as migrações pendentes antes de escutar. Sessões MCP continuam na memória do processo.
 
 ```bash
-nvm use
-npm ci
-npm run build
-docker compose up -d postgres
-npm run db:migrate
-pm2 start ecosystem.config.cjs
-pm2 save
+GIT_SHA=$(git rev-parse --short HEAD) docker compose --profile container up --build -d --no-deps mcp
 ```
 
-O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Para Redis no PM2, siga o [guia de Redis 7](docs/operations/redis.md): o Compose padrão não publica sua porta no host. Para executar o MCP em container, o Compose configura `REDIS_URL=redis://redis:6379`; aplique as migrações antes da primeira inicialização e use `docker compose --profile container up --build -d mcp`.
+`--no-deps` não recria Postgres nem Redis. O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Não suba `se7e-mcp` no PM2: o mesmo daemon segue com `plug_server`, Chatwoot e `evogo-qrcode`, e outro processo na 3333 toma a porta do proxy. Para Redis no host, o guia continua em [operations/redis.md](docs/operations/redis.md).
 
 ### Local (Node + Postgres no Docker)
 

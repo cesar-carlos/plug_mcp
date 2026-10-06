@@ -11,6 +11,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+### Changed
+
+- Neste servidor o MCP de produção passou a ser o serviço `mcp` do Compose (perfil `container`), em `127.0.0.1:3333`, com `restart: unless-stopped`. O PM2 deixa de subir `se7e-mcp`, para não disputar a porta com o Nginx.
+- `.env.example` passa a listar `E2E_AGENT_ID`, `E2E_CLIENT_TOKEN`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD` e `E2E_DIALETO`, vazios. Sem esses valores, `npm run test:live` continua se pulando.
+
 ### Fixed — compatibilidade e validação do piloto ChatGPT
 
 - CIMD com IP fixado, callback DNS all/scalar, família explícita, TLS/SNI e conexão nova; regressões com HTTPS nativo.

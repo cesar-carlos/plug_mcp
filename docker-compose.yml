@@ -27,6 +27,7 @@ services:
 
   mcp:
     profiles: ["container"]
+    restart: unless-stopped
     build:
       context: .
       args:
