@@ -22,7 +22,7 @@ Norte: [product/objective.md](product/objective.md). Tools: [mcp/tools.md](mcp/t
 
 ## Como ler
 
-Integração opcional com ChatGPT: [delegação OAuth e pacote privado](auth/chatgpt-oauth.md), com [registro de validação e homologação](operations/chatgpt-validation.md).
+Integração opcional com ChatGPT: [delegação OAuth e pacote privado](auth/chatgpt-oauth.md), com [registro de validação e homologação](operations/chatgpt-validation.md). Allowlists do piloto em produção: [chatgpt-oauth-allowlist.md](operations/chatgpt-oauth-allowlist.md).
 
 Instalação e versões: [README do projeto](../README.md). Redis 7, cliente npm, conexão Node/PM2 versus container, configuração opcional e diagnóstico: [operations/redis.md](operations/redis.md). O [overlay de porta local](operations/redis-host.compose.yml) complementa o Compose padrão sem alterar sua rede interna.
 
