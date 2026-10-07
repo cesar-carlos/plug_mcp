@@ -19,6 +19,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- A marca Se7e do console é uma URL pública em `/app`, para o Vite não tratar o PNG como módulo e o build da imagem falhar.
 - Criar outra persona no console mostra o Bearer novo sem trocar a persona da aba. Publicar skill só abre no passo `publicar_skill`, com o hash na memória. Params, anotações, escopo vinculado, JOIN, consulta inativada, alerta, lacuna e webhook passam a ter formulário.
 - Push na `main`, após o CI verde, publica o container MCP por SSH somente quando o commit altera o runtime. A imagem é a `linux/amd64` já testada no CI, identificada pelo SHA que passou. A chave executa `/usr/local/sbin/plug-mcp-deploy`, fora do Git. Falha de `/health` ou `/ready` restaura a imagem anterior. O commit recebe o status `production/mcp` e o host grava `/var/log/plug-mcp-deploy.log`.
 

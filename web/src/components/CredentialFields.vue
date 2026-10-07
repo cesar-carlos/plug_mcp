@@ -11,8 +11,7 @@ defineProps<{ senhaLabel?: string }>();
 <template>
   <div>
     <label
-      >E-mail
-      <input v-model="credenciais.email" type="email" autocomplete="username" required
+      >E-mail <input v-model="credenciais.email" type="email" autocomplete="username" required
     /></label>
     <label
       >{{ senhaLabel ?? "Senha" }}
