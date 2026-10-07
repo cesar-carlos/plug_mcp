@@ -19,12 +19,16 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- As páginas do plugin e do cofre usam o ícone Se7e de `/app/icon-192.png`. A CSP dessas respostas libera imagem só do próprio servidor.
 - A marca Se7e do console é uma URL pública em `/app`, para o Vite não tratar o PNG como módulo e o build da imagem falhar.
 - Criar outra persona no console mostra o Bearer novo sem trocar a persona da aba. Publicar skill só abre no passo `publicar_skill`, com o hash na memória. Params, anotações, escopo vinculado, JOIN, consulta inativada, alerta, lacuna e webhook passam a ter formulário.
 - Push na `main`, após o CI verde, publica o container MCP por SSH somente quando o commit altera o runtime. A imagem é a `linux/amd64` já testada no CI, identificada pelo SHA que passou. A chave executa `/usr/local/sbin/plug-mcp-deploy`, fora do Git. Falha de `/health` ou `/ready` restaura a imagem anterior. O commit recebe o status `production/mcp` e o host grava `/var/log/plug-mcp-deploy.log`.
 
 ### Changed
 
+- As páginas em que o plugin ChatGPT recebe o token MCP usam o visual do console Se7e. O campo de senha, a conferência da persona e a recusa sem recursos externos permanecem.
+- Os formulários de `/setup/:code` (cadastro, outra persona, credenciais e rotação), o Bearer mostrado uma vez e as recusas do cofre usam o mesmo visual. Campos, CSRF e a exibição única do token permanecem.
+- A página `/app/conectar` agrupa conta do hub, acesso SQL e confirmação. O dialeto aparece com o nome do GDBR e a confirmação fica alinhada ao texto. O POST de cadastro permanece o mesmo.
 - A inferência pelo nome só classifica segredo (senha, token, chave e equivalentes). Pessoal e sensível deixam de ser inferidos, inclusive texto livre e tipo `text`/`clob`, e a projeção desses campos volta a sair. Classe confirmada pelo usuário permanece.
 - Neste servidor o MCP de produção passou a ser o serviço `mcp` do Compose (perfil `container`), em `127.0.0.1:3333`, com `restart: unless-stopped`. O PM2 deixa de subir `se7e-mcp`, para não disputar a porta com o Nginx.
 - `.env.example` passa a listar `E2E_AGENT_ID`, `E2E_CLIENT_TOKEN`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD` e `E2E_DIALETO`, vazios. Sem esses valores, `npm run test:live` continua se pulando.

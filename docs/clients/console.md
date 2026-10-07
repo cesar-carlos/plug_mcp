@@ -8,7 +8,7 @@ Depois do build (`npm run web:build`), o Express serve `web/dist` em `/app`. Pro
 
 ## Criar a conexão
 
-`/app/conectar` chama `POST /app/api/setup/registrar` (sem segredo), lê CSRF em `GET /app/api/setup/:code` e envia e-mail, senha, `agentId`, dialeto e `client_token` no POST já existente de `/setup/:code`. O Bearer aparece uma vez. `/app/conectar/colar` só guarda o token na memória da aba.
+`/app/conectar` chama `POST /app/api/setup/registrar` (sem segredo), lê CSRF em `GET /app/api/setup/:code` e envia e-mail, senha, `agentId`, dialeto e `client_token` no POST já existente de `/setup/:code`. A tela agrupa conta do hub, acesso SQL e confirmação; o contrato do POST não muda. O Bearer aparece uma vez. `/app/conectar/colar` só guarda o token na memória da aba.
 
 Segredos não vão para `localStorage` nem para arguments de tools. Recarregar a página pede o Bearer de novo.
 

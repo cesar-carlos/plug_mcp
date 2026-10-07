@@ -1,8 +1,8 @@
 # Configurar allowlists OAuth do plugin Se7e
 
-A flag OAuth está ligada. A allowlist tem o cliente CIMD do ChatGPT e o acesso Financeiro Forteza — atendimento a vendedores.
+A flag OAuth está ligada. A allowlist tem o cliente CIMD do ChatGPT e o acesso Se7e SQL Server, persona Marina.
 
-Servidor: `/root/plug_mcp`, branch `main`, SHA em produção `8888671`. URL: `https://mcp.se7esistemassinop.com.br`. Arquivo: `/root/plug_mcp/.env`. Esse arquivo não vai para o Git.
+Servidor: `/root/plug_mcp`, branch `main`, SHA em produção `a80d2d4`. URL: `https://mcp.se7esistemassinop.com.br`. Arquivo: `/root/plug_mcp/.env`. Esse arquivo não vai para o Git.
 
 Contrato: [chatgpt-oauth.md](../auth/chatgpt-oauth.md). Pacote: [plugins/se7e-chatgpt/README.md](../../plugins/se7e-chatgpt/README.md).
 
@@ -12,8 +12,8 @@ Já verificado no container em execução:
 
 - `CHATGPT_OAUTH_ENABLED=true` e `PUBLIC_BASE_URL` canônica.
 - `CHATGPT_OAUTH_CLIENTS` contém o CIMD `https://chatgpt.com/oauth/client.json` e o redirect `https://chatgpt.com/connector_platform_oauth_redirect`.
-- `CHATGPT_OAUTH_ACCESS_IDS` contém somente `fdc915a9-a08b-4c8d-ac5a-c43969798fe4`: Frigorífico Forteza — financeiro, persona Financeiro Forteza — atendimento a vendedores, sybase, approved, token sem expiração.
-- `GET /health` e `GET /ready` respondem 200. SHA `8888671`.
+- `CHATGPT_OAUTH_ACCESS_IDS` contém somente `22c78617-7765-4d2a-a431-d8c0ec14d84f`: Se7e SQL Server, persona Marina, mssql, approved, token sem expiração.
+- `GET /health` e `GET /ready` respondem 200. SHA `a80d2d4`.
 - Discovery OAuth responde 200. `POST /mcp/chatgpt` sem credencial responde 401.
 - `GET /oauth/authorize` com esse cliente chega ao formulário do token. O log da etapa `authorize` registrou `success: true`. A falha anterior era `invalid_client`, com a allowlist de clientes vazia.
 

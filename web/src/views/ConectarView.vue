@@ -45,30 +45,57 @@ const submit = async (): Promise<void> => {
 
 <template>
   <Page
-    class="public"
+    class="public connect"
     title="Conectar ao plug_server"
     lead="Informe o Client já ativo no hub. O MCP não cria User, Client nem Agent."
     :error="error"
   >
-    <form class="card" @submit.prevent="submit">
-      <CredentialFields v-model="credenciais" senha-label="Senha do hub" />
-      <label>Agente (UUID) <input v-model="agentId" required /></label>
-      <DialetoSelect v-model="dialeto" />
-      <label
-        >client_token <input v-model="clientToken" type="password" autocomplete="off" required
-      /></label>
-      <label>Nome amigável <input v-model="nomeAmigavel" /></label>
-      <label
-        ><input v-model="recuperar" type="checkbox" /> Recuperar acesso existente e substituir o
-        Bearer</label
-      >
-      <label
-        ><input v-model="confirmado" type="checkbox" required /> Confirmo esta operação no acesso
-        informado</label
-      >
-      <div class="row">
-        <button type="submit" :disabled="pending">Conectar</button>
-        <RouterLink to="/conectar/colar">Já tenho um Bearer</RouterLink>
+    <form class="card connect-card" @submit.prevent="submit">
+      <fieldset class="section">
+        <legend>Conta do hub</legend>
+        <CredentialFields v-model="credenciais" senha-label="Senha do hub" />
+      </fieldset>
+      <fieldset class="section">
+        <legend>Acesso SQL</legend>
+        <label>
+          Agente
+          <input
+            v-model="agentId"
+            required
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="UUID do agentId"
+          />
+          <span class="hint">O mesmo agentId já cadastrado no plug_server.</span>
+        </label>
+        <DialetoSelect v-model="dialeto" />
+        <label>
+          client_token
+          <input v-model="clientToken" type="password" autocomplete="off" required />
+          <span class="hint">Token SQL deste acesso. Ele não volta a aparecer.</span>
+        </label>
+        <label>
+          Nome amigável
+          <input v-model="nomeAmigavel" autocomplete="off" placeholder="Opcional" />
+          <span class="hint">Só para reconhecer a persona nesta lista.</span>
+        </label>
+      </fieldset>
+      <fieldset class="section">
+        <legend>Confirmação</legend>
+        <label class="choice">
+          <input v-model="recuperar" type="checkbox" />
+          <span>Recuperar acesso existente e substituir o Bearer</span>
+        </label>
+        <label class="choice">
+          <input v-model="confirmado" type="checkbox" required />
+          <span>Confirmo esta operação no acesso informado</span>
+        </label>
+      </fieldset>
+      <div class="connect-actions">
+        <button type="submit" :disabled="pending">
+          {{ pending ? "Conectando…" : "Conectar" }}
+        </button>
+        <RouterLink class="ghost-link" to="/conectar/colar">Já tenho um Bearer</RouterLink>
       </div>
     </form>
   </Page>

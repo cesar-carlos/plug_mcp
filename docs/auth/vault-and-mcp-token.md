@@ -8,7 +8,7 @@ A SPA `/app` (documentada em [console.md](../clients/console.md)) usa o mesmo co
 
 registrar_acesso (bootstrap), adicionar_acesso, atualizar_credencial_plug e rotacionar_token_mcp recebem um objeto vazio estrito. Argumentos com senha ou tokens são recusados. A resposta contém success, setupUrl e expiresAt. Nunca envie credenciais no chat.
 
-1. Abra setupUrl. GET /setup/:code mostra o formulário e cria proteção CSRF; não consome a operação nem emite Bearer.
+1. Abra setupUrl. GET /setup/:code mostra o formulário, no mesmo visual das páginas do plugin, e cria proteção CSRF; não consome a operação nem emite Bearer. O HTML usa CSS interno e a marca `/app/icon-192.png`.
 2. Preencha as credenciais no formulário e confirme. POST verifica finalidade, expiração, CSRF, Origin, identidade no hub e vínculo com o acesso. Operações autenticadas reautenticam o mesmo Client.
 3. O Bearer aparece uma única vez na conclusão do POST. Copie-o para Authorization: Bearer e reconecte. O banco guarda apenas seu hash.
 

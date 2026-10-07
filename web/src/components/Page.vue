@@ -15,7 +15,7 @@ defineProps<{
 <template>
   <div>
     <h1>{{ title }}</h1>
-    <p v-if="lead">{{ lead }}</p>
+    <p v-if="lead" class="lead">{{ lead }}</p>
     <ErrorBanner :error="error" />
     <slot />
   </div>

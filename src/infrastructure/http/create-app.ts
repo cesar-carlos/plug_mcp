@@ -28,6 +28,12 @@ import { readErrorMappingMarkdown } from "./error-mapping-doc.js";
 import type { SetupCodeStore } from "./setup-code-store.js";
 import { registerConsoleApi } from "./console-api.js";
 import { sendCaughtError, wantsJson } from "./console-errors.js";
+import {
+  setupFormPage,
+  setupNoticePage,
+  setupTokenPage,
+  setupUpdatedPage,
+} from "./setup-browser-page.js";
 
 export const consumeSetupToken = async (
   memory: SetupCodeStore,
@@ -50,9 +56,6 @@ export const consumeSetupToken = async (
   }
   return persistent.consume(trimmed);
 };
-
-const setupTokenHtml = (token: string): string =>
-  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Token MCP</title></head><body><p>Copie o token abaixo para o header Authorization: Bearer do seu cliente MCP. Ele não será mostrado de novo.</p><pre>${token}</pre></body></html>`;
 
 export const createExpressApp = (input: {
   config: AppConfig;
@@ -83,7 +86,7 @@ export const createExpressApp = (input: {
           defaultSrc: ["'none'"],
           scriptSrc: ["'none'"],
           styleSrc: ["'unsafe-inline'"],
-          imgSrc: ["'none'"],
+          imgSrc: ["'self'"],
           formAction: ["'self'"],
           frameAncestors: ["'none'"],
           baseUri: ["'none'"],
@@ -250,16 +253,20 @@ export const createExpressApp = (input: {
   app.get("/setup/:code", async (req, res) => {
     const form = await input.useCases.setupOperations?.form(req.params.code ?? "");
     if (!form) {
-      res.status(404).type("html").send("<p>Operação inválida ou expirada. Gere outra URL.</p>");
+      res
+        .status(404)
+        .type("html")
+        .send(setupNoticePage("Operação inválida ou expirada. Gere outra URL."));
       return;
     }
-    const newAccess = form.purpose === "registrar" || form.purpose === "adicionar";
     res.setHeader("Referrer-Policy", "same-origin");
-    res
-      .type("html")
-      .send(
-        `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Operação do cofre MCP</title></head><body><h1>Operação do cofre MCP</h1><p>Use as credenciais do Client existente no hub. Esta operação expira em 15 minutos e será consumida na confirmação.</p><form method="post" action="/setup/${encodeURIComponent(req.params.code ?? "")}"><input type="hidden" name="csrf" value="${form.csrf}"><label>E-mail <input type="email" name="email" autocomplete="username" required></label><label>Senha do hub <input type="password" name="senha" autocomplete="current-password" required></label>${newAccess ? '<label>Agente (UUID) <input name="agentId" required></label><label>Dialeto <select name="dialeto"><option>mssql</option><option>sybase</option><option>postgres</option><option>firebird</option></select></label><label>client_token <input type="password" name="clientToken" autocomplete="off" required></label><label>Nome <input name="nomeAmigavel"></label>' : ""}${form.purpose === "registrar" ? '<label><input type="checkbox" name="recuperar" value="sim">Recuperar acesso existente e substituir seu Bearer</label>' : ""}<label><input type="checkbox" name="confirmado" value="sim" required>Confirmo esta operação no acesso informado</label><button type="submit">Confirmar</button></form></body></html>`,
-      );
+    res.type("html").send(
+      setupFormPage({
+        purpose: form.purpose,
+        code: req.params.code ?? "",
+        csrf: form.csrf,
+      }),
+    );
   });
   app.post("/setup/:code", async (req, res) => {
     const json = wantsJson(req.header("accept"));
@@ -273,7 +280,7 @@ export const createExpressApp = (input: {
         });
         return;
       }
-      res.status(403).type("html").send("<p>Origem não autorizada.</p>");
+      res.status(403).type("html").send(setupNoticePage("Origem não autorizada."));
       return;
     }
     try {
@@ -293,7 +300,7 @@ export const createExpressApp = (input: {
           });
           return;
         }
-        res.status(404).send("Operação indisponível.");
+        res.status(404).type("html").send(setupNoticePage("Operação indisponível."));
         return;
       }
       if (json) {
@@ -304,13 +311,7 @@ export const createExpressApp = (input: {
         });
         return;
       }
-      res
-        .type("html")
-        .send(
-          result.token
-            ? setupTokenHtml(result.token)
-            : "<p>Credenciais atualizadas no hub e no cofre.</p>",
-        );
+      res.type("html").send(result.token ? setupTokenPage(result.token) : setupUpdatedPage());
     } catch (error) {
       if (json) {
         sendCaughtError(res, error);
@@ -320,7 +321,9 @@ export const createExpressApp = (input: {
         .status(400)
         .type("html")
         .send(
-          "<p>Operação não concluída. Verifique as credenciais no hub e gere uma nova URL.</p>",
+          setupNoticePage(
+            "Operação não concluída. Verifique as credenciais no hub e gere uma nova URL.",
+          ),
         );
     }
   });

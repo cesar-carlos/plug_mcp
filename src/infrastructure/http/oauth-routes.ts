@@ -9,14 +9,8 @@ import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { RateLimitStore } from "./rate-limit.js";
 import type { AppConfig } from "../../config/env.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { oauthConnectErrorPage, oauthConsentPage, oauthTokenPage } from "./oauth-connect-page.js";
 
-const escape = (value: string): string =>
-  value.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-  );
-const page = (body: string): string =>
-  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Conectar Se7e</title></head><body><h1>Conectar Se7e ao ChatGPT</h1>${body}</body></html>`;
 const cookieName = "__Host-se7e-oauth";
 const cookie = (req: Request): string => {
   const values = (req.header("cookie") ?? "")
@@ -35,15 +29,13 @@ const params = (value: unknown): Record<string, string> => {
   }
   return result;
 };
-const field = (name: string, value: string): string =>
-  `<input type="hidden" name="${name}" value="${escape(value)}">`;
 const formHeaders = (res: Response, redirectUri: string): void => {
   // Chromium envia Origin:null em POST de navegação com no-referrer.
   // O redirect 303 mantém no-referrer; páginas só enviam Referer ao próprio servidor.
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader(
     "Content-Security-Policy",
-    `default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'none'; form-action 'self' ${new URL(redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
+    `default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self' ${new URL(redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
   );
 };
 
@@ -129,14 +121,7 @@ export const registerOAuthRoutes = (
         });
         res.status(known ? error.status : 503);
         if (step === "token" || step === "revoke") res.json({ error: code });
-        else
-          res
-            .type("html")
-            .send(
-              page(
-                "<p>Conexão não concluída. Reinicie a conexão no ChatGPT e confira o token no navegador.</p>",
-              ),
-            );
+        else res.type("html").send(oauthConnectErrorPage());
       }
     };
   app.get(
@@ -151,13 +136,13 @@ export const registerOAuthRoutes = (
         maxAge: 900_000,
       });
       formHeaders(res, transaction.redirectUri);
-      res
-        .type("html")
-        .send(
-          page(
-            `<p>Cliente: ${escape(transaction.clientId)}</p><p>Informe o token MCP existente somente neste formulário.</p><form method="post" action="/oauth/authorize/authenticate">${field("transaction", transaction.id)}${field("csrf", csrf)}<label>Token MCP <input type="password" name="token" autocomplete="off" required></label><button type="submit">Conferir acesso</button></form>`,
-          ),
-        );
+      res.type("html").send(
+        oauthTokenPage({
+          clientId: transaction.clientId,
+          transactionId: transaction.id,
+          csrf,
+        }),
+      );
     }),
   );
   app.post(
@@ -171,13 +156,14 @@ export const registerOAuthRoutes = (
         body.token ?? "",
       );
       formHeaders(res, result.transaction.redirectUri);
-      res
-        .type("html")
-        .send(
-          page(
-            `<p>Persona: <strong>${escape(result.name)}</strong></p><p>Cliente: ${escape(result.transaction.clientId)}</p><p>Autoriza consulta, treinamento e administração permitidos neste acesso. Publicações, policy e confirmações continuam obrigatórias.</p><form method="post" action="/oauth/authorize/consent">${field("transaction", result.transaction.id)}${field("csrf", result.csrf)}<button name="confirmed" value="yes" type="submit">Confirmar conexão</button><button name="confirmed" value="no" type="submit">Cancelar</button></form>`,
-          ),
-        );
+      res.type("html").send(
+        oauthConsentPage({
+          persona: result.name,
+          clientId: result.transaction.clientId,
+          transactionId: result.transaction.id,
+          csrf: result.csrf,
+        }),
+      );
     }),
   );
   app.post(

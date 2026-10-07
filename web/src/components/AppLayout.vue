@@ -19,10 +19,14 @@ const publicPage = computed(() => Boolean(route.meta.public));
 
 <template>
   <div>
-    <div v-if="publicPage">
-      <div class="public-head">
+    <div v-if="publicPage" class="public-shell">
+      <header class="public-head">
         <BrandMark />
-      </div>
+        <div>
+          <p class="public-kicker">Se7e</p>
+          <p class="public-product">Console MCP</p>
+        </div>
+      </header>
       <RouterView />
     </div>
     <div v-else class="layout">
