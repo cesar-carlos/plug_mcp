@@ -10,7 +10,7 @@ Em clientes legados, o host (Cursor e similares) copia `initialize.instructions`
 
 1. Apontar o cliente para `https://<host>/mcp` **sem** token (Bearer inválido retorna 401).
 2. Chamar `registrar_acesso({})` e preencher e-mail/senha/agentId/dialeto/client_token somente no formulário.
-3. Abrir setupUrl no navegador, confirmar o POST com CSRF, copiar o Bearer mostrado uma vez, configurar o cliente e reconectar. GET não emite nem consome Bearer.
+3. Abrir setupUrl no navegador (ou o console em `/app/conectar`), confirmar o POST com CSRF, copiar o Bearer mostrado uma vez, configurar o cliente e reconectar. GET não emite nem consome Bearer. Console: [console.md](console.md).
 
 ## Cursor
 

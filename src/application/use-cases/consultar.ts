@@ -141,6 +141,7 @@ import { coletarAvisosAnotacaoConsulta } from "./shared/avisos-anotacao-consulta
 import { inferirFormatoColuna, inferirPapelColuna } from "./shared/inferir-papel.js";
 import {
   inferirSensibilidadeColuna,
+  sensibilidadeGravadaEfetiva,
   type SensibilidadeColuna,
 } from "../../domain/entities/privacidade.js";
 import {
@@ -709,7 +710,13 @@ export class ConsultarDados {
               col.nome.toLowerCase() === column.toLowerCase() &&
               (!table || col.tabela.toLowerCase() === table.toLowerCase()),
           )
-          .map((col) => parseSensibilidadeColuna(col.sensibilidade));
+          .map((col) =>
+            sensibilidadeGravadaEfetiva({
+              nome: col.nome,
+              gravada: parseSensibilidadeColuna(col.sensibilidade),
+              origem: col.origem,
+            }),
+          );
         return live !== null || frozen.length
           ? maxSensibilidade([...(live ? [live] : []), ...frozen])
           : null;
@@ -1761,7 +1768,7 @@ export class MapearTabela {
             tipo,
             papel: inferirPapelColuna(coluna.nome, tipo),
             formato: inferirFormatoColuna(tipo),
-            sensibilidade: inferirSensibilidadeColuna(coluna.nome, tipo),
+            sensibilidade: inferirSensibilidadeColuna(coluna.nome),
             origem: "inferido",
             autorUsuarioId: uid,
           });
@@ -1798,7 +1805,7 @@ export class MapearTabela {
             nullable: coluna.nullable,
             papel: inferirPapelColuna(coluna.nome, tipo || null),
             formato: inferirFormatoColuna(tipo || null),
-            sensibilidade: inferirSensibilidadeColuna(coluna.nome, tipo || null),
+            sensibilidade: inferirSensibilidadeColuna(coluna.nome),
           };
         }),
         avisos,

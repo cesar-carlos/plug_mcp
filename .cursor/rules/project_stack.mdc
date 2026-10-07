@@ -8,7 +8,7 @@ alwaysApply: false
 
 Node.js 24 LTS (Krypton, `.nvmrc` = 24.21.0), TypeScript ESM (`NodeNext`, imports com `.js`).
 
-Produção: `@modelcontextprotocol/server + core + node + express`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`, `node-sql-parser`, `sharp`, `file-type`, `pdfkit`.
+Produção: `@modelcontextprotocol/server + core + node + express`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`, `node-sql-parser`, `sharp`, `file-type`, `pdfkit`. Console em `web/`: Vue 3, Vue Router, Pinia, Vite (`npm run web:build`); o Express serve `web/dist` em `/app`.
 
 Não usar: `jose`, `bcryptjs`, `cookie-parser`, `jsonwebtoken`, `dotenv`, `uuid`, `moment`, `jimp`, `pdf-lib`, `puppeteer`. Sem embeddings (busca é FTS léxica). Sem conversor Office/HEIC.
 

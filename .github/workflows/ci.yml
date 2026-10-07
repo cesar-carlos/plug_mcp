@@ -52,6 +52,7 @@ jobs:
           node-version-file: ".nvmrc"
           cache: npm
       - run: npm ci
+      - run: npm run web:build
       - run: npm run compiler:check
       - run: npm audit --omit=dev --audit-level=high
       - name: Install plug_server contract dependencies

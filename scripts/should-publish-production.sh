@@ -5,7 +5,7 @@ set -euo pipefail
 found=0
 while IFS= read -r file || [ -n "$file" ]; do
   case "$file" in
-    src/* | drizzle/* | docs/mcp/error-mapping.md | Dockerfile | docker-entrypoint.sh | package.json | package-lock.json | docker-compose.yml | .github/workflows/ci.yml | .github/workflows/deploy.yml)
+    src/* | web/* | drizzle/* | docs/mcp/error-mapping.md | Dockerfile | docker-entrypoint.sh | package.json | package-lock.json | docker-compose.yml | .github/workflows/ci.yml | .github/workflows/deploy.yml)
       found=1
       ;;
   esac

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import cors from "cors";
 import compression from "compression";
 import express, { type Express } from "express";
@@ -24,6 +26,8 @@ import { ERROR_MAPPING_DOC_PATH } from "../../domain/errors/error-next-action.js
 import { createRateLimiter, mcpRateLimitKey, type RateLimitStore } from "./rate-limit.js";
 import { readErrorMappingMarkdown } from "./error-mapping-doc.js";
 import type { SetupCodeStore } from "./setup-code-store.js";
+import { registerConsoleApi } from "./console-api.js";
+import { sendCaughtError, wantsJson } from "./console-errors.js";
 
 export const consumeSetupToken = async (
   memory: SetupCodeStore,
@@ -139,7 +143,8 @@ export const createExpressApp = (input: {
       req.path !== "/mcp/chatgpt" &&
       !req.path.startsWith("/oauth/") &&
       !req.path.startsWith("/.well-known/") &&
-      !req.path.startsWith("/setup/")
+      !req.path.startsWith("/setup/") &&
+      !req.path.startsWith("/app")
     ) {
       next();
       return;
@@ -148,7 +153,8 @@ export const createExpressApp = (input: {
     const browserForm =
       req.path === "/oauth/authorize/authenticate" ||
       req.path === "/oauth/authorize/consent" ||
-      req.path.startsWith("/setup/");
+      req.path.startsWith("/setup/") ||
+      req.path.startsWith("/app");
     const originAllowed = browserForm
       ? origin === new URL(input.config.PUBLIC_BASE_URL).origin
       : origin !== undefined && input.config.allowedOrigins.includes(origin);
@@ -256,7 +262,17 @@ export const createExpressApp = (input: {
       );
   });
   app.post("/setup/:code", async (req, res) => {
+    const json = wantsJson(req.header("accept"));
     if (req.header("origin") !== new URL(input.config.PUBLIC_BASE_URL).origin) {
+      if (json) {
+        res.status(403).json({
+          success: false,
+          code: "VALIDATION_ERROR",
+          message: "Origem não autorizada.",
+          hint: "O POST do formulário usa a origem de PUBLIC_BASE_URL.",
+        });
+        return;
+      }
       res.status(403).type("html").send("<p>Origem não autorizada.</p>");
       return;
     }
@@ -268,7 +284,24 @@ export const createExpressApp = (input: {
       );
       const result = await input.useCases.setupOperations?.complete(req.params.code ?? "", form);
       if (!result) {
+        if (json) {
+          res.status(404).json({
+            success: false,
+            code: "VALIDATION_ERROR",
+            message: "Operação indisponível.",
+            hint: "Gere uma nova URL de operação e confirme no navegador.",
+          });
+          return;
+        }
         res.status(404).send("Operação indisponível.");
+        return;
+      }
+      if (json) {
+        res.json({
+          success: true,
+          ...(result.token ? { token: result.token } : {}),
+          ...(result.acessoId ? { acessoId: result.acessoId } : {}),
+        });
         return;
       }
       res
@@ -278,7 +311,11 @@ export const createExpressApp = (input: {
             ? setupTokenHtml(result.token)
             : "<p>Credenciais atualizadas no hub e no cofre.</p>",
         );
-    } catch {
+    } catch (error) {
+      if (json) {
+        sendCaughtError(res, error);
+        return;
+      }
       res
         .status(400)
         .type("html")
@@ -286,6 +323,39 @@ export const createExpressApp = (input: {
           "<p>Operação não concluída. Verifique as credenciais no hub e gere uma nova URL.</p>",
         );
     }
+  });
+
+  registerConsoleApi(app, {
+    config: input.config,
+    useCases: input.useCases,
+    acessos: input.acessos,
+    crypto: input.crypto,
+    mcpRateLimitStore: input.mcpRateLimitStore,
+  });
+
+  const spaDir = path.resolve(process.cwd(), "web", "dist");
+  app.use("/app", (req, res, next) => {
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    );
+    next();
+  });
+  app.use("/app", express.static(spaDir, { index: false, fallthrough: true }));
+  app.get(/^\/app(?:\/.*)?$/, (req, res, next) => {
+    if (req.path.startsWith("/app/api")) {
+      next();
+      return;
+    }
+    const index = path.join(spaDir, "index.html");
+    if (!existsSync(index)) {
+      res
+        .status(503)
+        .type("text/plain; charset=utf-8")
+        .send("Console indisponível. Execute npm run web:build.");
+      return;
+    }
+    res.sendFile(index);
   });
 
   const quota = new McpSessionQuota();

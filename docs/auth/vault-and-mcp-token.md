@@ -4,6 +4,8 @@ O usuário já é Client no plug-server. O MCP mantém Bearer manual, com OAuth 
 
 ## Cadastro e manutenção no navegador
 
+A SPA `/app` (documentada em [console.md](../clients/console.md)) usa o mesmo cofre: `POST /app/api/setup/registrar` devolve setupUrl; `GET /app/api/setup/:code` devolve purpose, csrf e campos sem consumir o código; o POST de `/setup/:code` aceita HTML ou JSON (`Accept: application/json` devolve `{ token, acessoId }` ou `{ code, message, hint }`).
+
 registrar_acesso (bootstrap), adicionar_acesso, atualizar_credencial_plug e rotacionar_token_mcp recebem um objeto vazio estrito. Argumentos com senha ou tokens são recusados. A resposta contém success, setupUrl e expiresAt. Nunca envie credenciais no chat.
 
 1. Abra setupUrl. GET /setup/:code mostra o formulário e cria proteção CSRF; não consome a operação nem emite Bearer.

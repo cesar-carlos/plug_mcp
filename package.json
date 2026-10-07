@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
     "build": "tsc -p tsconfig.build.json",
+    "web:build": "npm ci --prefix web --include=dev && npm run build --prefix web",
+    "web:dev": "npm run dev --prefix web",
     "start": "node --env-file-if-exists=.env dist/main.js",
     "worker:operacoes": "tsx --env-file-if-exists=.env src/worker-operacoes.ts",
     "lint": "eslint src tests",

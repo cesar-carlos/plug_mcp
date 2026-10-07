@@ -13,7 +13,7 @@ import prettierConfig from "eslint-config-prettier";
  */
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**", "coverage/**", "drizzle/**"],
+    ignores: ["dist/**", "node_modules/**", "coverage/**", "drizzle/**", "web/**"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

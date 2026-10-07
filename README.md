@@ -22,7 +22,7 @@ GIT_SHA=$(git rev-parse HEAD) docker compose --profile container up --build -d -
 
 `--no-deps` não recria Postgres nem Redis. O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Não suba `se7e-mcp` no PM2: o mesmo daemon segue com `plug_server`, Chatwoot e `evogo-qrcode`, e outro processo na 3333 toma a porta do proxy. Para Redis no host, o guia continua em [operations/redis.md](docs/operations/redis.md).
 
-Push na `main` do GitHub, depois que o workflow `ci` termina com sucesso, dispara `deploy` só se o commit altera o runtime (`src/`, `drizzle/`, `Dockerfile`, `docker-entrypoint.sh`, `package.json`, `package-lock.json`, `docker-compose.yml`, `docs/mcp/error-mapping.md` ou os workflows de CI/deploy). O CI publica a imagem `linux/amd64` já testada em `ghcr.io/cesar-carlos/plug_mcp:<sha>`. O deploy baixa essa imagem e envia por SSH o SHA exato que passou no CI. A chave só executa `/usr/local/sbin/plug-mcp-deploy`, cópia de `scripts/deploy-production.sh` instalada fora do Git: um commit não troca o que a chave pode fazer. Atualizar esse script exige copiá-lo de novo para `/usr/local/sbin`. O servidor confere `/health` e `/ready`; se falhar, volta a imagem anterior. O resultado aparece no commit como status `production/mcp` e em `/var/log/plug-mcp-deploy.log`. Secrets: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_HOST_KEY`. O `.env` não vai no repositório. Cada publicação recria só o container `mcp` e derruba as sessões que estavam na memória dele.
+Push na `main` do GitHub, depois que o workflow `ci` termina com sucesso, dispara `deploy` só se o commit altera o runtime (`src/`, `web/`, `drizzle/`, `Dockerfile`, `docker-entrypoint.sh`, `package.json`, `package-lock.json`, `docker-compose.yml`, `docs/mcp/error-mapping.md` ou os workflows de CI/deploy). O CI publica a imagem `linux/amd64` já testada em `ghcr.io/cesar-carlos/plug_mcp:<sha>`. O deploy baixa essa imagem e envia por SSH o SHA exato que passou no CI. A chave só executa `/usr/local/sbin/plug-mcp-deploy`, cópia de `scripts/deploy-production.sh` instalada fora do Git: um commit não troca o que a chave pode fazer. Atualizar esse script exige copiá-lo de novo para `/usr/local/sbin`. O servidor confere `/health` e `/ready`; se falhar, volta a imagem anterior. O resultado aparece no commit como status `production/mcp` e em `/var/log/plug-mcp-deploy.log`. Secrets: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_HOST_KEY`. O `.env` não vai no repositório. Cada publicação recria só o container `mcp` e derruba as sessões que estavam na memória dele.
 
 ### Local (Node + Postgres no Docker)
 
@@ -46,6 +46,7 @@ Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fecha
 - Ready: `GET http://127.0.0.1:3333/ready` (`database: ok|skipped|error`; 503 se o banco falhar)
 - MCP: `POST http://127.0.0.1:3333/mcp`
 - Formulário público: `GET http://127.0.0.1:3333/setup/{code}`
+- Console do usuário (após `npm run web:build`): `GET http://127.0.0.1:3333/app/conectar`
 
 ## Bootstrap
 

@@ -2,6 +2,7 @@ import { assertPrivacidadeAntesDoHub } from "./shared/assert-privacidade.js";
 import {
   inferirSensibilidadeColuna,
   parseSensibilidadeColuna,
+  sensibilidadeGravadaEfetiva,
 } from "../../domain/entities/privacidade.js";
 import { createHash } from "node:crypto";
 import { identidadeConsulta } from "../../domain/entities/consulta-fingerprint.js";
@@ -114,8 +115,13 @@ export class SalvarConsulta {
               (!table || c.tabela.toLowerCase() === table.toLowerCase()) &&
               c.nome.toLowerCase() === col.toLowerCase(),
           );
-        return found.length === 1
-          ? parseSensibilidadeColuna(found[0]!.sensibilidade)
+        const coluna = found.length === 1 ? found[0] : undefined;
+        return coluna
+          ? sensibilidadeGravadaEfetiva({
+              nome: coluna.nome,
+              gravada: parseSensibilidadeColuna(coluna.sensibilidade),
+              origem: coluna.origem,
+            })
           : inferirSensibilidadeColuna(col);
       },
     });

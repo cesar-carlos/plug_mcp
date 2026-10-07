@@ -3,6 +3,7 @@ import type { SqlAstSelect } from "./sql-ast.js";
 import {
   inferirSensibilidadeColuna,
   maxSensibilidade,
+  sensibilidadeGravadaEfetiva,
   type SensibilidadeColuna,
 } from "../../../domain/entities/privacidade.js";
 import type { GrafoRepositoryPort } from "../../../domain/ports/grafo-repository.port.js";
@@ -198,12 +199,37 @@ export const mascararLinhas = (input: {
   return { rows, colunasMascaradas };
 };
 
+interface ClasseGravada {
+  sensibilidade: SensibilidadeColuna;
+  origem: string;
+}
+
+const classeMaisRestritiva = (
+  atual: ClasseGravada | undefined,
+  proxima: ClasseGravada,
+): ClasseGravada => {
+  if (!atual) {
+    return proxima;
+  }
+  const escolhida = maxSensibilidade([atual.sensibilidade, proxima.sensibilidade]);
+  if (escolhida !== atual.sensibilidade) {
+    return proxima;
+  }
+  if (escolhida !== proxima.sensibilidade) {
+    return atual;
+  }
+  if (proxima.origem === "confirmado_usuario") {
+    return proxima;
+  }
+  return atual;
+};
+
 export const lookupSensibilidadeGrafo = async (
   grafo: GrafoRepositoryPort,
   acessoId: string,
   tabelas: readonly string[],
 ): Promise<(tabela: string | null, coluna: string) => SensibilidadeColuna | null> => {
-  const map = new Map<string, SensibilidadeColuna>();
+  const map = new Map<string, ClasseGravada>();
   for (const nome of tabelas) {
     const tabela = await grafo.findTabelaByNome(acessoId, nome);
     if (!tabela) {
@@ -211,17 +237,35 @@ export const lookupSensibilidadeGrafo = async (
     }
     const cols = await grafo.listColunas(acessoId, tabela.id);
     for (const coluna of cols) {
-      map.set(`${tabela.nome.toLowerCase()}.${coluna.nome.toLowerCase()}`, coluna.sensibilidade);
-      map.set(
-        coluna.nome.toLowerCase(),
-        maxSensibilidade([map.get(coluna.nome.toLowerCase()) ?? "livre", coluna.sensibilidade]),
-      );
+      const gravada: ClasseGravada = {
+        sensibilidade: coluna.sensibilidade,
+        origem: coluna.origem,
+      };
+      map.set(`${tabela.nome.toLowerCase()}.${coluna.nome.toLowerCase()}`, gravada);
+      const solta = coluna.nome.toLowerCase();
+      map.set(solta, classeMaisRestritiva(map.get(solta), gravada));
     }
   }
   return (tabela, coluna) => {
     if (tabela) {
-      return map.get(`${tabela.toLowerCase()}.${coluna.toLowerCase()}`) ?? null;
+      const qualificada = map.get(`${tabela.toLowerCase()}.${coluna.toLowerCase()}`);
+      if (!qualificada) {
+        return null;
+      }
+      return sensibilidadeGravadaEfetiva({
+        nome: coluna,
+        gravada: qualificada.sensibilidade,
+        origem: qualificada.origem,
+      });
     }
-    return map.get(coluna.toLowerCase()) ?? inferirSensibilidadeColuna(coluna);
+    const solta = map.get(coluna.toLowerCase());
+    if (!solta) {
+      return inferirSensibilidadeColuna(coluna);
+    }
+    return sensibilidadeGravadaEfetiva({
+      nome: coluna,
+      gravada: solta.sensibilidade,
+      origem: solta.origem,
+    });
   };
 };

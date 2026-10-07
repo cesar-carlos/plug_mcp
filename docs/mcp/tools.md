@@ -92,7 +92,7 @@ Flags (default **ligado**; `false`/`0`/`no` desliga para rollback):
 
 Tool desligada → `FEATURE_DESLIGADA` (não aparece em `tools/list` quando a flag já estava off no boot). Após deploy, o cliente MCP precisa **reconectar** — o catálogo `tools/list` pode estar cacheado.
 
-HTTP (não são tools): `GET /health` → `status`, `service`, `version`, `sha` (GIT_SHA / SOURCE_COMMIT / GITHUB_SHA; `unknown` se o deploy não injetar), `buildTime`, `uptimeSec`. `GET /ready` → `SELECT 1` se há `DATABASE_URL`; senão `database: skipped`.
+HTTP (não são tools): `GET /health` → `status`, `service`, `version`, `sha` (GIT_SHA / SOURCE_COMMIT / GITHUB_SHA; `unknown` se o deploy não injetar), `buildTime`, `uptimeSec`. `GET /ready` → `SELECT 1` se há `DATABASE_URL`; senão `database: skipped`. Console do usuário: SPA em `/app` e BFF em `/app/api` (os mesmos casos de uso destas tools; senha e `client_token` só no POST de `/setup/:code`). `POST /setup/:code` com `Accept: application/json` devolve `{ token, acessoId }` ou `{ code, message, hint }`. Detalhe: [console.md](../clients/console.md).
 
 ## Skills
 

@@ -22,29 +22,31 @@ export const maxSensibilidade = (values: readonly SensibilidadeColuna[]): Sensib
   return max;
 };
 
-const PESSOAL =
-  /\b(cpf|cnpj|rg|email|e-mail|telefone|celular|fone|nome|razao|endereco|end[eê]reco|cep|bairro|cidade|nascimento|mae|pai|documento)\b/i;
 const SEGREDO = /\b(senha|password|passwd|secret|token|api[_-]?key|chave|hash|salt|private)\b/i;
-const SENSIVEL =
-  /\b(observa|historico|hist[oó]rico|comentario|coment[aá]rio|anotacao|anota[cç]ao|memo|texto|descricao_livre|obs)\b/i;
 
-export const inferirSensibilidadeColuna = (
-  nome: string,
-  tipo?: string | null,
-): SensibilidadeColuna => {
-  const n = nome.toLowerCase();
-  if (SEGREDO.test(n)) {
+/** Só segredo é inferido pelo nome. Pessoal e sensível exigem confirmação do usuário. */
+export const inferirSensibilidadeColuna = (nome: string): SensibilidadeColuna => {
+  if (SEGREDO.test(nome.toLowerCase())) {
     return "segredo";
   }
-  if (PESSOAL.test(n)) {
-    return "pessoal";
-  }
-  if (SENSIVEL.test(n)) {
-    return "sensivel";
-  }
-  const t = (tipo ?? "").toLowerCase();
-  if (t.includes("text") || t.includes("clob") || t.includes("ntext")) {
-    return "sensivel";
-  }
   return "livre";
+};
+
+/**
+ * Classe gravada por inferência antiga de pessoal/sensível não bloqueia projeção.
+ * Confirmação explícita (`confirmado_usuario`) permanece.
+ */
+export const sensibilidadeGravadaEfetiva = (input: {
+  nome: string;
+  gravada: SensibilidadeColuna;
+  origem?: string | null;
+}): SensibilidadeColuna => {
+  if (input.origem === "confirmado_usuario") {
+    return input.gravada;
+  }
+  if (input.gravada !== "pessoal" && input.gravada !== "sensivel") {
+    return input.gravada;
+  }
+  const inferida = inferirSensibilidadeColuna(input.nome);
+  return inferida === "segredo" ? inferida : "livre";
 };

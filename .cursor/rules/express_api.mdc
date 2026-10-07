@@ -8,7 +8,7 @@ alwaysApply: false
 
 - `GET /health` público. Não fala com o plug-server.
 - `GET /docs/mcp/error-mapping.md` público: matriz de erros do envelope (`documentationUrl`). Markdown, sem HTML extra.
-- GET /setup/:code mostra formulário e não consome; POST valida CSRF, Origin, finalidade/vínculo e identidade no hub, conclui uma vez e mostra Bearer. Código hash de 256 bits/15 minutos.
+- GET /setup/:code mostra formulário e não consome; POST valida CSRF, Origin, finalidade/vínculo e identidade no hub, conclui uma vez e mostra Bearer. Código hash de 256 bits/15 minutos. `Accept: application/json` no POST devolve `{ token, acessoId }` ou `{ code, message, hint }` sem ecoar segredo. Console Vue em `/app`; BFF `/app/api` chama os casos de uso das tools com o Bearer da persona.
 - `GET /.well-known/oauth-protected-resource` público: metadata do recurso **sem** Authorization Server (só `bearer_methods_supported: header`).
 - `POST|GET|DELETE /mcp` Streamable HTTP. CORS expõe `Mcp-Session-Id` e `mcp-protocol-version`. Origin inválido → 403.
 - Rotas OAuth opcionais para /mcp/chatgpt; cookie temporário de transação, sem login persistente. /mcp mantém seu contrato.

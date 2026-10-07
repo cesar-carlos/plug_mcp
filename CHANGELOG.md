@@ -13,11 +13,18 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- Console no navegador em `/app` (Vue 3 + Pinia): o usuário informa e-mail, senha, `agentId`, dialeto e `client_token` no formulário já seguro e mantém a persona, skills, grafo e operação pelos mesmos casos de uso das tools. Bearer só na memória da aba.
+- BFF `/app/api` e `POST /setup/:code` com `Accept: application/json` devolvem `{ token, acessoId }` ou `{ code, message, hint }`, sem ecoar senha ou `client_token`.
 - Procedimento para conferir a allowlist OAuth do piloto ChatGPT e recriar só o serviço `mcp`, sem imprimir segredos: `docs/operations/chatgpt-oauth-allowlist.md`.
+
+### Fixed
+
+- Criar outra persona no console mostra o Bearer novo sem trocar a persona da aba. Publicar skill só abre no passo `publicar_skill`, com o hash na memória. Params, anotações, escopo vinculado, JOIN, consulta inativada, alerta, lacuna e webhook passam a ter formulário.
 - Push na `main`, após o CI verde, publica o container MCP por SSH somente quando o commit altera o runtime. A imagem é a `linux/amd64` já testada no CI, identificada pelo SHA que passou. A chave executa `/usr/local/sbin/plug-mcp-deploy`, fora do Git. Falha de `/health` ou `/ready` restaura a imagem anterior. O commit recebe o status `production/mcp` e o host grava `/var/log/plug-mcp-deploy.log`.
 
 ### Changed
 
+- A inferência pelo nome só classifica segredo (senha, token, chave e equivalentes). Pessoal e sensível deixam de ser inferidos, inclusive texto livre e tipo `text`/`clob`, e a projeção desses campos volta a sair. Classe confirmada pelo usuário permanece.
 - Neste servidor o MCP de produção passou a ser o serviço `mcp` do Compose (perfil `container`), em `127.0.0.1:3333`, com `restart: unless-stopped`. O PM2 deixa de subir `se7e-mcp`, para não disputar a porta com o Nginx.
 - `.env.example` passa a listar `E2E_AGENT_ID`, `E2E_CLIENT_TOKEN`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD` e `E2E_DIALETO`, vazios. Sem esses valores, `npm run test:live` continua se pulando.
 

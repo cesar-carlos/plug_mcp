@@ -37,7 +37,8 @@ RUN npm ci
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY scripts/check-compiler.mjs ./scripts/check-compiler.mjs
-RUN npm run compiler:check && npm run build
+COPY web ./web
+RUN npm run compiler:check && npm run build && npm run web:build
 
 FROM node-base AS prod-deps
 WORKDIR /app
@@ -55,6 +56,7 @@ RUN apk add --no-cache libstdc++ ca-certificates \
 COPY --from=node-base /usr/local/bin/node /usr/local/bin/node
 COPY --chown=mcp:mcp --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=mcp:mcp --from=build /app/dist ./dist
+COPY --chown=mcp:mcp --from=build /app/web/dist ./web/dist
 COPY --chown=mcp:mcp drizzle ./drizzle
 COPY --chown=mcp:mcp docs/mcp/error-mapping.md ./docs/mcp/error-mapping.md
 COPY --chown=mcp:mcp docker-entrypoint.sh ./

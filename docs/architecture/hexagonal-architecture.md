@@ -5,7 +5,7 @@ Cliente MCP
    │  Streamable HTTP
    │  Bearer token MCP  (ou bootstrap sem Bearer)
    ▼
-Express  /mcp  /setup/:code  /health  /ready  /.well-known/oauth-protected-resource
+Express  /mcp  /setup/:code  /app  /app/api  /health  /ready  /.well-known/oauth-protected-resource
    │
 use-cases  →  ports  ←  adapters (Drizzle, REST plug-server, crypto)
 ```
