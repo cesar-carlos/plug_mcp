@@ -91,9 +91,34 @@ label {
   padding: 1.2rem 1rem;
 }
 
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0 0 1rem;
+}
+
 .nav h1 {
   font-size: 1rem;
-  margin: 0 0 1rem;
+  margin: 0;
+}
+
+.brand {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.brand.compact {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.public-head {
+  display: flex;
+  justify-content: center;
+  padding: 2.2rem 1rem 0;
 }
 
 .nav a {

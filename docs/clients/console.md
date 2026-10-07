@@ -4,7 +4,7 @@ A SPA em `/app` deixa o usuário cadastrar a conexão com o plug_server e manter
 
 ## Abrir
 
-Depois do build (`npm run web:build`), o Express serve `web/dist` em `/app`. Produção: `https://mcp.se7esistemassinop.com.br/app/conectar`.
+Depois do build (`npm run web:build`), o Express serve `web/dist` em `/app`. Produção: `https://mcp.se7esistemassinop.com.br/app/conectar`. A aba usa o ícone Se7e (`web/public/`: favicon, apple-touch e PNGs 192/512).
 
 ## Criar a conexão
 

@@ -13,7 +13,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
-- Console no navegador em `/app` (Vue 3 + Pinia): o usuário informa e-mail, senha, `agentId`, dialeto e `client_token` no formulário já seguro e mantém a persona, skills, grafo e operação pelos mesmos casos de uso das tools. Bearer só na memória da aba.
+- Console no navegador em `/app` (Vue 3 + Pinia): o usuário informa e-mail, senha, `agentId`, dialeto e `client_token` no formulário já seguro e mantém a persona, skills, grafo e operação pelos mesmos casos de uso das tools. Bearer só na memória da aba. Favicon e marca Se7e na aba e na navegação.
 - BFF `/app/api` e `POST /setup/:code` com `Accept: application/json` devolvem `{ token, acessoId }` ou `{ code, message, hint }`, sem ecoar senha ou `client_token`.
 - Procedimento para conferir a allowlist OAuth do piloto ChatGPT e recriar só o serviço `mcp`, sem imprimir segredos: `docs/operations/chatgpt-oauth-allowlist.md`.
 
@@ -106,8 +106,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Changed
 
-- O Bearer autentica **exatamente um** acesso (sessão `(usuarioId, acessoId)`). Tools omitem `acessoId`; `acessoId` de outra persona → `VALIDATION_ERROR`. `listar_acessos` / `rotacionar_token_mcp` / `remover_acesso` / `initialize.instructions` / `skill_*` / resources são só desta persona. Não há inferência N>1 nem sufixo `_acesso8` no caminho autenticado. Auth deixa de usar `usuario_mcp.token_hash` (coluna removida no cutover). Cada persona no Cursor é **uma entrada de servidor MCP**.
-- Catálogo de treino (skill, grafo, anotações, consultas aprendidas, sinônimos, lacunas, FTS) passa a ser por `acesso_id` — **1 `client_token` = 1 persona = 1 catálogo**. Unique slug `(acesso_id, slug)`. Mesmo e-mail/`agentId` + outro token (`adicionar_acesso`) começa vazio e não vê as skills do primeiro. Resource `skill://{acessoId}/{slug}` (não `agentId` na URI). Cache `mcp:query:acesso:{acessoId}:`. Hub SQL continua `agentId` + `client_token` daquele acesso. Cutover `0022_catalogo_por_acesso.sql`: um acesso no `agentId` anexa; vários duplicam cópias independentes; órfãos (zero acessos) ficam com `acesso_id` NULL e são registrados em `NOTICE` (`grafo_dialeto`/`grafo_lock` apagam órfãos).
+- O Bearer autentica **exatamente um** acesso (sessão `(usuarioId, acessoId)`). Tools omitem `acessoId`; `acessoId` de outra persona → `VALIDATION_ERROR`. `listar_acessos` / `rotacionar_token_mcp` / `remover_acesso` / `initialize.instructions` / `skill_`* / resources são só desta persona. Não há inferência N>1 nem sufixo `_acesso8` no caminho autenticado. Auth deixa de usar `usuario_mcp.token_hash` (coluna removida no cutover). Cada persona no Cursor é **uma entrada de servidor MCP**.
+- Catálogo de treino (skill, grafo, anotações, consultas aprendidas, sinônimos, lacunas, FTS) passa a ser por `acesso_id` — **1** `client_token` **= 1 persona = 1 catálogo**. Unique slug `(acesso_id, slug)`. Mesmo e-mail/`agentId` + outro token (`adicionar_acesso`) começa vazio e não vê as skills do primeiro. Resource `skill://{acessoId}/{slug}` (não `agentId` na URI). Cache `mcp:query:acesso:{acessoId}:`. Hub SQL continua `agentId` + `client_token` daquele acesso. Cutover `0022_catalogo_por_acesso.sql`: um acesso no `agentId` anexa; vários duplicam cópias independentes; órfãos (zero acessos) ficam com `acesso_id` NULL e são registrados em `NOTICE` (`grafo_dialeto`/`grafo_lock` apagam órfãos).
 - `remover_acesso` in-memory apaga o catálogo daquele `acesso_id` (skills, grafo, anotações, consultas aprendidas, sinônimos, lacunas, snapshots, dialeto/lock), alinhado ao `ON DELETE CASCADE` do Postgres.
 
 ### Fixed
@@ -149,7 +149,6 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Params: falta não bloqueante `kind: param` quando `tipo` ficou no default `string` (não impede `podeLiberar`). Passo 4 do pre-treino pede `tipo`.
 - `confirmar_relacionamento` sem `skillId` devolve hint: o validador publicado não vê o JOIN até ele entrar no pacote.
 - Treino: aviso `PAGINACAO_MODELO` se o `sqlModelo` já declara TOP/LIMIT/FIRST (`options.page` será recusado).
-
 - Pre-treino e docs: identificar o GDBR do acesso e emitir SQL compatível é treino + IA — o `plug_server` (hub) não reescreve dialeto nem trata erro de linguagem SQL; `sql_engine` vem do motor/GDBR via `plug_agente`.
 - `validar_skill` une o escopo do `sqlModelo` ao pacote já persistido (não reconstrói o allowlist pelo SELECT). Fotos/JOINs de `confirmar_coluna` / `confirmar_relacionamento` sobrevivem à validação.
 - `IN (:lista)`: `validar_consulta` também expande o array; teto documentado de 64 itens (`VALIDATION_ERROR` `source: mcp`) — recorte a lista, não interpole literais. Transporte ODBC/hub de listas grandes permanece no `plug_agente`.
@@ -342,7 +341,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - `consultar_dados` grava o SQL que funcionou (`consulta_aprendida`) e aceita `pergunta` + `aprendizado[]`. Tools `salvar_consulta` (exemplo curado) e `registrar_aprendizado` (regra/dicionário/sinônimo) permanecem para o que o servidor não infere do SELECT.
 - Migrations `0011_conhecimento.sql` (`skill.escopo`, papel/perfil/cardinalidade, `acesso.escopo_padrao`/`timezone`) e `0012_aprendizado.sql` (`consulta_aprendida`, `sinonimo`, `lacuna_consulta`).
 - Parser AST (`node-sql-parser`) no caminho de SQL livre. Firebird permanece só com consulta exemplo (`DIALECT_UNSUPPORTED`).
-- Flag `MCP_SKILL_TOOLS_ENABLED` (default **desligado**) para tools dinâmicas `skill_*`. Cache de resultado agregado (`QUERY_CACHE_TTL_MS`; Redis se `REDIS_URL`).
+- Flag `MCP_SKILL_TOOLS_ENABLED` (default **desligado**) para tools dinâmicas `skill_`*. Cache de resultado agregado (`QUERY_CACHE_TTL_MS`; Redis se `REDIS_URL`).
 - `treinar_com_sql enriquecer=completo`: cardinalidade, tipo/formato, perfil min/max/nulos e candidatos a dicionário (teto de 16 queries; falha vira aviso e não desfaz o treino). `validar_skill` aceita o mesmo `enriquecer=completo` para skills já publicadas.
 - Persistência preguiçosa de `skill.escopo` derivado do `sqlModelo` (e script `npm run db:backfill-escopo`) para skills antigas com JSON vazio. `escopo.grao` sai do SELECT (GROUP BY ou colunas físicas).
 - Suíte adversarial do validador de escopo (CTE, subquery, JOIN inventado no pacote, `SELECT *` aninhado, segundo comando). Teto de `GROUP BY` e aviso `LITERAL_TEXTO`.

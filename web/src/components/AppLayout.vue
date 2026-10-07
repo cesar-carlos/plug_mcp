@@ -10,6 +10,7 @@ export default defineComponent({
 import { useRoute } from "vue-router";
 import { computed } from "vue";
 import { useSessionStore } from "../stores/session";
+import BrandMark from "./BrandMark.vue";
 
 const route = useRoute();
 const session = useSessionStore();
@@ -19,11 +20,17 @@ const publicPage = computed(() => Boolean(route.meta.public));
 <template>
   <div>
     <div v-if="publicPage">
+      <div class="public-head">
+        <BrandMark />
+      </div>
       <RouterView />
     </div>
     <div v-else class="layout">
       <nav class="nav">
-        <h1>Console MCP</h1>
+        <div class="nav-brand">
+          <BrandMark compact />
+          <h1>Console MCP</h1>
+        </div>
         <p class="muted">{{ session.acesso?.nomeAmigavel ?? "Persona atual" }}</p>
         <a class="muted" style="display: block; margin-bottom: 0.8rem">{{
           session.acesso?.dialeto
