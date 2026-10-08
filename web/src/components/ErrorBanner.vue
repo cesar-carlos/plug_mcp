@@ -19,8 +19,14 @@ const text = (error: unknown): { title: string; hint: string } => {
 </script>
 
 <template>
-  <div v-if="error" class="error">
+  <div v-if="error" class="error" role="alert">
     <strong>{{ text(error).title }}</strong>
     <div v-if="text(error).hint">{{ text(error).hint }}</div>
+    <details v-if="error instanceof ConsoleApiError" class="raw">
+      <summary>Detalhes técnicos</summary>
+      <p>
+        Origem: {{ error.source || "console" }}<br />Próxima ação: {{ error.nextAction || "—" }}
+      </p>
+    </details>
   </div>
 </template>

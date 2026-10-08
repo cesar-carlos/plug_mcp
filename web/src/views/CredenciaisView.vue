@@ -3,17 +3,19 @@ export default { name: "CredenciaisView" };
 </script>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import { completeSetup } from "../composables/useSetupForm";
 import { useAction } from "../composables/useAction";
 import Page from "../components/Page.vue";
 import CredentialFields from "../components/CredentialFields.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 
-const { pending, error, run } = useAction();
+const { pending, error, run, success } = useAction();
 const credenciais = ref({ email: "", senha: "" });
 const confirmado = ref(false);
 const done = ref(false);
+useUnsavedChanges(computed(() => Boolean(credenciais.value.email || credenciais.value.senha)));
 
 const save = async (): Promise<void> => {
   done.value = false;
@@ -27,6 +29,8 @@ const save = async (): Promise<void> => {
       bearer,
     );
     done.value = true;
+    credenciais.value = { email: "", senha: "" };
+    confirmado.value = false;
   });
 };
 </script>
@@ -36,6 +40,8 @@ const save = async (): Promise<void> => {
     title="Credenciais do hub"
     lead="A senha só viaja no POST de /setup. Reautentica o mesmo Client."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <p v-if="done" class="ok">Credenciais atualizadas no hub e no cofre.</p>
     <form class="card" @submit.prevent="save">
@@ -45,7 +51,7 @@ const save = async (): Promise<void> => {
       </fieldset>
       <ConfirmField v-model="confirmado" label="Confirmo atualizar as credenciais deste Client" />
       <div class="form-actions">
-        <button type="submit" :disabled="pending">Atualizar</button>
+        <button type="submit" :disabled="pending || !confirmado">Salvar credenciais</button>
       </div>
     </form>
   </Page>

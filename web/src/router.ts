@@ -1,9 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useSessionStore } from "./stores/session";
 import { useSkillStore } from "./stores/skills";
+import { invalidateRequests } from "./api";
 
 export const router = createRouter({
   history: createWebHistory("/app/"),
+  scrollBehavior: () => ({ top: 0 }),
   routes: [
     { path: "/", redirect: "/acesso" },
     {
@@ -88,6 +90,12 @@ export const router = createRouter({
     { path: "/consultas", name: "consultas", component: () => import("./views/ConsultasView.vue") },
     { path: "/operacao", name: "operacao", component: () => import("./views/OperacaoView.vue") },
   ],
+});
+
+router.afterEach((_to, _from, failure) => {
+  if (!failure) {
+    invalidateRequests();
+  }
 });
 
 router.beforeEach((to) => {

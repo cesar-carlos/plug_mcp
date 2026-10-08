@@ -59,20 +59,22 @@ Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a con
 
 ## Scripts
 
-| Script                       | Função                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| `npm run dev`                | `tsx watch`                                                              |
-| `npm test`                   | Unitários, contratos e integrações; PostgreSQL/Redis quando configurados |
-| `npm run test:live`          | plug-server real (`E2E_*`)                                               |
-| `npm run lint` / `format`    | ESLint + Prettier                                                        |
-| `npm run release:check`      | Compilador 7, lint, formatação, tipos, testes e build                    |
-| `npm run db:migrate`         | Aplica `drizzle/*.sql`                                                   |
-| `npm run test:migrations`    | Banco novo, upgrades `0023`/`0027` e reaplicação em DB efêmero de CI     |
-| `npm run runtime:check`      | Servidor, worker e componentes nativos em banco CI isolado               |
-| `npm run test:evaluation`    | Avaliação determinística dos 100 cenários sintéticos                     |
-| `npm run evaluate:consumer`  | Avaliação explícita com adaptador/modelo de IA configurados              |
-| `npm run worker:operacoes`   | Processa SLO, revisões e outbox de webhook (requer banco)                |
-| `npm run db:backfill-escopo` | Preenche `skill.escopo` vazio a partir do `sql_modelo`                   |
+| Script                         | Função                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| `npm run dev`                  | `tsx watch`                                                              |
+| `npm test`                     | Unitários, contratos e integrações; PostgreSQL/Redis quando configurados |
+| `npm run test:live`            | plug-server real (`E2E_*`)                                               |
+| `npm run lint` / `format`      | ESLint + Prettier                                                        |
+| `npm run release:check`        | Compilador 7, lint, formatação, tipos, testes, build e `web:check`       |
+| `npm run web:check`            | Lint Vue/TypeScript, tipos, Vitest e build do console                    |
+| `npm run test:console:browser` | Chromium do console, separado do OAuth, com `FakePlugServer`             |
+| `npm run db:migrate`           | Aplica `drizzle/*.sql`                                                   |
+| `npm run test:migrations`      | Banco novo, upgrades `0023`/`0027` e reaplicação em DB efêmero de CI     |
+| `npm run runtime:check`        | Servidor, worker e componentes nativos em banco CI isolado               |
+| `npm run test:evaluation`      | Avaliação determinística dos 100 cenários sintéticos                     |
+| `npm run evaluate:consumer`    | Avaliação explícita com adaptador/modelo de IA configurados              |
+| `npm run worker:operacoes`     | Processa SLO, revisões e outbox de webhook (requer banco)                |
+| `npm run db:backfill-escopo`   | Preenche `skill.escopo` vazio a partir do `sql_modelo`                   |
 
 Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.21.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
 

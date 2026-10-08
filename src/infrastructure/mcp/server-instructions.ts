@@ -20,6 +20,7 @@ Aprendizado constante (obrigatório, não opcional):
 - Reuse consultasAprendidas[].id de buscar_contexto em obter_skill (consultasExemplo com o mesmo id). Não reinvente o SELECT.
 - Se o usuário ensinar regra, dicionário, glossário, métrica ou sinônimo: registre explicitamente por registrar_aprendizado; consultar_dados.aprendizado[] apenas sinaliza pendência (tipo=metrica + skillId overlaya metricasSaida). Não responda só no chat.
 - SQL que já funcionou e merece nome claro: salvar_consulta: obtenha preview e confirmacaoHash; mostre ao humano; confirme com ID/hash vigente e confirmadoPeloUsuario. Aprovação não incrementa execuções.
+- Inativar exemplo: inativar_consulta_aprendida devolve preview com acesso, consulta/versão/SQL/contrato/publicações/status e motivo usados no hash; mostre esse conteúdo antes da confirmação humana. Alteração ou confirmação obsoleta exige novo preview, sem repetição automática. Para editar uma candidata, prepare novo exemplo sem o ID anterior e preserve todos os vínculos de skills; não reative inativa implicitamente.
 - Sem skill capaz: SKILL_GAP; o servidor grava lacuna_consulta. Oriente o treino. Não invente tabela, coluna nem JOIN.
 - SQL recusado (validador/hub) **não** é gravado. Se o usuário ensinar a correção (regra, dicionário, sinônimo, SQL que funcionou): registrar_aprendizado ou salvar_consulta com confirmação humana; aprendizado[] apenas sinaliza pendência.
 

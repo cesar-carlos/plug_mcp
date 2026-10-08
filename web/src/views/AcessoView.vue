@@ -11,7 +11,7 @@ import Page from "../components/Page.vue";
 import StatusPill from "../components/StatusPill.vue";
 
 const session = useSessionStore();
-const { error, run } = useAction();
+const { error, run, pending, success } = useAction();
 
 const sqlResumo = computed(() => {
   const acesso = session.acesso;
@@ -31,15 +31,17 @@ const sqlResumo = computed(() => {
 });
 
 onMounted(() => {
-  void run(async () => session.refreshAcesso());
+  void run(async () => session.refreshAcesso(), { feedback: false });
 });
 </script>
 
 <template>
   <Page
     title="Acesso desta persona"
-    lead="Este Bearer autentica só esta persona. Outro chapéu usa outro token."
+    lead="Este Token MCP autentica só esta persona. Outra persona usa outro token."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <div v-if="session.acesso" class="card">
       <div class="row">

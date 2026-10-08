@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { presentPayload } from "./data-view";
 
 describe("presentPayload", () => {
+  it("apresenta todos os itens e colunas recebidos sem corte silencioso", () => {
+    const linhas = Array.from({ length: 75 }, (_, i) =>
+      Object.fromEntries(Array.from({ length: 12 }, (_, col) => [`c${col}`, `${i}:${col}`])),
+    );
+    const view = presentPayload({ linhas });
+    expect(view.tables[0]?.rows).toHaveLength(75);
+    expect(view.tables[0]?.columns).toHaveLength(12);
+    expect(view.tables[0]?.rows[74]?.[11]).toBe("74:11");
+  });
   it("lista tabelas e deixa o recorte num fato", () => {
     const view = presentPayload({
       success: true,

@@ -217,6 +217,32 @@ describe("evolução do treinamento", () => {
         motivo: "Referência incorreta",
       }),
     );
+    expect(preview).toMatchObject({
+      confirmacaoPendente: true,
+      preview: {
+        acessoId: env.a.acessoId,
+        motivo: "Referência incorreta",
+        consulta: {
+          id: c.id,
+          sql: env.sql,
+          pergunta: input.pergunta,
+          status: "confirmada",
+          publicacoes: input.publicacoes,
+        },
+      },
+    });
+    expect(preview.confirmacaoHash).toBe(hashTreino(preview.preview));
+    expect((await env.learned.obterConsulta(env.a.acessoId, c.id))?.status).toBe("confirmada");
+    await expect(
+      env.run(() =>
+        env.service.inativarConsulta(env.a.usuarioId, {
+          consultaAprendidaId: c.id,
+          motivo: "Motivo alterado",
+          confirmadoPeloUsuario: true,
+          confirmacaoHash: String(preview.confirmacaoHash),
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "CONFIRMACAO_DESATUALIZADA" });
     await env.run(() =>
       env.service.inativarConsulta(env.a.usuarioId, {
         consultaAprendidaId: c.id,

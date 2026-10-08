@@ -13,6 +13,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- Console: temas Sistema/Claro/Escuro com tokens semânticos, menu móvel acessível, confirmações e componentes compartilhados; `web:check` com lint Vue/TypeScript, tipos, Vitest e build no gate de release. Suíte Chromium do console separada do OAuth com `FakePlugServer` e fixtures sintéticas em Linux/Windows.
 - Console: tela **SQL de treino** (`/skills/sql`) lista o `sqlModelo` de cada skill desta persona e grava pelo mesmo `atualizar_skill`. O GET é `/app/api/skills/modelos`; a tool MCP `listar_skills` continua sem SQL.
 - Console no navegador em `/app` (Vue 3 + Pinia): o usuário informa e-mail, senha, `agentId`, dialeto e `client_token` no formulário já seguro e mantém a persona, skills, grafo e operação pelos mesmos casos de uso das tools. Bearer só na memória da aba. Favicon e marca Se7e na aba e na navegação.
 - BFF `/app/api` e `POST /setup/:code` com `Accept: application/json` devolvem `{ token, acessoId }` ou `{ code, message, hint }`, sem ecoar senha ou `client_token`.
@@ -20,6 +21,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- Console: salvar antes de validar, preservar edições pendentes, separar rascunho/publicação ativa e impedir confirmações obsoletas ou envios repetidos. Consultas distinguem candidata de novo exemplo, preservam múltiplas skills e isolam inativação. Anotações preservam governança, grafo mantém destino e JOIN composto, escopo permite remover vínculos, operação carrega seções independentemente e respostas antigas são descartadas na troca de sessão.
 - As páginas do plugin e do cofre usam o ícone Se7e de `/app/icon-192.png`. A CSP dessas respostas libera imagem só do próprio servidor.
 - A marca Se7e do console é uma URL pública em `/app`, para o Vite não tratar o PNG como módulo e o build da imagem falhar.
 - Criar outra persona no console mostra o Bearer novo sem trocar a persona da aba. Publicar skill só abre no passo `publicar_skill`, com o hash na memória. Params, anotações, escopo vinculado, JOIN, consulta inativada, alerta, lacuna e webhook passam a ter formulário.
@@ -27,6 +29,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Changed
 
+- `inativar_consulta_aprendida`: o preview retorna o conteúdo canônico associado ao hash (acesso, consulta/versionamento/SQL/contrato/publicações/status e motivo), sem alterar confirmação, CAS ou campos existentes.
 - SQL de treino abre os cartões fechados, filtra por trecho do SQL ou só os ilegíveis, mostra rascunho e publicação separados e grava um cartão sem apagar a edição dos outros. Em Consultas, abrir uma linha mostra o SQL do exemplo; a lista segue sem SQL e a troca continua no preview de `salvar_consulta`.
 - O menu do console tem **Sair**: esquece o Bearer e a skill aberta nesta aba e volta à tela de colar o token. A persona e o catálogo permanecem.
 - `listar_skills` e `obter_skill` seguem quando um `sqlModelo` não é interpretável: essa skill volta com falta `kind: sql` (`nextAction: atualizar_skill`, sem `podeLiberar`) e as demais permanecem na lista.

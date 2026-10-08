@@ -8,6 +8,8 @@ alwaysApply: true
 
 ## Configuração do compilador
 
+- Console `web/`: projeto Vite/Vue separado usa `moduleResolution: bundler` e imports locais sem `.js`, `vue-tsc --noEmit` e `web/eslint.config.js` flat com lint tipado. `strict` permanece habilitado; validar respostas na fronteira e manter regras de negócio/autorização no backend. Tipos do frontend acompanham governança, publicação/rascunho, consultas N:N e pares de JOIN existentes.
+
 - `strict: true` sempre habilitado. Não enfraqueça flags do compilador.
 - `noUncheckedIndexedAccess: true` — acesso por índice é `T | undefined`; estreite antes de usar.
 - `moduleResolution: NodeNext` + `module: NodeNext` — imports internos exigem extensão `.js` (mesmo que o fonte seja `.ts`).

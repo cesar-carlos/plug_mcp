@@ -5,13 +5,16 @@ export default { name: "SkillSqlView" };
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { api, type SkillSqlModeloRow } from "../api";
+import { listarModelos } from "../services/skills";
 import { useAction } from "../composables/useAction";
 import { statusLabel, toneForStatus } from "../presentation";
 import { mesclarSqlDrafts } from "../sql-draft";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import Page from "../components/Page.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 import ErrorBanner from "../components/ErrorBanner.vue";
 import StatusPill from "../components/StatusPill.vue";
+import SqlField from "../components/SqlField.vue";
 
 interface SkillSqlDraft extends SkillSqlModeloRow {
   original: string;
@@ -19,7 +22,7 @@ interface SkillSqlDraft extends SkillSqlModeloRow {
   confirmado: boolean;
 }
 
-const { pending, error, run } = useAction();
+const { pending, error, run, success } = useAction();
 const skills = ref<SkillSqlDraft[]>([]);
 const filtro = ref("");
 const soFalta = ref(false);
@@ -31,6 +34,7 @@ const faltaSql = (skill: SkillSqlModeloRow): string =>
   skill.faltas.find((falta) => falta.kind === "sql")?.message ?? "";
 
 const mudou = (skill: SkillSqlDraft): boolean => skill.sql.trim() !== skill.original.trim();
+useUnsavedChanges(computed(() => skills.value.some(mudou)));
 
 const rascunhoDistinto = (skill: SkillSqlDraft): boolean => skill.statusRascunho !== skill.status;
 
@@ -53,11 +57,7 @@ const aplicar = (rows: readonly SkillSqlModeloRow[], savedId?: string): void => 
 };
 
 const load = async (bearer: string | undefined, savedId?: string): Promise<void> => {
-  const result = await api.get<{ success: true; skills: SkillSqlModeloRow[] }>(
-    "/app/api/skills/modelos",
-    bearer,
-  );
-  aplicar(result.skills, savedId);
+  aplicar(await listarModelos(bearer), savedId);
 };
 
 const alternar = (id: string): void => {
@@ -65,7 +65,7 @@ const alternar = (id: string): void => {
 };
 
 onMounted(() => {
-  void run(load).then(() => {
+  void run(load, { feedback: false }).then(() => {
     pronto.value = true;
   });
 });
@@ -85,6 +85,7 @@ const save = async (skill: SkillSqlDraft): Promise<void> => {
       await load(bearer, skill.id);
     } catch (caught) {
       erros.value = { ...erros.value, [skill.id]: caught };
+      throw caught;
     }
   });
 };
@@ -95,6 +96,8 @@ const save = async (skill: SkillSqlDraft): Promise<void> => {
     title="SQL de treino"
     lead="O sqlModelo de cada skill desta persona. O selo publicada é a publicação ativa; o texto é o rascunho."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <div class="card">
       <label>
@@ -109,7 +112,12 @@ const save = async (skill: SkillSqlDraft): Promise<void> => {
     <p v-if="pronto && !error && skills.length === 0" class="empty">Nenhuma skill neste acesso.</p>
     <p v-else-if="pronto && visiveis.length === 0" class="empty">Nenhuma skill neste filtro.</p>
     <form v-for="skill in visiveis" :key="skill.id" class="card" @submit.prevent="save(skill)">
-      <button class="card-toggle" type="button" @click="alternar(skill.id)">
+      <button
+        class="card-toggle"
+        type="button"
+        :aria-expanded="Boolean(abertos[skill.id])"
+        @click="alternar(skill.id)"
+      >
         <span class="card-toggle-main">
           <strong>{{ skill.nome }}</strong>
           <span class="mono">{{ skill.slug }}</span>
@@ -126,10 +134,7 @@ const save = async (skill: SkillSqlDraft): Promise<void> => {
       <p v-else-if="skill.motivoRevalidacao" class="hint">{{ skill.motivoRevalidacao }}</p>
       <template v-if="abertos[skill.id]">
         <ErrorBanner :error="erros[skill.id]" />
-        <label>
-          sqlModelo
-          <textarea v-model="skill.sql" class="sql" rows="10" spellcheck="false" />
-        </label>
+        <SqlField v-model="skill.sql" :rows="10" />
         <p v-if="mudou(skill)" class="callout warn">
           Gravar este SQL devolve o rascunho a rascunho. Tabelas novas precisam já estar no grafo
           (Treino). A publicação ativa permanece até validar e republicar.

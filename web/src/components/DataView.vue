@@ -13,13 +13,13 @@ const props = defineProps<{
 }>();
 
 const presentation = computed(() => presentPayload(props.value));
-const listed = computed(
-  () => presentation.value.facts.length > 0 || presentation.value.tables.length > 0,
-);
 </script>
 
 <template>
   <div>
+    <p v-if="presentation.facts.length === 0 && presentation.tables.length === 0" class="empty">
+      {{ empty ?? "Nenhum dado disponível." }}
+    </p>
     <dl v-if="presentation.facts.length > 0" class="facts">
       <div v-for="(fact, index) in presentation.facts" :key="`${fact.label}-${index}`">
         <dt>{{ fact.label }}</dt>
@@ -29,20 +29,22 @@ const listed = computed(
     <section v-for="table in presentation.tables" :key="table.title" class="data-block">
       <h3>{{ table.title }}</h3>
       <p v-if="table.rows.length === 0" class="empty">{{ empty ?? table.empty }}</p>
-      <table v-else class="data">
-        <thead>
-          <tr>
-            <th v-for="column in table.columns" :key="column">{{ column }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex">
-            <td v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="table-scroll" tabindex="0" :aria-label="table.title">
+        <table class="data">
+          <thead>
+            <tr>
+              <th v-for="column in table.columns" :key="column">{{ column }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex">
+              <td v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
-    <details class="raw" :open="!listed">
+    <details class="raw">
       <summary>JSON</summary>
       <JsonBlock :value="value" />
     </details>

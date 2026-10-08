@@ -9,7 +9,8 @@ const dialeto = defineModel<string>({ required: true });
 <template>
   <label>
     Dialeto
-    <select v-model="dialeto">
+    <select v-model="dialeto" required>
+      <option value="" disabled>Selecione o dialeto do acesso</option>
       <option value="mssql">SQL Server (mssql)</option>
       <option value="sybase">SQL Anywhere (sybase)</option>
       <option value="postgres">Postgres</option>

@@ -15,12 +15,17 @@ export interface DataPresentation {
   readonly tables: readonly DataTable[];
 }
 
-const SKIP = new Set(["success", "fluxoTreino"]);
-const FACT_LIMIT = 24;
-const ROW_LIMIT = 50;
-const COLUMN_LIMIT = 8;
+const SKIP = new Set(["success", "fluxoTreino", "confirmacaoHash", "confirmacaoPendente"]);
 
 const LABELS: Record<string, string> = {
+  diff: "Mudanças",
+  adicionadas: "Adições",
+  removidas: "Remoções",
+  alteradas: "Alterações",
+  publicacaoAtiva: "Publicação ativa",
+  publicacoes: "Publicações vinculadas",
+  paramsContrato: "Contrato de parâmetros",
+  motivo: "Motivo",
   dialeto: "Dialeto",
   truncated: "Truncado",
   hint: "Aviso",
@@ -126,14 +131,14 @@ const tableFromRows = (
       }
     }
   }
-  const columns = keys.slice(0, COLUMN_LIMIT);
+  const columns = keys;
   if (columns.length === 0) {
     return null;
   }
   return {
     title,
     columns: columns.map(labelOf),
-    rows: rows.slice(0, ROW_LIMIT).map((row) => columns.map((key) => cellText(row[key]))),
+    rows: rows.map((row) => columns.map((key) => cellText(row[key]))),
     empty: `Nenhum item em ${title.toLowerCase()}.`,
   };
 };
@@ -163,9 +168,7 @@ export const presentPayload = (value: unknown): DataPresentation => {
       const label = prefix ? `${prefix} · ${labelOf(key)}` : labelOf(key);
       const text = asText(child);
       if (text !== null) {
-        if (facts.length < FACT_LIMIT) {
-          facts.push({ label, value: text });
-        }
+        facts.push({ label, value: text });
         continue;
       }
       if (Array.isArray(child)) {
@@ -181,7 +184,7 @@ export const presentPayload = (value: unknown): DataPresentation => {
           if (table) {
             tables.push(table);
           }
-        } else if (child.every((item) => asText(item) !== null) && facts.length < FACT_LIMIT) {
+        } else if (child.every((item) => asText(item) !== null)) {
           const joined = child
             .map((item) => asText(item))
             .filter((item): item is string => item !== null && item !== "—")

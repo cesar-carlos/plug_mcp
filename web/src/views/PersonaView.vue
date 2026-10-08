@@ -3,7 +3,8 @@ export default { name: "PersonaView" };
 </script>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import { api } from "../api";
 import { useAction } from "../composables/useAction";
 import { useSessionStore } from "../stores/session";
@@ -11,16 +12,20 @@ import Page from "../components/Page.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 
 const session = useSessionStore();
-const { pending, error, run } = useAction();
+const { pending, error, run, success } = useAction();
 const nomePersona = ref("");
 const instrucoesPersona = ref("");
 const confirmado = ref(false);
+const original = ref("");
+const snapshot = (): string => JSON.stringify([nomePersona.value, instrucoesPersona.value]);
+useUnsavedChanges(computed(() => original.value !== "" && snapshot() !== original.value));
 
 onMounted(() => {
   void run(async () => {
     await session.refreshAcesso();
     nomePersona.value = session.acesso?.nomePersona ?? "";
     instrucoesPersona.value = session.acesso?.instrucoesPersona ?? "";
+    original.value = snapshot();
   });
 });
 
@@ -36,6 +41,8 @@ const save = async (): Promise<void> => {
       bearer,
     );
     await session.refreshAcesso();
+    original.value = snapshot();
+    confirmado.value = false;
   });
 };
 </script>
@@ -45,6 +52,8 @@ const save = async (): Promise<void> => {
     title="Persona"
     lead="Tom e uso deste acesso. Não recorta skills nem licencia SQL."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <form class="card" @submit.prevent="save">
       <fieldset class="section">
@@ -62,7 +71,7 @@ const save = async (): Promise<void> => {
       </fieldset>
       <ConfirmField v-model="confirmado" label="Confirmo gravar o tom desta persona" />
       <div class="form-actions">
-        <button type="submit" :disabled="pending">Gravar</button>
+        <button type="submit" :disabled="pending || !confirmado">Salvar</button>
       </div>
     </form>
   </Page>

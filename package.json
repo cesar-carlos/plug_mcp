@@ -18,7 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "release:check": "npm run node:check && npm run compiler:check && npm run training:check && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
+    "release:check": "npm run node:check && npm run compiler:check && npm run training:check && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build && npm run web:check",
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "db:generate": "drizzle-kit generate",
@@ -38,7 +38,9 @@
     "node:check": "node scripts/check-node-version.mjs",
     "test:chatgpt:https": "vitest run tests/integration/cimd-https.test.ts",
     "test:chatgpt:browser": "playwright test",
-    "chatgpt:check": "tsx --env-file-if-exists=.env scripts/check-chatgpt-readiness.ts"
+    "chatgpt:check": "tsx --env-file-if-exists=.env scripts/check-chatgpt-readiness.ts",
+    "web:check": "npm run lint --prefix web && npm run typecheck --prefix web && npm run test --prefix web && npm run build --prefix web",
+    "test:console:browser": "npm run build --prefix web && playwright test --config playwright.console.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/core": "^2.3.0",

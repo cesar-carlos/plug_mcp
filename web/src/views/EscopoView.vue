@@ -3,7 +3,8 @@ export default { name: "EscopoView" };
 </script>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import { api } from "../api";
 import { useAction } from "../composables/useAction";
 import { useSessionStore } from "../stores/session";
@@ -11,7 +12,7 @@ import Page from "../components/Page.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 
 const session = useSessionStore();
-const { pending, error, run } = useAction();
+const { pending, error, run, success } = useAction();
 const empresa = ref("");
 const filial = ref("");
 const timezone = ref("");
@@ -19,6 +20,15 @@ const bindings = ref<{ tabela: string; coluna: string; param: "empresa" | "filia
 const confirmado = ref(false);
 const vigente = ref("");
 const carregado = ref(false);
+const original = ref("");
+const snapshot = (): string =>
+  JSON.stringify({
+    empresa: empresa.value,
+    filial: filial.value,
+    timezone: timezone.value,
+    bindings: bindings.value,
+  });
+useUnsavedChanges(computed(() => original.value !== "" && snapshot() !== original.value));
 
 onMounted(() => {
   void run(async () => {
@@ -40,6 +50,7 @@ onMounted(() => {
     ]
       .filter((item) => item.length > 0)
       .join(" · ");
+    original.value = snapshot();
   }).then(() => {
     carregado.value = true;
   });
@@ -57,11 +68,22 @@ const save = async (): Promise<void> => {
         empresa: empresa.value || undefined,
         filial: filial.value || undefined,
         timezone: timezone.value || undefined,
-        bindings: bindings.value.filter((item) => item.tabela && item.coluna),
+        bindings: bindings.value,
         confirmadoPeloUsuario: confirmado.value,
       },
       bearer,
     );
+    const acesso = await session.refreshAcesso();
+    vigente.value = [
+      acesso.escopoPadrao?.empresa ? `empresa ${acesso.escopoPadrao.empresa}` : "",
+      acesso.escopoPadrao?.filial ? `filial ${acesso.escopoPadrao.filial}` : "",
+      acesso.timezone ?? "",
+      `${acesso.escopoPadrao?.bindings?.length ?? 0} vínculo(s)`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    original.value = snapshot();
+    confirmado.value = false;
   });
 };
 </script>
@@ -71,6 +93,8 @@ const save = async (): Promise<void> => {
     title="Escopo padrão"
     lead="Empresa e filial entram como recorte imutável nas consultas."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <form class="card" @submit.prevent="save">
       <p v-if="vigente" class="callout">
@@ -83,7 +107,7 @@ const save = async (): Promise<void> => {
           <label>Empresa <input v-model="empresa" /></label>
           <label>Filial <input v-model="filial" /></label>
         </div>
-        <label>Timezone <input v-model="timezone" placeholder="America/Cuiaba" /></label>
+        <label>Fuso horário <input v-model="timezone" placeholder="America/Cuiaba" /></label>
       </fieldset>
       <fieldset class="section">
         <legend>Vínculo físico</legend>
@@ -92,8 +116,8 @@ const save = async (): Promise<void> => {
           não recorta a consulta.
         </p>
         <div v-for="(item, index) in bindings" :key="index" class="bind-row">
-          <label>Tabela <input v-model="item.tabela" /></label>
-          <label>Coluna <input v-model="item.coluna" /></label>
+          <label>Tabela <input v-model="item.tabela" required /></label>
+          <label>Coluna <input v-model="item.coluna" required /></label>
           <label>
             Parâmetro
             <select v-model="item.param">
@@ -101,12 +125,15 @@ const save = async (): Promise<void> => {
               <option value="filial">filial</option>
             </select>
           </label>
+          <button class="secondary" type="button" @click="bindings.splice(index, 1)">
+            Remover vínculo {{ index + 1 }}
+          </button>
         </div>
         <button class="secondary" type="button" @click="addBinding">Adicionar vínculo</button>
       </fieldset>
       <ConfirmField v-model="confirmado" label="Confirmo gravar este recorte imutável" />
       <div class="form-actions">
-        <button type="submit" :disabled="pending">Gravar</button>
+        <button type="submit" :disabled="pending || !confirmado">Salvar</button>
       </div>
     </form>
   </Page>

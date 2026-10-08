@@ -3,7 +3,8 @@ export default { name: "DialetoView" };
 </script>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import { api } from "../api";
 import { useAction } from "../composables/useAction";
 import { useSessionStore } from "../stores/session";
@@ -12,8 +13,10 @@ import DialetoSelect from "../components/DialetoSelect.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 
 const session = useSessionStore();
-const { pending, error, run } = useAction();
-const dialeto = ref(session.acesso?.dialeto ?? "mssql");
+const { pending, error, run, success } = useAction();
+const dialeto = ref(session.acesso?.dialeto ?? "");
+const original = ref(dialeto.value);
+useUnsavedChanges(computed(() => dialeto.value !== original.value));
 const confirmado = ref(false);
 
 const save = async (): Promise<void> => {
@@ -24,6 +27,8 @@ const save = async (): Promise<void> => {
       bearer,
     );
     await session.refreshAcesso();
+    original.value = dialeto.value;
+    confirmado.value = false;
   });
 };
 </script>
@@ -33,6 +38,8 @@ const save = async (): Promise<void> => {
     title="Dialeto"
     lead="A tela não descobre o GDBR. A troca vale só para este acesso."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <form class="card" @submit.prevent="save">
       <p class="callout warn">
@@ -42,7 +49,7 @@ const save = async (): Promise<void> => {
       <DialetoSelect v-model="dialeto" />
       <ConfirmField v-model="confirmado" label="Confirmo trocar o dialeto e rebaixar as skills" />
       <div class="form-actions">
-        <button type="submit" :disabled="pending">Alterar</button>
+        <button type="submit" :disabled="pending || !confirmado || !dialeto">Salvar dialeto</button>
       </div>
     </form>
   </Page>

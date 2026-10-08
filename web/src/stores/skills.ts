@@ -1,7 +1,8 @@
 import { defineStore } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { api } from "../api";
 import { useSessionStore } from "./session";
+import { record, stringField } from "../validation";
 
 const TIPOS = ["string", "number", "integer", "decimal", "date", "datetime", "boolean"] as const;
 
@@ -32,13 +33,15 @@ export interface SkillAberta {
   descricao: string;
   sqlModelo: string;
   status: string;
+  statusRascunho?: string;
+  publicacaoAtivaId?: string | null;
   fluxoTreino: FluxoTreinoUi | null;
   params: ParametroSkillForm[];
   revisao: "rascunho" | "publicada";
 }
 
 const asTipo = (value: unknown): TipoParametro => {
-  const tipo = String(value ?? "string");
+  const tipo = typeof value === "string" ? value : "string";
   return (TIPOS as readonly string[]).includes(tipo) ? (tipo as TipoParametro) : "string";
 };
 
@@ -46,11 +49,20 @@ const asFluxo = (value: unknown): FluxoTreinoUi | null => {
   if (!value || typeof value !== "object") {
     return null;
   }
-  const fluxo = value as Partial<FluxoTreinoUi>;
+  const fluxo = record(value);
   return {
     proximoPasso: typeof fluxo.proximoPasso === "string" ? fluxo.proximoPasso : null,
     podeLiberar: fluxo.podeLiberar === true,
-    passos: Array.isArray(fluxo.passos) ? fluxo.passos : [],
+    passos: Array.isArray(fluxo.passos)
+      ? fluxo.passos.map((item) => {
+          const row = record(item);
+          return {
+            id: stringField(row, "id"),
+            status: stringField(row, "status"),
+            hint: stringField(row, "hint"),
+          };
+        })
+      : [],
   };
 };
 
@@ -59,10 +71,10 @@ const asParams = (value: unknown): ParametroSkillForm[] => {
     return [];
   }
   return value.map((item) => {
-    const row = item as Record<string, unknown>;
+    const row = record(item);
     return {
-      nome: String(row.nome ?? ""),
-      descricao: String(row.descricao ?? ""),
+      nome: stringField(row, "nome"),
+      descricao: typeof row.descricao === "string" ? row.descricao : "",
       obrigatorio: row.obrigatorio !== false,
       tipo: asTipo(row.tipo),
     };
@@ -72,6 +84,8 @@ const asParams = (value: unknown): ParametroSkillForm[] => {
 export const useSkillStore = defineStore("skills", () => {
   const aberta = ref<SkillAberta | null>(null);
   const confirmacaoHash = ref<string | null>(null);
+  const publicada = ref<SkillAberta | null>(null);
+  const sqlTreinado = ref("");
 
   const podePublicar = computed(() => aberta.value?.fluxoTreino?.proximoPasso === "publicar_skill");
 
@@ -85,18 +99,30 @@ export const useSkillStore = defineStore("skills", () => {
       skill: Record<string, unknown>;
       fluxoTreino?: unknown;
     }>(`/app/api/skills/${encodeURIComponent(id)}?revisao=${revisao}`, session.bearer ?? undefined);
-    const skill = result.skill;
-    aberta.value = {
-      id: String(skill.id ?? id),
-      nome: String(skill.nome ?? ""),
-      descricao: String(skill.descricao ?? ""),
-      sqlModelo: String(skill.sqlModelo ?? ""),
-      status: String(skill.status ?? ""),
+    const skill = record(result.skill);
+    const loaded: SkillAberta = {
+      id: stringField(skill, "id"),
+      nome: stringField(skill, "nome"),
+      descricao: stringField(skill, "descricao"),
+      sqlModelo: stringField(skill, "sqlModelo"),
+      status: stringField(skill, "status"),
+      statusRascunho:
+        typeof skill.statusRascunho === "string"
+          ? skill.statusRascunho
+          : stringField(skill, "status"),
+      publicacaoAtivaId:
+        typeof skill.publicacaoAtivaId === "string" ? skill.publicacaoAtivaId : null,
       fluxoTreino: asFluxo(result.fluxoTreino ?? skill.fluxoTreino),
       params: asParams(skill.params),
       revisao,
     };
-    return aberta.value;
+    if (revisao === "publicada") {
+      publicada.value = loaded;
+    } else {
+      aberta.value = loaded;
+      confirmacaoHash.value = null;
+    }
+    return loaded;
   };
 
   const guardarHash = (hash: string | null): void => {
@@ -106,7 +132,19 @@ export const useSkillStore = defineStore("skills", () => {
   const limpar = (): void => {
     aberta.value = null;
     confirmacaoHash.value = null;
+    publicada.value = null;
+    sqlTreinado.value = "";
   };
+  watch(() => useSessionStore().generation, limpar, { flush: "sync" });
 
-  return { aberta, confirmacaoHash, podePublicar, carregar, guardarHash, limpar };
+  return {
+    aberta,
+    publicada,
+    sqlTreinado,
+    confirmacaoHash,
+    podePublicar,
+    carregar,
+    guardarHash,
+    limpar,
+  };
 });

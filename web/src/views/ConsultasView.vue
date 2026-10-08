@@ -1,154 +1,202 @@
-<script lang="ts">
-export default { name: "ConsultasView" };
-</script>
-
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { api } from "../api";
+import { askConfirmation } from "../confirmation";
+import { useReview } from "../composables/useReview";
+import { api, ConsoleApiError } from "../api";
+import { record, stringField } from "../validation";
+import {
+  listarConsultas,
+  obterConsulta,
+  previewConsulta,
+  novoExemplo,
+  type Consulta,
+  type ConsultaPreview,
+} from "../services/consultas";
 import { useAction } from "../composables/useAction";
-import { toneForStatus } from "../presentation";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import Page from "../components/Page.vue";
+import DataView from "../components/DataView.vue";
 import ConfirmField from "../components/ConfirmField.vue";
-import ErrorBanner from "../components/ErrorBanner.vue";
+import SkillSelect from "../components/SkillSelect.vue";
+import SqlField from "../components/SqlField.vue";
 import StatusPill from "../components/StatusPill.vue";
-
-interface ConsultaResumo {
-  id: string;
-  pergunta: string;
-  status: string;
-  skillIds: string[];
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const { error, run } = useAction();
-const lista = ref<unknown>(null);
-const abertaId = ref<string | null>(null);
-const sqlPorId = ref<Record<string, string>>({});
-const erroConsulta = ref<unknown>(null);
+const { error, pending, success, run } = useAction();
+const consultas = ref<Consulta[]>([]);
+const pagina = ref(1);
+const total = ref(0);
+const estado = ref("");
+const pronta = ref(false);
+const aberta = ref<Consulta | null>(null);
 const pergunta = ref("");
 const sql = ref("");
-const skillId = ref("");
+const skillIds = ref<string[]>([]);
+const { preview: salvarPreview, confirmado: confirmarSalvar } = useReview<ConsultaPreview>([
+  pergunta,
+  sql,
+  skillIds,
+]);
+const salvarOrigem = ref<"candidata" | "novo">("novo");
+const inativarId = ref("");
+const motivo = ref("");
+const { preview: inativarPreview, confirmado: confirmarInativar } = useReview<{
+  hash: string;
+  value: unknown;
+}>([inativarId, motivo]);
 const tipo = ref("sinonimo");
 const titulo = ref("");
 const texto = ref("");
-const confirmado = ref(false);
-const hash = ref("");
-const consultaId = ref("");
-const motivo = ref("");
-
-const consultas = computed((): ConsultaResumo[] => {
-  if (!isRecord(lista.value) || !Array.isArray(lista.value.consultas)) {
-    return [];
-  }
-  return lista.value.consultas.flatMap((item) => {
-    if (!isRecord(item) || typeof item.id !== "string") {
-      return [];
-    }
-    const skillIds = Array.isArray(item.skillIds)
-      ? item.skillIds.filter((skillId): skillId is string => typeof skillId === "string")
-      : [];
-    return [
-      {
-        id: item.id,
-        pergunta: typeof item.pergunta === "string" ? item.pergunta : item.id,
-        status: typeof item.status === "string" ? item.status : "—",
-        skillIds,
-      },
-    ];
-  });
-});
-
+const aprendizadoSkill = ref("");
+const dirty = computed(() =>
+  Boolean(pergunta.value || sql.value || titulo.value || texto.value || motivo.value),
+);
+useUnsavedChanges(dirty);
 const load = async (bearer: string | undefined): Promise<void> => {
-  lista.value = await api.get("/app/api/consultas", bearer);
+  const result = await listarConsultas(bearer, pagina.value, estado.value);
+  consultas.value = result.consultas;
+  total.value = result.total;
+  pronta.value = true;
 };
-
+onMounted(() => {
+  void run(load, { feedback: false });
+});
 const abrir = async (id: string): Promise<void> => {
-  if (abertaId.value === id) {
-    abertaId.value = null;
+  salvarPreview.value = null;
+  confirmarSalvar.value = false;
+  if (aberta.value?.id === id) {
+    aberta.value = null;
     return;
   }
-  abertaId.value = id;
-  if (sqlPorId.value[id]) {
+  await run(async (bearer) => {
+    aberta.value = await obterConsulta(id, bearer);
+  });
+};
+const copiar = async (): Promise<void> => {
+  if (!aberta.value) {
     return;
   }
-  erroConsulta.value = null;
+  if (
+    (pergunta.value || sql.value) &&
+    !(await askConfirmation({
+      title: "Substituir novo exemplo?",
+      message: "O conteúdo local do formulário será substituído pelo exemplo selecionado.",
+      action: "Substituir",
+    }))
+  ) {
+    return;
+  }
+  const novo = novoExemplo(aberta.value);
+  pergunta.value = novo.pergunta;
+  sql.value = novo.sql;
+  skillIds.value = novo.skillIds;
+  document.querySelector<HTMLElement>("#novo-exemplo")?.scrollIntoView({ block: "start" });
+};
+const revisar = async (candidata?: Consulta): Promise<void> => {
+  await run(async (bearer) => {
+    salvarOrigem.value = candidata ? "candidata" : "novo";
+    const body = candidata
+      ? { consultaAprendidaId: candidata.id }
+      : { pergunta: pergunta.value, sql: sql.value, skillIds: skillIds.value };
+    salvarPreview.value = previewConsulta(
+      await api.post("/app/api/consultas/salvar", body, bearer),
+    );
+    confirmarSalvar.value = false;
+  });
+};
+const confirmar = async (): Promise<void> => {
+  const preview = salvarPreview.value;
+  if (!preview || !confirmarSalvar.value) {
+    return;
+  }
   await run(async (bearer) => {
     try {
-      const result = await api.get<{ consulta?: { sql?: string } }>(
-        `/app/api/consultas/${encodeURIComponent(id)}`,
-        bearer,
+      const result = record(
+        await api.post(
+          "/app/api/consultas/salvar",
+          {
+            consultaAprendidaId: preview.consulta.id,
+            confirmacaoHash: preview.hash,
+            confirmadoPeloUsuario: confirmarSalvar.value,
+          },
+          bearer,
+        ),
       );
-      sqlPorId.value = { ...sqlPorId.value, [id]: result.consulta?.sql ?? "" };
+      if (result.confirmacaoPendente) {
+        salvarPreview.value = previewConsulta(result);
+        confirmarSalvar.value = false;
+        return;
+      }
+      salvarPreview.value = null;
+      confirmarSalvar.value = false;
+      if (salvarOrigem.value === "novo") {
+        pergunta.value = "";
+        sql.value = "";
+        skillIds.value = [];
+      }
+      aberta.value = null;
+      await load(bearer);
     } catch (caught) {
-      erroConsulta.value = caught;
+      if (caught instanceof ConsoleApiError && caught.code === "CONFIRMACAO_DESATUALIZADA") {
+        salvarPreview.value = null;
+        confirmarSalvar.value = false;
+      }
+      throw caught;
     }
   });
 };
-
-const levar = (item: ConsultaResumo): void => {
-  pergunta.value = item.pergunta;
-  consultaId.value = item.id;
-  sql.value = sqlPorId.value[item.id] ?? "";
-  skillId.value = item.skillIds[0] ?? "";
-  confirmado.value = false;
-  hash.value = "";
-};
-
-onMounted(() => {
-  void run(load);
-});
-
-const hashFrom = (payload: unknown): string | undefined => {
-  if (payload && typeof payload === "object" && "confirmacaoHash" in payload) {
-    const value = payload.confirmacaoHash;
-    return typeof value === "string" ? value : undefined;
-  }
-  return undefined;
-};
-
-const salvar = async (): Promise<void> => {
+const revisarInativacao = async (): Promise<void> => {
   await run(async (bearer) => {
-    const result = await api.post(
-      "/app/api/consultas/salvar",
-      {
-        pergunta: pergunta.value,
-        sql: sql.value,
-        skillId: skillId.value || undefined,
-        consultaAprendidaId: consultaId.value || undefined,
-        confirmacaoHash: hash.value || undefined,
-        confirmadoPeloUsuario: confirmado.value,
-      },
-      bearer,
+    const result = record(
+      await api.post(
+        `/app/api/consultas/${encodeURIComponent(inativarId.value)}/inativar`,
+        { motivo: motivo.value },
+        bearer,
+      ),
     );
-    const nextHash = hashFrom(result);
-    if (nextHash) {
-      hash.value = nextHash;
-    }
-    await load(bearer);
+    inativarPreview.value = {
+      hash: stringField(result, "confirmacaoHash"),
+      value: record(result.preview),
+    };
+    confirmarInativar.value = false;
   });
 };
-
 const inativar = async (): Promise<void> => {
+  if (!inativarPreview.value || !confirmarInativar.value) {
+    return;
+  }
   await run(async (bearer) => {
-    const result = await api.post(
-      `/app/api/consultas/${encodeURIComponent(consultaId.value)}/inativar`,
-      {
-        motivo: motivo.value,
-        confirmacaoHash: hash.value || undefined,
-        confirmadoPeloUsuario: confirmado.value,
-      },
-      bearer,
-    );
-    const nextHash = hashFrom(result);
-    if (nextHash) {
-      hash.value = nextHash;
+    try {
+      const result = record(
+        await api.post(
+          `/app/api/consultas/${encodeURIComponent(inativarId.value)}/inativar`,
+          {
+            motivo: motivo.value,
+            confirmacaoHash: inativarPreview.value?.hash,
+            confirmadoPeloUsuario: confirmarInativar.value,
+          },
+          bearer,
+        ),
+      );
+      if (result.confirmacaoPendente === true) {
+        inativarPreview.value = {
+          hash: stringField(result, "confirmacaoHash"),
+          value: record(result.preview),
+        };
+        confirmarInativar.value = false;
+        return;
+      }
+      inativarPreview.value = null;
+      confirmarInativar.value = false;
+      motivo.value = "";
+      inativarId.value = "";
+      aberta.value = null;
+      await load(bearer);
+    } catch (caught) {
+      inativarPreview.value = null;
+      confirmarInativar.value = false;
+      throw caught;
     }
-    await load(bearer);
   });
 };
-
 const aprendizado = async (): Promise<void> => {
   await run(async (bearer) => {
     await api.post(
@@ -157,95 +205,168 @@ const aprendizado = async (): Promise<void> => {
         tipo: tipo.value,
         titulo: titulo.value,
         texto: texto.value,
-        skillId: skillId.value || undefined,
+        skillId: aprendizadoSkill.value || undefined,
       },
       bearer,
     );
+    titulo.value = "";
+    texto.value = "";
   });
 };
+const trocarPagina = async (nova: number): Promise<void> => {
+  pagina.value = nova;
+  await run(load);
+};
 </script>
-
 <template>
   <Page
     title="Consultas e aprendizado"
-    lead="Salvar consulta exige preview e confirmação. Candidata não vira reuso sozinha."
+    lead="Revise exemplos e confirme seu conteúdo antes de autorizar o reuso no pacote atual."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <div class="card">
-      <h2>Nesta persona</h2>
-      <p v-if="consultas.length === 0" class="empty">Nenhuma consulta neste acesso.</p>
+      <h2>Exemplos desta persona</h2>
+      <label
+        >Status<select v-model="estado" @change="trocarPagina(1)">
+          <option value="">Todos</option>
+          <option value="candidata">Candidatas</option>
+          <option value="confirmada">Confirmadas</option>
+          <option value="inativa">Inativas</option>
+        </select></label
+      >
+      <p v-if="pronta && consultas.length === 0" class="empty">Nenhuma consulta neste filtro.</p>
       <div v-for="item in consultas" :key="item.id" class="data-block">
-        <button class="card-toggle" type="button" @click="abrir(item.id)">
-          <span class="card-toggle-main">{{ item.pergunta }}</span>
-          <StatusPill :label="item.status" :tone="toneForStatus(item.status)" />
-          <span class="hint">{{ abertaId === item.id ? "Fechar" : "Ver SQL" }}</span>
+        <button
+          class="card-toggle"
+          type="button"
+          :aria-expanded="aberta?.id === item.id"
+          @click="abrir(item.id)"
+        >
+          <span class="card-toggle-main">{{ item.pergunta }}</span
+          ><StatusPill :label="item.status" /><span class="hint">{{
+            aberta?.id === item.id ? "Fechar" : "Ver exemplo"
+          }}</span>
         </button>
-        <template v-if="abertaId === item.id">
-          <ErrorBanner v-if="erroConsulta && !sqlPorId[item.id]" :error="erroConsulta" />
-          <pre v-if="sqlPorId[item.id]" class="code">{{ sqlPorId[item.id] }}</pre>
+        <template v-if="aberta?.id === item.id">
+          <pre class="code">{{ aberta.sql }}</pre>
           <p class="hint">
-            Este texto não grava por cima do exemplo. Para substituir, leve ao formulário Salvar
-            consulta: a primeira chamada só devolve o hash.
+            {{ aberta.skillIds.length }} skill(s) vinculada(s). O conteúdo deste registro é somente
+            leitura.
           </p>
           <div class="form-actions">
-            <button
-              class="secondary"
-              type="button"
-              :disabled="!sqlPorId[item.id]"
-              @click="levar(item)"
-            >
-              Levar para salvar
+            <button v-if="item.status === 'candidata'" type="button" @click="revisar(aberta)">
+              Revisar candidata</button
+            ><button class="secondary" type="button" @click="copiar">
+              Criar novo exemplo a partir deste
             </button>
-          </div>
-        </template>
+          </div></template
+        >
+      </div>
+      <div class="form-actions">
+        <button
+          class="secondary"
+          type="button"
+          :disabled="pagina === 1"
+          @click="trocarPagina(pagina - 1)"
+        >
+          Anterior</button
+        ><span class="hint">Página {{ pagina }} · {{ total }} exemplo(s)</span
+        ><button
+          class="secondary"
+          type="button"
+          :disabled="pagina * 25 >= total"
+          @click="trocarPagina(pagina + 1)"
+        >
+          Próxima
+        </button>
       </div>
     </div>
-    <form class="card" @submit.prevent="salvar">
-      <h2>Salvar consulta</h2>
-      <label>Pergunta <input v-model="pergunta" /></label>
-      <label>SQL <textarea v-model="sql" rows="6" /></label>
-      <div class="fields-2">
-        <label>skillId <input v-model="skillId" /></label>
-        <label>consultaAprendidaId <input v-model="consultaId" /></label>
-      </div>
-      <label>
-        confirmacaoHash
-        <input v-model="hash" class="mono" spellcheck="false" />
-        <span class="hint">A primeira chamada devolve o hash. A segunda confirma com ele.</span>
-      </label>
-      <ConfirmField v-model="confirmado" label="Confirmo salvar este exemplo no pacote atual" />
+    <form id="novo-exemplo" class="card" @submit.prevent="revisar()">
+      <h2>Criar novo exemplo</h2>
+      <label>Pergunta<input v-model="pergunta" required /></label
+      ><SqlField v-model="sql" label="SQL do exemplo" required /><SkillSelect
+        :model-value="skillIds"
+        multiple
+        published-only
+        required
+        @update:model-value="skillIds = Array.isArray($event) ? $event : []"
+      />
+      <div class="form-actions"><button type="submit">Revisar novo exemplo</button></div>
+    </form>
+    <form v-if="salvarPreview" class="card" @submit.prevent="confirmar">
+      <h2>Conteúdo efetivo para confirmação</h2>
+      <p>{{ salvarPreview.consulta.pergunta }}</p>
+      <pre class="code">{{ salvarPreview.consulta.sql }}</pre>
+      <details class="raw">
+        <summary>Vínculos e contrato do exemplo</summary>
+        <DataView
+          :value="{
+            skillIds: salvarPreview.consulta.skillIds,
+            publicacoes: salvarPreview.consulta.publicacoes ?? [],
+            paramsContrato: salvarPreview.consulta.paramsContrato ?? [],
+          }"
+        />
+      </details>
+      <p class="hint">
+        {{ salvarPreview.consulta.skillIds.length }} skill(s) vinculada(s). A confirmação usa esta
+        candidata e as publicações vigentes.
+      </p>
+      <ConfirmField v-model="confirmarSalvar" label="Confirmo este exemplo no pacote atual" />
       <div class="form-actions">
-        <button type="submit">Salvar / confirmar</button>
+        <button type="submit" :disabled="!confirmarSalvar">Confirmar candidata</button
+        ><button class="secondary" type="button" @click="salvarPreview = null">
+          Cancelar revisão
+        </button>
       </div>
     </form>
-    <form class="card" @submit.prevent="inativar">
+    <form class="card" @submit.prevent="revisarInativacao">
       <h2>Inativar consulta</h2>
-      <p>
-        Usa o ID e o hash do formulário acima. A primeira chamada devolve o hash. A segunda
-        confirma. Execução não reativa o exemplo.
-      </p>
-      <label>Motivo <input v-model="motivo" required /></label>
+      <label
+        >Consulta<select v-model="inativarId" required>
+          <option value="">Selecione um exemplo desta página</option>
+          <option
+            v-for="item in consultas.filter((item) => item.status !== 'inativa')"
+            :key="item.id"
+            :value="item.id"
+          >
+            {{ item.pergunta }}
+          </option>
+        </select></label
+      ><label>Motivo<input v-model="motivo" required /></label>
       <div class="form-actions">
-        <button class="danger" type="submit">Inativar</button>
+        <button class="secondary" type="submit">Revisar inativação</button>
+      </div>
+    </form>
+    <form v-if="inativarPreview" class="card" @submit.prevent="inativar">
+      <h2>Revisar inativação</h2>
+      <DataView :value="inativarPreview.value" /><ConfirmField
+        v-model="confirmarInativar"
+        label="Confirmo inativar este exemplo pelo motivo apresentado"
+      />
+      <div class="form-actions">
+        <button class="danger" type="submit" :disabled="!confirmarInativar">
+          Confirmar inativação</button
+        ><button class="secondary" type="button" @click="inativarPreview = null">Cancelar</button>
       </div>
     </form>
     <form class="card" @submit.prevent="aprendizado">
       <h2>Registrar aprendizado</h2>
-      <label>
-        Tipo
-        <select v-model="tipo">
-          <option>sinonimo</option>
-          <option>regra</option>
-          <option>metrica</option>
-          <option>glossario</option>
-          <option>dicionario</option>
-        </select>
-      </label>
-      <label>Título <input v-model="titulo" /></label>
-      <label>Texto <textarea v-model="texto" rows="4" /></label>
-      <div class="form-actions">
-        <button type="submit">Registrar</button>
-      </div>
+      <SkillSelect
+        :model-value="aprendizadoSkill"
+        @update:model-value="aprendizadoSkill = typeof $event === 'string' ? $event : ''"
+      /><label
+        >Tipo<select v-model="tipo">
+          <option value="sinonimo">Sinônimo</option>
+          <option value="regra">Regra</option>
+          <option value="metrica">Métrica</option>
+          <option value="glossario">Glossário</option>
+          <option value="dicionario">Dicionário</option>
+        </select></label
+      ><label>Título<input v-model="titulo" required /></label
+      ><label>Texto<textarea v-model="texto" rows="4" required /></label>
+      <div class="form-actions"><button type="submit">Registrar aprendizado</button></div>
     </form>
   </Page>
 </template>

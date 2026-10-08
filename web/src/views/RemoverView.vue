@@ -13,7 +13,7 @@ import ConfirmField from "../components/ConfirmField.vue";
 
 const router = useRouter();
 const session = useSessionStore();
-const { pending, error, run } = useAction();
+const { pending, error, run, success } = useAction();
 const confirmado = ref(false);
 
 const remove = async (): Promise<void> => {
@@ -28,16 +28,18 @@ const remove = async (): Promise<void> => {
 <template>
   <Page
     title="Remover acesso"
-    lead="Outro Bearer continua válido."
+    lead="Outro Token MCP continua válido."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <form class="card" @submit.prevent="remove">
       <p class="callout danger">
-        Apaga esta persona, as skills e o catálogo deste Bearer. Outro token não é afetado.
+        Apaga esta persona, as skills e o catálogo deste Token MCP. Outro token não é afetado.
       </p>
       <ConfirmField v-model="confirmado" label="Confirmo apagar esta persona e o catálogo" />
       <div class="form-actions">
-        <button class="danger" type="submit" :disabled="pending">Remover</button>
+        <button class="danger" type="submit" :disabled="pending || !confirmado">Remover</button>
       </div>
     </form>
   </Page>

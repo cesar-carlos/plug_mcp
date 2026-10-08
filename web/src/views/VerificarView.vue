@@ -11,7 +11,7 @@ import Page from "../components/Page.vue";
 import DataView from "../components/DataView.vue";
 
 const session = useSessionStore();
-const { pending, error, run } = useAction();
+const { pending, error, run, success } = useAction();
 const result = ref<unknown>(null);
 
 const verificar = async (): Promise<void> => {
@@ -27,6 +27,8 @@ const verificar = async (): Promise<void> => {
     title="Verificar no hub"
     lead="Não faça polling agressivo. Uma leitura basta para atualizar o estado SQL."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <div class="card">
       <p class="hint">

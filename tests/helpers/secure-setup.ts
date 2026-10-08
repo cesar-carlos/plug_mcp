@@ -20,7 +20,7 @@ export const completeBrowserSetup = async (
     .set("Origin", origin)
     .type("form")
     .send({ ...form, csrf, confirmado: "sim" });
-  return { token: /<pre>([^<]+)<\/pre>/.exec(response.text)?.[1], response };
+  return { token: /<pre(?: class="token")?>([^<]+)<\/pre>/.exec(response.text)?.[1], response };
 };
 
 export const registerAccessViaBrowser = async (

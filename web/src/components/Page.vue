@@ -4,16 +4,19 @@ export default { name: "Page" };
 
 <script setup lang="ts">
 import ErrorBanner from "./ErrorBanner.vue";
+import ActionStatus from "./ActionStatus.vue";
 
 defineProps<{
   title: string;
   lead?: string;
   error?: unknown;
+  pending?: boolean;
+  success?: boolean;
 }>();
 </script>
 
 <template>
-  <div>
+  <div class="page" :aria-busy="pending || false">
     <header class="page-head">
       <div>
         <h1>{{ title }}</h1>
@@ -24,6 +27,7 @@ defineProps<{
       </div>
     </header>
     <ErrorBanner :error="error" />
-    <slot />
+    <ActionStatus :pending="pending" :success="success" />
+    <div :inert="pending || undefined"><slot /></div>
   </div>
 </template>

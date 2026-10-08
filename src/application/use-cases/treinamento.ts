@@ -120,23 +120,21 @@ export class Treinamento {
     const a = await this.access(uid);
     const c = await this.aprendizado.obterConsulta(a.id, input.consultaAprendidaId);
     if (!c || !textoSeguro(input.motivo)) fail("Consulta ou motivo inválidos.");
-    const pending = approved(
-      {
-        acessoId: a.id,
-        consulta: {
-          id: c.id,
-          versao: c.versao ?? 1,
-          sql: c.sql,
-          pergunta: c.pergunta,
-          paramsContrato: c.paramsContrato,
-          publicacoes: c.publicacoes,
-          status: c.status,
-        },
-        motivo: input.motivo,
+    const preview = {
+      acessoId: a.id,
+      consulta: {
+        id: c.id,
+        versao: c.versao ?? 1,
+        sql: c.sql,
+        pergunta: c.pergunta,
+        paramsContrato: c.paramsContrato,
+        publicacoes: c.publicacoes,
+        status: c.status,
       },
-      input,
-    );
-    if (pending) return { success: true, ...pending };
+      motivo: input.motivo,
+    };
+    const pending = approved(preview, input);
+    if (pending) return { success: true, ...pending, preview };
     return {
       success: true,
       consulta: await this.aprendizado.alterarEstado({

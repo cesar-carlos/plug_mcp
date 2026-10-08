@@ -3,7 +3,8 @@ export default { name: "ConectarView" };
 </script>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import { useRouter } from "vue-router";
 import { completeSetup } from "../composables/useSetupForm";
 import { useAction } from "../composables/useAction";
@@ -14,14 +15,26 @@ import DialetoSelect from "../components/DialetoSelect.vue";
 
 const router = useRouter();
 const session = useSessionStore();
-const { pending, error, run } = useAction();
+const { pending, error, run, success } = useAction();
 const credenciais = ref({ email: "", senha: "" });
 const agentId = ref("");
-const dialeto = ref("mssql");
+const dialeto = ref("");
 const clientToken = ref("");
 const nomeAmigavel = ref("");
 const recuperar = ref(false);
 const confirmado = ref(false);
+useUnsavedChanges(
+  computed(() =>
+    Boolean(
+      credenciais.value.email ||
+      credenciais.value.senha ||
+      agentId.value ||
+      clientToken.value ||
+      nomeAmigavel.value ||
+      dialeto.value,
+    ),
+  ),
+);
 
 const submit = async (): Promise<void> => {
   await run(async () => {
@@ -35,9 +48,14 @@ const submit = async (): Promise<void> => {
       ...(recuperar.value ? { recuperar: "sim" } : {}),
     });
     if (!completed.token) {
-      throw new Error("O servidor não devolveu o Bearer.");
+      throw new Error("O servidor não devolveu o Token MCP.");
     }
     session.rememberIssued(completed.token);
+    credenciais.value = { email: "", senha: "" };
+    agentId.value = "";
+    clientToken.value = "";
+    nomeAmigavel.value = "";
+    dialeto.value = "";
     await router.push({ name: "bearer" });
   });
 };
@@ -49,6 +67,8 @@ const submit = async (): Promise<void> => {
     title="Conectar ao plug_server"
     lead="Informe o Client já ativo no hub. O MCP não cria User, Client nem Agent."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <form class="card connect-card" @submit.prevent="submit">
       <fieldset class="section">
@@ -84,7 +104,7 @@ const submit = async (): Promise<void> => {
         <legend>Confirmação</legend>
         <label class="choice">
           <input v-model="recuperar" type="checkbox" />
-          <span>Recuperar acesso existente e substituir o Bearer</span>
+          <span>Recuperar acesso existente e substituir o Token MCP</span>
         </label>
         <label class="choice">
           <input v-model="confirmado" type="checkbox" required />
@@ -95,7 +115,7 @@ const submit = async (): Promise<void> => {
         <button type="submit" :disabled="pending">
           {{ pending ? "Conectando…" : "Conectar" }}
         </button>
-        <RouterLink class="ghost-link" to="/conectar/colar">Já tenho um Bearer</RouterLink>
+        <RouterLink class="ghost-link" to="/conectar/colar">Já tenho um Token MCP</RouterLink>
       </div>
     </form>
   </Page>

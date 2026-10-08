@@ -16,6 +16,8 @@ Três camadas, sem sobreposição. Não copie regra de estilo do Prettier para o
 
 `eslint-config-prettier` é **sempre o último** item de `eslint.config.js`. Não adicione `.eslintrc*` — o projeto usa só flat config.
 
+O console tem `web/eslint.config.js` flat próprio com `eslint-plugin-vue`, `vue-eslint-parser` e typed linting (`recommendedTypeChecked`, projectService). `npm run web:check` incorpora lint/tipos/testes/build ao release. Prettier também formata `.vue`; não desligar validação de tipos para aceitar componentes.
+
 ## O que o agente deve fazer
 
 - Rodar `npm run format` nos arquivos tocados (ou deixar o format-on-save do editor).

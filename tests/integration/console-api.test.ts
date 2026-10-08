@@ -3,7 +3,8 @@ import request from "supertest";
 import { testConfig } from "../../src/config/env.js";
 import { compose } from "../../src/composition/compose.js";
 import { FakePlugServer } from "../helpers/fake-plug-server.js";
-import { registerAccessViaBrowser } from "../helpers/secure-setup.js";
+import { completeBrowserSetup, registerAccessViaBrowser } from "../helpers/secure-setup.js";
+import { hashTreino } from "../../src/application/use-cases/shared/casos-treino.js";
 
 const agentA = "11111111-1111-4111-8111-111111111111";
 const agentB = "22222222-2222-4222-8222-222222222222";
@@ -27,6 +28,135 @@ const register = async (
 };
 
 describe("console HTTP", () => {
+  it("helper lê o Token MCP do formulário estilizado e mantém setup one-shot", async () => {
+    const plug = new FakePlugServer();
+    plug.approve(agentA);
+    const { app, close, useCases } = await compose(
+      testConfig({ DATABASE_URL: "", REDIS_URL: "", CHATGPT_OAUTH_ENABLED: false }),
+      { plug },
+    );
+    try {
+      const setup = await useCases.setupOperations!.begin("registrar");
+      const form = {
+        email: "setup-helper@example.test",
+        senha: "synthetic-password",
+        agentId: agentA,
+        dialeto: "postgres",
+        clientToken: "synthetic-client-token",
+      };
+      const completed = await completeBrowserSetup(app, setup.setupUrl, form);
+      expect(completed.response.status).toBe(200);
+      expect(completed.response.text).toContain('<pre class="token">');
+      expect(completed.token).toBeTypeOf("string");
+      const acesso = await request(app)
+        .get("/app/api/acesso")
+        .set("Authorization", `Bearer ${completed.token!}`);
+      expect(acesso.status).toBe(200);
+      expect(acesso.body.acessos).toHaveLength(1);
+      await expect(completeBrowserSetup(app, setup.setupUrl, form)).rejects.toThrow(
+        "Setup form unavailable",
+      );
+    } finally {
+      await close();
+    }
+  });
+
+  it("inativação mostra o conteúdo canônico do hash, CAS e isolamento", async () => {
+    const plug = new FakePlugServer();
+    plug.sqlImpl = async (sql) =>
+      sql.includes("column_name")
+        ? {
+            columns: ["column_name", "data_type"],
+            rows: [{ column_name: "valor", data_type: "numeric" }],
+          }
+        : { columns: ["valor"], rows: [{ valor: 10 }] };
+    const { app, close, useCases } = await compose(
+      testConfig({ DATABASE_URL: "", REDIS_URL: "", CHATGPT_OAUTH_ENABLED: false }),
+      { plug },
+    );
+    try {
+      const first = await register(app, useCases, plug, agentA, "curadoria@example.test");
+      const sibling = await register(app, useCases, plug, agentB, "sibling@example.test");
+      const post = (path: string, body: unknown, token = first.token) =>
+        request(app)
+          .post(`/app/api${path}`)
+          .set("Authorization", `Bearer ${token}`)
+          .send(body as Record<string, unknown>);
+      const sqlModelo = "SELECT SUM(f.valor) AS total FROM fato f";
+      expect((await post("/treino/sql", { sql: sqlModelo })).status).toBe(200);
+      expect((await post("/grafo/mapear", { tabela: "fato" })).status).toBe(200);
+      const created = await post("/skills", {
+        slug: "fato",
+        nome: "Fato sintético",
+        descricao: "Valores sintéticos",
+        sqlModelo,
+      });
+      expect(created.status).toBe(200);
+      const skillId = created.body.skill.id as string;
+      const column = await post("/grafo/coluna", {
+        skillId,
+        tabela: "fato",
+        coluna: "valor",
+        descricao: "Valor sintético",
+        sensibilidade: "livre",
+        confirmadoPeloUsuario: true,
+      });
+      expect(column.body).toMatchObject({ success: true });
+      const validation = await post(`/skills/${skillId}/validar`, {});
+      expect(validation.body.error).toBeUndefined();
+      expect(validation.body).toMatchObject({ success: true });
+      const publish = await post(`/skills/${skillId}/publicar`, {});
+      expect(publish.body.confirmacaoHash).toBeTypeOf("string");
+      const published = await post(`/skills/${skillId}/publicar`, {
+        confirmadoPeloUsuario: true,
+        confirmacaoHash: publish.body.confirmacaoHash,
+      });
+      expect(published.body.error).toBeUndefined();
+      const candidate = await post("/consultas/salvar", {
+        pergunta: "Valores sintéticos",
+        sql: sqlModelo,
+        skillIds: [skillId],
+      });
+      expect(candidate.status).toBe(200);
+      const id = candidate.body.consulta.id as string;
+      const path = `/consultas/${id}/inativar`;
+      const preview = await post(path, { motivo: "Referência antiga" });
+      expect(preview.status).toBe(200);
+      expect(preview.body.preview).toMatchObject({
+        acessoId: first.acessoId,
+        motivo: "Referência antiga",
+        consulta: { id, sql: sqlModelo, pergunta: "Valores sintéticos", status: "candidata" },
+      });
+      expect(preview.body.confirmacaoHash).toBe(hashTreino(preview.body.preview));
+      expect((await post(path, { motivo: "Referência antiga" }, sibling.token)).status).toBe(400);
+      const stale = await post(path, {
+        motivo: "Motivo diferente",
+        confirmadoPeloUsuario: true,
+        confirmacaoHash: preview.body.confirmacaoHash,
+      });
+      expect(stale.body.code).toBe("CONFIRMACAO_DESATUALIZADA");
+      expect(
+        (
+          await post(path, {
+            motivo: "Referência antiga",
+            confirmadoPeloUsuario: true,
+            confirmacaoHash: preview.body.confirmacaoHash,
+          })
+        ).body.consulta.status,
+      ).toBe("inativa");
+      expect(
+        (
+          await post(path, {
+            motivo: "Referência antiga",
+            confirmadoPeloUsuario: true,
+            confirmacaoHash: preview.body.confirmacaoHash,
+          })
+        ).body.code,
+      ).toBe("CONFIRMACAO_DESATUALIZADA");
+    } finally {
+      await close();
+    }
+  });
   it("begin GET e POST JSON cadastram sem ecoar segredo e amarram um Bearer", async () => {
     const plug = new FakePlugServer();
     plug.approve(agentA);

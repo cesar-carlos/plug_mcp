@@ -3,7 +3,9 @@ export default { name: "RotacionarView" };
 </script>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
+import { useRouter } from "vue-router";
+import { useUnsavedChanges } from "../composables/useUnsavedChanges";
 import { completeSetup } from "../composables/useSetupForm";
 import { useAction } from "../composables/useAction";
 import { useSessionStore } from "../stores/session";
@@ -12,13 +14,16 @@ import CredentialFields from "../components/CredentialFields.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 
 const session = useSessionStore();
-const { pending, error, run } = useAction();
+const router = useRouter();
+const { pending, error, run, success } = useAction();
 const credenciais = ref({ email: "", senha: "" });
 const confirmado = ref(false);
-const token = ref<string | null>(null);
+useUnsavedChanges(computed(() => Boolean(credenciais.value.email || credenciais.value.senha)));
+onBeforeUnmount(() => {
+  session.clearIssued();
+});
 
 const save = async (): Promise<void> => {
-  token.value = null;
   await run(async (bearer) => {
     if (!confirmado.value) {
       throw new Error("Confirme a operação.");
@@ -29,7 +34,9 @@ const save = async (): Promise<void> => {
       bearer,
     );
     if (result.token) {
-      token.value = result.token;
+      credenciais.value = { email: "", senha: "" };
+      confirmado.value = false;
+      await router.push({ name: "bearer" });
       session.rememberIssued(result.token);
     }
   });
@@ -38,25 +45,27 @@ const save = async (): Promise<void> => {
 
 <template>
   <Page
-    title="Rotacionar Bearer"
+    title="Rotacionar Token MCP"
     lead="Emite outro token para esta mesma persona."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
-    <div v-if="token" class="ok">
-      <p>Novo Bearer, mostrado uma vez:</p>
-      <pre class="code">{{ token }}</pre>
-    </div>
     <form class="card" @submit.prevent="save">
       <p class="callout warn">
-        O Bearer atual vale até este envio concluir. Depois só o token novo autentica esta persona.
+        O Token MCP atual vale até este envio concluir. Depois só o token novo autentica esta
+        persona.
       </p>
       <fieldset class="section">
         <legend>Conta do hub</legend>
         <CredentialFields v-model="credenciais" senha-label="Senha do hub" />
       </fieldset>
-      <ConfirmField v-model="confirmado" label="Confirmo invalidar o Bearer atual desta persona" />
+      <ConfirmField
+        v-model="confirmado"
+        label="Confirmo invalidar o Token MCP atual desta persona"
+      />
       <div class="form-actions">
-        <button type="submit" :disabled="pending">Emitir novo Bearer</button>
+        <button type="submit" :disabled="pending || !confirmado">Emitir novo token MCP</button>
       </div>
     </form>
   </Page>

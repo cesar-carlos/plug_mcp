@@ -11,7 +11,7 @@ import Page from "../components/Page.vue";
 
 const router = useRouter();
 const session = useSessionStore();
-const { error, run } = useAction();
+const { error, run, pending, success } = useAction();
 const token = ref("");
 
 const enter = async (): Promise<void> => {
@@ -31,14 +31,14 @@ const enter = async (): Promise<void> => {
 <template>
   <Page
     class="public"
-    title="Colar Bearer"
-    lead="O token fica só na memória desta aba. Recarregar a página pede o Bearer de novo."
+    title="Usar Token MCP"
+    lead="O token fica só na memória desta aba. Recarregar a página pede o Token MCP de novo."
     :error="error"
+    :pending="pending"
+    :success="success"
   >
     <form class="card" @submit.prevent="enter">
-      <label
-        >Bearer MCP <input v-model="token" type="password" autocomplete="off" required
-      /></label>
+      <label>Token MCP <input v-model="token" type="password" autocomplete="off" required /></label>
       <div class="row">
         <button type="submit">Entrar</button>
         <RouterLink to="/conectar">Cadastrar conexão</RouterLink>

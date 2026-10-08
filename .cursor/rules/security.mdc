@@ -6,6 +6,8 @@ alwaysApply: false
 
 # Segurança
 
+Console `/app`: somente preferência de tema pode ser persistida no navegador. Tokens, SQL, previews, formulários e dados do acesso ficam em memória e são limpos ao sair/substituir sessão. Ignorar respostas em trânsito do contexto anterior. Confirmações nunca são fabricadas, compartilhadas entre operações ou repetidas automaticamente; preservar origem de 401 do hub. Erros de transporte/JSON não exibem HTML bruto. Setup mantém POST/CSRF e entrega única do Token MCP.
+
 Nunca exponha senha, client_token, JWT, Bearer ou códigos de operação em tools/logs/erros/telemetria. Tools de credenciais recebem objeto vazio estrito, retornam setupUrl/expiresAt; formulário recebe segredos.
 
 GET /setup só mostra formulário. POST exige CSRF, Origin, finalidade, vínculo, identidade no hub e confirmação. Código aleatório >=256 bits, hash persistido, TTL 15 minutos e claim atômico único. no-store/frame-ancestors none; páginas de formulário same-origin preservam Origin do POST, demais respostas no-referrer. Rotação mantém Bearer anterior até conclusão e invalida sessões/handles/cache; falha de cache não perde o novo Bearer. 0029 invalida setups legados, preserva Bearers.
