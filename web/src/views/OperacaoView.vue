@@ -6,12 +6,15 @@ export default { name: "OperacaoView" };
 import { onMounted, ref } from "vue";
 import { api, type AlertaItem, type EntregaItem, type LacunaItem } from "../api";
 import { useAction } from "../composables/useAction";
+import { toneForStatus } from "../presentation";
 import Page from "../components/Page.vue";
-import JsonBlock from "../components/JsonBlock.vue";
+import DataView from "../components/DataView.vue";
+import StatusPill from "../components/StatusPill.vue";
 import WebhookForm from "../components/WebhookForm.vue";
 import type { WebhookConfigurarPayload, WebhookRearmarPayload } from "../form-payloads";
 
 const { error, run } = useAction();
+const pronto = ref(false);
 const auditoria = ref<unknown>(null);
 const metricas = ref<unknown>(null);
 const alertas = ref<AlertaItem[]>([]);
@@ -43,7 +46,9 @@ const load = async (bearer: string | undefined): Promise<void> => {
 };
 
 onMounted(() => {
-  void run(load);
+  void run(load).then(() => {
+    pronto.value = true;
+  });
 });
 
 const reconhecer = async (id: string): Promise<void> => {
@@ -92,20 +97,35 @@ const registrarLacuna = async (): Promise<void> => {
   >
     <div class="card">
       <h2>Métricas</h2>
-      <JsonBlock :value="metricas" />
+      <DataView v-if="metricas" :value="metricas" empty="Nenhuma métrica nesta janela." />
+      <p v-else class="empty">Nenhuma métrica carregada.</p>
     </div>
     <div class="card">
       <h2>Auditoria</h2>
-      <JsonBlock :value="auditoria" />
+      <DataView v-if="auditoria" :value="auditoria" empty="Nenhum evento de auditoria." />
+      <p v-else class="empty">Nenhuma auditoria carregada.</p>
     </div>
     <div class="card">
       <h2>Alertas</h2>
-      <table>
+      <p v-if="pronto && !error && alertas.length === 0" class="empty">Nenhum alerta.</p>
+      <table v-else-if="alertas.length > 0" class="data">
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th>Severidade</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
         <tbody>
           <tr v-for="alerta in alertas" :key="alerta.id">
             <td>{{ alerta.categoria }}</td>
-            <td>{{ alerta.severidade }}</td>
-            <td>{{ alerta.status }}</td>
+            <td>
+              <StatusPill :label="alerta.severidade" :tone="toneForStatus(alerta.severidade)" />
+            </td>
+            <td>
+              <StatusPill :label="alerta.status" :tone="toneForStatus(alerta.status)" />
+            </td>
             <td>
               <button
                 v-if="alerta.status === 'aberto'"
@@ -128,11 +148,23 @@ const registrarLacuna = async (): Promise<void> => {
           <option value="arquivada">arquivada</option>
         </select>
       </label>
-      <table>
+      <p v-if="pronto && !error && lacunas.length === 0" class="empty">
+        Nenhuma lacuna neste status.
+      </p>
+      <table v-else-if="lacunas.length > 0" class="data">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Status</th>
+            <th>Pergunta</th>
+          </tr>
+        </thead>
         <tbody>
           <tr v-for="lacuna in lacunas" :key="lacuna.id">
             <td>{{ lacuna.tipo }}</td>
-            <td>{{ lacuna.status }}</td>
+            <td>
+              <StatusPill :label="lacuna.status" :tone="toneForStatus(lacuna.status)" />
+            </td>
             <td>{{ lacuna.pergunta }}</td>
           </tr>
         </tbody>
@@ -146,7 +178,9 @@ const registrarLacuna = async (): Promise<void> => {
       <label>Permissão <input v-model="permissao" /></label>
       <label>Teto <input v-model="teto" /></label>
       <label>Aceite <input v-model="aceite" /></label>
-      <button type="submit">Registrar</button>
+      <div class="form-actions">
+        <button type="submit">Registrar</button>
+      </div>
     </form>
     <WebhookForm :entregas="entregas" @configurar="webhook" @rearmar="rearmar" />
   </Page>

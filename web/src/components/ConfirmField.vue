@@ -24,10 +24,8 @@ const onChange = (event: { target: unknown }): void => {
 </script>
 
 <template>
-  <label>
-    <span class="row">
-      <input type="checkbox" :checked="modelValue" @change="onChange" />
-      {{ label ?? "Confirmo esta operação no acesso informado" }}
-    </span>
+  <label class="choice">
+    <input type="checkbox" :checked="modelValue" @change="onChange" />
+    <span>{{ label ?? "Confirmo esta operação no acesso informado" }}</span>
   </label>
 </template>

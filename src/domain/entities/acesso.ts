@@ -59,6 +59,8 @@ export interface AcessoPublico {
   readonly clientTokenMasked: string;
   readonly nomePersona: string | null;
   readonly instrucoesPersona: string | null;
+  readonly escopoPadrao: EscopoPadraoAcesso | null;
+  readonly timezone: string | null;
 }
 
 export const maskToken = (token: string): string => {
@@ -97,6 +99,8 @@ export const toAcessoPublico = (
     clientTokenMasked: tokenPlain ? maskToken(tokenPlain) : "••••",
     nomePersona: acesso.nomePersona,
     instrucoesPersona: acesso.instrucoesPersona,
+    escopoPadrao: acesso.escopoPadrao,
+    timezone: acesso.timezone,
   };
 };
 

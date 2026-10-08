@@ -13,6 +13,7 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- Console: tela **SQL de treino** (`/skills/sql`) lista o `sqlModelo` de cada skill desta persona e grava pelo mesmo `atualizar_skill`. O GET é `/app/api/skills/modelos`; a tool MCP `listar_skills` continua sem SQL.
 - Console no navegador em `/app` (Vue 3 + Pinia): o usuário informa e-mail, senha, `agentId`, dialeto e `client_token` no formulário já seguro e mantém a persona, skills, grafo e operação pelos mesmos casos de uso das tools. Bearer só na memória da aba. Favicon e marca Se7e na aba e na navegação.
 - BFF `/app/api` e `POST /setup/:code` com `Accept: application/json` devolvem `{ token, acessoId }` ou `{ code, message, hint }`, sem ecoar senha ou `client_token`.
 - Procedimento para conferir a allowlist OAuth do piloto ChatGPT e recriar só o serviço `mcp`, sem imprimir segredos: `docs/operations/chatgpt-oauth-allowlist.md`.
@@ -26,6 +27,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Changed
 
+- SQL de treino abre os cartões fechados, filtra por trecho do SQL ou só os ilegíveis, mostra rascunho e publicação separados e grava um cartão sem apagar a edição dos outros. Em Consultas, abrir uma linha mostra o SQL do exemplo; a lista segue sem SQL e a troca continua no preview de `salvar_consulta`.
+- O menu do console tem **Sair**: esquece o Bearer e a skill aberta nesta aba e volta à tela de colar o token. A persona e o catálogo permanecem.
+- `listar_skills` e `obter_skill` seguem quando um `sqlModelo` não é interpretável: essa skill volta com falta `kind: sql` (`nextAction: atualizar_skill`, sem `podeLiberar`) e as demais permanecem na lista.
+- `listar_acessos` devolve `escopoPadrao` e `timezone` do recorte vigente. O console de escopo abre com esses valores. Grafo, treino, consultas, verificação, painel e o diff de publicação mostram lista; o JSON fica recolhido.
+- O console autenticado passa a mostrar a persona no menu e organiza acesso, catálogo e operação com o mesmo cabeçalho, selos de status e formulários agrupados. `unknown (vault)` na tela de acesso aparece como “não consultado”: o cofre não lê a policy ao vivo.
 - As páginas em que o plugin ChatGPT recebe o token MCP usam o visual do console Se7e. O campo de senha, a conferência da persona e a recusa sem recursos externos permanecem.
 - Os formulários de `/setup/:code` (cadastro, outra persona, credenciais e rotação), o Bearer mostrado uma vez e as recusas do cofre usam o mesmo visual. Campos, CSRF e a exibição única do token permanecem.
 - A página `/app/conectar` agrupa conta do hub, acesso SQL e confirmação. O dialeto aparece com o nome do GDBR e a confirmação fica alinhada ao texto. O POST de cadastro permanece o mesmo.

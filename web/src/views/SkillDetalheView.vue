@@ -8,9 +8,11 @@ import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import { useAction } from "../composables/useAction";
 import { useSkillStore, type ParametroSkillForm } from "../stores/skills";
+import { passoLabel, statusLabel, toneForStatus } from "../presentation";
 import Page from "../components/Page.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 import ParamsEditor from "../components/ParamsEditor.vue";
+import StatusPill from "../components/StatusPill.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -27,19 +29,15 @@ const id = (): string => String(route.params.id);
 const fluxo = computed(() => skills.aberta?.fluxoTreino ?? null);
 const proximo = computed(() => fluxo.value?.proximoPasso ?? null);
 
-const destino: Record<string, { label: string; to?: string }> = {
-  treinar_sql: { label: "Treinar SQL", to: "/treino" },
-  descrever_params: { label: "Descrever parâmetros" },
-  resolver_conflito: { label: "Resolver conflito", to: "/grafo" },
-  listar_conflitos: { label: "Ver conflitos", to: "/grafo" },
-  validar_skill: { label: "Validar skill" },
-  publicar_skill: { label: "Publicar", to: "" },
-  confirmar_coluna: { label: "Confirmar coluna", to: "/grafo" },
-  confirmar_relacionamento: { label: "Confirmar JOIN", to: "/grafo" },
-  remover_relacionamento: { label: "Remover JOIN", to: "/grafo" },
-  mapear_tabela: { label: "Mapear tabela", to: "/grafo" },
-  atualizar_skill: { label: "Atualizar a skill" },
-  criar_skill: { label: "Skill já criada" },
+const destino: Record<string, { to?: string }> = {
+  treinar_sql: { to: "/treino" },
+  resolver_conflito: { to: "/grafo" },
+  listar_conflitos: { to: "/grafo" },
+  publicar_skill: { to: "" },
+  confirmar_coluna: { to: "/grafo" },
+  confirmar_relacionamento: { to: "/grafo" },
+  remover_relacionamento: { to: "/grafo" },
+  mapear_tabela: { to: "/grafo" },
 };
 
 const linkProximo = computed(() => {
@@ -141,26 +139,34 @@ const seguir = async (): Promise<void> => {
 <template>
   <Page :title="nome || 'Skill'" :error="error">
     <div v-if="fluxo" class="card">
-      <p>Status: {{ skills.aberta?.status }} · próximo: {{ proximo ?? "concluído" }}</p>
-      <ol>
+      <div class="row">
+        <StatusPill
+          v-if="skills.aberta?.status"
+          :label="statusLabel(skills.aberta.status)"
+          :tone="toneForStatus(skills.aberta.status)"
+        />
+        <StatusPill :label="proximo ? passoLabel(proximo) : 'concluído'" />
+      </div>
+      <ol class="steps">
         <li v-for="passo in fluxo.passos" :key="passo.id">
-          <strong>{{ passo.id }}</strong> ({{ passo.status }}) — {{ passo.hint }}
+          <strong>{{ passoLabel(passo.id) }}</strong>
+          <span class="hint">{{ passo.status }} — {{ passo.hint }}</span>
         </li>
       </ol>
-      <div class="row">
+      <div class="form-actions">
         <button
           v-if="proximo === 'validar_skill' || proximo === 'publicar_skill'"
           type="button"
           @click="seguir"
         >
-          {{ destino[proximo]?.label }}
+          {{ passoLabel(proximo) }}
         </button>
-        <RouterLink v-else-if="linkProximo" :to="linkProximo">
-          {{ proximo ? destino[proximo]?.label : "" }}
+        <RouterLink v-else-if="linkProximo" class="btn" :to="linkProximo">
+          {{ proximo ? passoLabel(proximo) : "" }}
         </RouterLink>
-        <span v-if="!skills.podePublicar"
-          >Publicar fica disponível quando o próximo passo for publicar_skill.</span
-        >
+        <span v-if="!skills.podePublicar" class="hint">
+          Publicar abre quando o próximo passo for publicar.
+        </span>
       </div>
     </div>
     <form class="card" @submit.prevent="save">
@@ -169,7 +175,7 @@ const seguir = async (): Promise<void> => {
       <label>sqlModelo <textarea v-model="sqlModelo" rows="10" /></label>
       <ParamsEditor v-model="params" />
       <ConfirmField v-model="confirmado" label="Confirmo alterar slug, SQL ou escopo desta skill" />
-      <div class="row">
+      <div class="form-actions">
         <button type="submit" :disabled="pending">Salvar rascunho</button>
         <button class="secondary" type="button" :disabled="pending" @click="validar">
           Validar
@@ -185,7 +191,9 @@ const seguir = async (): Promise<void> => {
         confirmar_coluna.
       </p>
       <label>Tabelas <input v-model="tabelas" placeholder="pedido, cliente" /></label>
-      <button type="submit" :disabled="pending">Ampliar</button>
+      <div class="form-actions">
+        <button type="submit" :disabled="pending">Ampliar</button>
+      </div>
     </form>
   </Page>
 </template>

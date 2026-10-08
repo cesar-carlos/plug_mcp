@@ -307,6 +307,17 @@ export interface SkillListItem {
   readonly faltas: readonly FatoIncompleto[];
 }
 
+export interface SkillSqlModeloItem {
+  readonly id: string;
+  readonly slug: string;
+  readonly nome: string;
+  readonly status: StatusSkill;
+  readonly statusRascunho: StatusSkill;
+  readonly motivoRevalidacao: string | null;
+  readonly sqlModelo: string;
+  readonly faltas: readonly FatoIncompleto[];
+}
+
 export interface ResumoPublicacao {
   readonly nome: string;
   readonly slug: string;
@@ -1267,6 +1278,37 @@ export class ListarSkills {
   }
 }
 
+export class ListarSqlModelos {
+  constructor(
+    private readonly acessos: AcessoRepositoryPort,
+    private readonly skills: SkillRepositoryPort,
+    private readonly grafo: GrafoRepositoryPort,
+  ) {}
+
+  async execute(
+    usuarioId: string | undefined,
+    input: { acessoId?: string },
+  ): Promise<{ success: true; skills: readonly SkillSqlModeloItem[] }> {
+    const uid = requireUsuario(usuarioId);
+    const acesso = await requireAcesso(this.acessos, input.acessoId, uid);
+    const rows = await this.skills.listByAcesso(acesso.id);
+    const fluxos = await fluxoForAcessoSkills(this.grafo, acesso.id, rows);
+    return {
+      success: true,
+      skills: rows.map((skill, index) => ({
+        id: skill.id,
+        slug: skill.slug,
+        nome: skill.nome,
+        status: skill.publicacaoAtivaId ? "publicada" : skill.status,
+        statusRascunho: skill.status,
+        motivoRevalidacao: skill.motivoRevalidacao,
+        sqlModelo: skill.sqlModelo,
+        faltas: fluxos[index]?.faltas ?? [],
+      })),
+    };
+  }
+}
+
 export class ObterSkill {
   constructor(
     private readonly acessos: AcessoRepositoryPort,
@@ -1364,12 +1406,26 @@ export class ObterSkill {
         hint: "Passe skillId ou slug. Use listar_skills.",
       });
     }
-    const persisted =
-      skill.status === "publicada" ? skill : await persistirEscopoSeVazio(this.skills, skill);
-    const escopo =
-      persisted.escopo.tabelas.length > 0
-        ? persisted.escopo
-        : escopoFromSqlModelo(parseSqlModelo(persisted.sqlModelo));
+    let persisted = skill;
+    if (skill.status !== "publicada") {
+      try {
+        persisted = await persistirEscopoSeVazio(this.skills, skill);
+      } catch (error) {
+        if (!(error instanceof DomainError)) {
+          throw error;
+        }
+      }
+    }
+    let escopo = persisted.escopo;
+    if (escopo.tabelas.length === 0) {
+      try {
+        escopo = escopoFromSqlModelo(parseSqlModelo(persisted.sqlModelo));
+      } catch (error) {
+        if (!(error instanceof DomainError)) {
+          throw error;
+        }
+      }
+    }
     const policy = await withHubAuth(this.sessions, uid, (accessToken) =>
       this.plug.getClientTokenPolicy({
         accessToken,
@@ -1514,6 +1570,7 @@ export class ObterSkill {
         dicionario: valoresPermitidos ? coluna.dicionario : null,
       };
     };
+    const fluxoPacote = await fluxoEFaltasForAcessoSkill(this.grafo, acesso.id, persisted);
     const conhecimentoPublicado = persisted.conhecimentoPublicado
       ? {
           ...persisted.conhecimentoPublicado,
@@ -1563,9 +1620,9 @@ export class ObterSkill {
       guiaDialeto: guiaDialeto(acesso.dialeto),
       escopoPadrao: acesso.escopoPadrao,
       timezone: acesso.timezone,
-      fluxoTreino: await fluxoForAcessoSkill(this.grafo, acesso.id, persisted),
+      fluxoTreino: fluxoPacote.fluxo,
       avisos,
-      faltas,
+      faltas: [...faltas, ...fluxoPacote.faltas.filter((item) => item.kind === "sql")],
     };
   }
 }

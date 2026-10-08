@@ -31,13 +31,19 @@ const save = async (): Promise<void> => {
 <template>
   <Page
     title="Dialeto"
-    lead="Trocar o dialeto devolve as skills a rascunho. A tela não infere o GDBR."
+    lead="A tela não descobre o GDBR. A troca vale só para este acesso."
     :error="error"
   >
     <form class="card" @submit.prevent="save">
+      <p class="callout warn">
+        Trocar o dialeto devolve as skills deste acesso a rascunho. A tela não descobre o GDBR
+        sozinha.
+      </p>
       <DialetoSelect v-model="dialeto" />
-      <ConfirmField v-model="confirmado" />
-      <button type="submit" :disabled="pending">Alterar</button>
+      <ConfirmField v-model="confirmado" label="Confirmo trocar o dialeto e rebaixar as skills" />
+      <div class="form-actions">
+        <button type="submit" :disabled="pending">Alterar</button>
+      </div>
     </form>
   </Page>
 </template>

@@ -34,10 +34,12 @@ const body = (withConfirm: boolean): GrafoJoinBody => ({
 <template>
   <div class="card">
     <h2>Relacionamento</h2>
-    <label>Origem <input v-model="origem" /></label>
-    <label>Coluna origem <input v-model="colunaOrigem" /></label>
-    <label>Destino <input v-model="destino" /></label>
-    <label>Coluna destino <input v-model="colunaDestino" /></label>
+    <div class="fields-2">
+      <label>Tabela origem <input v-model="origem" /></label>
+      <label>Coluna origem <input v-model="colunaOrigem" /></label>
+      <label>Tabela destino <input v-model="destino" /></label>
+      <label>Coluna destino <input v-model="colunaDestino" /></label>
+    </div>
     <label>
       Cardinalidade
       <select v-model="cardinalidade">
@@ -56,7 +58,7 @@ const body = (withConfirm: boolean): GrafoJoinBody => ({
       </select>
     </label>
     <ConfirmField v-model="confirmado" />
-    <div class="row">
+    <div class="form-actions">
       <button type="button" @click="emit('confirmar', body(false))">Confirmar JOIN</button>
       <button class="danger" type="button" @click="emit('remover', body(true))">
         Remover JOIN

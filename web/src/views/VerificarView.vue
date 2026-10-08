@@ -8,7 +8,7 @@ import { api } from "../api";
 import { useAction } from "../composables/useAction";
 import { useSessionStore } from "../stores/session";
 import Page from "../components/Page.vue";
-import JsonBlock from "../components/JsonBlock.vue";
+import DataView from "../components/DataView.vue";
 
 const session = useSessionStore();
 const { pending, error, run } = useAction();
@@ -25,10 +25,21 @@ const verificar = async (): Promise<void> => {
 <template>
   <Page
     title="Verificar no hub"
-    lead="Consulta o pedido de acesso e a policy do client_token. Não faça polling agressivo."
+    lead="Não faça polling agressivo. Uma leitura basta para atualizar o estado SQL."
     :error="error"
   >
-    <button :disabled="pending" @click="verificar">Verificar agora</button>
-    <JsonBlock v-if="result" :value="result" />
+    <div class="card">
+      <p class="hint">
+        Lê o pedido de acesso e a policy do client_token neste momento. O estado “não consultado” da
+        tela de acesso muda só depois desta leitura.
+      </p>
+      <div class="form-actions">
+        <button :disabled="pending" @click="verificar">Verificar agora</button>
+      </div>
+    </div>
+    <div v-if="result" class="card">
+      <h2>Resposta do hub</h2>
+      <DataView :value="result" />
+    </div>
   </Page>
 </template>

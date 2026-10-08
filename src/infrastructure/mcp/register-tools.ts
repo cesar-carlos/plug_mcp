@@ -54,6 +54,7 @@ import type {
   ExpandirEscopo,
   ListarAnotacoes,
   ListarSkills,
+  ListarSqlModelos,
   ObterSkill,
   PublicarSkill,
   RemoverAnotacao,
@@ -105,6 +106,7 @@ export interface ToolUseCases {
   despublicarSkill: DespublicarSkill;
   removerSkill: RemoverSkill;
   listarSkills: ListarSkills;
+  listarSqlModelos: ListarSqlModelos;
   obterSkill: ObterSkill;
   expandirEscopo: ExpandirEscopo;
   confirmarRelacionamento: ConfirmarRelacionamento;
@@ -453,7 +455,7 @@ export const registerTools = (
     "listar_acessos",
     {
       description:
-        "Lista só o acesso deste Bearer (client_token mascarado; nomePersona e instrucoesPersona). Sem sessão ALS recusa (VALIDATION_ERROR) — não lista todos os chapéus. sqlAccessState vem só do cofre (approved → unknown). Outras personas usam o token MCP delas. Persona não licencia SQL.",
+        "Lista só o acesso deste Bearer (client_token mascarado; nomePersona, instrucoesPersona, escopoPadrao e timezone). Sem sessão ALS recusa (VALIDATION_ERROR) — não lista todos os chapéus. sqlAccessState vem só do cofre (approved → unknown). Escopo e persona não licenciam SQL. Outras personas usam o token MCP delas.",
       inputSchema: z.object(emptyShape),
       annotations: readList,
     },
@@ -888,7 +890,7 @@ export const registerTools = (
     "listar_skills",
     {
       description:
-        "Lista skills desta persona (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). Sem sqlModelo — use obter_skill para o pacote. Omita acessoId — o Bearer já amarra o catálogo.",
+        "Lista skills desta persona (id, slug, nome, status, versao, motivoRevalidacao, podeLiberar, fluxoTreino, faltas[]). sqlModelo ilegível vira falta kind sql nessa skill e a lista continua. Sem sqlModelo — use obter_skill para o pacote. Omita acessoId — o Bearer já amarra o catálogo.",
       inputSchema: z.object({ acessoId: z.string().optional() }),
       annotations: readList,
     },

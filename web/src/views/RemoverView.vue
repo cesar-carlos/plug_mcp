@@ -28,12 +28,17 @@ const remove = async (): Promise<void> => {
 <template>
   <Page
     title="Remover acesso"
-    lead="Apaga esta persona e o catálogo. Não apaga outro Bearer."
+    lead="Outro Bearer continua válido."
     :error="error"
   >
     <form class="card" @submit.prevent="remove">
+      <p class="callout danger">
+        Apaga esta persona, as skills e o catálogo deste Bearer. Outro token não é afetado.
+      </p>
       <ConfirmField v-model="confirmado" label="Confirmo apagar esta persona e o catálogo" />
-      <button class="danger" type="submit" :disabled="pending">Remover</button>
+      <div class="form-actions">
+        <button class="danger" type="submit" :disabled="pending">Remover</button>
+      </div>
     </form>
   </Page>
 </template>

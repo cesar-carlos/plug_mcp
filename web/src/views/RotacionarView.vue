@@ -39,17 +39,25 @@ const save = async (): Promise<void> => {
 <template>
   <Page
     title="Rotacionar Bearer"
-    lead="O Bearer atual vale até este POST concluir. Depois só o novo autentica esta persona."
+    lead="Emite outro token para esta mesma persona."
     :error="error"
   >
     <div v-if="token" class="ok">
-      <p>Novo Bearer (uma vez):</p>
+      <p>Novo Bearer, mostrado uma vez:</p>
       <pre class="code">{{ token }}</pre>
     </div>
     <form class="card" @submit.prevent="save">
-      <CredentialFields v-model="credenciais" />
-      <ConfirmField v-model="confirmado" />
-      <button type="submit" :disabled="pending">Emitir novo Bearer</button>
+      <p class="callout warn">
+        O Bearer atual vale até este envio concluir. Depois só o token novo autentica esta persona.
+      </p>
+      <fieldset class="section">
+        <legend>Conta do hub</legend>
+        <CredentialFields v-model="credenciais" senha-label="Senha do hub" />
+      </fieldset>
+      <ConfirmField v-model="confirmado" label="Confirmo invalidar o Bearer atual desta persona" />
+      <div class="form-actions">
+        <button type="submit" :disabled="pending">Emitir novo Bearer</button>
+      </div>
     </form>
   </Page>
 </template>

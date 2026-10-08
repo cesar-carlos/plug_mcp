@@ -47,10 +47,23 @@ const save = async (): Promise<void> => {
     :error="error"
   >
     <form class="card" @submit.prevent="save">
-      <label>Nome <input v-model="nomePersona" maxlength="80" /></label>
-      <label>Instruções <textarea v-model="instrucoesPersona" rows="8" maxlength="4000" /></label>
-      <ConfirmField v-model="confirmado" />
-      <button type="submit" :disabled="pending">Gravar</button>
+      <fieldset class="section">
+        <legend>Tom e uso</legend>
+        <label>
+          Nome
+          <input v-model="nomePersona" maxlength="80" />
+          <span class="hint">Como a IA trata esta persona. Não escolhe skills nem tabelas.</span>
+        </label>
+        <label>
+          Instruções
+          <textarea v-model="instrucoesPersona" rows="8" maxlength="4000" />
+          <span class="hint">Texto de uso. Segredo neste campo é recusado e não fica gravado.</span>
+        </label>
+      </fieldset>
+      <ConfirmField v-model="confirmado" label="Confirmo gravar o tom desta persona" />
+      <div class="form-actions">
+        <button type="submit" :disabled="pending">Gravar</button>
+      </div>
     </form>
   </Page>
 </template>

@@ -69,17 +69,26 @@ const atualizar = (): void => {
       </label>
       <label>Título <input v-model="titulo" required /></label>
       <label>Texto <textarea v-model="texto" rows="4" required /></label>
-      <label>Tabela <input v-model="tabela" /></label>
-      <label>Vigente de <input v-model="vigenteDe" type="date" /></label>
-      <label>Vigente até <input v-model="vigenteAte" type="date" /></label>
+      <label>Tabela <input v-model="tabela" placeholder="Opcional" /></label>
+      <div class="fields-2">
+        <label>Vigente de <input v-model="vigenteDe" type="date" /></label>
+        <label>Vigente até <input v-model="vigenteAte" type="date" /></label>
+      </div>
       <label>Revisar em <input v-model="revisarEm" type="date" /></label>
-      <button type="submit">Gravar</button>
+      <div class="form-actions">
+        <button type="submit">Gravar</button>
+      </div>
     </form>
     <form class="card" @submit.prevent="atualizar">
       <h2>Atualizar</h2>
-      <label>ID <input v-model="anotacaoId" required /></label>
-      <ConfirmField v-model="confirmado" />
-      <button type="submit">Atualizar</button>
+      <label>
+        ID
+        <input v-model="anotacaoId" required class="mono" />
+      </label>
+      <ConfirmField v-model="confirmado" label="Confirmo atualizar esta anotação" />
+      <div class="form-actions">
+        <button type="submit">Atualizar</button>
+      </div>
     </form>
   </div>
 </template>

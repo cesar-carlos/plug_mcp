@@ -44,12 +44,16 @@ const save = async (): Promise<void> => {
     :error="error"
   >
     <form class="card" @submit.prevent="save">
-      <label>Slug <input v-model="slug" required /></label>
-      <label>Nome <input v-model="nome" required /></label>
+      <div class="fields-2">
+        <label>Slug <input v-model="slug" required /></label>
+        <label>Nome <input v-model="nome" required /></label>
+      </div>
       <label>Descrição <textarea v-model="descricao" rows="3" /></label>
       <label>sqlModelo <textarea v-model="sqlModelo" rows="10" required /></label>
       <ParamsEditor v-model="params" />
-      <button type="submit" :disabled="pending">Criar</button>
+      <div class="form-actions">
+        <button type="submit" :disabled="pending">Criar</button>
+      </div>
     </form>
   </Page>
 </template>

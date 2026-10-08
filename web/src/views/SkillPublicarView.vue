@@ -9,7 +9,7 @@ import { api } from "../api";
 import { useAction } from "../composables/useAction";
 import { useSkillStore } from "../stores/skills";
 import Page from "../components/Page.vue";
-import JsonBlock from "../components/JsonBlock.vue";
+import DataView from "../components/DataView.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 
 const route = useRoute();
@@ -70,12 +70,17 @@ const confirm = async (): Promise<void> => {
     lead="A primeira chamada só mostra o diff. A segunda usa o hash vigente guardado nesta aba."
     :error="error"
   >
-    <JsonBlock v-if="preview" :value="preview" />
+    <div v-if="preview" class="card">
+      <h2>Diff</h2>
+      <DataView :value="preview" />
+    </div>
     <form class="card" @submit.prevent="confirm">
       <ConfirmField v-model="confirmado" label="Confirmo publicar este pacote" />
-      <button type="submit" :disabled="pending || !skills.confirmacaoHash">
-        Confirmar publicação
-      </button>
+      <div class="form-actions">
+        <button type="submit" :disabled="pending || !skills.confirmacaoHash">
+          Confirmar publicação
+        </button>
+      </div>
     </form>
   </Page>
 </template>

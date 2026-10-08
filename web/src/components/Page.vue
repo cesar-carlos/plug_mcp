@@ -14,8 +14,15 @@ defineProps<{
 
 <template>
   <div>
-    <h1>{{ title }}</h1>
-    <p v-if="lead" class="lead">{{ lead }}</p>
+    <header class="page-head">
+      <div>
+        <h1>{{ title }}</h1>
+        <p v-if="lead" class="lead">{{ lead }}</p>
+      </div>
+      <div v-if="$slots.actions" class="page-actions">
+        <slot name="actions" />
+      </div>
+    </header>
     <ErrorBanner :error="error" />
     <slot />
   </div>

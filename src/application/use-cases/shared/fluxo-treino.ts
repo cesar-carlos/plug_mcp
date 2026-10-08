@@ -1,3 +1,4 @@
+import { DomainError } from "../../../domain/errors/domain-error.js";
 import {
   escopoTemMedida,
   metricasMedidaSemDefinicao,
@@ -311,6 +312,38 @@ export const buildFluxoTreino = (input: {
   };
 };
 
+const fluxoSqlIlegivel = (error: DomainError): FluxoSkillResult => {
+  const message = error.hint ? `${error.message} ${error.hint}` : error.message;
+  return {
+    fluxo: {
+      passoAtual: "treinar_sql",
+      proximoPasso: "atualizar_skill",
+      podeLiberar: false,
+      pacoteMinimo: false,
+      passos: [
+        passo("treinar_sql", "bloqueado", message),
+        passo("criar_skill", "bloqueado", "Ajuste o sqlModelo antes de seguir o treino."),
+        passo(
+          "descrever_params",
+          "bloqueado",
+          "Os parâmetros ficam para depois do SQL interpretável.",
+        ),
+        passo("resolver_conflito", "bloqueado", "Conflito não libera um SQL ilegível."),
+        passo("validar_skill", "bloqueado", "Validar exige um SELECT interpretável neste dialeto."),
+        passo("publicar_skill", "bloqueado", "Publicar exige um sqlModelo interpretável."),
+      ],
+    },
+    faltas: [
+      {
+        kind: "sql",
+        alvo: "sqlModelo",
+        message,
+        nextAction: "atualizar_skill",
+      },
+    ],
+  };
+};
+
 const fluxoComConflitos = async (
   grafo: GrafoRepositoryPort,
   acessoId: string,
@@ -319,7 +352,15 @@ const fluxoComConflitos = async (
 ): Promise<FluxoSkillResult> => {
   let treinado: boolean;
   if (skill) {
-    const modelo = parseSqlModelo(skill.sqlModelo);
+    let modelo;
+    try {
+      modelo = parseSqlModelo(skill.sqlModelo);
+    } catch (error) {
+      if (error instanceof DomainError) {
+        return fluxoSqlIlegivel(error);
+      }
+      throw error;
+    }
     const missing = await missingGraphTables(
       grafo,
       acessoId,

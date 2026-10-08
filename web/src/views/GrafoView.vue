@@ -7,7 +7,7 @@ import { onMounted, ref } from "vue";
 import { api } from "../api";
 import { useAction } from "../composables/useAction";
 import Page from "../components/Page.vue";
-import JsonBlock from "../components/JsonBlock.vue";
+import DataView from "../components/DataView.vue";
 import ConfirmField from "../components/ConfirmField.vue";
 import GrafoJoinForm from "../components/GrafoJoinForm.vue";
 import type { GrafoJoinBody } from "../form-payloads";
@@ -86,20 +86,27 @@ const herdar = async (): Promise<void> => {
     :error="error"
   >
     <div class="card">
-      <label>Filtro <input v-model="filtro" /></label>
-      <div class="row">
+      <h2>Tabelas</h2>
+      <label>
+        Filtro
+        <input v-model="filtro" placeholder="Nome ou parte do nome" />
+      </label>
+      <div class="form-actions">
         <button type="button" @click="run(explorar)">Explorar tabelas</button>
         <button class="secondary" type="button" @click="herdar">Herdar template Se7e</button>
       </div>
-      <JsonBlock :value="tabelas" />
+      <DataView v-if="tabelas" :value="tabelas" empty="Nenhuma tabela neste filtro." />
+      <p v-else class="empty">Nenhuma tabela listada ainda.</p>
     </div>
     <div class="card">
-      <h2>Mapear / coluna</h2>
-      <label>Tabela <input v-model="tabela" /></label>
-      <label>Coluna <input v-model="coluna" /></label>
+      <h2>Mapear coluna</h2>
+      <div class="fields-2">
+        <label>Tabela <input v-model="tabela" /></label>
+        <label>Coluna <input v-model="coluna" /></label>
+      </div>
       <label>Descrição <input v-model="descricao" /></label>
-      <ConfirmField v-model="confirmado" />
-      <div class="row">
+      <ConfirmField v-model="confirmado" label="Confirmo a descrição desta coluna" />
+      <div class="form-actions">
         <button type="button" @click="mapear">Mapear tabela</button>
         <button class="secondary" type="button" @click="confirmarColuna">Confirmar coluna</button>
       </div>
@@ -107,7 +114,8 @@ const herdar = async (): Promise<void> => {
     <GrafoJoinForm @confirmar="confirmarJoin" @remover="removerJoin" />
     <div class="card">
       <h2>Conflitos</h2>
-      <JsonBlock :value="conflitos" />
+      <DataView v-if="conflitos" :value="conflitos" empty="Nenhum conflito neste acesso." />
+      <p v-else class="empty">Nenhum conflito carregado.</p>
     </div>
   </Page>
 </template>

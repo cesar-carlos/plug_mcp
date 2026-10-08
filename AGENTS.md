@@ -69,7 +69,7 @@ documentação de produto e os testes correspondentes.
   sempre `validar_skill`). `confirmar_relacionamento` sem `skillId` grava só no
   grafo — o validador publicado não vê o JOIN até ele entrar no pacote. Sem publicação ativa, rascunho, validada ou
   `rascunho_revalidacao` não consultam (`rascunho_revalidacao`: validar →
-  republicar). `listar_skills` devolve status/`fluxoTreino`/`faltas[]`; o
+  republicar). `listar_skills` devolve status/`fluxoTreino`/`faltas[]`; SQL ilegível vira falta `kind: sql` naquela skill e o restante da lista continua. O
   pacote fica em `obter_skill`. Skill `validada` com perfil incompleto:
   `proximoPasso` é a tool da primeira falta (nunca `null`). `despublicar_skill`
   rebaixa para validada sem apagar. JOIN composto substitui pares isolados;

@@ -37,7 +37,7 @@ export type FaltaNextAction =
   | "atualizar_skill";
 
 export interface FatoIncompleto {
-  readonly kind: "tabela" | "coluna" | "join" | "perfil" | "conflito" | "kpi" | "param";
+  readonly kind: "tabela" | "coluna" | "join" | "perfil" | "conflito" | "kpi" | "param" | "sql";
   readonly message: string;
   readonly alvo: string;
   readonly nextAction: FaltaNextAction;

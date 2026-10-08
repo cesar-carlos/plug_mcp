@@ -93,6 +93,13 @@ export const codeFromSetupUrl = (setupUrl: string): string => {
   return (parts[1] ?? "").split("?")[0] ?? "";
 };
 
+export interface SkillFalta {
+  kind: string;
+  message: string;
+  alvo: string;
+  nextAction: string;
+}
+
 export interface SkillRow {
   id: string;
   slug: string;
@@ -100,6 +107,18 @@ export interface SkillRow {
   status: string;
   podeLiberar?: boolean;
   fluxoTreino?: { proximoPasso?: string | null };
+  faltas?: SkillFalta[];
+}
+
+export interface SkillSqlModeloRow {
+  id: string;
+  slug: string;
+  nome: string;
+  status: string;
+  statusRascunho: string;
+  motivoRevalidacao: string | null;
+  sqlModelo: string;
+  faltas: SkillFalta[];
 }
 
 export interface AlertaItem {

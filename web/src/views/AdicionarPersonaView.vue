@@ -55,13 +55,31 @@ const save = async (): Promise<void> => {
     :error="error"
   >
     <form class="card" @submit.prevent="save">
-      <CredentialFields v-model="credenciais" />
-      <label>Agente (UUID) <input v-model="agentId" required /></label>
-      <DialetoSelect v-model="dialeto" />
-      <label>client_token <input v-model="clientToken" type="password" required /></label>
-      <label>Nome <input v-model="nomeAmigavel" /></label>
-      <ConfirmField v-model="confirmado" />
-      <button type="submit" :disabled="pending">Criar persona</button>
+      <fieldset class="section">
+        <legend>Conta do hub</legend>
+        <CredentialFields v-model="credenciais" senha-label="Senha do hub" />
+      </fieldset>
+      <fieldset class="section">
+        <legend>Acesso SQL da persona nova</legend>
+        <label>
+          Agente
+          <input v-model="agentId" required autocomplete="off" spellcheck="false" />
+          <span class="hint">UUID do agentId no plug_server. O catálogo começa vazio.</span>
+        </label>
+        <DialetoSelect v-model="dialeto" />
+        <label>
+          client_token
+          <input v-model="clientToken" type="password" autocomplete="off" required />
+        </label>
+        <label>
+          Nome
+          <input v-model="nomeAmigavel" placeholder="Opcional" />
+        </label>
+      </fieldset>
+      <ConfirmField v-model="confirmado" label="Confirmo criar outra persona sem trocar esta aba" />
+      <div class="form-actions">
+        <button type="submit" :disabled="pending">Criar persona</button>
+      </div>
     </form>
   </Page>
 </template>

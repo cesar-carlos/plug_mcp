@@ -64,6 +64,7 @@ import {
   ExpandirEscopo,
   ListarAnotacoes,
   ListarSkills,
+  ListarSqlModelos,
   ObterSkill,
   PublicarSkill,
   RemoverAnotacao,
@@ -486,6 +487,7 @@ export const compose = async (
     despublicarSkill: new DespublicarSkill(acessos, skills, grafo),
     removerSkill: new RemoverSkill(acessos, skills, aprendizado),
     listarSkills: new ListarSkills(acessos, skills, grafo),
+    listarSqlModelos: new ListarSqlModelos(acessos, skills, grafo),
     obterSkill: new ObterSkill(
       acessos,
       skills,

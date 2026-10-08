@@ -64,6 +64,11 @@ export const router = createRouter({
       component: () => import("./views/SkillNovaView.vue"),
     },
     {
+      path: "/skills/sql",
+      name: "skills-sql",
+      component: () => import("./views/SkillSqlView.vue"),
+    },
+    {
       path: "/skills/:id",
       name: "skill",
       component: () => import("./views/SkillDetalheView.vue"),

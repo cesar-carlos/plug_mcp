@@ -7,11 +7,13 @@ import { onMounted, ref } from "vue";
 import { api, type AnotacaoItem } from "../api";
 import { useAction } from "../composables/useAction";
 import Page from "../components/Page.vue";
+import StatusPill from "../components/StatusPill.vue";
 import AnotacaoForm from "../components/AnotacaoForm.vue";
 import type { AnotacaoAtualizarPayload, AnotacaoCriarPayload } from "../form-payloads";
 
 const { error, run } = useAction();
 const lista = ref<AnotacaoItem[]>([]);
+const pronto = ref(false);
 const somenteRevisao = ref(false);
 
 const load = async (bearer: string | undefined): Promise<void> => {
@@ -24,7 +26,9 @@ const load = async (bearer: string | undefined): Promise<void> => {
 };
 
 onMounted(() => {
-  void run(load);
+  void run(load).then(() => {
+    pronto.value = true;
+  });
 });
 
 const criar = async (payload: AnotacaoCriarPayload): Promise<void> => {
@@ -57,16 +61,19 @@ const remover = async (id: string): Promise<void> => {
     :error="error"
   >
     <div class="card">
-      <label
-        ><input v-model="somenteRevisao" type="checkbox" @change="run(load)" /> Só revisão
-        pendente</label
-      >
-      <table>
+      <label class="choice">
+        <input v-model="somenteRevisao" type="checkbox" @change="run(load)" />
+        <span>Só revisão pendente</span>
+      </label>
+      <p v-if="pronto && !error && lista.length === 0" class="empty">
+        Nenhuma anotação neste filtro.
+      </p>
+      <table v-else-if="lista.length > 0" class="data">
         <thead>
           <tr>
             <th>Título</th>
             <th>Tipo</th>
-            <th>Ativa</th>
+            <th>Vigência</th>
             <th>Revisão</th>
             <th></th>
           </tr>
@@ -75,8 +82,16 @@ const remover = async (id: string): Promise<void> => {
           <tr v-for="nota in lista" :key="nota.id">
             <td>{{ nota.titulo }}</td>
             <td>{{ nota.tipo }}</td>
-            <td>{{ nota.ativaAgora ? "sim" : "não" }}</td>
-            <td>{{ nota.revisao.pendente ? "pendente" : (nota.revisao.proximaEm ?? "—") }}</td>
+            <td>
+              <StatusPill
+                :label="nota.ativaAgora ? 'vigente' : 'fora da vigência'"
+                :tone="nota.ativaAgora ? 'ok' : 'neutral'"
+              />
+            </td>
+            <td>
+              <StatusPill v-if="nota.revisao.pendente" label="pendente" tone="warn" />
+              <span v-else>{{ nota.revisao.proximaEm ?? "—" }}</span>
+            </td>
             <td><button class="danger" type="button" @click="remover(nota.id)">Remover</button></td>
           </tr>
         </tbody>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AtualizarEscopoPadrao } from "../../src/application/use-cases/aprendizado.js";
 import {
   ListarAcessos,
   RegistrarAcesso,
@@ -55,6 +56,29 @@ describe("sqlAccessState", () => {
     expect(result.acessos[0]?.sqlAccessSource).toBe("vault");
     expect(result.acessos[0]?.nomePersona).toBeNull();
     expect(result.acessos[0]?.instrucoesPersona).toBeNull();
+    expect(result.acessos[0]?.escopoPadrao).toBeNull();
+    expect(result.acessos[0]?.timezone).toBeNull();
+  });
+
+  it("listar_acessos devolve o recorte vigente depois de gravar", async () => {
+    const { acessos, created } = await seed();
+    await new AtualizarEscopoPadrao(acessos).execute(created.usuarioId, {
+      acessoId: created.acessoId,
+      empresa: "1",
+      filial: "2",
+      timezone: "America/Cuiaba",
+      bindings: [{ tabela: "Filial", coluna: "CodEmpresa", param: "empresa" }],
+      confirmadoPeloUsuario: true,
+    });
+    const listed = await withBound(created.usuarioId, created.acessoId, () =>
+      new ListarAcessos(acessos).execute(created.usuarioId),
+    );
+    expect(listed.acessos[0]?.timezone).toBe("America/Cuiaba");
+    expect(listed.acessos[0]?.escopoPadrao).toEqual({
+      empresa: "1",
+      filial: "2",
+      bindings: [{ tabela: "Filial", coluna: "CodEmpresa", param: "empresa" }],
+    });
   });
 
   it("verificar_acesso com policy ok → active/policy", async () => {

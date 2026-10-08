@@ -45,16 +45,22 @@ const rearmar = (): void => {
       <h2>Webhook</h2>
       <label>URL HTTPS <input v-model="url" type="url" /></label>
       <label>Segredo <input v-model="segredo" type="password" autocomplete="off" /></label>
-      <ConfirmField v-model="confirmado" />
-      <button type="submit">Configurar</button>
+      <p class="hint">URL e segredo não voltam na resposta. Só HTTPS público.</p>
+      <ConfirmField v-model="confirmado" label="Confirmo gravar esta URL de webhook" />
+      <div class="form-actions">
+        <button type="submit">Configurar</button>
+      </div>
     </form>
     <form class="card" @submit.prevent="rearmar">
       <h2>Rearmar dead-letter</h2>
-      <ul>
-        <li v-for="entrega in deadLetters" :key="entrega.id">{{ entrega.id }}</li>
+      <p v-if="deadLetters.length === 0" class="empty">Nenhuma entrega em dead-letter.</p>
+      <ul v-else>
+        <li v-for="entrega in deadLetters" :key="entrega.id" class="mono">{{ entrega.id }}</li>
       </ul>
-      <label>eventoId <input v-model="eventoId" required /></label>
-      <button type="submit">Rearmar</button>
+      <label>eventoId <input v-model="eventoId" required class="mono" /></label>
+      <div class="form-actions">
+        <button type="submit">Rearmar</button>
+      </div>
     </form>
   </div>
 </template>

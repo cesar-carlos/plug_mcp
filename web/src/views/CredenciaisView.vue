@@ -39,9 +39,14 @@ const save = async (): Promise<void> => {
   >
     <p v-if="done" class="ok">Credenciais atualizadas no hub e no cofre.</p>
     <form class="card" @submit.prevent="save">
-      <CredentialFields v-model="credenciais" />
-      <ConfirmField v-model="confirmado" />
-      <button type="submit" :disabled="pending">Atualizar</button>
+      <fieldset class="section">
+        <legend>Conta do hub</legend>
+        <CredentialFields v-model="credenciais" senha-label="Senha do hub" />
+      </fieldset>
+      <ConfirmField v-model="confirmado" label="Confirmo atualizar as credenciais deste Client" />
+      <div class="form-actions">
+        <button type="submit" :disabled="pending">Atualizar</button>
+      </div>
     </form>
   </Page>
 </template>

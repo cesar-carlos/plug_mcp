@@ -62,7 +62,7 @@ const tipoValue = (event: { target: unknown }): TipoParametro => {
 
 <template>
   <div>
-    <p>
+    <p class="hint">
       Cada parâmetro do SQL precisa de descrição. O tipo padrão string gera falta, sem bloquear a
       publicação.
     </p>
@@ -84,13 +84,13 @@ const tipoValue = (event: { target: unknown }): TipoParametro => {
           <option v-for="tipo in tipos" :key="tipo" :value="tipo">{{ tipo }}</option>
         </select>
       </label>
-      <label>
+      <label class="choice">
         <input
           type="checkbox"
           :checked="param.obrigatorio"
           @change="update(index, { obrigatorio: checkedValue($event) })"
         />
-        Obrigatório
+        <span>Obrigatório</span>
       </label>
       <button class="secondary" type="button" @click="remove(index)">Remover parâmetro</button>
     </div>

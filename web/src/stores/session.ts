@@ -2,6 +2,18 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { api } from "../api";
 
+export interface BindingEscopo {
+  tabela: string;
+  coluna: string;
+  param: "empresa" | "filial";
+}
+
+export interface EscopoPadrao {
+  empresa?: string;
+  filial?: string;
+  bindings?: BindingEscopo[];
+}
+
 export interface AcessoPublico {
   id: string;
   agentId: string;
@@ -13,6 +25,8 @@ export interface AcessoPublico {
   clientTokenMasked?: string;
   nomePersona?: string | null;
   instrucoesPersona?: string | null;
+  escopoPadrao?: EscopoPadrao | null;
+  timezone?: string | null;
 }
 
 export const useSessionStore = defineStore("session", () => {

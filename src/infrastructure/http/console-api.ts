@@ -235,6 +235,13 @@ export const registerConsoleApi = (app: Express, input: ConsoleApiInput): void =
     runAuth(async (req, uid) => input.useCases.listarSkills.execute(uid, asArgs(jsonBody(req)))),
   );
   router.get(
+    "/skills/modelos",
+    authLimiter,
+    runAuth(async (req, uid) =>
+      input.useCases.listarSqlModelos.execute(uid, asArgs(jsonBody(req))),
+    ),
+  );
+  router.get(
     "/skills/:id",
     authLimiter,
     runAuth(async (req, uid) => {
