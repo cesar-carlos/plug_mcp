@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "integrated": false,
+  "authorizesRelease": false,
+  "files": [
+    {
+      "originalPath": "tests/homologation/persona-chain.test.ts",
+      "archivePath": "source/tests/homologation/persona-chain.test.ts.txt",
+      "sha256": "a998259025fa23a519d81d310116a09710c0f526d2c1b710b1e25bd5cb6b4537",
+      "bytes": 170792
+    },
+    {
+      "originalPath": "tests/helpers/persona-chain-knowledge-oauth-fixture.ts",
+      "archivePath": "source/tests/helpers/persona-chain-knowledge-oauth-fixture.ts.txt",
+      "sha256": "01277df6d1ecf3a31589049bc7fe1ed295666bec5e18e8dd0925005d233c518d",
+      "bytes": 8207
+    },
+    {
+      "originalPath": "tests/helpers/persona-chain-journey-timing.ts",
+      "archivePath": "source/tests/helpers/persona-chain-journey-timing.ts.txt",
+      "sha256": "8445e5eb5c26eb63777f4d99e2cbce890d0e1345688e702f414112948aeae6e7",
+      "bytes": 860
+    },
+    {
+      "originalPath": "tests/helpers/persona-chain-knowledge-history-oauth.ts",
+      "archivePath": "source/tests/helpers/persona-chain-knowledge-history-oauth.ts.txt",
+      "sha256": "df46f57cdb284f262003165158289a939d8f17ed45b596ac339b72f6c6bdbc50",
+      "bytes": 10903
+    },
+    {
+      "originalPath": "vitest.persona-chain.config.ts",
+      "archivePath": "source/vitest.persona-chain.config.ts.txt",
+      "sha256": "2a3fab94c649538fa539ea4e459f5d6b966b66152b5cafb4342b791d5c1a39b8",
+      "bytes": 339
+    }
+  ]
+}
