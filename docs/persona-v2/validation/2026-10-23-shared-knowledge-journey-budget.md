@@ -164,3 +164,62 @@ tráfego específicas da fixture continuam distintas dos defaults de produção.
 Os três manifestos conservam `ready:false` e gates incompletos; o guard de release
 continua recusando publicação. Integrar código na main não encerra aceite humano,
 HTTPS/ChatGPT, corte coordenado ou homologação instalada. **Deploy bloqueado.**
+
+## Repetição nos commits publicados após as correções do CI
+
+A rodada integral de 23/10/2026 passou **85/85 cenários, sem filtro, falhas ou
+skips**, em **714,27 segundos**. Executou a cadeia persistente `prisma` com
+REST, Socket.IO/RPC, ODBC e DPAPI reais em fixtures novas dos três motores.
+Os checkouts isolados estavam limpos e corresponderam aos commits abaixo;
+alterações locais de outras tarefas não foram incorporadas.
+
+| Projeto | Commit                                     | Snapshot SHA-256                                                   | Arquivos |
+| ------- | ------------------------------------------ | ------------------------------------------------------------------ | -------- |
+| MCP     | `59c7ed68e133c2c0b1c2a7555bbfb8e0f1372c8c` | `2d50539a7edf736c38d600bcd75c402758d99c01ca1f6a3b963e779139089e36` | 1133     |
+| Hub     | `8a4d9a559702cc742a839b0b6b3b70ec3b7aa4a2` | `9202f2f682705228cdb99d4990330a0dc600fcbf60ad4aa12d10dafdd90e0ee3` | 1024     |
+| Agente  | `3bfad1ae01df8e5d72f62e66d5ec34ab1f1ec191` | `59bf63a9efb96d79ffc5c8aac17b80140e2f6e44ccde6d29832fe0eec9cbdf43` | 2706     |
+
+Inventários capturados de `2026-10-23T19:56:40.912Z` a
+`2026-10-23T20:08:38.777Z` (15:56:40 a 16:08:38 em Cuiabá, UTC−04:00):
+`before == after`, `unchanged:true`, `testExitCode:0`, `result:passed` e
+`authorizesRelease:false`. As inclusões documentais desta publicação são
+posteriores ao ensaio e não alteram retrospectivamente seus hashes.
+
+O MCP executou a candidata local Linux/amd64
+`sha256:15277339aae0883524ba6a55da63cda9f2123623a23c665b095edbb88ac0f525`,
+construída com `GIT_SHA=59c7ed68e133c2c0b1c2a7555bbfb8e0f1372c8c`.
+Esse valor é o ID Docker local, não um digest de publicação em registry nem
+uma atestação de artefato produzido pelo CI. A imagem não foi publicada.
+Versões observadas por RPC: PostgreSQL `17.0.11`, SQL Server `16.00.4236`
+e SQL Anywhere `16.00.0000`.
+
+| Jornada              | PostgreSQL | MSSQL    | SQL Anywhere |
+| -------------------- | ---------- | -------- | ------------ |
+| Adoção compartilhada | 40,668 s   | 38,420 s | 35,626 s     |
+| OAuth compartilhado  | 3,800 s    | 4,127 s  | 3,094 s      |
+
+São tempos observados das jornadas nesta rodada; não constituem benchmark
+comparativo nem homologação dos limites padrão de produção. Os limites de
+SQL/RPC, aprovação, timeout, assertions e cotas da fixture foram preservados.
+
+A sessão manual conhecida já havia encerrado: o outro chat confirmou sua
+ausência e não iniciou outra sessão; a verificação local não encontrou seus
+companions, diretório ou listener antes de iniciar o runner com a DLL. A
+instalação operacional foi preservada. Essa coordenação não substitui um
+bloqueio global para todas as tarefas da máquina.
+
+A limpeza guardada concluiu às `2026-10-23T20:08:46.4773595Z`. A inspeção
+posterior confirmou ausência do diretório, DSN privado, processos e containers
+da fixture. Os três checkouts continuaram limpos. Nenhuma base operacional
+ou credencial cadastrada foi usada nos testes.
+
+O [registro sanitizado desta rodada](2026-10-23-current-main-85-evidence.json)
+conserva os inventários, versões, tempos, ID da imagem e resultado da limpeza.
+O log bruto ficou local em `plug_agente/build/current-85-results.log`, SHA-256
+`e55fa3eb491a82f720694e44ed5c39e0dbf60cee0e7cbbd17a30ff1448bfa30f`.
+Manifestos privados, credenciais e logs dos processos não fazem parte desta
+publicação.
+
+Os três manifestos continuam `ready:false`, sem gates concluídos. Esta rodada
+não encerra aceite humano, HTTPS/ChatGPT público, corte coordenado ou
+homologação do instalador e não autoriza produção. **Deploy bloqueado.**
