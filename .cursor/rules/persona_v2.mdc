@@ -1,0 +1,400 @@
+---
+description: "Contrato ativo persona-v2 e limites da transição"
+alwaysApply: true
+---
+
+# Persona-v2
+
+Troca de fonte no editor de consulta com sharedKnowledge exige confirmação e
+remove somente o vínculo local após aceite. Cancelamento/contexto obsoleto não
+altera a edição. Não reassociar prova/perfil nem mudar publicação ativa; fonte
+nova exige revisão e adoção explícitas, assim como no editor de operação SQL.
+
+Editor privado de consulta preserva table/view no recurso publicado. Ausência
+antiga segue table, sem mutação ao abrir; seleção não detecta tipo físico nem
+amplia policy. Correção exige nova revisão/publicação e concessão compatível.
+
+Navegação para fora de Consultas limpa valores e modos dos parâmetros juntos.
+Não conservar nulo/vazio/omitido após descartar a consulta local nem alterar o
+snapshot publicado para limpar estado da interface.
+
+Editor de consulta preserva IDs, intermediárias e elos ordenados N:N; reutiliza
+os campos das operações. Novo ID não renomeia relações existentes nem corrige
+referências silenciosamente. Rascunho pode estar incompleto; prévia valida o
+caminho e não licencia JOIN direto entre suas extremidades.
+
+Releitura de consulta é explícita pelo servidor: confirmar descarte antes de
+substituir treinamento/casos/conhecimento/prazo. Falha ou resposta obsoleta não
+substitui edição. Sucesso reinicia editores locais e prévia, sem gravar/publicar
+ou alterar snapshot ativo; cópia da lista em memória não resolve conflito CAS.
+
+Instruções de treinamento distinguem capacidades entregues de interfaces não
+delegadas: runners são CLIs de operador em fixtures isoladas, nunca tools MCP
+ou aprovação semântica. Onboarding deve refletir busca/grafo concedidos e setups
+existentes sem anunciar implementação ausente ou ampliar sua autoridade.
+
+Inspeção no console bloqueia submissões antes da primeira espera, reconfere
+escopo/vínculo/painel antes de enviar e descarta respostas obsoletas. Não iniciar
+inspeção/composição de fonte inativa; nenhuma guarda visual substitui autoridade.
+
+Gestão delegada de integrações exige gerenciar_integracoes e managedIntegrationIds
+explícitos em cada camada. Ausência não concede acesso; operações executáveis
+não são concessões administrativas. Teto só reduz o escopo. Consentimento OAuth
+exige selecionar gerenciar_integracoes e cada ID oferecido; seleção ausente ou
+ID fora do teto não concede gestão. A oferta exige delegação administrativa vigente.
+Gestão por HTTP/MCP usa serviço único: lista filtrada, impacto/fingerprint e CAS
+antes de suspender/recuperar. Recuperar não ativa contratos nem repete operações;
+credenciais continuam exclusivamente no navegador.
+
+Rascunhos externos delegados usam managedIntegrationIds em todas as camadas;
+troca de integração exige escopo na origem e no destino. Publicação exige
+publicar, prazo previamente definido pelo responsável e prévia vinculada à
+autoridade exata. Consumidor não define prazo humano nem usa prévia de sessão.
+Contrato publicado continua imutável e não concede execução automaticamente.
+Tools editoriais externas reutilizam schemas/serviços HTTP. Casos de rascunho
+não publicado exigem treinar e integração concedida; contratos publicados
+preservam exigência da concessão executável exata. Runner continua exclusivo
+do operador, sem aprovação técnica por MCP.
+Importação/descoberta delegada exige gerenciar_integracoes e escopo explícito
+antes da captura, do dispatch e da entrega. Propostas não persistem nem publicam.
+OpenAPI não busca URLs; MCP remoto usa só initialize/tools/list pelo transporte
+protegido. Revogação durante descoberta impede devolver o catálogo.
+
+Outbox conserva identidade/deduplicação terminal permanentemente. Limpeza após
+90 dias do encerramento local remove só metadados e cópias de credenciais, em
+lotes sob lease. Relógio PostgreSQL fixa encerramento/limpeza; registros antigos
+iniciam prazo na migração, sem data inventada. Pendentes e journals não mudam.
+UPDATE sem mudança de estado terminal não reinicia o prazo de retenção.
+
+Cruzamentos recusam inteiros numéricos sem precisão segura na entrada local;
+identificadores grandes exigem representação textual exata desde a fonte.
+Não converter número arredondado em texto nem unir chaves por aproximação.
+
+Cruzamentos reconferem prazo após autorização assíncrona e antes do dispatch
+local; timer ainda na fila não autoriza nova consulta após o deadline. Não
+prometer cancelamento de SQL já enviado.
+
+Erros do editor de consulta associam nome/slug aos campos; recusa genérica de
+training foca aviso da seção, sem atribuir erro a uma coluna não identificada.
+Preservar conteúdo e foco após liberar o bloqueio de submissão.
+
+Transporte do console não recomenda repetir POST/alteração após falha de rede
+ou corpo ilegível. Resultado não confirmado exige conferir estado/listagem;
+não equivale a receipt unknown, rollback ou falha comprovada antes do envio.
+Nenhum retry automático; abort/contexto descartado não transfere resposta.
+Gestão de tokens bloqueia salvar/rotacionar/revogar após confirmação perdida
+até releitura explícita bem-sucedida. Preserva edição até descarte confirmado
+e limpa Bearer exibido; segredo de rotação perdida não é recuperável por leitura.
+Emissão incerta bloqueia o formulário da persona até leitura explícita e nova
+decisão humana. Nova emissão limpa concessões selecionadas; não correlacionar
+cadastros por nome nem prometer idempotência. Estado fica só em memória da sessão.
+
+Concessões SQL no console usam efeitos e capabilities do snapshot publicado;
+SELECT auxiliar segue a mesma regra de domínio usada pela autoridade. Adicionar
+operação exige escolha explícita e inicia aprovação adicional. A política humana
+da skill permanece obrigatória; seleção não prepara/executa nem amplia tokens
+existentes. Publicação suspensa/incompleta não pode ser adicionada.
+Capacidade externa no console exige skill e operação exatas da publicação.
+Selecionar concede ambas explicitamente, sem efeitos SQL; ações iniciam com
+aprovação adicional. Editor permite retirar a operação sem apagar concessões
+independentes. Administração de integração não concede sua execução.
+
+Histórico e comparação delegados aceitam consultas e operações SQL ativas
+concedidas do mesmo padrão; operações passam pela autorização de publicação
+DML, inclusive efeitos/capabilities e dependências. Comparação usa
+somente os recortes adotados em seus snapshots, sob autorização transacional.
+Retorna direção, seções anterior/posterior e referências exatas; não lê catálogo
+integral, altera rascunhos ou concede execução. Fontes/perfis distintos podem
+explicar diferenças; ausência de diferença não prova equivalência das bases.
+Leitura não prepara/aprova/executa operação. Ferramentas editoriais e obter_padrao
+preservam seu alcance anterior de consultas, sem ampliação implícita.
+
+Preparação visual externa usa Bearer, contrato concedido e expectedPublicationId
+conferido na transação. Campos vêm da publicação; troca de contexto descarta
+estado/respostas. Confirmação de preparação não aprova nem envia efeito; perda de
+resposta não reenvia. Contrato: docs/persona-v2/external-integrations.md.
+
+Cadastro direto REST/MCP pelo responsável usa sessão Client, CSRF, confirmação e
+reautenticação do mesmo Client; não fabrica token/delegação. UUID da tentativa
+impede replay. Credencial técnica cifrada e integração inativa; nenhum contrato,
+grant ou chamada externa nasce do cadastro. Após erro, conferir lista pelo UUID
+antes de nova tentativa explícita. Segredos só no navegador; nunca recuperar
+credenciais ou reenviar automaticamente. Setups de consumidores são separados.
+
+Gestão de integrações no console tem CAS/fingerprint e sessão Client. Suspensão
+é distinta de aguardar publicação; bloqueia rede/novas publicações e consome
+prévias. Recuperar só remove suspensão. Rotação reautentica o mesmo responsável,
+preserva destino/tipo/suspensão e desativa contratos anteriores, sem tocar journal
+ou reenviar efeitos. Contrato: external-integrations.md.
+
+Descoberta MCP administrativa usa apenas initialize/tools/list, HTTPS protegido,
+paginação limitada e revalidação antes do envio/entrega. OpenAPI JSON é local,
+com gramática fechada sem remoção de constraints. Aplicar só prepara formulário;
+salvar cria rascunho com integração/versionamento vigentes. Não publica ou concede
+acesso, nem executa ferramentas. Contrato: external-integrations.md.
+
+Editor externo permite CAS antes da primeira publicação. Depois exige nova
+skill/operação, sem herdar casos, relatórios ou concessões. Listagem de conexões
+é só metadata; proposta plana de schemas não comprova o remoto. Console edita
+casos/lê relatórios, nunca executa runner ou aprova efeitos. Contrato:
+[editor externo](../../docs/persona-v2/external-integrations.md#editor-de-skills-externas).
+
+Editor de cruzamentos mantém dependências e regras tipadas explícitas. Casos por
+CAS preservam formato sintético ou de transporte; relatórios são somente leitura.
+Console não executa runners ou aprova evidência. Publicação fixa revisão/hash,
+prazo humano e dependências vigentes, sem alterar concessões ou snapshot anterior.
+Contrato: [cruzamentos](../../docs/persona-v2/federation.md#editor-e-casos-administrativos).
+
+Ações do consumidor no console usam Bearer e preparação existente, com contexto/
+estado reconferidos. Aprovação Client não executa. Referência contém somente
+ID/fingerprint; resposta perdida bloqueia reenvio na tela e exige acompanhamento.
+Troca de token/contexto descarta resposta antiga. Contrato:
+[console](../../docs/persona-v2/console.md#ações-do-consumidor-em-preparações-existentes).
+
+Cache/singleflight de consultas v2 são opt-in, em namespace/cifras próprios.
+Revalidar cada consumidor antes de lookup e entrega; revisão física e operações
+pendentes/desconhecidas bloqueiam reuso. Não substituir a prova estrutural na
+conexão, compartilhar resultados entre tokens/personas ou repetir SQL por erro
+de Redis/lease. Contrato: [cache v2](../../docs/persona-v2/query-cache.md).
+Após claim, reconferir a entrada publicada entre miss e lock antes de executar.
+Envelope autentica criação/vencimento; leitor aplica seu TTL à idade real, sem
+renovar prazo. Namespace v3 não lê envelopes antigos sem esse instante.
+
+Manutenção temporária do worker remove somente setups/prévias expirados e
+vínculos órfãos, em lotes com lease. OAuth vinculado conserva registro até
+expirarem registro e concessão, inclusive para replay de código consumido.
+Não remover journals/identidades de operação nem alterar autoridade.
+Contrato: [worker](../../docs/persona-v2/review-worker.md#limpeza-de-dados-temporários).
+
+Leases de revisão/limpeza/retenção usam relógio PostgreSQL e duração limitada.
+Revisão usa vencimento real do banco, sem antecipação por relógio da aplicação.
+Parada antes/do primeiro ciclo aguarda o job atual e impede próximos jobs/claims;
+queda abrupta não garante cancelamento imediato de uma consulta ou POST.
+
+Retenção de operações tem job separado: payload/result em 24h e comprovante em
+90 dias do desfecho local conhecido, com relógio protegido, lease e CAS. IDs,
+fingerprints e estados permanecem; desconhecido/em execução não são removidos.
+Conciliação comercial não habilita limpeza. Conteúdo removido nunca é restaurado
+ou interpretado como rollback/reexecução. Contrato:
+[retenção](../../docs/persona-v2/review-worker.md#retenção-de-operações).
+
+Rotação do cofre v2 é manutenção de operador de banco, nunca tool/delegação.
+Simula sem gravar, usa lock de sessão e cursor transacional, confere igualdade
+do conteúdo em memória e preserva autoridade/estado. Papel específico e hashes
+das linhas vinculam a exceção de rewrap; GUC sozinho não autoriza. Escritores e
+startup respeitam chave ativa/keyring; retomada exige rodada e material exatos.
+Contrato: [cofre](../../docs/persona-v2/vault-rotation.md).
+
+Outbox v2 de notificações exige configuração humana da persona, CAS/CSRF e
+segredo próprio no navegador. HMAC, DNS público fixado no TLS e revalidação local
+do claim/configuração/origem precedem envio. Lease/fencing e orçamento permitem
+retomada, sem exatamente uma vez; receptor deduplica por ID. Só metadados privados,
+sem catálogo, SQL ou resultados. Suspender desativa assinatura; recuperar não
+rearma. Contrato: [outbox](../../docs/persona-v2/outbox.md).
+
+Precedência em `AGENTS.md`. Estado e pendências em `docs/persona-v2/README.md`.
+Entrada principal ainda legada; `main-persona-v2.ts` é de desenvolvimento.
+`contracts/persona-v2-release.json` bloqueia deploy até o aceite integral.
+O procedimento de cada tema fica no documento ligado. Esta regra guarda a decisão.
+
+Inspeção estrutural e adoção inicial em consultas estão no
+[contrato compartilhado](../../docs/persona-v2/shared-knowledge.md): metadados
+fixos pelo hub/agente, versão/evidência imutáveis e colunas conferidas na mesma
+conexão antes/depois do SELECT. Constraints utilizadas exigem sourceConstraints v1;
+status desconhecido não prova chave/FK habilitada. Perfis físicos publicados exigem
+curador com acesso vigente, substituições explícitas e adoção por versão exata.
+Console inspeciona/compara e aplica conhecimento somente ao rascunho. Seleção,
+prova técnica e publicação de perfil não atualizam skills ou concessões automaticamente.
+Essa entrega não conclui o gate de conhecimento compartilhado nem libera deploy.
+
+Compor inspeções usa IDs de páginas vigentes e linhagem imutável, com mesma
+persona/fonte/identidade/versões/escopo. Conserva menor validade e cobertura;
+lacunas/conflitos não habilitam adoção. sourceSchema v1 vigente é obrigatório.
+Envelope composto interno não amplia o RPC nem promete snapshot simultâneo.
+
+## Identidade
+
+- Responsável = hubOrigin + client.id. Persona pode existir sem fonte. Credencial
+  e concessão pertencem ao vínculo. Compartilhamento estrutural é o
+  [DV2-008](../../docs/persona-v2/decisions.md#dv2-008--conhecimento-compartilhado-por-padrão-e-base)
+  e não amplia token nem entrega resultado.
+- Recurso novo não entra em token existente. Delegação só restringe.
+- Edição usa CAS. Troca de credencial prova a mesma base fora da transação MCP
+  e suspende as publicações afetadas. Falha de transporte não reassocia treino.
+- Suspender persona bloqueia uso, suspende publicações e revoga conexões
+  derivadas. Recuperar por sessão Client/CAS não remove suspensões nem
+  ressuscita tokens/conexões revogados; contexto e preview antigos ficam obsoletos.
+- Banco vem da policy. Prova é nativa, com a exceção DV2-007 no SQL Anywhere:
+  UUID provisionado pelo DBA. Locator é recusado. O runtime não cria o marcador.
+- Suspender fonte afeta só o vínculo e dependências. Recuperar exige nova prova
+  da mesma identidade pelo hub/agente e não remove suspensões. Substituir cria
+  novo vínculo/credencial na mesma transação do histórico, sem transferir treino
+  ou concessões; o vínculo substituído nunca é reativado ou reassociado.
+- `expectedSource` e `sourceIdentity` v1 acompanham a conexão executora, sem
+  reconexão. Prova divergente suspende vínculos e dependências.
+
+Fluxo: `docs/persona-v2/onboarding.md` e `docs/persona-v2/source-identity.md`.
+
+## Publicação e consulta
+
+- Rascunho, preview de uso único e snapshot imutável são estados diferentes.
+  Nova publicação exige prazo futuro escolhido pelo responsável/curador humano,
+  ligado à revisão/hash e ao preview. Consumidor usa plano configurado no console;
+  não define data. Calendário nasce na mesma transação da publicação.
+  Execução exige publicação, concessão explícita e os três portões, revalidados
+  antes do envio e da entrega.
+- SELECT valida a AST, classificação/finalidades por campo, recortes, JOIN composto e
+  fanout. Validar executa envelope vazio. Motores suportados: PostgreSQL, SQL Server e SQL Anywhere. Firebird não é suportado.
+- Campos pessoais/sensíveis exigem uses/usePurpose publicados e capacidade por
+  campo/finalidade no token e consentimento. Concessão cobre a publicação inteira;
+  incompleta não entrega contexto nem executa. Livre sem uses preserva consultas
+  anteriores. Segredo/inferido nunca executam. Alias/combinação não amplia uso;
+  linhagem inconclusiva recusa. DML segue livre. Anexo JSON exige contrato publicado,
+  exportacao explícita e capability nova concedida; flags antigas não habilitam.
+  Anexo cifrado no PostgreSQL de controle é compartilhado somente entre instâncias
+  da mesma origem/keyring, com hash do handle e vínculo ao consumidor/concessão.
+  Reinício não estende prazo nem reserva autoridade. Quotas transacionais globais,
+  limpeza por worker e rotação preservam isolamento; falha não tem fallback/retry.
+  Revalidar
+  policy/fonte/publicação/fence e dependências estruturais em cada entrega;
+  pending/unknown recusa. Binário exige binaryAttachments/capability próprios,
+  coluna física direta, tipo comprovado e um registro completo; sem paginação,
+  expressão ou inferência por conteúdo textual. Download conserva bytes com
+  MIME publicado/nome seguro; sem conversão, cache ou retry. Contrato: attachments.md.
+  Contrato: source-queries.md, seção Campos e finalidades.
+- Cruzamento fixa dependências e combina depois de ler. Página final não
+  promete snapshot distribuído nem completa entrada faltante.
+
+Contratos: `docs/persona-v2/catalog.md`, `source-queries.md`
+e `federation.md`.
+
+## Operações e console
+
+Setup de rotação do token originador requer gerenciar_tokens, consentimento e
+delegação vigentes, reautenticação humana e confirmação no navegador. Preserva
+concessões/prazo e invalida Bearer anterior/derivados no commit do consumo único.
+Novo segredo somente na resposta POST, sem recuperação por GET/MCP. Resposta
+perdida exige console, sem reenvio automático. Contrato em oauth.md.
+
+Emissão limitada usa proposta imutável no setup, prazo explícito e teto de
+concessões/delegação/consentimento vigente. Login e confirmação humana no POST;
+consumo, novo token e auditoria fazem commit juntos. Não altera o originador,
+não amplia delegação e não devolve segredo por MCP. Mudança exige outro link.
+
+Setups de integração exigem gerenciar_integracoes, consentimento e delegação,
+reautenticação e confirmação humana. Cadastro/rotação guardam credencial própria
+cifrada e consomem o setup junto à auditoria; rotação fixa destino/tipo/versão.
+Integração e operações permanecem inativas. Nenhuma descoberta, chamada externa,
+publicação ou concessão é feita pelo setup. Contrato em oauth.md.
+
+Publicação externa separada permite REST e ferramenta MCP remota
+com contrato fixado, casos obrigatórios atuais e calendário humano.
+Concessões exigem operação externa e capability exata da skill; OAuth intersecta.
+Revalidar antes do dispatch e entrega. DNS público fixado na conexão TLS, sem
+redirects/retry; nenhuma credencial de outra origem é encaminhada. Saída externa
+não instrui nem comprova totalidade. Ação exige preparação cifrada de até 15 minutos,
+aprovação aplicável pelo responsável Client no navegador e claim CAS antes do
+efeito. Aprovação não amplia concessões. Desconhecido nunca volta a executável;
+reinício, revogação e timeout não autorizam reenvio. Receipt não prova efeito
+comercial; conciliação explícita exige leitura treinada, chave original, unicidade e completude; evidência separada nunca autoriza retry.
+Contrato: docs/persona-v2/external-integrations.md.
+
+Runner CLI externo exige manifesto/vínculos exatos, fixture de hostname separado,
+claim durável único, identificação autenticada e limpeza confirmada. Rodada incerta
+não volta a executável. Editor de casos usa CAS e não altera publicação ativa;
+relatórios obsoletos não aprovam revisão nova. Não expor execução/aprovação técnica
+em HTTP/MCP. Operator DB não substitui aprovação humana ou concessões de consumidor.
+
+Templates/datasets são material editorial cifrado e versionado do catálogo,
+não publicações executáveis. Importação por sessão cria rascunho com mapeamento
+explícito, sem aprovação, casos ou concessões herdadas. DDL estrutural nunca é
+executado: campos inferidos, constraints desconhecidas e grão não inventado.
+Constraints inline nomeadas preservam identidade; nomes explícitos repetidos
+na mesma tabela recusam o arquivo inteiro, sem importação parcial ou execução.
+Contrato: `docs/persona-v2/knowledge-library.md`.
+
+Feedback referencia item/publicação concedidos, sem captura automática de dados.
+Calendários separados exigem prazo explícito do curador/responsável, CAS e
+histórico. Vencimento gera aviso/tarefa, sem suspensão automática; novas versões
+não herdam prazos. Worker v2 separado usa lease, tarefa e notificação interna
+únicas por calendário/versão, sem SQL de negócio. Marcar como lida não conclui
+revisão. Contrato: `docs/persona-v2/review-worker.md` e DV2-010.
+
+Curadoria de particularidades físicas conserva propostas/hashes em persistência
+própria. Papel no catálogo e acesso atual à mesma base são obrigatórios; preview
+de quinze minutos e CAS incorporam só ao rascunho. Publicação, adoção e concessão
+continuam separadas. Contrato: `docs/persona-v2/shared-knowledge.md`.
+
+- Uma fonte e uma transação. Adaptação fica dentro do contrato publicado.
+  DML canônico cita schema/tabela separadamente nos motores com namespace;
+  Recortes e policy usam recurso exato, sem
+  fallback/cache legado ou omissão por qualificação. Nomes novos exigem concessões.
+  Resultado incerto não é reenviado. Conciliação não fabrica receipt nem rollback.
+  Adoção DML fixa versões/provas, grão/classificação explícitos e identidade
+  PK/UNIQUE comprovada. Campos/chaves sem uso não viram dependências. Preparação
+  inclui expectativa no fingerprint; catálogo/padrão/perfil são revalidados.
+  Recusa estrutural comprovada persiste receipt e suspende a publicação utilizada.
+  SQL Anywhere unknown não habilita adoção; runner sem guarda real não aprova.
+  A prova SQL Anywhere é limitada a constraints locais declaradas na versão 16,
+  catálogos públicos/índices físicos e configuração verificável para FK.
+  Relacionamentos DML preservam pares/elos N:N e FKs na filha, com unicidade 1:1.
+  Tabelas relacionadas não recebem escrita por serem dependências estruturais.
+- Ações externas usam o caminho próprio de preparação/aprovação/claim; conciliação explícita preserva receipt/estado e não repete efeitos. O runner SQL genérico é de operador e exige fixtures privadas nos três motores;
+  sua matriz integral, a retenção e a homologação operacional continuam pendentes.
+- O console de desenvolvimento está em `docs/persona-v2/console.md`. Aviso de
+  indisponibilidade não conta como entrega.
+
+Detalhe operacional: `docs/persona-v2/sql-operations.md`. Evidência datada:
+`docs/persona-v2/validation.md`.
+
+## Plugin privado
+
+Gestão administrativa de conexões é exclusiva do responsável Client no console:
+lista paginada por persona, consentimento imutável e revogação por hash exato.
+Não revoga originador ou outras conexões, não restaura concessões e não testa
+ChatGPT/autoridade remota. Histórico sem data permanece não registrado.
+
+- Montagem exige `--runtime=legacy|persona-v2`, ambiente e variante explícitos.
+  Validar perfil local versionado, tools, referências, assets e inventário antes
+  de disponibilizar o pacote. Não sobrescrever artefatos nem inventar conexão.
+- O candidato portátil v2 usa `/mcp` manual; ChatGPT usa `/mcp/chatgpt` OAuth
+  próprio (`se7e:persona`), consentimento explícito e armazenamento v2.
+  Access e token manual não são intercambiáveis. Skills orientam; o servidor
+  aplica autorização e deadline do access até a entrega. Administração OAuth
+  exige teto explícito da delegação ativa do hub, token e consentimento.
+  Treinamento/publicação privados e manutenção limitada de outros tokens usam
+  a unidade autorizada; previews vinculam o consumidor e a delegação exatos.
+  Segredos exigem navegador. Setups delegados de emissão/rotação de tokens e
+  integrações seguem os contratos de consumo único/reautenticação em oauth.md.
+  Delegações antigas mantêm somente gerenciar_fontes;
+  aprovação humana de operações não é delegada.
+- Instalação privada/conversa real são evidências separadas. Não publicar pacote
+  publicamente nem liberar imagens/deploy por aprovação do validador local.
+
+Contrato: `docs/persona-v2/plugin.md`.
+
+## Orçamentos redutíveis
+
+Console de treinamento de operação SQL usa contratos/casos tipados, CAS e
+relatórios do runner separado. Preview/hash/prazo humano continuam obrigatórios;
+editar não altera snapshot ativo. UI não executa/aprova testes ou lançamentos.
+Relacionamentos e vínculos existentes devem ser preservados, sem adoção tácita.
+Editor visual conserva pares/intermediárias/elos N:N; remover uma relação não
+repara caminhos por inferência. Adotar padrão/perfil exige inspeção/compatibilidade
+e confirmação, enriquece recursos declarados e preserva o contrato de escrita.
+Não habilita JOIN em DML, publica ou amplia concessões.
+
+Consulta e DML aplicam o menor teto da plataforma, pacote publicado, token,
+concessão por skill, consentimento OAuth e requisição. União de consultas usa
+todos os pacotes selecionados. Delegação compara limites efetivos por skill;
+campos ausentes preservam teto, não concedem recurso. Cruzamento inclui o limite
+por concessão e os tetos de cada consulta local. Bytes contam o JSON completo da
+tool após materialização, sem promessa de limite nativo do driver. Timeout impede
+entrega tardia, sem prometer cancelamento de SQL já enviado. DML fixa orçamento
+no fingerprint e recusa mínimos de linhas incompatíveis; 32 comandos são teto
+fixo. Contrato: `docs/persona-v2/source-queries.md#limites-redutíveis`.
+
+Preparação SQL visual lê somente operações concedidas e confere ID/publicação/hash
+entre listagem e leitura. Parâmetros conservam tipos exatos; adaptação por etapa
+somente no modo publicado. Preparar não aprova nem executa. Troca de contexto
+limpa o formulário; resposta perdida não repete a tentativa. Contrato: console v2.

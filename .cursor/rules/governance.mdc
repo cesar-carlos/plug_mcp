@@ -1,23 +1,68 @@
 ---
-description: "Governança e verificação antes de concluir"
-globs: ["src/**/*.ts", "tests/**/*.ts"]
+description: "Precedência, evidências e verificação da entrega"
+globs: ["src/**/*.ts", "tests/**/*.ts", "docs/**/*.md", "AGENTS.md", ".cursor/rules/*.mdc"]
 alwaysApply: false
 ---
 
 # Governança
 
-Precedência: product_objective > security > architecture/domain > mcp_protocol/plug_server_client > catalog/express > changelog_and_docs > performance > typescript/lint > testing > coding_standards.
+A ordem canônica está em `AGENTS.md`: persona-v2 prevalece sobre invariantes
+de produto legados incompatíveis. Não criar outra ordem neste arquivo.
 
-Não inverter o objetivo: consulta ao ERP via **pacote de skill publicada**; grafo só no treino e na confirmação de fatos; sem skill, não inventar SQL. Não tratar o grafo, match textual ou skill em `rascunho_revalidacao` como licença de consulta.
+- Separar contrato aprovado, implementação observável e evidência de teste.
+  Relatórios datados não descrevem automaticamente o checkout atual.
+- Não copiar contagens de testes ou estado de implantação para rules.
+- Mudança de comportamento atualiza contrato, instruções do runtime afetado,
+  schemas e testes. Revisão documental não modifica gates ou código funcional.
+- Código: checks aplicáveis de `testing.mdc`, incluindo Node/TypeScript reais
+  pelos scripts `node:check`, `compiler:check` e `typecheck`.
+- Documentação/rules: conferir links, exemplos, duplicações e formatação dos
+  arquivos tocados. Não executar migrations ou SQL de negócio para isso.
+- Executar `npm run docs:check`; exemplos obrigatórios e contratos ficam em
+  scripts/docs/examples.ts. Manter decisões substituídas em docs/persona-v2/decisions.md
+  e pendências/evidências por gate em docs/persona-v2/acceptance.md.
+- Manifesto persona-v2 bloqueia deploy até aceite integral. Não marcar gates sem
+  evidência nem usar backfill legado na v2.
+- Verificador de liberação exige relatórios por gate, hashes, candidato e registro
+  de aceite conforme docs/persona-v2/release-evidence.md. Capturar candidato é
+  somente leitura; integridade não comprova revisão humana nem homologação da imagem.
+- Alvo Docker persona-v2-candidate e compose próprio são de homologação, sem
+  liberar produção. Startup só verifica migrations; migrate é explícito. O alvo
+  padrão continua legado até corte aprovado. Ver candidate-distribution.md.
 
-Antes de concluir mudança de produção:
+Git: `git_workflow.mdc`. Documentação: `changelog_and_docs.mdc`.
 
-1. `npm run lint`
-2. `npm run format:check` (ou `npm run format`)
-3. `npx tsc -p tsconfig.json --noEmit`
-4. `npm test` se use-case, adapter, erros, MCP ou HTTP mudaram
-5. `CHANGELOG.md` (Unreleased), `docs/` e as rules desta pasta se comportamento, contrato, tools, erros ou env mudaram (ver `changelog_and_docs`)
+Compose de produção v2 é separado e exige imagem por digest/segredos externos;
+preflight estático não autoriza release nem comprova infraestrutura. Preservar
+recusa de produção até aceite; não usar modo development para contorná-la.
+Contrato: docs/persona-v2/production-distribution.md.
 
-Não reintroduzir login próprio do MCP, JWT de conta, Client de serviço no `.env`, catálogo pronto, nem devolver token MCP na tool. Cutover de pacote: `npm run db:backfill-escopo` reconstrói AST, associa aprendizado e rebaixa publicadas — não pule a revalidação.
+Reset v2 é exclusivo de operador em banco local de desenvolvimento previamente
+marcado descartável. Exige URL própria, confirmação/geração e migrations íntegras;
+simula por padrão, sem fallback de configuração ou limpeza de recursos estranhos.
+Preserva schema/migrations; não desfaz efeitos externos nem substitui corte.
+Contrato: docs/persona-v2/development-reset.md.
 
-OAuth opcional: atualizar docs/auth/chatgpt-oauth.md, rules/runtime/testes coordenadamente. Aceite local, homologação HTTPS e piloto ChatGPT são marcos separados. Sem credenciais ou IDs reais, não afirmar instalação/homologação.
+Publicação depende de todos os jobs obrigatórios; não publicar dentro da matriz
+de testes. Preservar e verificar o artefato da rodada exata, sem reconstrução ou
+fallback para tag mutável. Ausência/expiração/falha bloqueia; integridade não
+substitui aceite dos gates. Contrato: docs/persona-v2/release-evidence.md.
+
+Evidência de liberação v2 fixa imagem por ID Docker, revisão de build, plataforma
+e runtime em cada gate. CI/deploy comparam a prova da imagem carregada ao aceite
+antes de publicação/envio. Hash do arquivo e inspeção Docker continuam obrigatórios;
+prova textual não os substitui. Provas v1 não são migradas automaticamente.
+Contrato: docs/persona-v2/release-evidence.md.
+
+Promoção usa ID imutável do artefato e origem aceita: mesmo repositório, push/main,
+workflow CI, commit exato e rodada bem-sucedida. Expiração/divergência/API
+indisponível bloqueiam; não usar rodada mais recente ou reconstrução como fallback.
+Revisão da imagem e revisão de aceite são distintas e verificadas separadamente.
+
+Produtor CI v2 é separado do legado, testa a imagem antes de exportar e não tem
+permissão de publicação. Manifesto incompleto permite somente artefato privado de
+candidata, nunca aceite ou deploy. Ensaio fixa imagem local por ID e recusa fallback.
+
+Saúde do worker v2 é local e observacional: ciclo completo, falhas e atraso
+monotônico, sem consultar banco ou executar jobs. Unhealthy não autoriza retry,
+reinício ou publicação; parada aguarda o job atual sem prometer rollback.

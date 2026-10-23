@@ -37,7 +37,7 @@ const columnName = (value: unknown): string | null => {
 };
 
 /** A mandatory predicate must dominate every alternative; an AND needs either side. */
-const implicaRecorte = (
+export const implicaRecorte = (
   node: unknown,
   alias: string,
   coluna: string,

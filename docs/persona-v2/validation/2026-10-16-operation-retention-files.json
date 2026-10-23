@@ -1,0 +1,43 @@
+{
+  "kind": "partial-local-development-inventory",
+  "date": "2026-10-16",
+  "mcpBase": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "node": "24.21.0",
+  "compiler": "7.0.2",
+  "fixture": {
+    "container": "se7e_retention_e45161969e4f_test",
+    "image": "postgres:17-alpine",
+    "imageId": "sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24",
+    "postgres": "17.11",
+    "bind": "loopback",
+    "port": 51794
+  },
+  "ready": false,
+  "files": {
+    "migrations/persona-v2/0029_operation_retention.sql": "43e7ff64babfa7d7ff4b1efcc85a11627370beff40bacae120474206c8b9f8c6",
+    "src/domain/persona-v2/operation-retention.ts": "664ed64c9ee175ee80c5611ed4c5c6c6449f30469670591453958fc222dca2ed",
+    "src/domain/ports/persona-retention-worker.port.ts": "8280dccda735dbbe684a5551391b1a8c781c8077acdd624757fcf1bff4237c1f",
+    "src/application/persona-v2/retention-worker.ts": "3c94be11642b634478f755b9f7b9144ee5a8b2cc2b88c38afa5ae80499409673",
+    "src/infrastructure/persistence/persona-v2/retention-worker.ts": "108a64b1f931a66607404c50e7d15b30b99082a46089cfcc47438fe38d2b9117",
+    "src/worker-persona-v2.ts": "af67e8ea5bd40af1e3b1d3238d50ecd4b11a36d453906c48a1c0c73cf2fd21f2",
+    "src/domain/ports/sql-operation-store.port.ts": "172ddeadb1cf841fc48f418a447b72687628afd16eaf7ea700649bcb407af9b9",
+    "src/domain/persona-v2/external-action.ts": "9554eaa3cc7a7b4a015058af5108d59e122e04880d9e31f577ee5447bceaac63",
+    "src/infrastructure/persistence/persona-v2/sql-operations.ts": "3a2c4a2389daebbfc3710ac831d09936977d1a76a28bd657da739a231b29fc65",
+    "src/infrastructure/persistence/persona-v2/external-actions.ts": "6de5d0cb19bcf5cdcdcd002ae52113ca23f9d458f6e84385cad3f29bb60c14c2",
+    "src/application/persona-v2/sql-operations.ts": "268a6cbf7c1e429b298e95414f3881c3459bed5fc834765205a890c695ed245a",
+    "src/application/persona-v2/external-actions.ts": "11359fabd3cff42173fb41eab76fdb5e2670024299ff51c9c1e617c6d1b153e3",
+    "src/application/persona-v2/runtime-instructions.ts": "cba597db253437ad67f7cce18309f03d403610d312ca3a53557526e0cf19e1c6",
+    "tests/persona-v2/operation-retention.postgres.test.ts": "4b675976202cd5dad9a72b5fffd7c47fde1c1e7ff3aae0b9d5e81bd666e917bf",
+    "tests/persona-v2/setup-delegation.postgres.test.ts": "e8e5d9188ee8892f0856cf500f127aaba177512ef5cb26f5f7f434be3283142f",
+    "tests/persona-v2/postgres.test.ts": "c680006dd10bb240f9a9e591f38b2774b7db57e7b38251a70d353e813e361058",
+    "tests/persona-v2-browser/persona.spec.ts": "734ecc1c840ca0e44e0411277f87d81230951f0cbe2e70c4543a1567a2c75853",
+    "web/src/persona-v2/OperationRetentionNotice.vue": "be1edfe7c39101fb6c8cb21f3e710409e0a28afa21064da591f3143ae99a8961",
+    "web/src/persona-v2/operation-retention.test.ts": "5853000ba467fbf7110c293996d1df3d6d53a5b3d96f4381b16c278cab60e2f7",
+    "web/src/persona-v2/OperationsPanel.vue": "7ed8bb8f30da76347b8dbf9dac2caed1de4f3816a9de8decd6b3910c404b046b",
+    "web/src/persona-v2/ExternalActionsPanel.vue": "7486365babc1432ed80af5507f80fd0a94e6aaa6d5d38dc0d2bc501c3d498724",
+    "AGENTS.md": "70fc57e908af6ac4fd39d445f20af98e3fbad2bd75310db00336942f801bb4ac",
+    ".cursor/rules/persona_v2.mdc": "7e2a44ba0a5a40053e22a090a862a12c2b49a9597a76757a945af512fd43eab0",
+    ".env.example": "8da11371a158f1ab3dee7919af99f4bcb70d45de866100a73fa3f6a2abb7e2d9",
+    "contracts/persona-v2-release.json": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+  }
+}

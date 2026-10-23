@@ -1,32 +1,401 @@
 ---
-description: "Estratégia de testes: unitário, HTTP, live e contratos do pacote"
-globs: ["tests/**/*.ts"]
+description: "Verificação proporcional, fixtures isoladas e aceite por evidência"
+globs: ["tests/**/*.ts", "scripts/**/*", "src/**/*.ts", "web/src/**/*"]
 alwaysApply: false
 ---
 
 # Testes
 
-- Console: `npm ci --prefix web --include=dev` e `npm run web:check` (lint flat tipado Vue/TypeScript, typecheck, Vitest, build) no release. `npm run test:console:browser` usa Chromium em processo separado com `FakePlugServer`, banco/Redis vazios e fixtures sintéticas; não herdar ERP ou banco operacional. Suite separada de OAuth. Cobrir edição pendente, salvar/validar sequenciais, falhas, CAS/previews, payloads multi-skill/pares compostos, governança, cliques repetidos e sessão em trânsito; temas/390/768/1440 e telas principais 320/zoom 200%, teclado/foco, transporte e falhas parciais. HTTP deve conferir conteúdo do preview de inativação e seu hash, sem dispensar isolamento/CAS.
+Na fixture persistente de cruzamento, remover o ClientAgentAccess da primeira
+fonte após o segundo SELECT deve recusar a entrega por AUTHORIZATION_DENIED.
+O transporte continua real; o hook só controla o instante da alteração na
+autoridade de fixture. Restaurar somente o registro capturado dessa fixture
+no finally, sem apresentar isso como recuperação de concessão em produção.
 
-- O checkout auxiliar `plug_server_contract` fica fora da formatação deste projeto. Suítes opcionais de contrato devem carregar fixtures em hooks de execução, nunca no callback de `describe.skip`, que ainda é avaliado quando os arquivos estão ausentes.
-- Unitário (`tests/unit`): casos de uso com repos in-memory e `FakePlugServer`. Sem I/O. Seed de grafo: `seedTabelaComColunas` (tabela sem coluna falha nos gates).
-- Integração (`tests/integration`): `supertest` na app de `compose()` com overrides. Bootstrap sem Bearer, rate limit, `GET /setup/:code`, schema de `tools/list` (inclui `listar_conflitos` e `remover_relacionamento`). FTS (`tests/integration/conhecimento-fts.test.ts`) exige `DATABASE_URL` (CI já migra). Se `CI=true` sem `DATABASE_URL`, o arquivo **falha** (não skip silencioso). Cobrir: definicao/regra/SQL fora do índice; stemming `titulo`/`titulos` (JS e `to_tsvector('portuguese')`; falha se o dicionário não unir). Não trocar a imagem `pgvector/pgvector:pg16` por `postgres:16` — `0008` ainda faz `CREATE EXTENSION vector` (drop só na `0019`).
-- Live (`tests/live`, `npm run test:live`): adapter real contra o hub. `describe.skipIf(!getLiveEnv())`. Credenciais `E2E_*` só no `.env`. Nunca a conta de um Client real de produção. SQL só SELECT com FROM em catálogo de sistema. Sem mutação.
+## Isolamento e gates
 
-Cobrir: `registrar_acesso` sem token na resposta; dois CLIENT_TOKENs no mesmo e-mail emitem Bearers distintos (`bearer-por-acesso`: isolamento ALS, `adicionar_acesso` não troca a sessão, `rotacionar_token_mcp` só o Bearer atual, setup persistido sobrevive memória vazia, CONFLICT do mesmo trio); dois usuários no mesmo `agentId` isolam catálogo; mesmo usuario+`agentId` com dois `client_token` isolam skills (`catalogo-por-acesso`: CASCADE `remover_acesso`, bind recusa `acessoId` irmão, UUID oracle, `consultaAprendidaId`, `listar_auditoria`, IDOR `skillId`/`anotacaoId` com ALS); `notify-usuario` (mesmo `acessoId`); troca de Bearer no mesmo `mcp-session-id` é recusada; GET formulário não consome e POST CSRF/claim atômico one-shot (setup-operation); `exportar-anexo` handle de outro acesso recusado; `DIALECT_CONFLICT`; policy recorta leitura; 403 Client inativo ≠ senha; `SELECT *` recusado no treino/`consultar_dados`; `inspecionar_consulta` aceita `SELECT *` de uma tabela do allowlist (com projeção segura e omissão de colunas pessoais/secretas/inferidas, `colunasNovasNoGrafo`); `-32009` `invalid_payload` **não** é `sql_engine` mesmo com haystack de motor; HTTP 5xx `denied`/`permission` sem RPC de policy **não** é `PERMISSION_DENIED`; `-32009` com haystack de motor traz `details.engineMessage`; wrap genérico do driver aponta `mapear_tabela` sem rewrite de `plug_server_http`; `SQLSTATE` `42703`/`42P01` no hint; `-32001` ramifica por `reason`; falha de rede `ECONNREFUSED` → `PLUG_SERVER_ERROR` `plug_server_http` (não `INTERNAL_ERROR`); Firebird `Column unknown` → `mapear_tabela`; `consultar_dados` sem `skillIds` usa união das publicadas; `consultaAprendidaId`; `confirmar_coluna.colunas[]`; ciclo validar → publicar com `SKILL_NOT_PUBLISHED` antes da confirmação; `rascunho_revalidacao` sem publicação ativa não consulta; gates JWT / `ClientAgentAccess` / `client_token` como falhas distintas; `pergunta` obrigatória; validador fail-closed (UNION/subquery/alias/`SELECT *` aninhado); `obter_skill` só colunas do pacote; `columnsMetadata` com zero linhas; recorte obrigatório e paginação sem TOP/LIMIT; `METADATA_CONTRATO` sem pagination do agente; cache isolado por token/policy (`aprendizado-escala`); backfill (`backfill-pacote`); `execution_mode: preserve` só sem página; conhecimento híbrido (`buscar-contexto` / `montar-conhecimentos`: falso `completa` por regra, teto com slot de regra/métrica, `tabelaId` fail-closed, sinônimo UUID, consulta `inativa` omitida, isolamento `acessoId`, envelope sem SQL, telemetria sem pergunta, `consultaSemanticaSugerida` com cobertura completa/composta ou listagem, `fatias[]`, hint de sinônimo em parcial, FTS em `conhecimento-fts`; `validar-skill` une pacote persistido; `sensibilidade-merge` preserva `livre`; `map-plug-error` 4104; `sql-modelo` teto IN 64; `cobertura-skill` negação); `fluxoTreino.pacoteMinimo`; `herdar_catalogo` com `pagar` e `pares[]` compostos; gate 1 tabela vs JOIN sem cardinalidade; `expandir_escopo` recusa JOIN só `inferido` (`manutencao-skill`); `descobrir_tabela` recorta ao pacote (`inspecionar-consulta`); `tipoJoin` no merge LEFT vs herdar inner (`tipo-join-merge`); `treinar_com_sql` poda isolado coberto por composto (`cofre-treino`).
+- Nunca usar credenciais/fontes cadastradas ou bancos operacionais em ensaios.
+  Fixtures têm nomes aleatórios próprios e URL explícita; remover só alvos criados.
+- Não tratar parser, mocks, harness de referência ou uma suíte PostgreSQL como
+  homologação dos três motores ou avaliação real da IA.
+- Casos obrigatórios precisam de relatório atual do runner separado; IA não
+  aprova relatório. Ambiente obrigatório ausente falha, não vira skip.
+- Não alterar migrations aplicadas. Validar banco novo e upgrades legados em CI
+  efêmero; v2 recusa banco legado antes de DDL, sem reset/backfill automático.
+- Executar checks proporcionais ao código: lint, typecheck, testes afetados e build;
+  antes de entrega de produção, `release:check` quando o ambiente permitir.
+  Gate exige Node 24 LTS e TypeScript 7 real; não reduzir requisitos.
+- Documentação/rules sem mudança funcional: links, exemplos e formatação dos
+  arquivos tocados com `docs:check` e Prettier. Não exigir banco para revisão de texto.
 
-Helpers em `tests/helpers`. Não reintroduzir login próprio do MCP nem catálogo pronto. Mudança de pre-treino: `tests/unit/pre-treino-sessao.test.ts`. Persona do acesso: `tests/unit/atualizar-persona.test.ts`, `tests/unit/parece-segredo.test.ts`, `tests/integration/persona.test.ts` (`initialize` um acesso por Bearer; `pre_treino` relê; `resources/read` `persona://` JSON + IDOR vazio; bootstrap não lê pacote). `atualizar_persona` com `acessoId` de outro usuário → `ACESSO_NOT_FOUND`; `confirmadoPeloUsuario: false` recusa. `confirmar_relacionamento.tipoJoin`: `tests/unit/confirmar-relacionamento.test.ts` (omitir não grava inner sobre LEFT). Anexo: `tests/unit/detectar-celula-binaria.test.ts` e `tests/unit/exportar-anexo.test.ts` (stub base64/`Buffer`, recusa zip/svg/PDF→jpeg, handle de outro `usuarioId`/`acessoId`, inspeção sem handle + origem legado recusada `source: mcp`, cap por usuário + TTL sem contar inspeção, `PRIVACIDADE_NEGADA` sem `nextAction` inspeção, teto 8 células/8 MiB `CONSULTA_ORCAMENTO.source === mcp`, `MIDIA_TETO` via converter/`limitInputPixels`, stub não vai ao cache; `exportar_anexo` ausente no bootstrap).
+## Persona-v2
 
-Além da regressão existente, cobrir IR v2 (múltiplas métricas/listagem) também com geração determinística de entradas e fixture sintética sem ERP, preflight idêntico entre validação e execução, governança de vigência e agenda de revisão no fuso do acesso, preview/hash/concorrência de publicação, deltas de deriva, auditoria/painel sem conteúdo sensível, amostragem de timings e `contracts/plug-mcp-rest-v1.json` + baseline de compatibilidade via `contract:check` cross-repo. Antes de entregar, rode `npm run release:check` quando o ambiente local permitir.
+- Cópias de fixture do plugin filtram caminhos relativos à raiz de origem.
+  Diretório ancestral chamado build não exclui o pacote inteiro; artefatos
+  gerados internos continuam excluídos. Validar a montagem real nesse cenário,
+  sem reduzir os validadores ou confundir falha do harness com falha do runtime.
 
-`test:migrations` deve criar bancos efêmeros exclusivos em CI e validar tanto um banco limpo quanto upgrade de `0023` com fixture legada e reaplicação idempotente. Operação: alertas/revisões respeitam acesso/timezone e não carregam conteúdo sensível; webhooks devem cobrir bloqueio SSRF, HMAC, retry/dead-letter e isolamento. Cache: concorrência idêntica coalesce uma execução e tokens/policies diferentes não coalescem.
+- A bateria OAuth de histórico compartilhado tem preparação própria dentro
+  de cada caso, incluindo versões/perfil e recursos/relacionamentos originais.
+  Extração de jornada não remove assertions nem transfere setup para hooks para
+  contornar timeout. Registrar correspondência da contagem e tempos por etapa
+  somente com metadados. A matriz integral vigente está documentada em
+  `docs/persona-v2/validation.md`; filtro explícito não certifica os demais.
+  Cotas de tráfego da fixture não comprovam defaults de produção.
 
-Novos gates: SQL adversarial com OR/UNION/CTE/SELECT INTO/funções, origem física/grão/preagregação/EXISTS, revogação in-flight/cache/export, publicação CAS/snapshot imutável, setup POST/CSRF/replay, Redis proprietário/renovação/timeouts e MCP legado/2026-07-28. 100 casos sintéticos e resultados PostgreSQL; harness de IA explícito registra modelo, 100% segurança/lacuna e >=95% suportados. Não apresentar harness-adapter nem parser como certificação de IA/motor. Migrações cobrem novo/0023/0027 e suspensão/invalidação.
+- Views regulares na cadeia usam os recursos já provisionados wide_15/wide_hidden
+  e suas regras explícitas. Conferir schema exato da inspeção, tipo publicado,
+  paginação e recusa sem sql.execute para tipo incorreto/recurso não concedido.
+  SQL Anywhere da fixture usa DBA no catálogo; dba divergente continua inconclusivo.
+  Rodada filtrada identifica os casos não selecionados e não certifica a suíte inteira.
 
-Treinamento: preservar 100 cenários, comparar decimais exatos/nulos/tipos/ordem; descoberta/resources/schemas reais. Runner evaluate:skills usa fixtures PostgreSQL isoladas/rollback e distingue executor indisponível. Curadoria/CAS/replay/republicação e relatórios obsoletos em PG real; upgrade desde0031 sem inventar confirmação/execução/relatório. Gates de base fixam contrato/hash. IA real e homologação piloto somente após execução explícita, nunca certificação pelo harness.
+- Gates que reconstroem `web/dist` terminam antes da rodada final Chromium.
+  Não alterar o build servido durante o ensaio. Banco/Redis de integrações legadas
+  são fixtures separadas da geração v2; não converter schema para aproveitar
+  um ambiente. Suítes PostgreSQL v2/cache/cadeia têm comandos e evidências próprios.
 
-## Delegação ChatGPT opcional
+- Treinamento manual em cadeia inclui parâmetro inteiro declarado no console,
+  releitura do tipo e execução com valores separados do SQL nos três motores.
+  Navegação descarta valores e modos de envio juntos; revisar nulo/vazio/omissão
+  sem alterar publicação ou ampliar concessões.
 
-OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
+- `manual-publication` exige as mesmas guardas privadas/persistentes de
+  `manual-training`, mas usa fixture nova separada. Casos são salvos no console;
+  relatório vem do CLI real de operador com fonte de teste explícita distinta.
+  Alterar o caso deve tornar o relatório obsoleto. Executar as duas jornadas,
+  sem desativar cotas, aprovar por HTTP/MCP ou repetir SQL após resultado incerto.
 
-Regressões OAuth incluem HTTPS nativo IPv4/IPv6/SNI/certificados/redirect/limite/cancelamento e Chromium com POSTs reais, Origin/CSRF/cookie/303/histórico/replay. Browser exige PostgreSQL efêmero e gera banco próprio; não aplicar migrações em banco operacional. TLS de teste limita confiança à fixture sintética. CI Linux executa browser; JSON serializado prova securitySchemes em ambos os protocolos. Rollback/concorrência usam barreiras. chatgpt:check é read-only e seus relatórios nunca certificam instalação/homologação.
+- Percurso Chromium da sessão manual em cadeia real confere dois tokens com
+  concessões distintas, chamada MCP direta à skill omitida, retirada de concessão
+  pelo console e consulta do consumidor independente. Segunda emissão precisa
+  aguardar o novo Bearer confirmado, não apenas campo já preenchido. Credenciais
+  ficam em memória/arquivo privado; falhas relatam só a etapa segura, sem screenshots,
+  traces ou valores. Não reusar fixture após falha nem considerar snapshot alterado
+  uma rodada aprovada.
+
+- Sessão manual usa fixture nova, controle MCP vazio e prazo explícito de até
+  duas horas. Servidor/worker e companions param cooperativamente; limpeza exige
+  comprovante da mesma sessão e verificação de propriedade. Não prolongar limites
+  de SQL/aprovação/login, criar treinamento automático ou tratar parada/inventário
+  estável como aceite humano. Credenciais sintéticas ficam em arquivo com ACL
+  privada, conferida pelo controlador antes de gravar chaves/iniciar serviços;
+  não corrigir ACL de pasta existente para aceitar a sessão. Teste negativo
+  verifica recusa sem criar sessão e sem alterar a ACL. Contrato:
+  docs/persona-v2/homologation-chain.md.
+
+- Runner da cadeia registra revisão/hash/contagem dos três checkouts antes/depois,
+  sem alterar index ou ler arquivos ignorados. Mudança ou captura indisponível
+  recusa resultado positivo; falha dos testes não vira aprovação por inventário
+  estável. Registro incompleto não certifica rodada. Comparação entre duas leituras
+  não prova congelamento durante execução nem substitui imagem/driver instalado,
+  filtro, resumo do executor ou aceite. Metadados não contêm conteúdo privado.
+
+- Token externo no console: emitir concessões da skill/operação exatas, preparar
+  sem dispatch e retirar somente a operação na edição. Conferir skill preservada,
+  chamada MCP direta recusada sem novo journal e outro token independente ainda
+  capaz de preparar. Aceitar JSON/SSE na leitura do teste, sem mudar o protocolo
+  para facilitar a fixture. Provedor sintético não certifica serviço real.
+
+- Histórico compartilhado na cadeia: publicar uma versão nova não amplia token
+  anterior. Adotar em outra skill e conceder explicitamente permite ler ambos
+  os vínculos. Suspender perfil remove só os dependentes; âncora/cursor sem
+  concessão e token revogado são recusados. Consulta real confirma a nova adoção.
+  Por OAuth, leitura não exige consentimento administrativo: fontes e skills
+  consentidas limitam versões, âncoras e cursores. Revogar uma conexão conserva
+  as demais e o Bearer; revogar o originador bloqueia os derivados. Histórico
+  autorizado comum não tem o isolamento autoral das propostas editoriais.
+  Metadados OAuth de fixture não comprovam HTTPS público ou ChatGPT.
+  Comparação na mesma cadeia confere referências de ambos os lados, direção
+  reversa e identidade sem diferenças. Consentimento parcial/sem fonte recusa
+  comparar; conexão revogada não compara, outra conexão conserva o acesso.
+  Revogação do originador bloqueia derivados e Bearer. Perfil suspenso impede
+  comparar seu vínculo, sem impedir comparação do vínculo independente.
+  Repetir histórico/comparação por OAuth para operações SQL publicadas por
+  runner real: consentimento parcial não revela a segunda operação, ausência
+  de fonte recusa leitura e revogações conservam os acessos independentes.
+  Conferir que ler/comparar não acrescenta dispatch sql.operation.execute;
+  autorização de conhecimento não substitui preparação/aprovação de efeitos.
+  Histórico misto deve atravessar o limite de vinte vínculos com consultas e
+  operações do mesmo padrão, sem duplicação e na ordem revisão/ID. Comparação
+  consulta/operação preserva direção; token com só um lado não compara. Cursor
+  fora da concessão, suspenso ou usado após revogação é recusado; paginação não
+  reserva snapshot nem autoridade.
+  Repetir as duas páginas por OAuth: consentimento sem fonte ou sem o cursor
+  recusa continuação; revogar uma conexão conserva outra e o Bearer. Revogar
+  o originador bloqueia todos os seus derivados. Histórico misto autorizado
+  não é proposta privada da conexão e não acrescenta dispatch DML.
+
+- Inativação editorial na cadeia persistente usa exemplo explícito de skill
+  publicada/inspecionada. Comparar conteúdo e publicação antes/depois, conferir
+  CAS concorrente e replay; revogação no hub com delegação local ativa deve
+  impedir nova alteração e conservar o rascunho. Não confundir inativação de
+  exemplo com suspensão de publicação ou execução de SQL.
+  Repetir pelo endpoint OAuth com consentimento explícito: falta de treinar ou
+  fonte impede alteração. Revogar a conexão bloqueia nova inativação sem mudar
+  rascunho/publicação nem bloquear os demais acessos. Metadados OAuth de fixture
+  não comprovam HTTPS público ou cliente ChatGPT.
+
+- Lista editorial própria: criar mais de uma página por consumidor, comparar
+  IDs enviados/listados sem duplicação e conferir somente metadados permitidos.
+  Outro token equivalente recebe lista vazia e não reutiliza cursor do autor.
+  Revogação remota bloqueia primeira página e continuação mesmo com estado local
+  ativo. Recorte persistente Bearer não certifica OAuth ou toda a matriz.
+  Para propostas físicas, testar conexões OAuth distintas do mesmo originador:
+  páginas e cursores isolados, consentimento sem treinar recusado e revogação
+  individual sem bloquear outra conexão ou o Bearer. Metadados de cliente de
+  fixture não certificam TLS público ou instalação no ChatGPT.
+
+- Releitura editorial compartilhada na cadeia usa proposta enviada pelo token,
+  skill adotada e prova estrutural real. Conferir conteúdo/base originais e
+  recusa de outro token igualmente concedido. Revogação diretamente no hub com
+  registro local ativo deve bloquear leitura; não confundir filtro dirigido com
+  aceite da matriz ou autenticação OAuth ponta a ponta.
+
+- Homologação editorial externa com hub persistente não equivale a execução do
+  provedor. Separar os dados sintéticos do relatório da autoridade real Prisma;
+  comprovar recusa após revogação remota com registro local ainda ativo e
+  preservação dos casos/publicação ao reconstruir a composição MCP.
+  Importação OpenAPI por OAuth exige escopo da integração e consentimento
+  administrativo próprios. Testar ausência de ambos, integração não concedida,
+  revogação individual preservando outra conexão e revogação remota da delegação.
+  Interpretar documento local não comprova discovery de um servidor MCP externo.
+  Discovery delegado deve usar adapter real contra servidor TLS de fixture,
+  sem ferramentas de negócio chamadas. Conexão sem escopo não descobre;
+  revogação individual preserva outra conexão e revogação remota bloqueia ambas.
+  Resolver/CA locais da fixture não certificam DNS público ou ChatGPT.
+
+- Delegação no console: falha de leitura e confirmação perdida devem preservar
+  seleção, focar erro e bloquear nova mutação até leitura explícita. Descartar
+  edição exige confirmação; recuperação não repete POST nem concede autoridade.
+
+- Reinício composto da cadeia tem orçamento próprio para as paradas, partidas e
+  reconexão sequenciais. Não usar o timeout curto de um caso SQL para encerrar
+  esse percurso; preservar os limites individuais de processo, RPC e consulta.
+  Uma correção desse orçamento exige repetir a cadeia, não apenas typecheck.
+
+- Fixture Chromium usa globalSetup/teardown do runner no mesmo processo. Fecha
+  HTTP, runtime e pools antes de remover somente bancos próprios e seu estado.
+  Não usar rota HTTP de parada nem depender de kill da árvore de processos no
+  Windows. Falha de teste também exige limpeza; falha de limpeza reprova a rodada.
+
+- Ensaio de backup usa somente controle de fixture: restaura em banco novo,
+  preserva original, compara linhas/cifras e verifica imutabilidade/revogação/unknown.
+  Não confundir snapshot restaurado com autoridade atual ou reversão de efeitos
+  posteriores nos agentes/provedores. Dump privado não entra em artefatos/logs.
+
+- Homologação da imagem usa `-CandidateImage` explícito, ID imutável local e hub
+  Prisma. Docker Desktop acessa somente endpoints de fixture verificados; não
+  acrescentar proxy público ou gateway simulado. Chromium confere imagem e SQL
+  observado nos três agentes. Filtro dirigido não certifica casos não executados;
+  usar fixture nova por rodada e remover contêiner por label da sessão.
+  Imagem, helpers e agente preservam a mesma origem loopback do hub. Relay TCP
+  privado dentro do contêiner encaminha somente a porta verificada da fixture,
+  sem reescrever HTTP/RPC ou identidade. Não alterar responsáveis/fontes
+  persistidos nem relaxar comparação de origem. O relay termina com o contêiner
+  e não é componente da imagem distribuída ou evidência de proxy/TLS público.
+  Versões nativas observadas por inspeção são preservadas também no log antes
+  da limpeza. Ausência de inspeção conserva null; não inferir versões da imagem
+  ou de outra rodada nem exportar manifestos/credenciais para suprir metadados.
+
+- Gestão de integrações: suspensão/rotação/recovery por CAS/fingerprint, Client
+  divergente, metadata sem segredo, prévia anterior inválida, concorrência e
+  journal desconhecido preservado. Console testa formatos Bearer/API key/Basic,
+  edição protegida, limpeza após erro e confirmação perdida sem reenvio. Usar
+  só fixtures; recuperação não restaura operações/publicações/concessões.
+
+- Descoberta externa: testar páginas/cursor/duplicatas/limites, schema recusado,
+  SSRF, revalidação e ausência de tools/call. OpenAPI recusa referências remotas,
+  constraints e transportes não representáveis. No console, aplicar só preenche
+  formulário e salvar cria rascunho sem grants/publicação/journal; rotação invalida
+  proposta. TLS sintético não certifica HTTPS público ou cliente ChatGPT.
+
+- Editor externo: percorrer REST e MCP remoto com schemas e conciliação,
+  casos tipados, runner separado, revisão/publicação e contrato publicado
+  imutável. Cobrir CAS, cópia sem autoridade herdada, edição pendente e ausência
+  de dispatch/aprovação pelo console. Fixtures sintéticas não homologam provedor
+  real, HTTPS público ou ChatGPT; não usar credenciais/fontes operacionais.
+
+- Editor de cruzamento: duas consultas publicadas, etapas tipadas, casos sintéticos
+  e de transporte sem conversão, CAS concorrente, relatórios obsoletos/paginados,
+  revisão/publicação e snapshot ativo preservado. Testar consentimento explícito
+  para dependências e token revogado. Chromium/PostgreSQL com hub sintético não
+  substituem homologação persistente dos três motores ou HTTPS/ChatGPT manuais.
+
+- Editor de operação SQL: cobrir contrato estruturado, valores exatos/nulos,
+  bindings, casos por CAS, edição concorrente, relatório obsoleto, prévia e
+  publicação preservando snapshot ativo. Console só edita casos/lê relatórios;
+  runner continua separado em fixture. Chromium com hub sintético e runner
+  PostgreSQL não certifica cadeia persistente dos três motores.
+  Edição visual inclui chaves compostas, N:N, caminhos ausentes recusados,
+  prova de outra fonte/expirada, perfil da versão exata e preservação de escrita/
+  parâmetros/etapas/snapshot ativo. Seletor montado bloqueado deve inicializar
+  quando liberado, sem retry de mutações ou adoção automática.
+
+- Console de operações: testar Bearer de outra persona, referências exatas sem
+  conteúdo administrativo, confirmação separada, clique duplo, resposta perdida/
+  atrasada, troca de token, cancelamento sem rollback presumido e conciliação
+  sem reenvio. Rotas mockadas no Chromium verificam UI, não efeitos ou cadeia SQL.
+
+- `test:persona-v2`: autorização, estados, SQL/recortes, catálogo e combinação.
+- Anexos JSON: contrato/finalidades novos, cifra/quotas/prazo, outra persona/token/
+  concessão, revogação em trânsito, metadata inconclusiva e fence físico; HTTP,
+  MCP/resource e console não entregam bytes nem repetem SQL após recusa.
+- Binários: bytea nativo em fixture, metadados ODBC preservados, texto base64
+  sem tipo positivo recusado, outra coluna/expressão/UNION/página/duplicata/NULL,
+  MIME/concessão antigos e revogação. Bytes originais sem conversão; hub sintético
+  não certifica drivers/cadeia persistente dos três motores.
+- `test:persona-v2:cache`: Redis nativo local explícito de fixture, sem fallback
+  ou skip; cifras, dois coordenadores, fencing e ausência de takeover/retry.
+  Incluir corrida entre miss/claim e leitura entre TTLs distintos. Cadeia real
+  usa dois processos MCP sob a mesma origem, com barreira de publicação após SQL
+  e interrupção apenas do Redis proprietário de fixture. Exigir revalidação,
+  isolamento, revogação em trânsito e ausência de reenvio pelo seguidor.
+  Suíte PostgreSQL aceita Redis de fixture explícito para comprovar o caminho
+  HTTP/MCP habilitado; sem ele comprova somente o modo local. Não é aceite de frota.
+- `test:persona-v2:postgres`: URL explícita `PERSONA_V2_TEST_DATABASE_URL`
+  com sufixo `_test`, sem fallback a DATABASE_URL operacional; bancos próprios.
+- Worker/outbox: dois processos com composição real dos quatro jobs e PostgreSQL
+  dedicado; falha independente, rollback, queda durante POST/transação e retomada
+  após lease real. Receptor TLS verifica HMAC/idade e deduplica ID/corpo em ledger
+  serializado. IPC de parada testa o mesmo ciclo; não certifica SIGTERM no Windows,
+  HTTPS público, receptor instalado ou a frota. Não acelerar os leases desses casos.
+- `test:persona-v2:browser`: Chromium e fontes PostgreSQL sintéticas independentes;
+  persona vazia, publicação/preview, token restrito, troca de contexto e teclado.
+  Hub sintético não homologa transporte real. Casos de cruzamento usam publicação
+  e runner separado na fixture, sem endpoint de aprovação de relatório. A suíte
+  respeita Retry-After do login; não desativa rate limit para acelerar testes.
+- Cobrir CAS/replay/expiração, publicação/dependências alteradas, concessões antigas,
+  revogação em trânsito, fonte ambígua, schema exato e recortes dominantes.
+- Descoberta: motor divergente, base homônima substituída, suspensão transitiva,
+  migração 0005 e sem rebinding. SQL Anywhere recusa locator e marcador ausente;
+  UUID provisionado exige testes de reinício, troca homônima, SELECT mínimo e
+  bloqueio de alterações do marcador, sem DDL automático.
+  Prova na conexão executora: divergência bloqueia SELECT/DML antes do SQL de
+  negócio; mudança após SELECT descarta linhas; timeout tardio não executa SQL.
+  Duplicata durável não reexecuta mesmo após correção do destino.
+- Firebird deve ser recusado nas entradas v2, sem adaptação para outro motor.
+- Operações: aprovação/claim concorrente, saída tipada, contagens, limites,
+  reinício do journal, confirmação perdida, sem reenvio e sem rollback presumido.
+  Adaptação testa SQL aceito/recusado e preservação de identidade/valores/recortes.
+  Conciliação testa marcador único, ausência/duplicidade/truncamento e revogação.
+- Ações externas: PostgreSQL de controle e provedores REST/MCP em TLS nativo
+  isolado, com ledger sintético durável, perda de confirmação e reabertura do
+  runtime. Conciliação exige chave original completa, unicidade, completude e
+  estado treinado; ausência/falha é inconclusiva. Evidência append-only não muda
+  receipt/estado nem permite reenvio. Resolver/CA de teste não certificam HTTPS público.
+  CLI exige manifesto sem segredos, fixture separada, claim único e limpeza
+  confirmada. Cobrir ownership recusado sem POST, replay, rodada incerta, CAS e
+  obsolescência/paginação de relatórios. Console não dispara execução técnica.
+- Cruzamentos: concessões de todas as dependências, projeção, cardinalidade/nulos,
+  decimais exatos, incompletude/limites e revalidação de fontes já lidas.
+- Runner de operações usa PostgreSQL aleatório/rollback; runner de cruzamentos
+  usa fixtures sintéticas. Ambos são separados do runtime consumidor.
+- Matriz ODBC exige fixtures próprias dos três motores, decoder/executor/journal
+  reais, sem motor ausente virar skip. Autoridade sintética não é aceite integral.
+- Cadeia real: `scripts/run-persona-chain-homologation.ps1` exige manifesto explícito
+  e verifica primeiro o commit-base/contrato do hub, antes de processos/migrations.
+  Divergência exige revisão coordenada; não re-pin automático nem fallback.
+  Anexos binários usam binary_fixture fechada e somente leitura, com bytes
+  sintéticos, NUL/high bytes e mais de 64 KiB. Exigir igualdade HTTP/MCP/resource,
+  namespace de tipo explícito, completude, isolamento e revogação. Reinício recupera
+  anexos cifrados ainda válidos, com autorização remota e sem novo SELECT; token
+  revogado não ressuscita. Quotas concorrentes, expiração, falha do armazenamento,
+  limpeza e rotação exigem PostgreSQL nativo. Só nova ação explícita consulta
+  novamente. Nunca usar fontes do usuário.
+  e os companions locais do hub/agente. MCP usa composição v2 real e PostgreSQL
+  de controle; SQL de negócio passa por REST/Socket.IO/policy/ODBC/journal.
+  O padrão prisma exige hubDatabaseUrl de fixture separado do controle MCP,
+  migrations Prisma, aprovação real de ClientAgentAccess e processos HTTP
+  independentes MCP/hub com reinício. memory é modo explícito, sem fallback.
+  Configuração do agente usa Drift e segredos usam adapters FlutterSecure com
+  backend Windows DPAPI real em diretório exclusivo. Só a localização do cofre
+  é redirecionada; não mockar armazenamento/criptografia nem abrir/migrar o cofre
+  operacional. Reinício remove bootstrap, preserva tokens e verifica journals
+  incertos por RPC, sem recriar dados ou tornar operações incertas executáveis.
+  Não confundir esse alcance com bootstrap/instalador desktop, TLS/Redis distribuídos,
+  avaliação da IA ou aceite integral. Injetar perda de confirmação
+  somente depois do commit nativo nas fixtures e comprovar ausência de reenvio.
+  Não executar dois runners Flutter simultâneos que disputem a DLL ODBC.
+  A fixture estrutural ampla usa policy explícita, 16 recursos paginados e uma
+  view. DDL de drift fica apenas em ações fixas do companion, na base descartável
+  cuja identidade ele confere; nunca aceitar SQL/identificadores do consumidor.
+  Coluna não treinada não invalida a consulta; alteração treinada deve recusar
+  entrega/suspender somente dependentes. Não confundir policy restrita com prova
+  de mínimos privilégios no motor.
+  Relações físicas usam fixture composta com ponte N:N: provar FK reversa na
+  filha, caminho e recusa de atalho; remoção fixa de FK deve impedir entrega.
+  SQL Anywhere com enforcement desconhecido recusa a adoção física. Declarar
+  relação de negócio é ação editorial separada, nunca fallback automático.
+
+## Regressões da entrada legada
+
+Preservar isolamento por acesso/concessão, portões vigentes em cache/exportação,
+AST adversarial, privacidade, recortes, fanout, snapshot/CAS, curadoria e setup
+POST/CSRF/uso único. Migrations cobrem novo e upgrades desde 0023/0027/0031,
+incluindo OAuth 0034; fixtures antigas com vector precisam da imagem compatível.
+
+Console: `web:check` e `test:console:browser`; OAuth:
+`test:chatgpt:https`, `test:chatgpt:browser` e concorrência PostgreSQL.
+TLS/DNS nativos, formulários reais, replay/revogação e rollback não são substituídos
+por mocks. `chatgpt:check` é somente leitura e não comprova instalação.
+`persona:https-check` prepara somente discovery/pacote/CIMD da homologação v2,
+sem credenciais ou banco; sucesso não certifica isolamento ou conexão no cliente.
+Não substituir esse check pelo `chatgpt:check` legado. Procedimento no contrato OAuth v2.
+
+OAuth v2: `tests/persona-v2/oauth.postgres.test.ts` e
+`tests/browser/persona-v2-oauth.spec.ts` usam PostgreSQL dedicado. Chromium/CIMD
+com certificado e resolução sintéticos não comprovam instalação privada ou DNS
+público; documentar separadamente. Não reutilizar stores legados.
+
+Preservar 100 cenários sintéticos de treinamento; comparar decimais/nulos/tipos/
+ordem. IA real exige modelo/julgador identificados, 100% segurança/lacuna e
+pelo menos 95% dos casos suportados. Não minerar auditoria para datasets.
+
+Suítes opcionais carregam fixtures em hooks; callback de describe.skip ainda roda.
+Live exige conta dedicada, sem DML e sem conta Client operacional.
+
+## Evidências
+
+Pin do hub exige checkout/SHA/hash exatos e ancestralidade do commit de
+incorporação. Snapshot histórico é conferido com reverse/check/cached em índice
+temporário do ancestral aprovado, nunca reaplicado ao candidato. Revisar mudanças
+do candidato independentemente; não editar o snapshot para ocultar drift textual.
+
+Publicação genérica usa `persona:test-publication` com manifesto local explícito,
+casos declarativos e fixtures próprias. Evidência distingue fonte pretendida,
+identidade de teste, hashes e publicações utilizadas. Cruzamento sintético não
+substitui o runner pela cadeia. Operação com marcador usa identidade nova por
+caso/rodada; ID no caso é somente alias tipado do marcador, nunca receipt antigo.
+Manifesto privado admite FK composta e trigger de cópia de inserção tipados,
+sem SQL de setup. Falha nativa esperada exige rollback confirmado, categoria
+nativa exata e sementes intactas; não inferir qual constraint falhou pelo receipt.
+Linhas de trigger são efeitos indiretos, conferidos separadamente da contagem.
+CHECK privado tem intervalo inteiro int64; cascata é explícita, com chave
+composta e tenant preservado. UPDATE copia NEW e DELETE copia OLD em destinos
+distintos. Testar rollback após efeito indireto e falha em CHECK descendente;
+nenhum desses casos aceita SQL de setup enviado pelo consumidor.
+
+Console v2: cobrir roteiro sem fonte, treinamento privado opcional ao catálogo,
+erros locais nos editores SQL/cruzamento com foco após desbloqueio, descrição
+associada e edição preservada; referência genérica training não inventa campo interno.
+No editor externo, repetir para REST/MCP e contract; ausência do contrato na API
+retorna apenas referência pública, nunca conteúdo ou caminhos internos arbitrários.
+Cobrir também
+diagnóstico seguido de revogação, token de outra persona, conexão sem SQL,
+histórico isolado/paginado com horários iguais e metadados sem payload. Comparar
+preview com snapshots exatos e preservar casos/CAS. Diagrama precisa de lista
+equivalente; viewport reduzido não comprova zoom real de 200% ou leitor de tela.
+
+Resultados datados em `docs/persona-v2/validation.md` e `docs/operations/`.
+
+Bootstrap desktop compilado exige prova explícita de fontes e fixture privada
+nova. O controlador valida o envelope REST normalizado, sem confundir HTTP 200
+com sucesso RPC. Bootstrap/reinício não certificam ciclo instalado ou SCM.
+Procedimento: docs/persona-v2/homologation-chain.md.
+
+Cadastro direto de integração cobre mesmo Client reautenticado, autoridade
+vigente no commit, duplicata concorrente, UUID reaproveitado com outro conteúdo,
+auditoria atômica e ausência de ativação/publicação. Chromium perde a confirmação
+após commit real, confere a lista sem reenviar e verifica descarte dos segredos.
+Não copiar totais de testes para AGENTS/rules nem marcar gates por contagem.
+`contracts/persona-v2-release.json` continua bloqueando deploy até aceite integral.

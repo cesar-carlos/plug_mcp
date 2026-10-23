@@ -1,0 +1,39 @@
+{
+  "kind": "partial-local-development-inventory",
+  "date": "2026-10-16",
+  "mcpBase": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "node": "24.21.0",
+  "compiler": "7.0.2",
+  "fixture": {
+    "container": "se7e_vault_998f3c7be54d_test",
+    "image": "postgres:17-alpine",
+    "imageId": "sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24",
+    "postgres": "17.11",
+    "bind": "loopback",
+    "port": 63840,
+    "removed": true
+  },
+  "ready": false,
+  "files": {
+    "migrations/persona-v2/0030_vault_rotation.sql": "f36242fb3ec6e2ca84ce743d9aca4488b8d010855079da716200f272b566d6c9",
+    "migrations/persona-v2/0031_vault_rotation_integrity.sql": "481c6ff7d38bbf6d6afb84f2dba07f67fddde936c0a3b76bf4726ad3464febe9",
+    "src/domain/persona-v2/vault-rotation.ts": "6c9acbdd5c02177dec8a3660e336a4a41c8380ab8aeee973c8bfef3b12a23ccc",
+    "src/domain/ports/persona-vault-rotation.port.ts": "71909148959b6a707c67c7013b684b72f6fbd27e97087ad9fd3104bb5d5898c8",
+    "src/application/persona-v2/vault-rotation.ts": "df1f86427c9b8617e25cb33b0688ec3b91d4d112d32e5d6a41df70fed5f938fa",
+    "src/infrastructure/persistence/persona-v2/vault-rotation.ts": "c452169e4c923484988834864f3ef6694df999ccea40691ab097e5822e247843",
+    "src/infrastructure/persistence/persona-v2/vault-keyring.ts": "95075828bbd6e15fc79f45b83c167e169d2df76d4618c512ab83916941b40771",
+    "src/infrastructure/crypto/node-crypto.adapter.ts": "112cb87cec73e84d74342410612e1da83b10dd4d40d1f1935fd026eafc5845d1",
+    "src/composition/compose-persona-v2.ts": "2dbf6ead8078ac179f4d0b242ae2b5f0b4ac6addb63f3874e0d62822884121ca",
+    "src/worker-persona-v2.ts": "0ccba65113321eb4753615f81ec49cf2607c303bb3885cd82d287948d0137f7c",
+    "src/application/persona-v2/runtime-instructions.ts": "2b0846439cd4aa26a38ea647bec79b126278ded42041443062e4b84637ec2fdf",
+    "scripts/rotate-persona-vault.ts": "8c73596d5cd662a04834c5c47fd18b4d69ac7f7cf0ccc92657ce4f0b9c9ebc52",
+    "package.json": "9e38ade40e4f7da6757e009f0ccd68f106c1dd6c7ac8b1c40477037c901af2d3",
+    "tests/persona-v2/vault-rotation.postgres.test.ts": "2e62ecf69dcf78ca33c8b25087de87cf23549b48124e7384a9c2881a5b83f974",
+    "tests/persona-v2/postgres.test.ts": "5543f51f2296b38ecf623f2d73a4951a3409293b9fa9c04fcfe1c8c96d5c14a6",
+    "docs/persona-v2/vault-rotation.md": "0acfedb6712ad21c81d6cfe6772d9dd16349a84400c128fc8b3c2170cb846ff5",
+    "AGENTS.md": "9e48dc04d663f4df28fbe3fb41ea9cb1b98bbe43c717ef5873f58aaefb58a461",
+    ".cursor/rules/persona_v2.mdc": "648c93ebaaeb3292536cd3c0a13eb71bc03f9558bb5c249824f7398842b75a29",
+    ".env.example": "aae78dcb895724b52b54aa01958cb6c1af43a04f262c19694152db231712dbf4",
+    "contracts/persona-v2-release.json": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+  }
+}

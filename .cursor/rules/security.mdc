@@ -1,35 +1,127 @@
 ---
-description: "Cofre, operações de navegador, autorização vigente e isolamento"
-globs: ["src/**/*.ts"]
+description: "Segredos, autoridade vigente, isolamento e operações seguras"
+globs: ["src/**/*.ts", "web/src/**/*"]
 alwaysApply: false
 ---
 
 # Segurança
 
-Console `/app`: somente preferência de tema pode ser persistida no navegador. Tokens, SQL, previews, formulários e dados do acesso ficam em memória e são limpos ao sair/substituir sessão. Ignorar respostas em trânsito do contexto anterior. Confirmações nunca são fabricadas, compartilhadas entre operações ou repetidas automaticamente; preservar origem de 401 do hub. Erros de transporte/JSON não exibem HTML bruto. Setup mantém POST/CSRF e entrega única do Token MCP.
+Aplicar `AGENTS.md` e `persona_v2.mdc`. A refatoração não dispensa estes controles.
 
-Nunca exponha senha, client_token, JWT, Bearer ou códigos de operação em tools/logs/erros/telemetria. Tools de credenciais recebem objeto vazio estrito, retornam setupUrl/expiresAt; formulário recebe segredos.
+## Segredos e navegador
 
-GET /setup só mostra formulário. POST exige CSRF, Origin, finalidade, vínculo, identidade no hub e confirmação. Código aleatório >=256 bits, hash persistido, TTL 15 minutos e claim atômico único. no-store/frame-ancestors none; páginas de formulário same-origin preservam Origin do POST, demais respostas no-referrer. Rotação mantém Bearer anterior até conclusão e invalida sessões/handles/cache; falha de cache não perde o novo Bearer. 0029 invalida setups legados, preserva Bearers.
+- Senha/client_token/Bearer somente no fluxo autorizado do navegador, nunca em
+  chat, argumentos de tools, erros, logs ou auditoria. Credenciais persistidas
+  são cifradas, Bearer só hash e JWT do hub somente memória.
+- Console persiste apenas tema. Limpar credenciais após tentativa e tokens/dados/
+  previews ao sair/trocar contexto; ignorar respostas antigas.
+- Mutações exigem sessão, Host/Origin e CSRF. GET administrativo v2 sem Origin
+  exige Fetch Metadata same-origin e Host exato, mantendo sessão/CSRF.
+- Confirmação é específica de conteúdo/hash/prazo; não fabricar, compartilhar
+  entre operações ou repetir automaticamente.
+- Manutenção de persona/fonte exige responsável vigente e CAS; verificar nova
+  credencial pelo hub/agente fora da transação e repetir o portão antes de gravar.
+  Rotação descarta JWT/login em voo da credencial, sem devolver segredos ao console.
+- Validar Host, Origin e proxy explicitamente. Origin ausente em MCP nativo não
+  equivale a null/desconhecido. Não mostrar HTML bruto de erros.
 
-Cofre AES-256-GCM v2 com key ID/AAD, leitura v1 e keyring para rotação. Bearer somente hash SHA-256 por acesso, JWTs do hub somente memória. Authorization Server opcional e delimitado para ChatGPT; sem JWT próprio, sessão persistente de login ou Client de serviço. Cookie temporário somente da transação OAuth.
+## Autoridade e dados
 
-Toda entrega revalida JWT Client, ClientAgentAccess e policy do client_token. Cache hit, exportação e consulta em andamento não entregam dados com autorização antiga/autoridade indisponível. Recorte/token/publicação/sensibilidade alterados bloqueiam. Preserve source, sem retry cego.
+- Cache v2 guarda somente resultados cifrados por até sessenta segundos, em
+  namespace próprio. Chave HMAC inclui consumidor/concessão, fonte/credencial,
+  policy, recortes, publicações, limites e consulta. Cada hit/seguidor revalida
+  hub e autoridade local, inclusive revisão física/pending. Sem dados ou SQL em
+  chaves/logs, sem fallback estrutural, takeover ou retry. Contrato: `docs/persona-v2/query-cache.md`.
 
-SQL somente leitura em toda AST, limites antes do parser e funções seguras explícitas; UDFs/desconhecidas/efeitos colaterais recusados. Recortes físicos dominam AND/OR/UNION/CTE/subqueries; presença de parâmetro não prova isolamento. JOIN composto exige todas as igualdades garantidas. Origem/grão/cardinalidade devem demonstrar ausência de fanout; não corrigir com SUM(DISTINCT valor).
+- Revalidar publicação/concessões e JWT Client/ClientAgentAccess/policy antes do
+  envio e da entrega. Autoridade indisponível bloqueia; Redis/cache não autorizam.
+- Preservar fonte, credencial, recortes e identidade exata. Banco vem da policy.
+  Prova incompatível suspende vínculos/dependências, sem rebinding. SQL Anywhere
+  admite apenas UUID provisionado pelo DBA (DV2-007), com SELECT mínimo no marcador;
+  não expor a tabela técnica a skills nem criá-la/alterá-la pelo runtime.
+  Exigir expectedSource/sourceIdentity v1 na conexão executora: antes/depois
+  do SELECT e antes da transação DML. Sem reconexão, retry ou fallback legado.
+  Limitações: `docs/persona-v2/source-identity.md`.
+- Rascunho não modifica snapshot. Ampliação exige publicação/concessões;
+  restrição, revogação ou deriva incompatível suspende publicações afetadas.
+- SELECT valida AST inteira, funções seguras, limites antes do parser, JOIN
+  composto e fanout. Recortes dominam cada ocorrência/ramo. Parâmetro presente
+  não prova isolamento; SUM(DISTINCT valor) não corrige fanout.
+- V2 exige finalidades explícitas e justificativa para pessoal/sensível, fixadas
+  na publicação e concedidas por campo/uso no token/consentimento. Concessão
+  incompleta bloqueia a publicação inteira. Segredo/inferido nunca executam.
+  Livre sem uses preserva consulta existente, sem exportação. JSON exige exportacao
+  explícita, contrato publicado e capability nova concedida. Handle cifrado e
+  opaco fica vinculado à persona/token/versões/concessão; nenhuma URL é pública.
+  Corpo operacional cifrado fica no PostgreSQL v2, separado da auditoria e cache;
+  somente hashes de handle/vínculo/origem são persistidos. Instâncias compatíveis
+  recuperam dentro do prazo original; outra origem ou concessão não acessa.
+  Recuperação não reserva autoridade, renova prazo ou reenvia SQL. Worker limpa
+  expirados; rotação autenticada preserva vínculo e metadados imutáveis.
+  Download revalida autoridade local/remota, revisão física e estrutura relevante;
+  sem cookies administrativos, cache ou conteúdo em auditoria. Binários exigem
+  contrato/capability separados, projeção física direta, tipo ODBC/nativo positivo,
+  base64 canônico e exatamente um registro completo. Ausência/conflito de metadata
+  não autoriza inferência. MIME vem da assinatura/contrato, nome do servidor;
+  bytes somente por download/resource autorizado, sem render/conversão/execução.
+  Contrato: `docs/persona-v2/attachments.md`.
+  Alias/derivada/cruzamento não ampliam uso; linhagem insuficiente recusa.
+  DML continua livre, com validador separado. Firebird não é suportado na v2.
+- Auditoria só IDs, origem, contagens, cache, paginação, truncamento, estágio e
+  duração; nunca SQL, perguntas, parâmetros, resultados ou segredos.
+- Preservar origem da falha; não corrigir transporte reescrevendo SQL.
 
-Inspeção expande STAR para projeção classificada livre e omite pessoal/segredo/inferido. Metadados descobrem colunas sem valores; treino/perfil/dicionário também respeitam classificação. Binário de inspeção é stub sem handle. Handle de consulta vincula usuário/acesso, hashes de token, origem física e publicações exatas; exportação revalida antes/depois da conversão. TTL, cap de quantidade e ANEXO_MAX_BYTES_PER_ACCESS/PROCESS limitam memória.
+## Operações v2
 
-Cache mcp:query:acesso:{acessoId}: inclui usuário/token/policy e pares ordenados skill/publicação/hash, SQL/params canônicos. Não cachear erro/anexo. Redis renova/libera lease só pelo proprietário via Lua; timeout de concorrente não dispara SQL com lease vigente. Redis indisponível desativa otimização, não autorização.
+Notificações v2 são opt-in do responsável autenticado, no navegador, com segredo
+próprio cifrado e eventos explícitos. Transporte HTTPS público fixa IP após DNS,
+assina ID/timestamp/corpo por HMAC e não segue redirect. Outbox conserva ID e
+orçamento após queda; deduplicação cabe ao receptor. Só metadados privados da
+persona, sem resultados/SQL ou exportação de catálogo. Não repete operações.
+Contrato: `docs/persona-v2/outbox.md`.
 
-Auditoria allowlist de IDs/origem/contagens/cache/paginação/truncamento/estágio/duração, nunca conteúdo. Timings amostrados. Webhook HTTPS público sem query/user-info, DNS revalidado por entrega, HMAC/outbox/lease; somente IDs/agregados e segredos cifrados.
+Leases de manutenção e vencimentos de revisão usam relógio PostgreSQL; duração
+é limitada, sem tomada antecipada por relógio de aplicação. Parada aguarda o
+job atual e impede próximos jobs/claims. Queda do cliente não garante cancelamento
+imediato da transação/POST; retomada preserva fencing e orçamento.
 
-Sessão legada imutável por usuário/acesso; contexto moderno por requisição. Origin ausente para nativos, null/desconhecido recusado, Host validado e TRUST_PROXY explícito. Notificações/assinaturas só do acesso dono. Persona não licencia SQL.
+Preparação cifrada/imutável, aprovação por conteúdo/hash/prazo, claim CAS e journal
+durável. Preservar identidade, concorrência, valores, recortes e outputs.
+Timeout nativo não autoriza rollback concorrente; incerteza nunca é reenviada.
+Conciliação não fabrica resultado técnico. Persistir receipt antes de bloquear
+entrega por revogação. Helpers e prova da base entram no hash e no teto.
+Contrato: `docs/persona-v2/sql-operations.md`.
 
-Curadoria: AST compartilhado para captura/aprovação/exportação, constantes aprovadas vinculadas fisicamente e classificadas livres; parâmetros/recortes concretos, PII e segredos não persistem. Confirmação ligada ao acesso/revisão/publicações com CAS em transação. Feedback guarda correção segura fora da auditoria. Importação não ativa publicação; relatórios só runner confiável.
+## Proteções da entrada legada
 
-## Delegação ChatGPT opcional
-
-OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
-
-CIMD fixa IP/família com lookup compatível all/scalar, nova conexão sem pooling, SNI/hostname e TLS validados. Formulários usam same-origin para manter Origin exato; redirects no-referrer, sem Referer externo. CSP permite callback previamente validado. securitySchemes deve existir no JSON principal de tools/list e _meta; desafios de tools incluem error/descrição fixa. Transações autorizadas substituem inspeção de SQL no pool.
+- Setup: tools recebem objeto vazio; GET mostra formulário; POST reautentica e
+  consome código de 256 bits/hash/15 minutos uma vez. Rotação invalida Bearer
+  anterior somente na conclusão. Cofre AES-GCM v2 com key ID/AAD e rotação:
+  `docs/auth/vault-and-mcp-token.md`.
+- Consulta recusa segredo e projeção pessoal, salvo COUNT permitido. Inspeção
+  omite pessoal/segredo/inferido; sensíveis permitidos são mascarados. Binário
+  de inspeção nunca emite handle. Exportação vincula origem física, acesso/token
+  e publicações, com quotas e revalidação antes/depois da conversão.
+- Cache/singleflight isolam usuário/acesso/token/policy/publicações, sem erro/anexo.
+  Lease Redis só é renovada/liberada pelo proprietário; timeout de espera não
+  dispara SQL com lease vigente.
+- Curadoria usa preview/hash/CAS. Candidata não licencia reuso; importação não
+  ativa publicação; relatórios só por runner confiável.
+- OAuth delega acesso existente, limitado ao token originador. PostgreSQL autoriza
+  gravações na mesma transação; locks ordenados e rede fora dela. CIMD exige
+  TLS/DNS nativos/IP fixado, sem redirect. `docs/auth/chatgpt-oauth.md`.
+  OAuth v2 usa stores próprios, `se7e:persona`, seleção explícita e invalidação
+  conservadora de derivados após mudança do originador. Revalidar deadline do
+  access dentro das transações. Revogação atual não atinge outras conexões.
+  Setups v2 de fonte exigem gerenciar_fontes, consentimento quando OAuth,
+  delegação opaca Client/persona/origem e reautenticação humana. Código/CSRF
+  por hash, contexto cifrado, até 15 minutos e consumo na transação da credencial
+  e auditoria. GET não consome. Prova remota fora da transação, novamente antes
+  da escrita; revalidar prazos/versões locais nela. Não prometer atomicidade
+  distribuída. Demais permissões/setups: docs/persona-v2/oauth.md.
+- Webhook exige HTTPS público sem query/user-info, DNS revalidado/IP fixado por
+  entrega, HMAC/outbox/lease e somente metadados: `docs/operations/worker.md`.
+- Limites v2 são intersectados por skill/token/concessão/OAuth e requisição.
+  Delegação não amplia tetos; redução integra a revalidação. Bytes são limitados
+  após materialização no MCP, não no driver. Orçamento DML integra fingerprint.
+  Contrato: `docs/persona-v2/source-queries.md#limites-redutíveis`.

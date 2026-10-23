@@ -1,0 +1,42 @@
+[
+  {
+    "path": "tests/helpers/persona-chain-container.ts",
+    "sha256": "e468472dc6254b9931715a22899191b2d95e2ca2d33c0de153c13096f1056662"
+  },
+  {
+    "path": "tests/homologation/persona-chain.test.ts",
+    "sha256": "a52495230af16839722cfb7135f81f54fcf8debd123597830367bd024791fded"
+  },
+  {
+    "path": "scripts/run-persona-chain-homologation.ps1",
+    "sha256": "d8bc796cd66ffe1dc4a8f67602cb0db0b8729cf165d01fe8dd527308fa4bf57a"
+  },
+  {
+    "path": "scripts/remove-persona-chain-fixture.ps1",
+    "sha256": "0066b312f360dbfc83a2f4b99f74594350f6a90d145fe40637d419e821e09006"
+  },
+  {
+    "path": "docs/persona-v2/candidate-distribution.md",
+    "sha256": "f1f2c4ade2651ef3f3637f9affac0f43d9ad98cdcfc43ca636ff6961003062ee"
+  },
+  {
+    "path": "docs/persona-v2/homologation-chain.md",
+    "sha256": "143a47ba4313912b33095ad8f575761482c51bb0e7796c4ddf5a4fb8bf9f9261"
+  },
+  {
+    "path": "docs/persona-v2/remaining-plan.md",
+    "sha256": "60bde2d2021b4c7bb498354e83d608062fd39baca8f58f99fc6793d7fb1329a4"
+  },
+  {
+    "path": "docs/persona-v2/acceptance.md",
+    "sha256": "3202ccf797851b63ad65c61be5108bc25b716679e553cc8a368d14bff4ca493c"
+  },
+  {
+    "path": ".cursor/rules/testing.mdc",
+    "sha256": "89de4afeb648bbc60302397b9d8561ee9a348a0afd4ab06c113b0010af5eda3d"
+  },
+  {
+    "path": "CHANGELOG.md",
+    "sha256": "7b3fadb7a9348b024c8c59f0d653bb5ea150a983157448b55791dba1dc40d6dd"
+  }
+]

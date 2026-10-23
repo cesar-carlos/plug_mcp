@@ -1,36 +1,39 @@
 ---
-description: "Manter CHANGELOG.md, docs/ e rules alinhados a cada mudança de comportamento"
+description: "Documentar mudanças no contrato do runtime afetado"
 alwaysApply: true
 ---
 
 # Changelog e documentação
 
-Toda mudança de **comportamento**, contrato ou operação entra no changelog **e** na docs correspondente **na mesma tarefa**. Não deixe isso para “depois”.
+Mudança de comportamento, contrato ou operação atualiza documentação, rules
+aplicáveis e testes na mesma tarefa. Identifique primeiro o runtime afetado;
+a precedência e o índice estão em [AGENTS.md](../../AGENTS.md).
+
+## Destino da alteração
+
+| Área                         | Persona-v2                                                       | Manutenção legada                                                  |
+| ---------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Modelo, identidade e console | docs/persona-v2/{README,onboarding,source-identity}.md           | docs/{data/data-model,clients/console,auth/vault-and-mcp-token}.md |
+| Catálogo e treinamento       | docs/persona-v2/catalog.md                                       | docs/product/training.md                                           |
+| Tools, consulta e guias      | docs/persona-v2/{catalog,source-queries}.md e persona-v2-http.ts | docs/mcp/{tools,error-mapping}.md e server-instructions.ts         |
+| Cruzamentos e operações      | docs/persona-v2/{federation,sql-operations}.md                   | Não anunciar como capacidade legada                                |
+| Hub, auth e transporte       | docs/plug-server/ e contratos v2 específicos                     | docs/plug-server/ e docs/auth/chatgpt-oauth.md                     |
+| Setup, env e scripts         | README.md, .env.example e documento do subsistema                | Mesmas referências                                                 |
+
+Use os arquivos existentes e mantenha o índice em docs/README.md. Contratos ativos,
+pendências e evidências datadas devem ser distinguíveis. Evite copiar contagens,
+versões de snapshot e detalhes de ambiente em vários guias.
+
+Estado resume capacidades; remaining-plan mantém lacunas; acceptance define
+critérios; validation indexa cada relatório uma vez. Não copiar cronologias entre
+esses documentos. Preservar evidências originais e identificar material histórico,
+inclusive Firebird fora do suporte v2. Documentação legada não é obsoleta enquanto
+o runtime principal depender dela.
 
 ## CHANGELOG.md
 
-- Formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) + SemVer.
-- Escreva em **Unreleased** (Added / Changed / Deprecated / Removed / Fixed / Security).
-- Não invente número de versão nem data de release. Só promova Unreleased → `[x.y.z]` quando o usuário pedir o release.
-- Uma ou duas frases no **porquê/impacto**, em português. Sem dump de diff.
-- **Não** registre: lint, Prettier, rename interno sem efeito, ajuste de teste que não muda contrato, revisão só de rules sem mudança de produto.
-
-## docs/ e rules
-
-Atualize o arquivo que o usuário/IA vai ler, não um doc extra:
-
-| Mudou | Atualize |
-| ----- | -------- |
-| Tool, auth MCP, bootstrap | `docs/mcp/tools.md`, `docs/auth/vault-and-mcp-token.md`, rules `mcp_protocol` / `express_api` |
-| Erro / hint | `docs/mcp/error-mapping.md`, rule `domain_layer` se o código for novo |
-| Hub REST / RPC / papéis | `docs/plug-server/{communication,auth,rest-integration}.md`, rule `plug_server_client` |
-| Modelo / skill / grafo / pacote | `docs/data/data-model.md`, `docs/product/objective.md`, rules `catalog` / `architecture` |
-| Objetivo de consulta / pre-treino | `docs/product/objective.md` + `product_objective` + `src/infrastructure/mcp/server-instructions.ts` + `tests/unit/pre-treino-sessao.test.ts` + `AGENTS.md` |
-| Cache, tetos, paginação | rules `performance` / `security` / `testing` |
-| Setup, env, scripts | `README.md`, `.env.example`, rule `project_stack` |
-
-Novo tipo de doc só se o usuário pedir. Índice: `docs/README.md`.
-
-## Fechar a tarefa
-
-Não conclua se Unreleased, a tabela acima ou as rules desta pasta ficaram desatualizados em mudança de produto. Typo/format-only: pule o changelog.
+- Use Unreleased (Added / Changed / Deprecated / Removed / Fixed / Security),
+  com motivo e impacto em português.
+- Não invente versão/data nem promova release sem solicitação.
+- Revisão apenas de documentação/rules, formatação ou refatoração sem efeito
+  observável não exige changelog.

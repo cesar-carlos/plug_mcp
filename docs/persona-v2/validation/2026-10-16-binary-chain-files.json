@@ -1,0 +1,309 @@
+{
+  "scope": "persona-v2-binary-chain",
+  "generatedAt": "2026-10-16T20:15:25.1399572Z",
+  "partial": true,
+  "productionReady": false,
+  "revisions": {
+    "plug_agente": "7d00ae8a8f822605d76e775fb5659f27e29df539",
+    "plug_mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "plug_server": "76950497dc386130e13b7d6afc0678e50208e985"
+  },
+  "fixture": "se7e_persona_d15c802ffcd7_test",
+  "files": [
+    {
+      "project": "plug_mcp",
+      "path": "AGENTS.md",
+      "sha256": "1610c8e4292ec431666b0b083374a95bb426dee1fc4d12aaa6cdd27e6977c0bc"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "CHANGELOG.md",
+      "sha256": "18451f1b3d6c96a975c209fd2a7de6e1866ec77b9f362ba17a95e88815b6a458"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/testing.mdc",
+      "sha256": "8c8d15dc92244cefbd8e207cbf5e18d0ee0f053ede4c28726f4dff63db3f42f2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/plug_server_client.mdc",
+      "sha256": "88bec316bbaa005cfdeaeb2f6ee0c6ad277b88e938b897dc266f63d381cc1ddc"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/performance.mdc",
+      "sha256": "2da45667c02e783bf920bd75e4ac6d7eb85c7ad8fb035c5b353df1ef30398214"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "a8e8bc82a9b6d995c8637bf47bc35e17d44c5b21aba60889be25654ac60f4e60"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/hub-persona-v2.snapshot.patch",
+      "sha256": "7f1b746a782b5023aed562cb40edbf72dbe39a15498fcba2e36a949604aa1948"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/plug-server-gateway.port.ts",
+      "sha256": "2cc7da6ca9022c77a1be67d602ff9bf9ca4810171f2f37ad9050858942fcc05d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/attachments.ts",
+      "sha256": "fd177345f448bc511cf7f4d6cbca61ff7c04233aba3960f954c5c4e727c0260c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/source-query.ts",
+      "sha256": "ab86ee144c675cdeb4a54efe4aeb94101fd3ae7374ea616951962bc8a236df6a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/binary-attachment.ts",
+      "sha256": "9f75a6939fefb5bde61b84d442670fad6cbbae48e59ac47c3a120c381d8b71cc"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/attachments.ts",
+      "sha256": "29b6107e21b77ee41d868e90f58197fbb5dda341036c643eae32962aa8054e2f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/consumer-catalog.ts",
+      "sha256": "f114edc8f2992109639d709086cacf31f06ecfb8b2014f8d02dd5ce6c2387525"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/query-training.ts",
+      "sha256": "56c71dde8acbd04f8c73920d8ca5253a79ebe6150c48db766e3ff6b1eac51400"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/training-base.ts",
+      "sha256": "a90461452a202fbb3cfd272fb355da0cfc1b75616e56163b3eb459f235960351"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "d05035632b026cf8db0886924268eab5012d15c52c71d3fb5a298c7032d8e539"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/plug-server/plug-server-rest.adapter.ts",
+      "sha256": "e6295a3df4664225fcf1148358bc3d01ef99adafc6f9a5b9f3696b6ee44025f8"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/plug-server/persona-source-query.ts",
+      "sha256": "0684b8871a8e1b12f0c82c63f831ed12588145c964a313deec8de9325b7c2ab0"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persona-v2/query-reuse.ts",
+      "sha256": "3a64f55bd650ca3680810b5be384828b18a78cb896e0a34a5c82c7ab135d0b26"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-attachments.ts",
+      "sha256": "042c1cfb56db012f66194afdce22f7802995c87da95c202791da4b28c039e8b1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/mcp/persona-v2-http.ts",
+      "sha256": "7e8f39a64d80f1e82bcf2682b1392d55a8d9450d2e933b4e792df613e50bf139"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "scripts/new-persona-chain-fixture.ps1",
+      "sha256": "a9899cd780b0ad9a74449003de50bf3f66d9203dc42eb9e37054e503350e3c3d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "scripts/run-persona-chain-homologation.ps1",
+      "sha256": "b5d1805771ee5264662906921e089053483125c8b9705d269a0779e0084c9c3c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "scripts/remove-persona-chain-fixture.ps1",
+      "sha256": "218cba399b850e51f22029980ca7a972e10a0fbc8175f4f55bfeaf1f10b1d0e6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "scripts/homologation/chain-manifest.ts",
+      "sha256": "6b1789eb4b825c944170ef03b7c730934742b1f89ceed9b88b553553a0b6a7a9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "scripts/homologation/fixture-environment.ts",
+      "sha256": "3c59076d5f59bd04db33ad52197dbb4da80c440095947e6a4f7ead1a3cd01fed"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/helpers/persona-chain-attachments.ts",
+      "sha256": "8f90dd56ebdf59747d8e67fd1ffcb49e68f7277b75cf5b7cb72733fe4e0e78a5"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/homologation/persona-chain.test.ts",
+      "sha256": "866a34a34e3dcec1396541ce341a9cd262404cbcbbbfe50d4fd43bf5031f0799"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/attachments.test.ts",
+      "sha256": "d7cbead9bf3e98b9a9c9b6a2593c01f6ac432dd698b738981dab97fceb30f780"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/plug-server-rest.adapter.test.ts",
+      "sha256": "9fdf5a5dd7da50f6a24de97e7fd35c7a54df0d3537df5440c4471b81b016de93"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/source-query.postgres.test.ts",
+      "sha256": "1d784bac7694be5e06336fe7d7bd7c6ce1abddab33c23b7377691705a4b8115c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/postgres.test.ts",
+      "sha256": "9cd5bfbe5ba39df03e378c654fd363910e56821d422c10d1ce50352d811f02cb"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/helpers/persona-v2-browser-server.ts",
+      "sha256": "144b5f10c1659229a8c5675340c786113cc9267c83d6abda2da3709f96f14b8d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "6a399432f9fbb582f364e87ca1b8b8efc909e4874054d244eee09bb214e95dfe"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "402da79752b72796ff1c7c92bbb3a462d83ec38c9219bc5a13d6b9121e26df08"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/BinaryAttachmentEditor.vue",
+      "sha256": "f82e54f3c8dd210165184801ec9b0c47f836d78d277db9bdb8d10bef901a0a15"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "plugins/se7e-persona-v2/skills/se7e-consulta/SKILL.md",
+      "sha256": "0657350ce8780dde51f586ed234ed0aa0494fbe2a6af213d77171b5cf650c50f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/README.md",
+      "sha256": "958f9d9bbfaab438c42cdd85af0f61c0723d675e88ac98cd6aa8bc3289cbecfb"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/attachments.md",
+      "sha256": "a3b0d0657a6638c172c5fd441177f633c0009632db96508e66531998075aab93"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/query-cache.md",
+      "sha256": "0c5281a15788c7255036a43a0c629b321ad4c392892b1bc99713446580b9d1ac"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "c6a6b5ca27de6375b1a54f8b862bad50357f96cb63ea40ef61227061c084449b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/homologation-chain.md",
+      "sha256": "3a3b10140b29500fbc95c0181218ba34dadb9a92f52a3e432de08a3317739362"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "a7ff9751e4f6c640d31e3311c8035a5db7955dfc9fc188f75141957a7e460209"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation.md",
+      "sha256": "e897d8f3db3a56651f8a0264ceeae5dc6c1e36aed829a14def3cbab9a36ced0a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-16-binary-chain.md",
+      "sha256": "00848a2a191b2cd1dc6b3d43f01b3839bb079c48b484fc0d274678f5b5687d9b"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/infrastructure/external_services/odbc_gateway_query_result_mapper.dart",
+      "sha256": "2959782864fdc7a864a1763e56643dd6f0e9b5c97bd06109bc0d149a6c830efe"
+    },
+    {
+      "project": "plug_agente",
+      "path": "test/infrastructure/external_services/odbc_gateway_query_result_mapper_test.dart",
+      "sha256": "bacefbd3a471291ffb73b331b3d4b75c300df5bd7e8a3aded1555589b8be3ab2"
+    },
+    {
+      "project": "plug_agente",
+      "path": "tool/homologation/persona_chain_binary_fixture.dart",
+      "sha256": "40ece03f105ecb21f10b4c92d4625bcd16affb0c4391b251db949f7cb8452197"
+    },
+    {
+      "project": "plug_agente",
+      "path": "tool/homologation/persona_chain_agent_test.dart",
+      "sha256": "07467418ac56007a9eef4e4dd27c602e46a9235760ff9989da9ee8a133ce2971"
+    },
+    {
+      "project": "plug_agente",
+      "path": "tool/homologation/persona_chain_storage.dart",
+      "sha256": "b828a8e3bee80e79f3fcec3659a9f3ceb0b67bfbc8c21601914f39e0269160a2"
+    },
+    {
+      "project": "plug_agente",
+      "path": "tool/homologation/persona_chain_observer.dart",
+      "sha256": "4ba76f3a246490166022eeb280797d54d1fd0d227d2a520219017ca93d41590d"
+    },
+    {
+      "project": "plug_agente",
+      "path": "docs/communication/sql_operations.md",
+      "sha256": "439c6fb05cdba52539fa8eece389752cdcc81552cba97b48377dbeb7491f708f"
+    },
+    {
+      "project": "plug_agente",
+      "path": "docs/communication/schemas/rpc.result.sql-execute.schema.json",
+      "sha256": "a9823bf36b38531f63eb3da6e176f2e5952e39962cc5fb99c59ac98429d306bc"
+    },
+    {
+      "project": "plug_agente",
+      "path": ".cursor/rules/project_specifics.mdc",
+      "sha256": "e523de2cd28e98daff89dd433b1412f466a71e6efd0f9ce3582d3db39591df70"
+    },
+    {
+      "project": "plug_agente",
+      "path": "CHANGELOG.md",
+      "sha256": "ef704964bc7c0c63234bba2a386851ac48464774060a9d25c84acf84dae35722"
+    },
+    {
+      "project": "plug_agente",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "project": "odbc_fast",
+      "path": "lib/domain/entities/column_metadata.dart",
+      "sha256": "76ec5bb171f514d69960323a8e040f4f994a6e3f0aba6fe0f04dd4f1917b08d2"
+    },
+    {
+      "project": "odbc_fast",
+      "path": "lib/infrastructure/native/protocol/odbc_type.dart",
+      "sha256": "f557d1b261e8a24b748534c588b948a0005c6e6e8971252c04b564751f27938b"
+    }
+  ]
+}

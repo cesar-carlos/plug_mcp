@@ -1,0 +1,195 @@
+{
+  "scope": "persona-v2-integration-management",
+  "partial": true,
+  "productionReady": false,
+  "generatedAt": "2026-10-19T12:17:06.2779996Z",
+  "revisions": {
+    "plug_mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "plug_server": "76950497dc386130e13b7d6afc0678e50208e985",
+    "plug_agente": "993a69651fd94cb3019f5303697e28daebd6ef6f"
+  },
+  "environment": {
+    "node": "24.21.0",
+    "typescript": "7.0.2",
+    "postgres": "17.11",
+    "chromium": "153.0.8010.12",
+    "hub": "synthetic",
+    "fixture": "se7e-integration-management-d6ce9a487086",
+    "https": "manual",
+    "chatgpt": "manual",
+    "agent": "observed-only-not-exercised"
+  },
+  "runs": [
+    {
+      "suite": "browser-complete",
+      "passed": 42,
+      "skipped": 0,
+      "duration": "4.2m"
+    },
+    {
+      "suite": "browser-directed-management",
+      "passed": 2,
+      "skipped": 0,
+      "duration": "7.7s"
+    },
+    {
+      "suite": "postgres-administration-migrations-vault",
+      "passed": 87,
+      "skipped": 0,
+      "duration": "108.87s"
+    },
+    {
+      "suite": "postgres-migrations-final-with-upgrade-proof",
+      "passed": 20,
+      "skipped": 0,
+      "duration": "10.97s",
+      "note": "Includes overlapping migration tests from prior suite; not additional unique tests"
+    },
+    {
+      "suite": "frontend",
+      "passed": 63,
+      "skipped": 0,
+      "duration": "1.96s"
+    },
+    {
+      "suite": "general-native",
+      "passed": 1486,
+      "skipped": 91,
+      "duration": "107.83s"
+    }
+  ],
+  "cleanupConfirmed": true,
+  "cleanup": {
+    "databasesInOwnedFixture": 10,
+    "anonymousVolumesRemoved": 1,
+    "temporarySecretsRemoved": true,
+    "emptyProviderFixtureDirectoriesRemoved": 3,
+    "consoleListeners": 0
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "3f2708df81e127342ab4e7854c42e2480bb8b069583dbc7b3c4813d3e809d63f"
+    },
+    {
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "a11565e93391e97debc4311219953e0eba93b454061f9e5ef3f61fb4dfc9f3d3"
+    },
+    {
+      "path": ".cursor/rules/testing.mdc",
+      "sha256": "ff2e6b7f32581b33aedfb938bded0948b9b92dbc970c9855693c79b1557581cc"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "d34e505af8d0378a79afe71432aff3a6b30283f6f6f29c56bc6126c40d2c2ea7"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "path": "migrations/persona-v2/0040_integration_lifecycle.sql",
+      "sha256": "6d45c5251edd4650a8f2218450c60a28fe61d1687f72d85fc6c6149488d31f83"
+    },
+    {
+      "path": "src/domain/persona-v2/integration-management.ts",
+      "sha256": "d80fae424f106bcaec20271297b43b9aee411995c917e58a35cec51a34524124"
+    },
+    {
+      "path": "src/domain/ports/persona-external.port.ts",
+      "sha256": "898bf81e900d635da88a187dc579db59abd609d465b17759561d60207a781ccf"
+    },
+    {
+      "path": "src/application/persona-v2/integration-management.ts",
+      "sha256": "894a3c89b2cbeee3fcc3686269ee4c1c6618fb24e95037d113bcfe48d15ad899"
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "c83d6095f6e0abef6b01260a97754807ac67afd44e810c1716acac04da1d5bbb"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/external.ts",
+      "sha256": "c17be2a3c20574fd879f35bf17331987e34b47d6433d7718fc991ec1e7eabcde"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/security.ts",
+      "sha256": "05e51f2b9d0f2b890e0bc2e811532eeabf4a0a5b67c87febe87659d3837fa6af"
+    },
+    {
+      "path": "src/composition/compose-persona-v2.ts",
+      "sha256": "cee9977e9070f3c83e21bdf97bf8175b5a1d3df48e79cb0671c47f152657f2f9"
+    },
+    {
+      "path": "src/infrastructure/http/persona-v2-admin.ts",
+      "sha256": "0fcd4a183c379e95133d1f524a3c7d1de274f238f834fa4189c7cad369528b0a"
+    },
+    {
+      "path": "web/src/persona-v2/IntegrationManagementPanel.vue",
+      "sha256": "bce0fdb49684993a840a02bee45ed5ad5605ad67494c0d95f11f341ecf50d30c"
+    },
+    {
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "579b11f0d2d0ab41c772b3cf7040da1830c1c7c5bfcc6cab7d134ad68bd142da"
+    },
+    {
+      "path": "tests/persona-v2/setup-delegation.postgres.test.ts",
+      "sha256": "54d94a2e7fd5e4c38cacacf9ab9038a44e1988c85209e0b87d4d35b94bc6797d"
+    },
+    {
+      "path": "tests/persona-v2/postgres.test.ts",
+      "sha256": "4cbe226b31ce8f4a575fd28f21cc3a9fb8ba9a5d54674326dae1ef7c9e7e6d45"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "0cb9b739556d06a0f0ab73b5716019709ce9ba07ee00215cc8f9fe4d94eabab1"
+    },
+    {
+      "path": "docs/persona-v2/README.md",
+      "sha256": "a55bbfc563cf83abc96a501b95a0fee17ba4eebd6183e9e1a7eec613661353fd"
+    },
+    {
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "d9588c3e6fe90129fefd2649677e7cac3ad823893533a5a5bb49557fc3fe2f60"
+    },
+    {
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "8262dc9cb3620fc61d3b918e3438f168686ebfdba0ea070ff9f0be3a637a1b57"
+    },
+    {
+      "path": "docs/persona-v2/console.md",
+      "sha256": "9592b94a8f577f2a76a119489281cd72103a6220dc78be4baf039010f17efbab"
+    },
+    {
+      "path": "docs/persona-v2/external-integrations.md",
+      "sha256": "fa700faf569c87c3dc101be88e99c96cc2b872eeef9188d6e7e194b6bbdc8a60"
+    },
+    {
+      "path": "docs/persona-v2/validation/2026-10-19-integration-management.md",
+      "sha256": "8c8eb5c03954290092a7c9a9cba2e54ac0789e8379b084f6a4ef2a7b1c3bff96"
+    },
+    {
+      "path": "web/dist/persona-v2.html",
+      "sha256": "8d648be86baab4e223983254edf33a423e4c7bbb6eda0ff23379d4bc06e87b20"
+    },
+    {
+      "path": "web/dist/assets/ExternalSkillEditor-Db0eKGAa.js",
+      "sha256": "bd381d2ae1fdb0190f1cfdce6db7e4b974b91770bda82454e3779b581253066c"
+    },
+    {
+      "path": "web/dist/assets/FederationSkillEditor-BA15iyBD.js",
+      "sha256": "8ce1fbf2326b015037ef0eda6ac45301cc35b7d59652b88c85d775a4a3ec1877"
+    },
+    {
+      "path": "web/dist/assets/persona-09G526lh.js",
+      "sha256": "a41ee2b90ac2cb70b48eed8abbe3d7988bc428999cb25bb4bf2d9c58e71acdf1"
+    },
+    {
+      "path": "web/dist/assets/persona-BlK0PRLn.css",
+      "sha256": "7ffd218762c2073237c97ee04a1443acc1dad4d8e007e254dfb1500802e07cda"
+    },
+    {
+      "path": "web/dist/assets/preload-helper-DSyqeqVq.js",
+      "sha256": "34bb4f8813937e2450c2ca62dc02eb06d0f3b4b99a7f401b2c483e53648b1554"
+    }
+  ]
+}

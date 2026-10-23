@@ -1,0 +1,9 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "fa811ea106651b69c3d469eaac4ed3a9b1482e48b612173183f256f5600c1603"
+    }
+  ]
+}

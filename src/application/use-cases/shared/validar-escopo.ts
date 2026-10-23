@@ -448,14 +448,22 @@ export const validarSqlNoEscopo = (
   escopo: EscopoSkill,
   options?: { page?: number; pageSize?: number; modo?: ModoValidacaoEscopo },
 ): SqlAstSelect => {
+  return validarAstNoEscopo(parseSelect(sql, dialeto), escopo, options);
+};
+
+/** Common physical authority checks, independent of the dialect parser. */
+export const validarAstNoEscopo = (
+  ast: SqlAstSelect,
+  escopo: EscopoSkill,
+  options?: { page?: number; pageSize?: number; modo?: ModoValidacaoEscopo },
+): SqlAstSelect => {
   const modo = options?.modo ?? "consulta";
-  const ast = parseSelect(sql, dialeto);
   const cteNomes = new Set(ast.cteNomes.map(lower));
   validarSelect(ast, escopo, cteNomes, modo === "inspecao");
   if (modo !== "inspecao") {
     assertRecorte(ast);
   }
-  exigirPaginacaoEstavel(sql, ast, options);
+  exigirPaginacaoEstavel(ast.sql, ast, options);
   return ast;
 };
 

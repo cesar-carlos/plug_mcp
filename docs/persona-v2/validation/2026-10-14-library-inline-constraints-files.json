@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-14",
+  "scope": "Focused editorial DDL implementation and library regressions; not full candidate acceptance",
+  "head": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "dirty": true,
+  "release": {
+    "ready": false,
+    "required": 14,
+    "completed": 0
+  },
+  "node": "24.21.0",
+  "tests": {
+    "unitV2": 354,
+    "unitLibrary": 41,
+    "postgresKnowledge": 19,
+    "chromiumSelected": 1
+  },
+  "fixture": {
+    "container": "se7e_library_0d161e6fd4904771b67bfc4e67008b18_test",
+    "removed": true,
+    "volumeRemoved": true
+  },
+  "files": [
+    {
+      "path": "src/application/persona-v2/structural-ddl.ts",
+      "sha256": "cf17ec9a7e9dcc5b16337ecaf36ec9d11b86c99e3d39ee184b9ef87d33a5d3a9"
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "11e710c5d3246d4f82b97acecee05c8a9505e82cd14d8bcb692663850e57c468"
+    },
+    {
+      "path": "tests/unit/persona-v2/knowledge-library.test.ts",
+      "sha256": "26812f06ac963897a71e637ec186bfae61e6ea9590786247b3660620b696328c"
+    },
+    {
+      "path": "tests/persona-v2/shared-knowledge.postgres.test.ts",
+      "sha256": "d240063b039f50892107b46289552398e0f835f7073eba19b9a02cff383572a2"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "c9dc8960fed0f974384976fb9eaa3147049ad62df73579f9f612922be463ee65"
+    },
+    {
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "86682fe063c116c36f67e034b88b184e69ba5c0f8c6d0fb971e05cb5151fd918"
+    },
+    {
+      "path": "docs/persona-v2/knowledge-library.md",
+      "sha256": "64755c690f0b8bbee2968fda3a118ee0b79e7ff8afa4df82f78308c436805bda"
+    },
+    {
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "5df780d246f7f2542b75f24bef962672a7dec29771264f6c75de1e1ab7251156"
+    },
+    {
+      "path": "docs/persona-v2/validation.md",
+      "sha256": "4bd22aa06ff38f6684e20e549b50113a788416a447cd31d4da5633422e112eb3"
+    },
+    {
+      "path": "docs/persona-v2/validation/2026-10-14-library-inline-constraints.md",
+      "sha256": "524ce9484aa6946b73a39a7d6c9551b5846f5a643da026366089984bc0dc2589"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "07819b511309347fd272be9dad683fe09f048ba81b726550bc620d5614b45edc"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "212dc6bb71232a8bdb8ffe57e5ac78cd21c152b5383ef8689d3c8df55ed0cbcd"
+    },
+    {
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "2d933ed826428a59ada0507ae4c6aaf32a5603454a8b2f5ddfaf978ac5f35af0"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "0d02d026421bb15fca54abff0bbde7ba6ad659ead437dc9f6c48b14f9c862547"
+    }
+  ]
+}

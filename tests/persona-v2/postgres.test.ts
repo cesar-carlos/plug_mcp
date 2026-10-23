@@ -1,0 +1,1004 @@
+import { reviewDateFixture } from "../helpers/review-deadline.js";
+import { randomUUID, createHash } from "node:crypto";
+import { readFile, readdir } from "node:fs/promises";
+import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
+import { assertPluginToolsAvailable } from "../../src/infrastructure/plugins/tool-catalog.js";
+import pg from "pg";
+import request from "supertest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { applyPersonaMigrations } from "../../src/infrastructure/persistence/persona-v2/migrate.js";
+import { verifyPersonaMigrations } from "../../src/infrastructure/persistence/persona-v2/migrate.js";
+import { applyMigrations } from "../../src/infrastructure/persistence/migrate.js";
+import { personaV2TestDatabaseUrl } from "../../src/config/persona-v2-test.js";
+import { composePersonaV2 } from "../../src/composition/compose-persona-v2.js";
+import { testConfig } from "../../src/config/env.js";
+import type { OwnerAuthenticationPort } from "../../src/domain/ports/persona-v2.port.js";
+import { PostgresPersonaRepository } from "../../src/infrastructure/persistence/persona-v2/repository.js";
+import type { Permissions } from "../../src/domain/persona-v2/model.js";
+import { assertConsumer } from "../../src/domain/persona-v2/authorization.js";
+import { queryTraining, sourceProof } from "../helpers/persona-v2-training.js";
+import { parseMcpPayload } from "../helpers/mcp-rpc.js";
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  PROTOCOL_VERSION_META_KEY,
+} from "@modelcontextprotocol/server";
+
+const base = new URL(personaV2TestDatabaseUrl());
+const adminUrl = new URL(base);
+adminUrl.pathname = "/postgres";
+const admin = new pg.Pool({ connectionString: adminUrl.toString() });
+const suffix = randomUUID().replaceAll("-", "");
+const freshName = `persona_v2_${suffix}_test`;
+const legacyName = `persona_legacy_${suffix}_test`;
+const urlFor = (name: string): string => {
+  const url = new URL(base);
+  url.pathname = `/${name}`;
+  return url.toString();
+};
+let db: pg.Pool;
+let runtime: Awaited<ReturnType<typeof composePersonaV2>>;
+let active = true;
+let hubClientId = "stable-client-id";
+let ownerEmail = "original@fixture.test";
+let profileFailure = false;
+const ownerAuth: OwnerAuthenticationPort = {
+  hubOrigin: "http://plug-server.test",
+  login: async (email, password) => {
+    if (email !== ownerEmail || password !== "fixture-password") {
+      throw new Error("invalid credentials");
+    }
+    return { accessToken: "server-only-jwt" };
+  },
+  profile: async () => {
+    if (profileFailure) {
+      throw new Error("unavailable secret should not escape");
+    }
+    return { clientId: hubClientId, active };
+  },
+};
+const empty: Permissions = {
+  sourceIds: [],
+  skills: [],
+  externalOperationIds: [],
+  administrative: [],
+};
+const verifySource = vi.fn(
+  async (input: {
+    email: string;
+    password: string;
+    clientToken: string;
+    database?: string;
+    dialect: "postgres" | "mssql" | "sybase";
+  }) => {
+    if (
+      input.email !== "source-client-b@fixture.test" ||
+      input.password !== "source-password" ||
+      input.clientToken !== "source-token"
+    ) {
+      throw new Error("invalid source credentials");
+    }
+    const proof = sourceProof({ database: input.database ?? "fixture_db", dialect: input.dialect });
+    return {
+      database: proof.database,
+      dialect: proof.dialect,
+      identityHash: proof.identityHash,
+      verifiedAt: proof.verifiedAt,
+    };
+  },
+);
+const login = async () => {
+  const result = await request(runtime.app)
+    .post("/api/admin/login")
+    .set("Origin", "http://127.0.0.1:3333")
+    .set("Host", "127.0.0.1:3333")
+    .send({ email: ownerEmail, password: "fixture-password" });
+  expect(result.status).toBe(200);
+  expect(JSON.stringify(result.body)).not.toContain("server-only-jwt");
+  const cookie = (result.headers["set-cookie"] as unknown as string[])[0]!.split(";")[0]!;
+  const csrf = result.body.csrfToken as string;
+  return { cookie, csrf };
+};
+const authorized = (
+  method: "get" | "post",
+  path: string,
+  session: { cookie: string; csrf: string },
+) =>
+  request(runtime.app)
+    [method](path)
+    .set("Origin", "http://127.0.0.1:3333")
+    .set("Host", "127.0.0.1:3333")
+    .set("Cookie", session.cookie)
+    .set("X-CSRF-Token", session.csrf);
+
+beforeAll(async () => {
+  await admin.query(`CREATE DATABASE "${freshName}"`);
+  await admin.query(`CREATE DATABASE "${legacyName}"`);
+  await applyPersonaMigrations(urlFor(freshName));
+  db = new pg.Pool({ connectionString: urlFor(freshName) });
+  runtime = await composePersonaV2(testConfig({ DATABASE_URL: urlFor(freshName) }), {
+    ownerAuth,
+    sourceVerifier: { verify: verifySource },
+  });
+});
+afterAll(async () => {
+  await runtime?.close();
+  await db?.end();
+  // Only databases generated by this test run are ever dropped.
+  await admin.query(`DROP DATABASE IF EXISTS "${freshName}"`);
+  await admin.query(`DROP DATABASE IF EXISTS "${legacyName}"`);
+  await admin.end();
+});
+describe("baseline persona-v2 e administração em PostgreSQL real", () => {
+  it("upgrade 0039 para 0040 preserva credencial e estado sem migração de autoridade", async () => {
+    const name = `persona_upgrade_${suffix}_test`,
+      pool = new pg.Pool({ connectionString: urlFor(name) });
+    await admin.query(`CREATE DATABASE "${name}"`);
+    try {
+      // Reproduce the exact previous generation in a new owned database, without
+      // downgrading a schema or rewriting already-applied migration records.
+      await pool.query(
+        "CREATE TABLE _persona_v2_migrations(filename text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())",
+      );
+      const directory = new URL("../../migrations/persona-v2/", import.meta.url);
+      for (const filename of (await readdir(directory))
+        .filter((f) => /^\d{4}_.+\.sql$/.test(f) && f < "0040")
+        .sort()) {
+        const sql = await readFile(new URL(filename, directory));
+        await pool.query(sql.toString());
+        await pool.query("INSERT INTO _persona_v2_migrations(filename,checksum) VALUES($1,$2)", [
+          filename,
+          createHash("sha256").update(sql).digest("hex"),
+        ]);
+      }
+      const owner = randomUUID(),
+        persona = randomUUID(),
+        id = randomUUID(),
+        cipher = new NodeCryptoAdapter("a".repeat(64)).encrypt("fixture-only");
+      await pool.query(
+        "INSERT INTO responsavel(id,hub_origin,hub_client_id) VALUES($1,'https://hub.fixture.test','upgrade')",
+        [owner],
+      );
+      await pool.query(
+        "INSERT INTO persona(id,responsavel_id,nome,especialidade) VALUES($1,$2,'Upgrade','Fixture')",
+        [persona, owner],
+      );
+      await pool.query(
+        "INSERT INTO integracao(id,persona_id,nome,tipo,destino,credencial_enc,ativa) VALUES($1,$2,'Fixture','rest','https://fixture.example.com',$3,true)",
+        [id, persona, cipher],
+      );
+      const before = (await pool.query("SELECT * FROM integracao WHERE id=$1", [id])).rows[0];
+      await applyPersonaMigrations(urlFor(name));
+      await applyPersonaMigrations(urlFor(name));
+      const { versao_gestao, suspensa_em, ...after } = (
+        await pool.query("SELECT * FROM integracao WHERE id=$1", [id])
+      ).rows[0];
+      expect(after).toEqual(before);
+      expect(versao_gestao).toBe(1);
+      expect(suspensa_em).toBeNull();
+    } finally {
+      await pool.end();
+      await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+    }
+  });
+  it("aplica/reaplica baseline e não cria catálogo nem extensões vetoriais", async () => {
+    await applyPersonaMigrations(urlFor(freshName));
+    expect((await db.query("SELECT generation FROM mcp_schema_generation")).rows).toEqual([
+      { generation: "persona-v2" },
+    ]);
+    expect((await db.query("SELECT count(*)::integer AS count FROM persona")).rows[0].count).toBe(
+      0,
+    );
+    expect(
+      (await db.query("SELECT extname FROM pg_extension WHERE extname='vector'")).rowCount,
+    ).toBe(0);
+    expect((await db.query("SELECT filename FROM _persona_v2_migrations")).rows).toEqual([
+      { filename: "0001_baseline.sql" },
+      { filename: "0002_catalog.sql" },
+      { filename: "0003_operation_integrity.sql" },
+      { filename: "0004_operation_reconciliation.sql" },
+      { filename: "0005_source_identity.sql" },
+      { filename: "0006_shared_knowledge.sql" },
+      { filename: "0007_shared_preview_authority.sql" },
+      { filename: "0008_console_history.sql" },
+      { filename: "0009_oauth_integrity.sql" },
+      { filename: "0010_delegation_and_setup.sql" },
+      { filename: "0011_source_replacement.sql" },
+      { filename: "0012_administrative_authority.sql" },
+      { filename: "0013_source_structure_evidence.sql" },
+      { filename: "0014_physical_profiles.sql" },
+      { filename: "0015_physical_native_identity.sql" },
+      { filename: "0016_knowledge_curation.sql" },
+      { filename: "0017_publication_knowledge_index.sql" },
+      { filename: "0018_physical_knowledge_curation.sql" },
+      { filename: "0019_knowledge_feedback_review.sql" },
+      { filename: "0020_review_publication_worker.sql" },
+      { filename: "0021_knowledge_library.sql" },
+      { filename: "0022_structure_evidence_composition.sql" },
+      { filename: "0023_publication_run_evidence.sql" },
+      { filename: "0024_integration_credential_audit.sql" },
+      { filename: "0025_external_actions.sql" },
+      { filename: "0026_external_reconciliation.sql" },
+      { filename: "0027_external_runner.sql" },
+      { filename: "0028_ephemeral_worker.sql" },
+      { filename: "0029_operation_retention.sql" },
+      { filename: "0030_vault_rotation.sql" },
+      { filename: "0031_vault_rotation_integrity.sql" },
+      { filename: "0032_notification_outbox.sql" },
+      { filename: "0033_notification_migration_guard.sql" },
+      { filename: "0034_notification_event_namespace.sql" },
+      { filename: "0035_notification_credential_reference.sql" },
+      { filename: "0036_oauth_connection_administration.sql" },
+      { filename: "0037_query_reuse_fences.sql" },
+      { filename: "0038_attachment_audit.sql" },
+      { filename: "0039_shared_attachments.sql" },
+      { filename: "0040_integration_lifecycle.sql" },
+      { filename: "0041_notification_retention.sql" },
+      { filename: "0042_notification_terminal_clock.sql" },
+      { filename: "0043_dataset_template_versions.sql" },
+    ]);
+    await expect(applyMigrations({ databaseUrl: urlFor(freshName) })).rejects.toThrow(
+      "Runner legado recusado",
+    );
+    expect(
+      (await db.query("SELECT to_regclass('public._mcp_migrations') AS ledger")).rows[0].ledger,
+    ).toBeNull();
+  });
+  it("recusa schema legado sem criar ledger ou alterar seus registros", async () => {
+    const legacy = new pg.Pool({ connectionString: urlFor(legacyName) });
+    try {
+      await legacy.query(
+        "CREATE TABLE acesso(id integer PRIMARY KEY); INSERT INTO acesso VALUES(42)",
+      );
+      await expect(applyPersonaMigrations(urlFor(legacyName))).rejects.toThrow("sem alteração");
+      expect((await legacy.query("SELECT * FROM acesso")).rows).toEqual([{ id: 42 }]);
+      expect(
+        (await legacy.query("SELECT tablename FROM pg_tables WHERE schemaname='public'")).rows,
+      ).toEqual([{ tablename: "acesso" }]);
+    } finally {
+      await legacy.end();
+    }
+  });
+  it("verificação de startup recusa migração ausente ou checksum adulterado sem DDL", async () => {
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      await verifyPersonaMigrations(client);
+      await client.query("DELETE FROM _persona_v2_migrations WHERE filename='0002_catalog.sql'");
+      await expect(verifyPersonaMigrations(client)).rejects.toThrow("incompletas");
+      expect(
+        (await client.query("SELECT to_regclass('public.publicacao_preview_v2') AS relation"))
+          .rows[0].relation,
+      ).toBe("publicacao_preview_v2");
+      await client.query("ROLLBACK");
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE _persona_v2_migrations SET checksum='invalid' WHERE filename='0002_catalog.sql'",
+      );
+      await expect(verifyPersonaMigrations(client)).rejects.toThrow("Checksum");
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  });
+  it("cria persona sem fonte e recupera responsável após mudança de email", async () => {
+    const session = await login();
+    const create = await authorized("post", "/api/admin/personas", session).send({
+      name: "Financeiro",
+      specialty: "Contas a receber",
+      instructions: "Consultar bases treinadas.",
+    });
+    expect(create.status).toBe(201);
+    const personaId = create.body.persona.id as string;
+    expect(
+      (await db.query("SELECT count(*)::integer AS n FROM fonte WHERE persona_id=$1", [personaId]))
+        .rows[0].n,
+    ).toBe(0);
+    ownerEmail = "changed@fixture.test";
+    const recovered = await login();
+    const list = await authorized("get", "/api/admin/personas", recovered);
+    expect(list.status).toBe(200);
+    expect((list.body.personas as { id: string }[]).some((p) => p.id === personaId)).toBe(true);
+    expect((await db.query("SELECT count(*)::integer AS n FROM responsavel")).rows[0].n).toBe(1);
+  });
+  it("emite vários tokens por persona, persiste só hash e não amplia concedidos", async () => {
+    const session = await login();
+    const personas = await authorized("get", "/api/admin/personas", session);
+    const personaId = personas.body.personas[0].id as string;
+    const path = `/api/admin/personas/${personaId}/tokens`;
+    const first = await authorized("post", path, session).send({
+      name: "Consulta",
+      permissions: empty,
+      delegation: empty,
+      expiresAt: null,
+    });
+    const second = await authorized("post", path, session).send({
+      name: "Outro",
+      permissions: empty,
+      delegation: empty,
+      expiresAt: null,
+    });
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(first.body.bearer).not.toBe(second.body.bearer);
+    const tokens = await db.query("SELECT * FROM persona_token WHERE persona_id=$1", [personaId]);
+    expect(tokens.rowCount).toBe(2);
+    expect(JSON.stringify(tokens.rows)).not.toContain(first.body.bearer);
+    const repo = new PostgresPersonaRepository(db);
+    const state = await repo.authentication(tokens.rows[0].token_hash as string);
+    expect(state?.persona.id).toBe(personaId);
+    expect(state?.token.permissions.sourceIds).toEqual([]);
+    const bad = await authorized("post", path, session).send({
+      name: "Bad",
+      permissions: { ...empty, sourceIds: [randomUUID()] },
+      delegation: empty,
+      expiresAt: null,
+    });
+    expect(bad.status).toBe(403);
+  });
+  it("permite GET sem Origin apenas no navegador same-origin, mantendo Host, sessão e CSRF", async () => {
+    const session = await login();
+    const browser = (
+      method: "get" | "post",
+      site = "same-origin",
+      host = "127.0.0.1:3333",
+      csrf = session.csrf,
+    ) =>
+      request(runtime.app)
+        [method]("/api/admin/personas")
+        .set("Host", host)
+        .set("Sec-Fetch-Site", site)
+        .set("Cookie", session.cookie)
+        .set("X-CSRF-Token", csrf);
+    expect((await browser("get")).status).toBe(200);
+    expect((await browser("get", "cross-site")).status).toBe(403);
+    expect((await browser("get", "same-origin", "attacker.test")).status).toBe(403);
+    expect((await browser("get", "same-origin", "127.0.0.1:3333", "invalid")).status).toBe(403);
+    expect(
+      (await browser("post").send({ name: "x", specialty: "x", instructions: "" })).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(runtime.app)
+          .get("/api/admin/personas")
+          .set("Host", "127.0.0.1:3333")
+          .set("Cookie", session.cookie)
+          .set("X-CSRF-Token", session.csrf)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(runtime.app)
+          .get("/api/admin/personas")
+          .set("Host", "127.0.0.1:3333")
+          .set("Sec-Fetch-Site", "same-origin")
+          .set("X-CSRF-Token", session.csrf)
+      ).status,
+    ).toBe(403);
+  });
+  it("bloqueia responsável estranho, CSRF e autoridade indisponível", async () => {
+    const session = await login();
+    const personaId = (await authorized("get", "/api/admin/personas", session)).body.personas[0]
+      .id as string;
+    const badCsrf = await authorized("post", "/api/admin/personas", {
+      ...session,
+      csrf: "invalid",
+    }).send({ name: "x", specialty: "x", instructions: "" });
+    expect(badCsrf.status).toBe(403);
+    hubClientId = "another-client";
+    const other = await login();
+    const forbidden = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/tokens`,
+      other,
+    ).send({ name: "x", permissions: empty, delegation: empty, expiresAt: null });
+    expect(forbidden.status).toBe(403);
+    hubClientId = "stable-client-id";
+    profileFailure = true;
+    const unavailable = await authorized("post", "/api/admin/personas", session).send({
+      name: "x",
+      specialty: "x",
+      instructions: "",
+    });
+    expect(unavailable.status).toBe(503);
+    expect(JSON.stringify(unavailable.body)).not.toContain("secret");
+    profileFailure = false;
+    active = false;
+    expect((await authorized("get", "/api/admin/personas", session)).status).toBe(401);
+    active = true;
+  });
+  it("fontes da conta B são independentes do responsável A; compartilhar base não compartilha credenciais ou tokens", async () => {
+    const session = await login();
+    const personaId = (await authorized("get", "/api/admin/personas", session)).body.personas[0]
+      .id as string;
+    const second = await authorized("post", "/api/admin/personas", session).send({
+      name: "Vendas",
+      specialty: "Vendas",
+      instructions: "",
+    });
+    const otherId = second.body.persona.id as string;
+    const agentId = randomUUID();
+    const body = {
+      name: "ERP",
+      purpose: "Base sintética",
+      environment: "test",
+      agentId,
+      database: "fixture_db",
+      dialect: "postgres",
+      email: "source-client-b@fixture.test",
+      password: "source-password",
+      clientToken: "source-token",
+    };
+    const a = await authorized("post", `/api/admin/personas/${personaId}/fontes`, session).send(
+      body,
+    );
+    const b = await authorized("post", `/api/admin/personas/${otherId}/fontes`, session).send(body);
+    expect(a.status).toBe(201);
+    expect(b.status).toBe(201);
+    expect(a.body.fonte.physicalSourceId).toBe(b.body.fonte.physicalSourceId);
+    expect(a.body.fonte.credentialId).not.toBe(b.body.fonte.credentialId);
+    expect(JSON.stringify(a.body)).not.toContain("source-password");
+    expect(JSON.stringify(a.body)).not.toContain("source-token");
+    const credentials = await db.query("SELECT * FROM fonte_credencial");
+    expect(JSON.stringify(credentials.rows)).not.toContain("source-password");
+    expect(JSON.stringify(credentials.rows)).not.toContain("source-token");
+    const tokens = await db.query("SELECT permissoes FROM persona_token WHERE persona_id=$1", [
+      personaId,
+    ]);
+    expect(
+      tokens.rows.every((r: { permissoes: Permissions }) => r.permissoes.sourceIds.length === 0),
+    ).toBe(true);
+    expect(
+      (await authorized("get", `/api/admin/personas/${personaId}/fontes`, session)).body.fontes,
+    ).toHaveLength(1);
+  });
+  it("publicações são imutáveis e fonte não referencia credencial de outra persona", async () => {
+    const personaId = (await db.query("SELECT id FROM persona LIMIT 1")).rows[0].id as string;
+    const skillId = randomUUID(),
+      publicationId = randomUUID();
+    await db.query(
+      "INSERT INTO skill_v2(id,persona_id,slug,tipo,nome,rascunho) VALUES($1,$2,'fixture','consulta','Fixture','{}')",
+      [skillId, personaId],
+    );
+    await db.query(
+      "INSERT INTO publicacao(id,persona_id,skill_id,revisao,pacote,pacote_hash) VALUES($1,$2,$3,1,'{}',$4)",
+      [publicationId, personaId, skillId, "a".repeat(64)],
+    );
+    await expect(
+      db.query("UPDATE publicacao SET pacote='{}' WHERE id=$1", [publicationId]),
+    ).rejects.toThrow("immutable");
+    await expect(db.query("DELETE FROM publicacao WHERE id=$1", [publicationId])).rejects.toThrow(
+      "immutable",
+    );
+    const ownerId = (await db.query("SELECT responsavel_id FROM persona WHERE id=$1", [personaId]))
+      .rows[0].responsavel_id as string;
+    const another = randomUUID(),
+      cred = randomUUID(),
+      physical = randomUUID();
+    await db.query(
+      "INSERT INTO persona(id,responsavel_id,nome,especialidade) VALUES($1,$2,'Other','Other')",
+      [another, ownerId],
+    );
+    await db.query(
+      "INSERT INTO fonte_credencial(id,persona_id,email_enc,senha_enc,client_token_enc) VALUES($1,$2,'enc','enc','enc')",
+      [cred, another],
+    );
+    await db.query("INSERT INTO fonte_fisica(id,identity_hash) VALUES($1,'fixture-physical')", [
+      physical,
+    ]);
+    await expect(
+      db.query(
+        "INSERT INTO fonte(id,persona_id,fonte_fisica_id,credencial_id,agent_id,banco,dialeto,nome,finalidade,ambiente) VALUES($1,$2,$3,$4,$5,'fixture','postgres','Fixture','Fixture','test')",
+        [randomUUID(), personaId, physical, cred, randomUUID()],
+      ),
+    ).rejects.toThrow("foreign key");
+    await expect(
+      db.query(
+        "INSERT INTO curadoria_v2(id,persona_id,publicacao_id,tipo,conteudo) VALUES($1,$2,$3,'candidata','{}')",
+        [randomUUID(), another, publicationId],
+      ),
+    ).rejects.toThrow("foreign key");
+    await expect(
+      db.query(
+        "INSERT INTO oauth_registro_v2(id_hash,tipo,expires_at,conteudo_enc) VALUES('unbound','access_token',now()+interval '1 hour','enc')",
+      ),
+    ).rejects.toThrow("check constraint");
+  });
+  it("revogação invalida token e concessões derivadas na mesma transação", async () => {
+    const session = await login();
+    const personaId = (await authorized("get", "/api/admin/personas", session)).body.personas[0]
+      .id as string;
+    const issued = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/tokens`,
+      session,
+    ).send({ name: "Revoke", permissions: empty, delegation: empty, expiresAt: null });
+    expect(issued.status).toBe(201);
+    const tokenId = issued.body.tokenId as string;
+    await db.query(
+      "INSERT INTO oauth_concessao_v2(id,persona_id,token_id,token_version,permissoes,client_id,expires_at) VALUES($1,$2,$3,1,$4,'fixture',now()+interval '1 hour')",
+      [randomUUID(), personaId, tokenId, JSON.stringify(empty)],
+    );
+    const revoke = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/tokens/${tokenId}/revogar`,
+      session,
+    ).send({});
+    expect(revoke.status).toBe(204);
+    const state = await new PostgresPersonaRepository(db).authorization({
+      personaId,
+      tokenId,
+      tokenVersion: 1,
+      personaVersion: 1,
+    });
+    expect(state?.token.authorizationVersion).toBe(2);
+    expect(() =>
+      assertConsumer(
+        { personaId, tokenId, tokenVersion: 1, personaVersion: 1 },
+        state!,
+        new Date(),
+      ),
+    ).toThrow();
+    expect(
+      (await db.query("SELECT revoked_at FROM oauth_concessao_v2 WHERE token_id=$1", [tokenId]))
+        .rows[0].revoked_at,
+    ).toBeInstanceOf(Date);
+    expect((await authorized("post", "/api/admin/logout", session).send({})).status).toBe(204);
+    expect((await authorized("get", "/api/admin/personas", session)).status).toBe(403);
+  });
+});
+
+describe("treinamento, publicação e catálogo MCP persona-v2", () => {
+  let session: Awaited<ReturnType<typeof login>>;
+  let personaId: string, sourceId: string, skillId: string, bearer: string;
+  let currentRevision = 1;
+  const skillPath = () => `/api/admin/personas/${personaId}/skills/${skillId}`;
+  const rpc = async (method: string, params: unknown, token?: string) => {
+    const call = request(runtime.app)
+      .post("/mcp")
+      .set("Host", "127.0.0.1:3333")
+      .set("Accept", "application/json, text/event-stream");
+    if (token) call.set("Authorization", `Bearer ${token}`);
+    const response = await call.send({ jsonrpc: "2.0", id: 1, method, params });
+    expect(response.status).toBe(200);
+    return parseMcpPayload(response);
+  };
+  const tool = async (name: string, args: unknown, token = bearer) => {
+    const payload = await rpc("tools/call", { name, arguments: args }, token);
+    const result = payload.result as { isError?: boolean; content: { text: string }[] };
+    return { isError: result.isError, value: JSON.parse(result.content[0]!.text) };
+  };
+  it("cria rascunho por fonte; preview publica conteúdo exato e é consumido uma vez", async () => {
+    session = await login();
+    const persona = await authorized("post", "/api/admin/personas", session).send({
+      name: "Catálogo",
+      specialty: "Teste",
+      instructions: "",
+    });
+    personaId = persona.body.persona.id;
+    const source = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/fontes`,
+      session,
+    ).send({
+      name: "ERP",
+      purpose: "Sintético",
+      environment: "test",
+      agentId: randomUUID(),
+      database: "synthetic",
+      dialect: "postgres",
+      email: "source-client-b@fixture.test",
+      password: "source-password",
+      clientToken: "source-token",
+    });
+    expect(source.status).toBe(201);
+    sourceId = source.body.fonte.id;
+    const draft = await authorized("post", `/api/admin/personas/${personaId}/skills`, session).send(
+      {
+        slug: "orders",
+        kind: "consulta",
+        name: "Pedidos",
+        training: {
+          ...queryTraining(sourceId),
+          examples: [
+            {
+              id: "ids",
+              purpose: "Identificadores",
+              sql: "SELECT p.id FROM orders p WHERE p.id > :minimum ORDER BY p.id",
+              explanation: "Projeção reduzida da mesma fonte",
+            },
+          ],
+        },
+      },
+    );
+    expect(draft.status).toBe(201);
+    skillId = draft.body.skill.id;
+    const duplicate = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/skills`,
+      session,
+    ).send({
+      slug: "orders",
+      kind: "consulta",
+      name: "Duplicado",
+      training: queryTraining(sourceId),
+    });
+    expect(duplicate.status).toBe(409);
+    const preview = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    expect(preview.status).toBe(200);
+    expect(preview.body.warnings).toContain("SEM_CASOS_DE_TESTE");
+    const issued = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/tokens`,
+      session,
+    ).send({
+      name: "Leitura",
+      permissions: {
+        ...empty,
+        sourceIds: [sourceId],
+        skills: [
+          {
+            skillId,
+            capabilities: preview.body.package.requiredCapabilities,
+            effects: ["select"],
+            requireHumanApproval: false,
+          },
+        ],
+      },
+      delegation: empty,
+      expiresAt: null,
+    });
+    expect(issued.status).toBe(201);
+    bearer = issued.body.bearer;
+    expect((await tool("listar_skills", {})).value).toEqual([]);
+    const publish = await authorized("post", `${skillPath()}/publicar`, session).send({
+      confirmationHash: preview.body.confirmationHash,
+    });
+    expect(publish.status).toBe(201);
+    expect(
+      (
+        await authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: preview.body.confirmationHash,
+        })
+      ).status,
+    ).toBe(409);
+    expect((await tool("obter_skill", { slug: "orders" })).value.publicationId).toBe(
+      publish.body.publication.id,
+    );
+    expect((await tool("obter_skill", { slug: "orders" })).value.examples).toEqual([
+      {
+        id: "ids",
+        purpose: "Identificadores",
+        sql: "SELECT p.id FROM orders p WHERE p.id > :minimum ORDER BY p.id",
+        explanation: "Projeção reduzida da mesma fonte",
+      },
+    ]);
+  });
+  it("edita rascunho mantendo autoridade anterior; CAS e confirmação obsoleta recusam", async () => {
+    const before = (await tool("obter_skill", { slug: "orders" })).value;
+    const preview = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    const edit = await authorized("post", `${skillPath()}/rascunho`, session).send({
+      name: "Novo nome",
+      expectedRevision: 1,
+      training: { ...queryTraining(sourceId), purpose: "Novo propósito" },
+    });
+    expect(edit.status).toBe(200);
+    currentRevision = edit.body.skill.revision;
+    expect((await tool("obter_skill", { slug: "orders" })).value).toEqual(before);
+    expect((await tool("listar_skills", {})).value[0].name).toBe("Pedidos");
+    expect(
+      (
+        await authorized("post", `${skillPath()}/rascunho`, session).send({
+          name: "Perdido",
+          expectedRevision: 1,
+          training: queryTraining(sourceId),
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: preview.body.confirmationHash,
+        })
+      ).status,
+    ).toBe(409);
+  });
+  it("ampliar pacote não amplia token; listagem e leitura direta/resource usam o mesmo portão", async () => {
+    const training = queryTraining(sourceId);
+    const edit = await authorized("post", `${skillPath()}/rascunho`, session).send({
+      name: "Pedidos ampliados",
+      expectedRevision: currentRevision,
+      training: {
+        ...training,
+        columns: [
+          ...training.columns,
+          { table: "orders", name: "status", meaning: "Situação", classification: "livre" },
+        ],
+      },
+    });
+    expect(edit.status).toBe(200);
+    currentRevision = edit.body.skill.revision;
+    const preview = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    expect(preview.status).toBe(200);
+    expect(preview.body.diff.addedCapabilities.length).toBeGreaterThan(0);
+    expect(
+      (
+        await authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: preview.body.confirmationHash,
+        })
+      ).status,
+    ).toBe(201);
+    expect((await tool("listar_skills", {})).value).toEqual([]);
+    expect((await tool("obter_skill", { slug: "orders" })).isError).toBe(true);
+    const denied = await rpc("resources/read", { uri: `skill://${personaId}/orders` }, bearer);
+    expect(denied.error).toBeDefined();
+    expect(JSON.stringify(denied)).not.toContain("sqlModel");
+    const wrongPersona = await rpc(
+      "resources/read",
+      { uri: `skill://${randomUUID()}/orders` },
+      bearer,
+    );
+    expect(JSON.stringify(wrongPersona)).not.toContain("sqlModel");
+  });
+  it("fonte/credencial alterada invalida preview e pacote; expiração impede confirmação", async () => {
+    const preview = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    await db.query(
+      "UPDATE fonte_credencial SET versao=versao+1 WHERE id=(SELECT credencial_id FROM fonte WHERE id=$1)",
+      [sourceId],
+    );
+    expect(
+      (
+        await authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: preview.body.confirmationHash,
+        })
+      ).status,
+    ).toBe(409);
+    const expiring = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    await db.query(
+      "UPDATE publicacao_preview_v2 SET expires_at=now()-interval '1 second' WHERE hash=$1",
+      [expiring.body.confirmationHash],
+    );
+    expect(
+      (
+        await authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: expiring.body.confirmationHash,
+        })
+      ).status,
+    ).toBe(409);
+  });
+  it("autorização da persona altera preview; fonte de outra persona não entra no rascunho", async () => {
+    const preview = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    await db.query("UPDATE persona SET authorization_version=authorization_version+1 WHERE id=$1", [
+      personaId,
+    ]);
+    expect(
+      (
+        await authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: preview.body.confirmationHash,
+        })
+      ).status,
+    ).toBe(409);
+    const otherSource = (
+      await db.query("SELECT id FROM fonte WHERE persona_id<>$1 LIMIT 1", [personaId])
+    ).rows[0].id as string;
+    const create = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/skills`,
+      session,
+    ).send({
+      slug: "forbidden",
+      name: "Errada",
+      kind: "consulta",
+      training: queryTraining(otherSource),
+    });
+    expect(create.status).toBe(403);
+    profileFailure = true;
+    const unavailable = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    profileFailure = false;
+    expect(unavailable.status).toBe(503);
+  });
+  it("publicação concorrente consome um preview; suspensão e revogação afetam chamadas seguintes", async () => {
+    const preview = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    const results = await Promise.all(
+      [0, 1].map(() =>
+        authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: preview.body.confirmationHash,
+        }),
+      ),
+    );
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    const issued = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/tokens`,
+      session,
+    ).send({
+      name: "Atualizado",
+      permissions: {
+        ...empty,
+        sourceIds: [sourceId],
+        skills: [
+          {
+            skillId,
+            capabilities: preview.body.package.requiredCapabilities,
+            effects: ["select"],
+            requireHumanApproval: false,
+          },
+        ],
+      },
+      delegation: empty,
+      expiresAt: null,
+    });
+    expect(issued.status).toBe(201);
+    const allowed = await tool("obter_skill", { slug: "orders" }, issued.body.bearer);
+    expect(allowed.isError).not.toBe(true);
+    await db.query(
+      "UPDATE fonte_credencial SET versao=versao+1 WHERE id=(SELECT credencial_id FROM fonte WHERE id=$1)",
+      [sourceId],
+    );
+    expect((await tool("obter_skill", { slug: "orders" }, issued.body.bearer)).isError).toBe(true);
+    const renewed = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    expect(
+      (
+        await authorized("post", `${skillPath()}/publicar`, session).send({
+          confirmationHash: renewed.body.confirmationHash,
+        })
+      ).status,
+    ).toBe(201);
+    expect((await tool("obter_skill", { slug: "orders" }, issued.body.bearer)).isError).not.toBe(
+      true,
+    );
+    expect((await authorized("post", `${skillPath()}/suspender`, session).send({})).status).toBe(
+      204,
+    );
+    expect((await tool("listar_skills", {}, issued.body.bearer)).value).toEqual([]);
+    expect((await tool("obter_skill", { slug: "orders" }, issued.body.bearer)).isError).toBe(true);
+    const revoke = await authorized(
+      "post",
+      `/api/admin/personas/${personaId}/tokens/${issued.body.tokenId}/revogar`,
+      session,
+    ).send({});
+    expect(revoke.status).toBe(204);
+    const denied = await request(runtime.app)
+      .post("/mcp")
+      .set("Host", "127.0.0.1:3333")
+      .set("Authorization", `Bearer ${issued.body.bearer}`)
+      .send({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+    expect(denied.status).toBe(401);
+  });
+  it("casos obrigatórios sem relatório atual bloqueiam; tipos sem executor nunca publicam", async () => {
+    const add = await authorized("post", `${skillPath()}/casos`, session).send({
+      required: true,
+      content: { name: "Filtro mínimo", input: { minimum: 1 }, expected: { rows: [] } },
+    });
+    expect(add.status).toBe(201);
+    const blocked = await authorized("post", `${skillPath()}/preview`, session).send({
+      reviewDueAt: reviewDateFixture(),
+    });
+    expect(blocked.body.error.code).toBe("INCOMPLETE_INPUT");
+    for (const kind of ["acao_externa"]) {
+      const create = await authorized(
+        "post",
+        `/api/admin/personas/${personaId}/skills`,
+        session,
+      ).send({
+        slug: kind.replaceAll("_", "-"),
+        kind,
+        name: kind,
+        training: { purpose: "Rascunho inerte" },
+      });
+      expect(create.status).toBe(201);
+      const result = await authorized(
+        "post",
+        `/api/admin/personas/${personaId}/skills/${create.body.skill.id}/preview`,
+        session,
+      ).send({ reviewDueAt: reviewDateFixture() });
+      expect(result.body.error.code).toBe("CAPABILITY_UNAVAILABLE");
+    }
+  });
+  it("dependências publicadas são imutáveis e auditoria mantém somente metadados", async () => {
+    const publication = (
+      await db.query("SELECT publicacao_ativa_id FROM skill_v2 WHERE id=$1", [skillId])
+    ).rows[0].publicacao_ativa_id as string;
+    await expect(
+      db.query("UPDATE publicacao_fonte SET fonte_version=fonte_version+1 WHERE publicacao_id=$1", [
+        publication,
+      ]),
+    ).rejects.toThrow("immutable");
+    await expect(
+      db.query("DELETE FROM publicacao_fonte WHERE publicacao_id=$1", [publication]),
+    ).rejects.toThrow("immutable");
+    const records = await db.query("SELECT * FROM audit_v2 WHERE persona_id=$1", [personaId]);
+    expect(records.rowCount).toBeGreaterThan(0);
+    expect(records.rows.some((r) => r.evento === "skill_publicada" && r.publicacao_id)).toBe(true);
+    expect(JSON.stringify(records.rows)).not.toMatch(
+      /SELECT |source-password|source-token|amount|minimum/,
+    );
+    const catalogEvents = records.rows.filter((r) => String(r.evento).startsWith("skill_"));
+    expect(catalogEvents.length).toBeGreaterThan(0);
+    expect(catalogEvents.every((r) => r.responsavel_id && r.skill_id)).toBe(true);
+    expect(
+      records.rows.some(
+        (r) => r.evento === "persona.created" && r.responsavel_id && r.resource_version === 1,
+      ),
+    ).toBe(true);
+  });
+  it("MCP oferece bootstrap público, schemas reais e ambos os protocolos sem sessão mutável", async () => {
+    const modern = await request(runtime.app)
+      .post("/mcp")
+      .set("Host", "127.0.0.1:3333")
+      .set("Accept", "application/json, text/event-stream")
+      .set("MCP-Protocol-Version", "2026-07-28")
+      .set("MCP-Method", "tools/list")
+      .set("Authorization", `Bearer ${bearer}`)
+      .send({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {
+          _meta: {
+            [PROTOCOL_VERSION_META_KEY]: "2026-07-28",
+            [CLIENT_INFO_META_KEY]: { name: "fixture", version: "1" },
+            [CLIENT_CAPABILITIES_META_KEY]: {},
+          },
+        },
+      });
+    expect(modern.status).toBe(200);
+    expect(JSON.stringify(parseMcpPayload(modern))).toContain("obter_skill");
+    const init = await rpc(
+      "initialize",
+      {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "fixture", version: "1" },
+      },
+      bearer,
+    );
+    expect(JSON.stringify(init)).toContain("persona-v2");
+    const anonymous = await rpc("tools/list", {});
+    expect(JSON.stringify(anonymous)).not.toContain("obter_skill");
+    expect(JSON.stringify(anonymous)).toContain("obter_treinamento_base");
+    const schema = await rpc("tools/list", {}, bearer);
+    assertPluginToolsAvailable(
+      "persona-v2",
+      (schema.result as { tools: { name: string }[] }).tools.map((tool) => tool.name),
+    );
+    expect(JSON.stringify(schema)).toContain("additionalProperties");
+    expect(JSON.stringify(schema)).toContain("consultar_dados");
+    expect(JSON.stringify(anonymous)).not.toContain("consultar_dados");
+    const guide = await rpc("resources/read", { uri: "guia://persona-v2" });
+    expect(JSON.stringify(guide)).toContain("persona-v2-redis-cache-1");
+    const invalid = await request(runtime.app)
+      .post("/mcp")
+      .set("Host", "127.0.0.1:3333")
+      .set("Authorization", "Bearer invalid")
+      .send({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+    expect(invalid.status).toBe(401);
+    expect(
+      (
+        await request(runtime.app)
+          .post("/mcp")
+          .set("Host", "127.0.0.1:3333")
+          .set("Origin", "https://attacker.test")
+          .send({})
+      ).status,
+    ).toBe(403);
+  });
+});

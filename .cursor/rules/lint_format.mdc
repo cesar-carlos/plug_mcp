@@ -1,6 +1,14 @@
 ---
 description: "EditorConfig, Prettier e ESLint — quem formata o quê e como configurar"
-globs: ["eslint.config.js", ".prettierrc.json", ".editorconfig", ".vscode/**", "src/**/*.ts", "tests/**/*.ts"]
+globs:
+  [
+    "eslint.config.js",
+    ".prettierrc.json",
+    ".editorconfig",
+    ".vscode/**",
+    "src/**/*.ts",
+    "tests/**/*.ts",
+  ]
 alwaysApply: true
 ---
 
@@ -8,11 +16,11 @@ alwaysApply: true
 
 Três camadas, sem sobreposição. Não copie regra de estilo do Prettier para o ESLint.
 
-| Camada | Arquivo | Responsabilidade |
-| ------ | ------- | ---------------- |
-| **EditorConfig** | `.editorconfig` | Bytes do arquivo em qualquer editor: UTF-8, LF, 2 espaços, newline final |
-| **Prettier** | `.prettierrc.json` | Estilo: aspas duplas, `;`, trailing comma, `printWidth` 100 |
-| **ESLint** | `eslint.config.js` (flat, ESLint 9) | Correção: tipos, promises, `import type`, `eqeqeq`, `no-explicit-any` |
+| Camada           | Arquivo                              | Responsabilidade                                                         |
+| ---------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| **EditorConfig** | `.editorconfig`                      | Bytes do arquivo em qualquer editor: UTF-8, LF, 2 espaços, newline final |
+| **Prettier**     | `.prettierrc.json`                   | Estilo: aspas duplas, `;`, trailing comma, `printWidth` 100              |
+| **ESLint**       | `eslint.config.js` (flat, ESLint 10) | Correção: tipos, promises, `import type`, `eqeqeq`, `no-explicit-any`    |
 
 `eslint-config-prettier` é **sempre o último** item de `eslint.config.js`. Não adicione `.eslintrc*` — o projeto usa só flat config.
 
@@ -20,11 +28,11 @@ O console tem `web/eslint.config.js` flat próprio com `eslint-plugin-vue`, `vue
 
 ## O que o agente deve fazer
 
-- Rodar `npm run format` nos arquivos tocados (ou deixar o format-on-save do editor).
-- Rodar `npm run lint` e zerar erros introduzidos pela tarefa.
+- Formatar somente os arquivos tocados com Prettier; `npm run format` formata todo o repositório. Para `.mdc`, selecionar o parser Markdown.
+- Alterações de código exigem `npm run lint`; documentação isolada exige links, exemplos e formatação válidos.
 - Não desligar `@typescript-eslint/no-explicit-any` nem typed linting (`recommendedTypeChecked`) para “passar o lint”.
 - Exceção de `require-await` só em fakes in-memory (`persistence/memory`) e em `tests/` — ports async sem I/O. Não espalhe `eslint-disable` no domínio.
-- `no-console` é erro em `src/` (use `LoggerPort`). Permitido em `main.ts`, scripts de migrate/backfill e testes.
+- Logs de aplicação usam `LoggerPort`. Exceções de `console` seguem `eslint.config.js`; não ampliá-las ao domínio.
 - Funções **exportadas** e métodos públicos levam tipo de retorno explícito (`explicit-module-boundary-types`).
 - Imports só-tipo: `import type` ou `import { type X }` (autofix do ESLint).
 

@@ -20,12 +20,16 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: read
+      actions: read
       statuses: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
 
       - id: gate
         name: Decide se há alteração de runtime
@@ -33,27 +37,54 @@ jobs:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          if git show --pretty=format: --name-only "$SHA" | bash scripts/should-publish-production.sh; then
+          git show --pretty=format: --name-only "$SHA" > "$RUNNER_TEMP/changed-files"
+          if bash scripts/should-publish-production.sh < "$RUNNER_TEMP/changed-files"; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verificar aceite da refatoração persona-v2
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          PERSONA_V2_RELEASE_REVISION: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/check-persona-release.mjs
+
+      - id: accepted-image
+        name: Validate accepted artifact origin
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/accepted-image-origin.mjs
+      - uses: actions/download-artifact@v8
+        if: steps.gate.outputs.publish == 'true'
+        with:
+          artifact-ids: ${{ steps.accepted-image.outputs.artifact_id }}
+          path: ${{ runner.temp }}/tested-image/
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.accepted-image.outputs.run_id }}
+          digest-mismatch: error
+
       - id: deploy
         name: Publish the CI image
-        if: steps.gate.outputs.publish == 'true'
+        if: success() && steps.gate.outputs.publish == 'true'
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST_KEY: ${{ secrets.DEPLOY_HOST_KEY }}
-          GH_TOKEN: ${{ github.token }}
+          PERSONA_V2_RELEASE_REVISION: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]'):${SHA}"
-          echo "$GH_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
-          docker pull "$image"
+          export PERSONA_V2_IMAGE_REVISION="${{ steps.accepted-image.outputs.image_revision }}"
+          node scripts/tested-image.mjs verify "$RUNNER_TEMP/tested-image"
+          docker load --input "$RUNNER_TEMP/tested-image/image.tar"
+          node scripts/tested-image.mjs verify-loaded "$RUNNER_TEMP/tested-image" se7e-native
+          node scripts/check-persona-release.mjs --image-proof "$RUNNER_TEMP/tested-image/image-proof.json"
+          docker tag se7e-native "$image"
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
@@ -73,7 +104,7 @@ jobs:
           OUTCOME: ${{ steps.deploy.outcome }}
         run: |
           set -euo pipefail
-          if [ "$PUBLISH" != "true" ]; then
+          if [ "$PUBLISH" = "false" ]; then
             state=success
             desc="Sem alteração de runtime"
           elif [ "$OUTCOME" = "success" ]; then

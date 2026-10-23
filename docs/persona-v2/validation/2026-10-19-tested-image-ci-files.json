@@ -1,0 +1,26 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "27b36503700f5e0bfb4364c6785a2a687bc50745d4d341f66102e371d12dea47"
+    },
+    {
+      "path": ".github/workflows/deploy.yml",
+      "sha256": "7ac2212e02697463e61cacece8102cd4ab9190292bbcd89102362d4c7ffa18f4"
+    },
+    {
+      "path": "scripts/tested-image.mjs",
+      "sha256": "abed6cc09406e60e60167cb9e9ba9be71b069e435fc1f8d179fa9347ad4b33ad"
+    },
+    {
+      "path": "scripts/should-publish-production.sh",
+      "sha256": "0c3d7e355adbdf02924a4889c5c090fae843de95cfbf02405958788b8ce28caf"
+    },
+    {
+      "path": "tests/unit/tested-image.test.ts",
+      "sha256": "13a238273a2ac5d42636c8f7b06a516605ef6aa2edbb0ec4cdbd1f4dff9679d4"
+    }
+  ],
+  "note": "Local dirty snapshot; no commit, publication or deploy."
+}

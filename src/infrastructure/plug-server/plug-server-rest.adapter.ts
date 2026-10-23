@@ -1,4 +1,8 @@
+import type { ExpectedSource } from "../../domain/persona-v2/source-discovery.js";
+import type { ExpectedStructure } from "../../domain/persona-v2/source-schema.js";
 import { randomUUID } from "node:crypto";
+import type { SqlOperationTransportPort } from "../../domain/ports/sql-operation-transport.port.js";
+import { parseFullClientPolicy } from "./full-policy.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
@@ -49,7 +53,7 @@ const asUnknownArray = (value: unknown): unknown[] => (Array.isArray(value) ? va
 const asStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
-export class PlugServerRestAdapter implements PlugServerGatewayPort {
+export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperationTransportPort {
   private readonly sqlFetch: typeof fetch;
   private readonly authFetch: typeof fetch;
 
@@ -76,6 +80,21 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     return this.postTokens("/api/v1/client-auth/refresh", { refreshToken });
   }
 
+  async getClientProfile(accessToken: string): Promise<{ clientId: string; active: boolean }> {
+    const json = await this.request(accessToken, "GET", "/api/v1/client-auth/me");
+    const root = asRecord(asRecord(json)?.data) ?? asRecord(json);
+    const client = asRecord(root?.client);
+    if (!client || typeof client.id !== "string" || !client.id) {
+      throw new DomainError({
+        code: ERROR_CODES.PLUG_SERVER_ERROR,
+        message: "Perfil Client incompatível.",
+        hint: "Verifique o contrato GET /api/v1/client-auth/me do hub.",
+        source: "plug_server_http",
+      });
+    }
+    return { clientId: client.id, active: client.status === "active" };
+  }
+
   async requestAgentAccess(
     accessToken: string,
     agentId: string,
@@ -95,12 +114,30 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
   async getAgentAccessStatus(accessToken: string, agentId: string): Promise<AgentAccessStatus> {
     try {
       const json = await this.request(accessToken, "GET", `/api/v1/client/me/agents/${agentId}`);
-      const rec = asRecord(asRecord(json)?.data) ?? asRecord(json) ?? {};
+      const root = asRecord(asRecord(json)?.data) ?? asRecord(json) ?? {};
+      const rec = asRecord(root.agent) ?? root;
+      const caps = asRecord(rec.sqlOperations);
       return {
         agentId,
         state: "approved",
+        sourceIdentity: rec.sourceIdentity === 1 ? 1 : null,
+        sourceSchema: rec.sourceSchema === 1 ? 1 : null,
+        sourceConstraints: rec.sourceConstraints === 1 ? 1 : null,
         hasClientToken: rec.hasClientToken === true,
         isHubConnected: typeof rec.isHubConnected === "boolean" ? rec.isHubConnected : null,
+        sqlOperations:
+          caps?.version === 1 &&
+          [caps.maxSteps, caps.maxAffectedRows, caps.timeoutMs].every(
+            (v) => typeof v === "number" && Number.isSafeInteger(v) && v > 0,
+          )
+            ? {
+                version: 1,
+                ...(caps.structureGuard === 1 ? { structureGuard: 1 as const } : {}),
+                maxSteps: Math.min(caps.maxSteps as number, 32),
+                maxAffectedRows: Math.min(caps.maxAffectedRows as number, 100000),
+                timeoutMs: Math.min(caps.timeoutMs as number, 300000),
+              }
+            : null,
       };
     } catch (error) {
       if (!(error instanceof DomainError && error.code === ERROR_CODES.AGENT_ACCESS_DENIED)) {
@@ -113,6 +150,108 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
         isHubConnected: null,
       };
     }
+  }
+
+  /** Single HTTP dispatch. Never uses query pagination, session refresh or automatic replay. */
+  async describeSource(input: {
+    accessToken: string;
+    agentId: string;
+    clientToken: string;
+    database: string;
+  }): Promise<unknown> {
+    const body = await this.request(
+      input.accessToken,
+      "POST",
+      "/api/v1/agents/commands",
+      {
+        agentId: input.agentId,
+        timeoutMs: 20000,
+        command: {
+          jsonrpc: "2.0",
+          id: randomUUID(),
+          method: "sql.describeSource",
+          params: { contractVersion: 1, database: input.database, client_token: input.clientToken },
+        },
+      },
+      25000,
+      "auth",
+    );
+    return unwrapRpcResult(body);
+  }
+
+  async describeSchema(
+    input: Parameters<NonNullable<PlugServerGatewayPort["describeSchema"]>>[0],
+  ): Promise<unknown> {
+    const body = await this.request(
+      input.accessToken,
+      "POST",
+      "/api/v1/agents/commands",
+      {
+        agentId: input.agentId,
+        timeoutMs: 35000,
+        command: {
+          jsonrpc: "2.0",
+          id: randomUUID(),
+          method: "sql.describeSchema",
+          params: {
+            contractVersion: 1,
+            database: input.database,
+            client_token: input.clientToken,
+            expectedSource: input.expectedSource,
+            ...input.inspection,
+          },
+        },
+      },
+      40000,
+      "auth",
+    );
+    return unwrapRpcResult(body);
+  }
+
+  /** Single HTTP dispatch. Never uses query pagination, session refresh or automatic replay. */
+  async operationRpc(
+    input: Parameters<SqlOperationTransportPort["operationRpc"]>[0],
+  ): Promise<unknown> {
+    if ((input.method === "sql.operation.execute") !== Boolean(input.command))
+      throw new Error("Envelope de operação incompatível.");
+    const timeout = input.command?.timeoutMs ?? 15000;
+    let body: unknown;
+    try {
+      body = await this.request(
+        input.accessToken,
+        "POST",
+        "/api/v1/agents/commands",
+        {
+          agentId: input.agentId,
+          timeoutMs: timeout + 5000,
+          command: {
+            jsonrpc: "2.0",
+            id: randomUUID(),
+            method: input.method,
+            params: {
+              ...(input.command ?? input.reference),
+              contractVersion: 1,
+              sourcePhysicalId: input.sourcePhysicalId,
+              ...(input.expectedSource ? { expectedSource: input.expectedSource } : {}),
+              client_token: input.clientToken,
+            },
+          },
+        },
+        timeout + 10000,
+        "sql",
+      );
+    } catch (error) {
+      throw new DomainError({
+        code: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
+        message: "Transporte da operação indisponível ou recusado.",
+        hint: "Não reenvie o lançamento. Consulte o estado pelo mesmo operationId/fingerprint e faça conciliação quando necessário.",
+        source: error instanceof DomainError ? error.source : "plug_server_http",
+        stage: input.method,
+        retryable: false,
+        details: { outcome_unknown: input.method === "sql.operation.execute" },
+      });
+    }
+    return unwrapRpcResult(body);
   }
 
   async putClientToken(
@@ -148,9 +287,11 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
       "auth",
     );
     const result = unwrapRpcResult(json);
+    const fullPolicy = parseFullClientPolicy(result);
     return {
       allTables: result.allTables === true || result.all_tables === true,
       tables: asStringArray(result.tables ?? result.allowedTables ?? result.allowed_tables),
+      ...(fullPolicy ? { fullPolicy } : {}),
     };
   }
 
@@ -159,6 +300,9 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
     agentId: string;
     clientToken: string;
     sql: string;
+    database?: string;
+    expectedSource?: ExpectedSource;
+    expectedStructure?: ExpectedStructure;
     params?: Record<string, unknown>;
     options?: {
       maxRows?: number;
@@ -198,6 +342,9 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
           id: randomUUID(),
           params: {
             sql: input.sql,
+            ...(input.expectedSource ? { expectedSource: input.expectedSource } : {}),
+            ...(input.expectedStructure ? { expectedStructure: input.expectedStructure } : {}),
+            ...(input.database ? { database: input.database } : {}),
             params: input.params,
             client_token: input.clientToken,
             options,
@@ -231,13 +378,13 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
       const status = typeof match?.status === "string" ? match.status : undefined;
       if (
         status === "pending" ||
-        status === "approved" ||
         status === "rejected" ||
         status === "revoked" ||
         status === "expired"
       ) {
         return status;
       }
+      // Historical approval cannot override the live access denial.
       return "unknown";
     } catch {
       return "unknown";
@@ -312,6 +459,27 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort {
       );
     }
     const rpc = asRecord(asRecord(asRecord(json)?.response)?.item)?.error;
+    if (asRecord(asRecord(rpc)?.data)?.failure_code === "SOURCE_IDENTITY_MISMATCH") {
+      throw new DomainError({
+        code: ERROR_CODES.CREDENTIAL_STALE,
+        message: "A conexão executora não corresponde à identidade nativa cadastrada.",
+        hint: "Suspenda o uso da fonte e revise o cadastro. Não altere SQL ou dialeto nem repita automaticamente.",
+        source: "client_token_rpc",
+        stage,
+        retryable: false,
+        details: { failureCode: "SOURCE_IDENTITY_MISMATCH" },
+      });
+    }
+    if (asRecord(asRecord(rpc)?.data)?.failure_code === "SOURCE_STRUCTURE_MISMATCH")
+      throw new DomainError({
+        code: ERROR_CODES.CREDENTIAL_STALE,
+        message: "Estrutura usada pela consulta difere da publicação.",
+        hint: "Inspecione, revise e republique a skill; não repita automaticamente.",
+        source: "client_token_rpc",
+        stage,
+        retryable: false,
+        details: { failureCode: "SOURCE_STRUCTURE_MISMATCH" },
+      });
     if (rpc) {
       throw mapPlugServerFailure({ status: 200, body: json, retryAfterMs }, this.logger, stage);
     }
@@ -382,7 +550,16 @@ const readColumnsMetadata = (result: Record<string, unknown>): SqlColumnMetadata
           : rec.is_nullable === false
             ? false
             : undefined;
-    out.push({ name, ...(type ? { type } : {}), ...(nullable !== undefined ? { nullable } : {}) });
+    const odbcType = rec.odbc_type ?? rec.odbcType;
+    out.push({
+      name,
+      ...(type ? { type } : {}),
+      ...(nullable !== undefined ? { nullable } : {}),
+      ...(typeof odbcType === "number" && Number.isSafeInteger(odbcType) ? { odbcType } : {}),
+      ...(rec.type_system !== undefined
+        ? { typeSystem: typeof rec.type_system === "string" ? rec.type_system : "unknown" }
+        : {}),
+    });
   }
   return out;
 };
@@ -437,7 +614,7 @@ export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
   return {
     columns: inferred,
     rows,
-    ...(result.truncated === true ? { truncated: true } : {}),
+    ...(typeof result.truncated === "boolean" ? { truncated: result.truncated } : {}),
     ...(pagination ? { pagination } : {}),
     ...(metadata.length > 0 ? { columnsMetadata: metadata } : {}),
     ...(serverTimings

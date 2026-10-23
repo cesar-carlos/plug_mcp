@@ -1,0 +1,91 @@
+{
+  "capturedAt": "2026-10-14T21:42:50.4126747Z",
+  "validation": {
+    "chromium": 1,
+    "nativeFourEngineChain": false,
+    "unitPersona": 393,
+    "postgres": 43,
+    "web": 32,
+    "fixtureCleaned": true
+  },
+  "scope": "affected-files-only",
+  "generation": "persona-v2",
+  "typescript": "7.0.2",
+  "commitBase": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "node": "24.21.0",
+  "release": {
+    "requiredGates": 14,
+    "completedGates": 0,
+    "ready": false
+  },
+  "files": [
+    {
+      "sha256": "0d1731efc2de81625dcd5108aa97e91b95719db11fd0d274d3d83e9b12f6ad29",
+      "path": "src/application/persona-v2/dataset-types.ts"
+    },
+    {
+      "sha256": "b994b0dff5c14d03947a9d1263134f2a8b622e219b1f9b073545c3462ed695e7",
+      "path": "src/application/persona-v2/knowledge-library-schema.ts"
+    },
+    {
+      "sha256": "febab8419102f9950571510c59614c75b678b20330b19a8e5af1208cf4453c25",
+      "path": "src/application/persona-v2/runtime-instructions.ts"
+    },
+    {
+      "sha256": "5bf44867066cf9dcb30e9ec99e958a8979039d1709cc72d5701767e44ae70da9",
+      "path": "web/src/persona-v2/KnowledgeDatasetEditor.vue"
+    },
+    {
+      "sha256": "0024888a6b434b6da420f416282899aee66126502e7013253f90633a8a674944",
+      "path": "web/src/persona-v2/KnowledgeLibraryPanel.vue"
+    },
+    {
+      "sha256": "5a5074b57160a951f0fef63c1ef4bbb48333a32b14fc2c3d46b65e1c0b7601e6",
+      "path": "tests/unit/persona-v2/knowledge-library.test.ts"
+    },
+    {
+      "sha256": "b49b86d02f790298e2820520240e5d12a5d4513c17324c52e9283c19f064634f",
+      "path": "tests/persona-v2/shared-knowledge.postgres.test.ts"
+    },
+    {
+      "sha256": "bc8188567a4454755882a7cf50594e457f924cc19d066384fcfa52a431492e6c",
+      "path": "tests/persona-v2-browser/persona.spec.ts"
+    },
+    {
+      "sha256": "2721bef14a9c7624c459b22ef99bca54a7aaa48b6b90456d08e3d5cf4888af42",
+      "path": ".cursor/rules/catalog.mdc"
+    },
+    {
+      "sha256": "f3a097d906ddeaa834211a5f36d25da9b665f441de521713380801be7cdd4ccb",
+      "path": "docs/persona-v2/knowledge-library.md"
+    },
+    {
+      "sha256": "5a8871dfe70dd4717cd4ce28ffa99701c859da42be6441708ba539478088b27e",
+      "path": "docs/persona-v2/console.md"
+    },
+    {
+      "sha256": "7f8fe53288266ae5fddf764ae7b56569519d6e5629919a14e334773f72404bd8",
+      "path": "docs/persona-v2/remaining-plan.md"
+    },
+    {
+      "sha256": "e66800df1f95579f286ad0be883df53f9acd92bb542605395c3884b800ca2c45",
+      "path": "docs/persona-v2/acceptance.md"
+    },
+    {
+      "sha256": "8ee4ea6aeaed143ce82b5df9c51003c7ca849ff90c38c17eaaa058dca9fcb46f",
+      "path": "docs/persona-v2/validation.md"
+    },
+    {
+      "sha256": "67bbb4820d71b9aeb8d6d5706ca19fdfe47481980f0e8a1ab26c5fce34a5acbb",
+      "path": "docs/persona-v2/validation/2026-10-14-dataset-editor.md"
+    },
+    {
+      "sha256": "af33ce3f597378724c8ace7653b4e1e1781608b29d0c753f64742addb294c6aa",
+      "path": "CHANGELOG.md"
+    },
+    {
+      "sha256": "212dc6bb71232a8bdb8ffe57e5ac78cd21c152b5383ef8689d3c8df55ed0cbcd",
+      "path": "contracts/persona-v2-release.json"
+    }
+  ]
+}

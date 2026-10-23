@@ -1,27 +1,23 @@
 ---
-description: "Estrutura de pastas do se7e-mcp-server"
-globs: ["src/**/*.ts", "tests/**/*.ts"]
+description: "Localização dos componentes novos e legados"
+globs: ["src/**/*.ts", "tests/**/*.ts", "web/src/**/*"]
 alwaysApply: false
 ---
 
-# Pastas
+# Estrutura
 
-```
-src/domain/entities|ports|errors
-src/application/use-cases/{cofre,treinar-com-sql,consultar,inspecionar,exportar-anexo,skills,aprendizado}.ts
-src/application/use-cases/shared/{sql-ast,sql-scan,validar-escopo,gates-skill,query-cache-key,backfill-pacote,telemetria-busca,esqueleto-semantico,detectar-celula-binaria,sanitizar-linhas-consulta}.ts
-src/infrastructure/{http,mcp,plug-server,persistence,crypto,logging,cache,anexo}
-src/composition/compose.ts
-src/config/env.ts
-src/main.ts
-tests/{unit,integration,live,helpers}
-drizzle/0008_cofre_grafo.sql … 0023_token_por_acesso.sql
-```
+| Área         | Persona-v2                                   | Principal legada                        |
+| ------------ | -------------------------------------------- | --------------------------------------- |
+| Entrada      | `src/main-persona-v2.ts`                     | `src/main.ts`                           |
+| Composição   | `src/composition/compose-persona-v2.ts`      | `src/composition/compose.ts`            |
+| Domínio      | `src/domain/persona-v2/`                     | `src/domain/entities/`                  |
+| Aplicação    | `src/application/persona-v2/`                | `src/application/use-cases/`            |
+| Persistência | `src/infrastructure/persistence/persona-v2/` | `src/infrastructure/persistence/`       |
+| Migrations   | `migrations/persona-v2/`                     | `drizzle/`                              |
+| Console      | `web/src/persona-v2/`                        | Demais views/services de `web/src/`     |
+| Contratos    | `docs/persona-v2/`                           | Referências legadas em `docs/README.md` |
 
-Novo caso de uso → `use-cases/` + `register-tools.ts` + `compose.ts` + teste + `docs/mcp/tools.md` + `CHANGELOG.md` (Unreleased) + rule `catalog`/`mcp_protocol` se o contrato mudar.
-
-Novo port → `domain/ports`. Adapter só em `infrastructure`. OAuth delimitado por ports/aplicação/adapters; sem seed Fonte ou embeddings. Cutover de pacote: `npm run db:backfill-escopo`.
-
-## Delegação ChatGPT opcional
-
-OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
+Ports em `src/domain/ports/`; adapters em `src/infrastructure/`.
+Novos casos de uso entram na aplicação/composição do runtime correspondente,
+com contrato e testes. Não registrar funcionalidades v2 automaticamente nas
+tools legadas nem usar `db:backfill-escopo` para migrar persona-v2.

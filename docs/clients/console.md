@@ -1,5 +1,8 @@
 # Console de manutenção no navegador
 
+> Referência do runtime legado por acesso. Modelo aprovado e estado da refatoração:
+> [persona-v2](../persona-v2/README.md). Não aplicar esta identidade à entrada nova.
+
 A SPA em `/app` permite cadastrar a conexão com o plug_server e manter persona, skills, grafo e operação. É destinada a técnicos e administradores, usa Vue 3, Pinia, Vue Router e Vite, com componentes próprios. Um Token MCP autentica exatamente um acesso; a interface não amplia pacote, policy ou autorização.
 
 ## Abrir e navegar

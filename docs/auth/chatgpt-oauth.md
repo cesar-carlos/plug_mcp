@@ -1,5 +1,8 @@
 # ChatGPT: delegação OAuth de um acesso Se7e
 
+> Referência do runtime legado por acesso. Modelo aprovado e estado da refatoração:
+> [persona-v2](../persona-v2/README.md). Não aplicar esta identidade à entrada nova.
+
 Status: implementação local; instalação e homologação real do piloto dependem da URL HTTPS e conexão privada. Testes locais não certificam funcionamento no ChatGPT.
 
 ## Configuração e vínculo
@@ -42,7 +45,7 @@ Tools novas: `get_profile({})` retorna id opaco estável e nome sem email; `obte
 
 ## Pacote e implantação
 
-Fonte em `plugins/se7e-chatgpt`. `npm run plugin:package -- --portable` gera pacote HTTP; `npm run plugin:package -- --connection-id=ID_REAL` gera variante ChatGPT com `.app.json`, sem segundo servidor mcp.json. O script exige PUBLIC_BASE_URL HTTPS e recusa placeholders. Artefatos em build/ são ignorados e cada geração exige diretório novo, evitando mistura. Cadastre o servidor privado no ChatGPT e use o ID real plugin_asdk_app antes de gerar o pacote ChatGPT. Instale em marketplace local para teste e depois distribua privadamente pelo workspace.
+Fonte legada em `plugins/se7e-chatgpt`. `npm run plugin:package -- --runtime=legacy --portable` gera pacote HTTP; `npm run plugin:package -- --runtime=legacy --connection-id=ID_REAL` gera variante ChatGPT com `.app.json`, sem segundo servidor mcp.json. O script exige PUBLIC_BASE_URL HTTPS e recusa placeholders. Artefatos em build/ são ignorados; destino final inclui `legacy/chatgpt/se7e` ou `legacy/portable/se7e` e não admite sobrescrita. Perfil, hashes, assets oficiais e ferramentas são validados antes da disponibilização. `npm run plugin:check` repete a validação offline. Confira o ID real da conexão privada existente antes de montar; montagem não altera instalações. [Contrato do pacote](../persona-v2/plugin.md). O candidato persona-v2 é separado e não implementa este OAuth legado.
 
 Aplicar migração com flag desligada, implantar/verificar clientes existentes, habilitar discovery, cadastrar conexão e liberar apenas os acessos do piloto. Uma instância inicialmente. Não alterar o contrato REST do hub.
 

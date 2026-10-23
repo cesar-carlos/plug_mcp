@@ -1,0 +1,99 @@
+{
+  "baseCommit": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "hubObservedHead": "eb80cfbdf106d2b238f8299940b472f278b9d13e",
+  "ready": false,
+  "capturedAt": "2026-10-15T21:44:47.8746549Z",
+  "hubPinnedCommit": "693da92a334c98ae911c329d52006456ce768b09",
+  "generation": "persona-v2",
+  "scope": "Selected dirty local candidate files; not a full platform snapshot or new commit",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "90b87abfa493b5f4a17290577d5c1edd27de4f6c4470aebf3b212c87038c4f6f"
+    },
+    {
+      "path": "src/domain/persona-v2/external-run.ts",
+      "sha256": "4471f025a49e0be8e9c0aea12e1db3b1b53c4fb37933a6607c159a046e961c37"
+    },
+    {
+      "path": "src/domain/ports/persona-external.port.ts",
+      "sha256": "f77b8661d541c7f4aef1875e2e483137268da0e142cf00241238f3025d5c9e29"
+    },
+    {
+      "path": "src/application/persona-v2/external-integrations.ts",
+      "sha256": "4aa9c813fecf73c0fd0046251e448ee1dacd6ea61dd46f7e73b5f20cf6283d61"
+    },
+    {
+      "path": "src/application/persona-v2/external-publication-cases.ts",
+      "sha256": "f76339de3b80155ec378f0b503063d7c33f82224c91ea623b84708f80b358992"
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "567b24b264842a097a66d2b56b77c45cd6b10522489457507fe833d4da6875e1"
+    },
+    {
+      "path": "src/application/persona-v2/training-base.ts",
+      "sha256": "89ccc25ef2738fa80703c0ce2c4fede39ef4d7dd3ff84498cf36043568a7888e"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/external.ts",
+      "sha256": "409901c95f8d6e8f490da4c78a140729fccefc3138dc7c06f094ac6058ace8f5"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/run-external-cases.ts",
+      "sha256": "8906f875428580b9785b0c8288de2055ac6e15453637ec1f40f73ae8bdad0dbf"
+    },
+    {
+      "path": "src/infrastructure/persona-v2/external-fixture-control.ts",
+      "sha256": "b2a054821dbbe1e535ad5c4d535aff6d92664e3f182fa4cd24ff27d91d73b5e9"
+    },
+    {
+      "path": "src/infrastructure/http/persona-v2-admin.ts",
+      "sha256": "e049878d9e0002863fe82793c5f96b9ae17d238c9feed87a71f9c057e1361049"
+    },
+    {
+      "path": "migrations/persona-v2/0027_external_runner.sql",
+      "sha256": "f31c90c5ae1432ce1207e5e396cee52d222e1c3b7d2b20f0883165df1ba1b116"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalTestsPanel.vue",
+      "sha256": "9eb3907efbb7741a2b660d2c38a3c1387906cd2372c49f67fb06f77e19bef8ec"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalTestFields.vue",
+      "sha256": "9400f4c6d1ccbd51db8a4b79db2db997a410a2872484bf9a8ad89cdf4a3e749d"
+    },
+    {
+      "path": "web/src/persona-v2/external-test-values.ts",
+      "sha256": "23d42783e337157558138e441610ebfcb2f06dcb771ade91e375483401bd6431"
+    },
+    {
+      "path": "web/src/persona-v2/external-test-values.test.ts",
+      "sha256": "3ae39e4bb9cf190cec5e281ac4551ea600297872f024f28dc834f36b3e10ec85"
+    },
+    {
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "9065642f4af90244f4fc5fdde09aa3d1b4a1477032d6f29d96744fe0d8f0086a"
+    },
+    {
+      "path": "tests/helpers/external-provider.ts",
+      "sha256": "0323d90f86c55cd15f6a9f9c8e3c93117e7f548e62f037b74d05571fef7de73e"
+    },
+    {
+      "path": "tests/persona-v2/setup-delegation.postgres.test.ts",
+      "sha256": "e54872e3d71bd278b4302921895e85f8b841d99051e2ced9f1389622a1eb4099"
+    },
+    {
+      "path": "tests/unit/persona-v2/external-run.test.ts",
+      "sha256": "292a3112050c868b3749ec61d0c8749c23f72829b755f36193ed40d96d6386b1"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "6e811af09f2f15a8579c71fcd67edb307ef6a56015bc8f7649153d0fc3561ee4"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    }
+  ]
+}

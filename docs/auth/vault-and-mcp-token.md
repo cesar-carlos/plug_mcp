@@ -1,5 +1,8 @@
 # Cofre e token MCP
 
+> Referência do runtime legado por acesso. Modelo aprovado e estado da refatoração:
+> [persona-v2](../persona-v2/README.md). Não aplicar esta identidade à entrada nova.
+
 O usuário já é Client no plug-server. O MCP mantém Bearer manual, com OAuth opcional para delegação ChatGPT, sem novas contas no hub ou sessão persistente de login. Um client_token identifica um acesso, uma persona, um catálogo e um Bearer. A senha autentica; não particiona o catálogo.
 
 ## Cadastro e manutenção no navegador
@@ -28,6 +31,9 @@ Legado mantém sessões/SSE em memória, imutáveis por usuário/acesso; trocar 
 
 ## Migração e rotação de chaves
 
+Este procedimento cobre o runtime legado. Persona-v2 usa
+[rotação própria](../persona-v2/vault-rotation.md), sem transferir cifras ou bancos.
+
 0023 é histórico: distribuiu Bearers por acesso. 0029 apaga setups legados pendentes em mcp_setup e preserva Bearers existentes. Não exponha códigos por SELECT; regenere pelo formulário autenticado no hub.
 
 Novas cifras usam AES-256-GCM v2 com identificador de chave e AAD. MCP_ENCRYPTION_KEY/KEY_ID definem a chave atual; MCP_ENCRYPTION_PREVIOUS_KEYS é JSON identificador → chave; MCP_ENCRYPTION_LEGACY_KEY permite ler v1 de uma chave anterior. Nunca registre os valores.
@@ -38,4 +44,4 @@ Auditoria guarda IDs, contagens, estágio, origem e duração, nunca SQL, pergun
 
 ## Conexão ChatGPT
 
-[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+Contrato de delegação e isolamento: [OAuth do runtime legado](../auth/chatgpt-oauth.md).

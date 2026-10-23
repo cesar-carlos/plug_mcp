@@ -1,0 +1,60 @@
+# Prepared distribution only: current v2 runtime still refuses production.
+name: se7e-persona-v2-production
+
+x-runtime: &runtime
+  image: ${PERSONA_V2_PRODUCTION_IMAGE:?Explicit accepted image digest required}
+  entrypoint: ["./docker-entrypoint-persona-v2.sh"]
+  init: true
+  read_only: true
+  restart: "no"
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  stop_grace_period: 30s
+  environment: &runtime-env
+    NODE_ENV: production
+    HOST: 0.0.0.0
+    PORT: "3333"
+    DATABASE_URL: ${PERSONA_V2_PRODUCTION_DATABASE_URL:?Dedicated persona-v2 database required}
+    MCP_ENCRYPTION_KEY: ${PERSONA_V2_PRODUCTION_ENCRYPTION_KEY:?External random key required}
+    MCP_ENCRYPTION_KEY_ID: ${PERSONA_V2_PRODUCTION_ENCRYPTION_KEY_ID:?Explicit key identity required}
+    MCP_ENCRYPTION_PREVIOUS_KEYS: "${PERSONA_V2_PRODUCTION_PREVIOUS_KEYS:-{}}"
+    PUBLIC_BASE_URL: ${PERSONA_V2_PRODUCTION_PUBLIC_URL:?Explicit HTTPS origin required}
+    PLUG_SERVER_BASE_URL: ${PERSONA_V2_PRODUCTION_HUB_URL:?Explicit HTTPS hub origin required}
+    TRUST_PROXY: ${PERSONA_V2_PRODUCTION_TRUST_PROXY:-}
+    PERSONA_V2_REDIS_URL: ${PERSONA_V2_PRODUCTION_REDIS_URL:-}
+    PERSONA_V2_QUERY_CACHE_TTL_MS: ${PERSONA_V2_PRODUCTION_CACHE_TTL_MS:-0}
+    PERSONA_V2_OAUTH_ENABLED: ${PERSONA_V2_PRODUCTION_OAUTH_ENABLED:-false}
+    PERSONA_V2_OAUTH_CLIENTS: "${PERSONA_V2_PRODUCTION_OAUTH_CLIENTS:-{}}"
+
+services:
+  server:
+    <<: *runtime
+    command: [server]
+    ports:
+      - "127.0.0.1:${PERSONA_V2_PRODUCTION_LOCAL_PORT:?Explicit loopback port required}:3333"
+  worker:
+    <<: *runtime
+    command: [worker]
+    environment:
+      <<: *runtime-env
+      PERSONA_V2_WORKER_HEALTH_PORT: "3335"
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3335/health',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 6
+  migrate:
+    <<: *runtime
+    profiles: [maintenance]
+    command: [migrate]
+    healthcheck:
+      disable: true

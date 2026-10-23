@@ -1,0 +1,250 @@
+{
+  "scope": "persona-v2-console-consumer-operations",
+  "generatedAt": "2026-10-17T12:38:50.660Z",
+  "partial": true,
+  "productionReady": false,
+  "cleanupConfirmed": true,
+  "revisions": {
+    "plug_mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "plug_server": "76950497dc386130e13b7d6afc0678e50208e985",
+    "plug_agente": "7d00ae8a8f822605d76e775fb5659f27e29df539"
+  },
+  "environment": {
+    "fixture": "se7e-console-77c1b4a34a1e",
+    "node": "24.21.0",
+    "typescript": "7.0.2",
+    "chromium": "153.0.8010.12",
+    "postgres": "17.11"
+  },
+  "runs": [
+    {
+      "suite": "browser-complete",
+      "passed": 33,
+      "excluded": 0
+    },
+    {
+      "suite": "frontend-native",
+      "passed": 45,
+      "excluded": 0,
+      "durationSeconds": 0.735
+    },
+    {
+      "suite": "root-regression-native",
+      "passed": 1470,
+      "excluded": 91,
+      "durationSeconds": 78.14
+    }
+  ],
+  "files": [
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "769356d029a3a437850eea859f6def3ebf0f0d82e71ab676fb6c7a4844af0465"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/testing.mdc",
+      "sha256": "36f3180c16549ad41dd10352f195f997f490a5a74d24ccffa77666b50ace7865"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "AGENTS.md",
+      "sha256": "2617064bcecf83bf22651507444405f171f5730aea406d702cb34adfe8b34184"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "CHANGELOG.md",
+      "sha256": "d0aacf7a2553d9bc1814ae8a06c786b3dbeef58cf5c719c6c75c32c8d1aeaff6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/README.md",
+      "sha256": "767c25c712c6d501ace487fcfb5db5344f98c82eb8ace4769c6be5eea7916b6f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "f1c1c2d731b1f934dca68249bf7c596c0bd4d4dbd64d9ff57195e0007cd2fba3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/console.md",
+      "sha256": "4d6e16430045f4c580e72a8e2fe5f268de683ac95c3f2da439fafa74e6f60ed2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/external-integrations.md",
+      "sha256": "990ce51319c44205eebc015167e609cbc211bcf456953b828e7a03158ce7e67c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "d52ab69d95aa9561c6c6692316d6680df16f6ae84225fe4219498058c9275e8e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/sql-operations.md",
+      "sha256": "2dd0b5ee5f22b847972bd02483c0d47baace53d8a26fef19f9b6531725fb821c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation.md",
+      "sha256": "e6d24a01367a96d4eb13528b31505a3968000b4660532bf2ef56626944f8c307"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-17-console-consumer-operations.md",
+      "sha256": "edd1f8611cea3cc31f49922af6328581dd354fcb4d6cc01473b4a04cbd559782"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "package-lock.json",
+      "sha256": "0d02d026421bb15fca54abff0bbde7ba6ad659ead437dc9f6c48b14f9c862547"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "package.json",
+      "sha256": "23c98290e07d98589776c6f85bf7d64f7a87360009e5c8cdf451535affe5aa4f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "playwright.persona-v2.config.ts",
+      "sha256": "05515dc41d49951ed2bbc7c2fbde867d8a183c8fb6a3e1e61d45273a67ee6938"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/external-actions.ts",
+      "sha256": "11359fabd3cff42173fb41eab76fdb5e2670024299ff51c9c1e617c6d1b153e3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/sql-operations.ts",
+      "sha256": "268a6cbf7c1e429b298e95414f3881c3459bed5fc834765205a890c695ed245a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/operation.ts",
+      "sha256": "8d84c89ce59225397fcdfb91628ca9ecf7ad68c5b130e150955cfe86213b6a5d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/mcp/persona-v2-http.ts",
+      "sha256": "7e8f39a64d80f1e82bcf2682b1392d55a8d9450d2e933b4e792df613e50bf139"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/helpers/persona-v2-browser-server.ts",
+      "sha256": "144b5f10c1659229a8c5675340c786113cc9267c83d6abda2da3709f96f14b8d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "0d7d29c967beadbd311a6782a5c592952e01117f219c681efd5c0b840799ca13"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/dist/assets/persona-BlK0PRLn.css",
+      "sha256": "7ffd218762c2073237c97ee04a1443acc1dad4d8e007e254dfb1500802e07cda"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/dist/assets/persona-DBGsQj54.js",
+      "sha256": "1bbbb13396333f4168e55a90193d38d6ae13e5d1409cdff7b607b93b7a8685cf"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/dist/index.html",
+      "sha256": "4f3bce0a7415961065e639897555653d36bc9dc186e0a3f3bd327df52220c094"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/dist/persona-v2.html",
+      "sha256": "bb23a5ba235b8236a0df7fb3ec79ac6519bb3d4a41b34aa8d23ba67c13bc5542"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/package-lock.json",
+      "sha256": "cab25aa3ee3f1b50410851757b3b63148de9d69971c9f1e2e64607bb6153e880"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/package.json",
+      "sha256": "0fdc66747667afd9651fd9b12f5b5480dfe9edd607225f53b2f7eff4553ca07a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/ConsumerOperationPanel.vue",
+      "sha256": "2c6cb588ffd2deb9014bad69e9f3f62bf33b7fcd9c5ec443a40f89aac96aae32"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/ExternalActionsPanel.vue",
+      "sha256": "3084a627b3d04078112ef5b1f5b78ae00533ec564fe48d529a80f69e53c0f200"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/OperationRetentionNotice.vue",
+      "sha256": "be1edfe7c39101fb6c8cb21f3e710409e0a28afa21064da591f3143ae99a8961"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/OperationsPanel.vue",
+      "sha256": "78067630d6a05c20c20dc7c644a172dacdb1fbadc763a2f983b8090a127fc587"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "45424f25767739a2540ee5d6768d75694e17445f0bf36d7236ac2d5ebc3898f4"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/consumer-operation.test.ts",
+      "sha256": "381cd188d8ac8f0f5323823fbfa0cfff92c2938f4a6eeb10f221fb2a2fa05956"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/consumer-operation.ts",
+      "sha256": "0ab6f42e215665d3c6515184991ebb02909eba0e7dd48a2a481993080d951866"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/model.ts",
+      "sha256": "63582e99afb2bf3eabc45c8eb4d9d796108aaa400a13ede19dff9ce5e44bf227"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/navigation.ts",
+      "sha256": "36a059d402f55f7291fadacf109009862a6180f6ff1ded8cc1c5cb44fed11c3a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/style.css",
+      "sha256": "b9fbd47f3538b797d8e8a4ee0161978df791e353e8127a0641885b06130f415b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/useErrorSummary.ts",
+      "sha256": "4d3e1a058eb8cc788705c4ccfb54629097ae0997f2baab5e32e5a81c373baf23"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/vite.config.ts",
+      "sha256": "c4331f73b913b1eaae1203a1ec1495237ffd0576c3ab6a2d21cdd902df912abd"
+    },
+    {
+      "project": "plug_server",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "project": "plug_agente",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    }
+  ]
+}

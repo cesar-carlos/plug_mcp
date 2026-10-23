@@ -200,6 +200,15 @@ export const compose = async (
 
   if (config.DATABASE_URL) {
     const { db, pool } = createDb(config.DATABASE_URL);
+    const generation = await pool.query<{ generation_table: string | null }>(
+      "SELECT to_regclass('public.mcp_schema_generation')::text AS generation_table",
+    );
+    if (generation.rows[0]?.generation_table) {
+      await pool.end();
+      throw new Error(
+        "Runtime legado recusado em banco persona-v2; use a entrada dedicada de desenvolvimento.",
+      );
+    }
     dbPool = pool;
     usuarios = new DrizzleUsuarioRepository(db);
     acessos = new DrizzleAcessoRepository(db);

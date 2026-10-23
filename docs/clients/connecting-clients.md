@@ -1,5 +1,8 @@
 # Conectar clientes
 
+> Referência do runtime legado por acesso. Modelo aprovado e estado da refatoração:
+> [persona-v2](../persona-v2/README.md). Não aplicar esta identidade à entrada nova.
+
 O cliente MCP usa `Authorization: Bearer <token_mcp>`. Com CHATGPT_OAUTH_ENABLED, /mcp/chatgpt publica discovery e aceita apenas OAuth; /mcp continua manual.
 
 Nos clientes legados, no `initialize`, o servidor envia `instructions` com o pre-treino de sessão (SQL no **escopo da skill publicada**, depois a persona). Sem Bearer: só o SQL comum. Com Bearer: SQL inalterado + persona **deste** acesso depois — o Bearer autentica exatamente um acesso. **Várias personas = vários acessos = vários Bearers** (`adicionar_acesso` / `registrar_acesso`); um Bearer = um chapéu; não concatena chapéus. O protocolo só reenvia isso no `initialize`. `adicionar_acesso` **não** troca o chapéu desta sessão (devolve `setupUrl` da persona nova — conecte outro servidor MCP no host). Este Bearer nunca ganhou um segundo chapéu; o host pode manter `instructions` do chapéu 1 até reconectar. Chat novo na mesma conexão MCP pode não receber de novo — use o prompt `pre_treino` (sem argumentos; **releitura viva** da persona no banco) se o host não reinsere `instructions`. Após deploy, reconecte o cliente: o catálogo `tools/list` pode estar cacheado. O servidor envia `notifications/tools/list_changed` no `initialize` autenticado se SHA/versão do processo mudou. Resources: `guia://paginacao` e `guia://dialeto/{mssql|sybase|postgres|firebird}` já no bootstrap (sem Bearer) e após Bearer — leia o guia do dialeto do acesso, não assuma mssql. Identificar o GDBR e emitir SQL compatível é treino + IA; o `plug_server` não reescreve dialeto ([objective.md](../product/objective.md)). `skill://{acessoId}/{slug}` é o pacote da skill publicada (URI com `acessoId`; leitura só se for desta sessão) e exige Bearer. `persona://{acessoId}` (Bearer) é a persona do acesso (tom/uso; **não** recorta skills **dentro** do acesso). Tools omitem `acessoId`. Dois `client_token` no mesmo e-mail/`agentId` são catálogos distintos, cada um com o próprio Bearer. Hub SQL continua `agentId` + `client_token` daquele acesso.
@@ -56,4 +59,4 @@ Leia `obter_treinamento_base`/guias públicos antes do pacote do acesso. Para co
 
 ## Conexão ChatGPT
 
-[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+Contrato de delegação e isolamento: [OAuth do runtime legado](../auth/chatgpt-oauth.md).

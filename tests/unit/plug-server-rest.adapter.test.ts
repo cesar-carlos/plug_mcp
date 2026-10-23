@@ -13,6 +13,61 @@ import { SilentTestLogger } from "../helpers/silent-logger.js";
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 
+it.each(["approved", "pending", "rejected", "revoked", "expired"])(
+  "não restaura acesso negado pelo histórico %s",
+  async (status) => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ code: "AGENT_ACCESS_DENIED" }), { status: 403 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ requests: [{ agentId: "fixture-agent", status }] }), {
+          status: 200,
+        }),
+      );
+    const adapter = new PlugServerRestAdapter(
+      "http://hub.fixture.test",
+      new SilentTestLogger(),
+      fetcher,
+    );
+    const result = await adapter.getAgentAccessStatus("fixture-jwt", "fixture-agent");
+    expect(result.state).toBe(status === "approved" ? "unknown" : status);
+    expect(result.hasClientToken).toBe(false);
+    expect(result.sourceIdentity).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  },
+);
+
+it("preserva tipo ODBC do wire do agente sem inferir base64 textual como binário", () => {
+  const result = normalizeSqlResult({
+    columns: ["file"],
+    rows: [{ file: "YQ==" }],
+    column_metadata: [{ name: "file", odbc_type: -4 }],
+  });
+  expect(result.columnsMetadata).toEqual([{ name: "file", odbcType: -4 }]);
+  expect(result.rows).toEqual([{ file: "YQ==" }]);
+  expect(
+    normalizeSqlResult({
+      rows: [{ file: "YQ==" }],
+      column_metadata: [{ name: "file", odbc_type: 7, type_system: "odbc_fast" }],
+    }).columnsMetadata,
+  ).toEqual([{ name: "file", odbcType: 7, typeSystem: "odbc_fast" }]);
+  expect(
+    normalizeSqlResult({
+      rows: [{ file: "YQ==" }],
+      column_metadata: [{ name: "file", odbc_type: -4, type_system: 7 }],
+    }).columnsMetadata,
+  ).toEqual([{ name: "file", odbcType: -4, typeSystem: "unknown" }]);
+  expect(
+    normalizeSqlResult({
+      columns: ["file"],
+      rows: [{ file: "YQ==" }],
+      column_metadata: [{ name: "file", odbc_type: "-4" }],
+    }).columnsMetadata,
+  ).toEqual([{ name: "file" }]);
+});
+
 const commandOptions = (body: unknown): Record<string, unknown> => {
   const root = asRecord(body);
   const command = asRecord(root?.command);
@@ -31,6 +86,39 @@ const okSqlResponse = (): Response =>
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
+
+it.each([1, 2, null])("não presume suporte estrutural para capability %s", async (version) => {
+  const adapter = new PlugServerRestAdapter(
+    "http://hub.fixture.test",
+    new SilentTestLogger(),
+    async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            agent: {
+              sourceIdentity: 1,
+              sourceSchema: version,
+              sourceConstraints: version,
+              sqlOperations: {
+                version: 1,
+                structureGuard: version,
+                maxSteps: 32,
+                maxAffectedRows: 100000,
+                timeoutMs: 300000,
+              },
+              hasClientToken: true,
+              isHubConnected: true,
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+  );
+  const result = await adapter.getAgentAccessStatus("fixture-jwt", "fixture-agent");
+  expect(result.sourceSchema).toBe(version === 1 ? 1 : null);
+  expect(result.sourceConstraints).toBe(version === 1 ? 1 : null);
+  expect(result.sqlOperations?.structureGuard).toBe(version === 1 ? 1 : undefined);
+});
 
 const captureExecuteSql = async (
   options?: {
@@ -76,6 +164,36 @@ const captureExecuteSql = async (
 };
 
 describe("PlugServerRestAdapter.executeSql", () => {
+  it("preserva truncated=false explícito e não inventa completude quando ausente", () => {
+    expect(
+      normalizeSqlResult({ result: { columns: ["id"], rows: [], truncated: false } }).truncated,
+    ).toBe(false);
+    expect(normalizeSqlResult({ result: { columns: ["id"], rows: [] } }).truncated).toBeUndefined();
+  });
+  it("encaminha database explícito da fonte sem alterar SQL nem parâmetros", async () => {
+    let captured: Record<string, unknown> = {};
+    const adapter = new PlugServerRestAdapter(
+      "http://hub.test",
+      new SilentTestLogger(),
+      async (_url, init) => {
+        captured = JSON.parse(String(init?.body));
+        return okSqlResponse();
+      },
+    );
+    await adapter.executeSql({
+      accessToken: "jwt",
+      agentId: "agent",
+      clientToken: "source",
+      database: "base-a",
+      sql: "SELECT id FROM orders WHERE id > :minimum",
+      params: { minimum: 0 },
+    });
+    expect(asRecord(asRecord(captured.command)?.params)).toMatchObject({
+      database: "base-a",
+      sql: "SELECT id FROM orders WHERE id > :minimum",
+      params: { minimum: 0 },
+    });
+  });
   it("envia execution_mode preserve quando não há paginação", async () => {
     const { envelope } = await captureExecuteSql({ maxRows: 50 });
     const options = commandOptions(envelope);

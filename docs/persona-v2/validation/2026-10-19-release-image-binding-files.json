@@ -1,0 +1,29 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": "scripts/check-persona-release.mjs",
+      "sha256": "4e1df7cd8032a58f4677e58b9e6c245f7dc67c2badfa27b0b2f6feba9b10c4d6"
+    },
+    {
+      "path": "scripts/persona-release-evidence.mjs",
+      "sha256": "fdcccec913028186aba18632a395a0ff53f2a8d26bf3d1fd703c65dfdbf73f3e"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "3f4c0bd0559cf10a933c9b5348b18c42d15cd3ef7e1c55aa910bab79d698e8bd"
+    },
+    {
+      "path": ".github/workflows/deploy.yml",
+      "sha256": "11e35efdf67b9bdd148e8831fcb2dd45e2aac8452aab760b92b0626954898f8e"
+    },
+    {
+      "path": "tests/unit/persona-release-evidence.test.ts",
+      "sha256": "7ab7b3ed22fc3df4f3cdfe19339574da05ae4448f7a7778def1a8272f25c6f77"
+    },
+    {
+      "path": "tests/unit/tested-image.test.ts",
+      "sha256": "0e7dbf19d56889d271c9ee958a9cda29914282ab839a309800dfd9ca2bf0ccb9"
+    }
+  ]
+}

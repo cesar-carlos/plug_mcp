@@ -1,5 +1,8 @@
 # Modelo de dados
 
+> Referência do runtime legado por acesso. Modelo aprovado e estado da refatoração:
+> [persona-v2](../persona-v2/README.md). Não aplicar esta identidade à entrada nova.
+
 Não há tabela de senha de conta MCP, nova conta OAuth nem catálogo pronto.
 
 ## Cofre
@@ -65,4 +68,4 @@ Cofre usa envelope criptográfico v2 key ID/AAD; leitura v1 e keyring anteriores
 
 ## Conexão ChatGPT
 
-[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+Contrato de delegação e isolamento: [OAuth do runtime legado](../auth/chatgpt-oauth.md).

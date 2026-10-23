@@ -15,6 +15,28 @@ import {
   type HubHttpAgents,
 } from "../../src/infrastructure/plug-server/hub-http.js";
 
+it.each([204, 205, 304])(
+  "preserves bodyless HTTP %s responses for delegation revocation",
+  async (status) => {
+    const server = createServer((_req, res) => {
+      res.writeHead(status);
+      res.end();
+    });
+    const agents = createHubHttpAgents();
+    try {
+      const port = await listen(server);
+      const response = await createPooledFetch(agents.auth)(`http://127.0.0.1:${port}/fixture`, {
+        method: "DELETE",
+      });
+      expect(response.status).toBe(status);
+      expect(response.body).toBeNull();
+    } finally {
+      destroyHubHttpAgents(agents);
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
+
 const listen = async (server: Server): Promise<number> =>
   new Promise((resolve, reject) => {
     server.listen(0, "127.0.0.1", () => {

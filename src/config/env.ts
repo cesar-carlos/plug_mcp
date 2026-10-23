@@ -12,6 +12,42 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   PUBLIC_BASE_URL: z.string().url().default("http://127.0.0.1:3333"),
   DATABASE_URL: z.string().optional(),
+  PERSONA_V2_QUERY_CACHE_TTL_MS: z.coerce.number().int().min(0).max(60000).default(0),
+  PERSONA_V2_REDIS_URL: z.string().default(""),
+  PERSONA_V2_WORKER_HEALTH_PORT: z.coerce.number().int().min(0).max(65535).default(0),
+  PERSONA_V2_OAUTH_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  PERSONA_V2_REVIEW_WORKER_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .max(3600000)
+    .default(60000),
+  PERSONA_V2_OAUTH_CLIENTS: z
+    .string()
+    .default("{}")
+    .transform((value, ctx): Record<string, string[]> => {
+      try {
+        const clients = z.record(z.url(), z.array(z.url()).min(1)).parse(JSON.parse(value));
+        for (const [id, redirects] of Object.entries(clients)) {
+          for (const raw of [id, ...redirects]) {
+            const url = new URL(raw);
+            if (url.protocol !== "https:" || url.username || url.password || url.hash) {
+              throw new Error("invalid_url");
+            }
+          }
+        }
+        return clients;
+      } catch {
+        ctx.addIssue({
+          code: "custom",
+          message: "Allowlist de clientes OAuth persona-v2 inválida.",
+        });
+        return {};
+      }
+    }),
   CHATGPT_OAUTH_ENABLED: z
     .enum(["true", "false"])
     .default("false")
@@ -164,7 +200,7 @@ export const loadConfig = (overrides: Record<string, string | undefined> = {}): 
   const merged = { ...process.env, ...overrides };
   const parsed = envSchema.parse(merged);
   const publicBase = stripTrailingSlash(parsed.PUBLIC_BASE_URL);
-  if (parsed.CHATGPT_OAUTH_ENABLED) {
+  if (parsed.CHATGPT_OAUTH_ENABLED || parsed.PERSONA_V2_OAUTH_ENABLED) {
     const url = new URL(publicBase);
     if (
       url.protocol !== "https:" ||
@@ -182,6 +218,12 @@ export const loadConfig = (overrides: Record<string, string | undefined> = {}): 
       !["postgres:", "postgresql:"].includes(new URL(parsed.DATABASE_URL).protocol)
     )
       throw new Error("OAuth exige URL PostgreSQL.");
+  }
+  if (
+    parsed.PERSONA_V2_OAUTH_ENABLED &&
+    Object.keys(parsed.PERSONA_V2_OAUTH_CLIENTS).length === 0
+  ) {
+    throw new Error("OAuth persona-v2 exige allowlist própria de clientes e redirects exatos.");
   }
   return {
     ...parsed,

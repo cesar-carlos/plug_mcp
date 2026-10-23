@@ -1,1 +1,3 @@
 * text=auto eol=lf
+# Unified patches require a literal space on empty context lines.
+contracts/*.snapshot.patch whitespace=-blank-at-eol

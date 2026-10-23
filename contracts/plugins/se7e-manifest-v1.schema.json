@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+    },
+    "name": {
+      "type": "string",
+      "const": "se7e"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\\+[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*)?$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "extensions": {
+      "type": "object",
+      "properties": {
+        "com.openai": {
+          "type": "object",
+          "properties": {
+            "apps": {
+              "type": "string",
+              "const": "./.app.json"
+            },
+            "interface": {
+              "type": "object",
+              "properties": {
+                "displayName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "shortDescription": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 30
+                },
+                "capabilities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["Read", "Write", "Interactive"]
+                  }
+                },
+                "logo": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240,
+                  "pattern": "^[A-Za-z0-9._/-]+$"
+                },
+                "composerIcon": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240,
+                  "pattern": "^[A-Za-z0-9._/-]+$"
+                }
+              },
+              "required": [
+                "displayName",
+                "shortDescription",
+                "capabilities",
+                "logo",
+                "composerIcon"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": ["interface"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["com.openai"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["$schema", "name", "version", "description"],
+  "additionalProperties": false
+}

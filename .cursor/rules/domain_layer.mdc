@@ -1,17 +1,26 @@
 ---
-description: "Camada de domínio: ports, DomainError, EscopoSkill e grafo"
+description: "Ports, erros e identidades do domínio"
 globs: ["src/domain/**/*.ts", "src/application/**/*.ts"]
 alwaysApply: false
 ---
 
 # Domínio
 
-Domain não importa application/infrastructure/Express/Drizzle/MCP SDK/`fetch`.
+- Domain não importa application/infrastructure, Express, Drizzle, pg, MCP SDK ou fetch.
+- Use ports explícitos e tipos do runtime correspondente; não converter acesso
+  legado em persona/fonte/token v2 por conveniência.
+- Autorização chega explicitamente à aplicação; não ler ALS nos casos de uso.
+- Modele variantes/estados de forma discriminada e transições exaustivas.
+  Resultado desconhecido de operação nunca volta a executável.
+- Grafo e rascunho não são autoridade de execução. Contratos publicados fixam
+  origem, recursos físicos, classificação, grão, relações e parâmetros.
+- Execução técnica preserva fatos semânticos confirmados. Cardinalidade e classe
+  não são apagadas por inferência/perfilamento posterior.
+- Falhas legadas usam `DomainError`/`ERROR_CODES`; v2 usa seus erros de domínio
+  e preserva erros SQL/upstream quando aplicável. Não lançar strings.
+- `DomainError.pacote` conserva source=sql; erro de mídia tem source=mcp/stage=anexo.
+  Preservar code/source/stage/details ao substituir hint.
+- Hint deve orientar uma correção dentro da autoridade vigente. Não sugerir
+  contorno de policy, inspeção para obter foto pessoal ou retry de operação incerta.
 
-Falhas: `throw new DomainError({ code, message, hint, retryable })` com `ERROR_CODES`. Recusa do **pacote/validador** usa `DomainError.pacote` (`source: sql`, `ERROR_SOURCE.sql`) — `INVALID_SQL` / `COLUNA_FORA_DO_ESCOPO` / `JOIN_DESCONHECIDO` / `CONSULTA_SEM_RECORTE` / orçamento local da **skill** / `parseSqlModelo` / `DIALECT_UNSUPPORTED` / gates de skill (`PACOTE_INCOMPLETO`, `PERFIL_AUSENTE`) / `expandir_escopo` sem JOIN ou JOIN só `inferido`. Teto de **anexo** no MCP (`CONSULTA_ORCAMENTO`, `MIDIA_TIPO_RECUSADO`, `MIDIA_TETO`, `MIDIA_ORIGEM_INVALIDA`) usa `DomainError.anexo` (`source: mcp` / `stage: anexo`) — não `DomainError.pacote`. `CONSULTA_ORCAMENTO` de mídia aponta `omitir_coluna_ou_reduzir` (o de skill `max_rows` continua `agregar_ou_reduzir`). `MIDIA_TIPO_RECUSADO` é `category: validation` (não privacy). `PERMISSION_DENIED` de policy no treino usa `source: client_token_rpc`. Códigos novos de pacote/SQL (`ALIAS_DESCONHECIDO`, `COLUNA_AMBIGUA`, `PACOTE_INCOMPLETO`, `MULTI_SKILL_PARAMS`, `METADATA_CONTRATO`, `TABELA_FORA_DO_ESCOPO`, `MIDIA_TIPO_RECUSADO`, `MIDIA_TETO`, `MIDIA_ORIGEM_INVALIDA`, …) entram em `error-codes.ts` e `docs/mcp/error-mapping.md`. `hint` deve ser acionável para a IA consumidora (o que estava errado, o que ajustar, o que não repetir) sem enfraquecer fail-closed. Preserve `source`/`stage` ao reempacotar (`withHint`): `sql` = validador do pacote; `sql_engine` = motor/classificação no hub; `client_token_rpc` = policy; `plug_server_http` = JWT/HTTP; `client_agent_access` = acesso Client→Agent. `plug_server_http` + `invalid_payload` / `PLUG_SERVER_ERROR` de transporte: não reescrever o SQL; 429/503 ≠ policy.
-
-Identidade nas tools autenticadas: `usuarioId` explícito. Application não lê ALS.
-
-Grafo: lock por `acessoId`. Dialeto no primeiro merge daquele acesso. Precedência de origem no merge (`tipoJoin`: origem mais fraca não sobrescreve LEFT confirmado). SQL de treino: SELECT nomeado; JOIN se >1 tabela; merge só após execute + policy; só nomes físicos; poda isolado coberto por composto.
-
-`EscopoSkill` é o contrato do pacote (`pacoteVersao`, tabelas, colunas físicas, relacionamentos, grãos, `metricasSaida`). Overlay de KPI (`overlayMetricasSaida`) só atualiza aliases já no pacote. `StatusSkill` inclui `rascunho_revalidacao`. Params: `string|number|integer|decimal|date|datetime|boolean`. Ports de skill/aprendizado usam `skillIds[]` e `pacoteVersao`/`motivoRevalidacao` — não trate o grafo como licença de consulta. Merge de coluna: `sensibilidadeAposMerge` preserva classe `confirmado_usuario` quando o enriquecimento vem com origem mais alta.
+Códigos/envelopes: `docs/mcp/error-mapping.md`. Regras de pacote: `catalog.mdc`.

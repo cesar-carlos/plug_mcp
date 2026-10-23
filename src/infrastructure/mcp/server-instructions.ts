@@ -1,5 +1,10 @@
 import type { PersonaSessao } from "../../domain/entities/acesso.js";
+// Runtime legado: persona-v2 registra catálogo MCP separado. Seu contrato
+// aprovado e gates pendentes estão em docs/persona-v2/README.md. Nunca anunciar
+// escrita nas instruções abaixo antes de substituir transporte e execução.
 import { RESUMO_BASE } from "../../application/use-cases/shared/treinamento-base.js";
+
+export { PERSONA_V2_INSTRUCTIONS } from "../../application/persona-v2/runtime-instructions.js";
 
 export const CHATGPT_INSTRUCOES =
   "Conexão ChatGPT: use get_profile e obter_contexto_sessao para conferir persona/dialeto. OAuth delega exatamente um acesso e não amplia publicação ou policy. Segredos somente no navegador, nunca na conversa. Erro OAuth pede reconexão; falha hub/SQL/transporte preserva sua origem. Revogar conexão exige confirmação humana e encerra apenas esta concessão; após comprovante terminal, não repetir a mutação.";
