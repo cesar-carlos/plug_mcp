@@ -11,6 +11,8 @@ nem reutilizar evidência de uma revisão para certificar outra.
 
 ## Registrar uma nova rodada
 
+[Orientações MCP de treinamento e histórico — 2026-10-23](validation/2026-10-23-training-guidance-contract.md).
+
 [Fixture do plugin sob diretório build — 2026-10-23](validation/2026-10-23-plugin-fixture-build-ancestor.md).
 
 [Troca de base no treinamento compartilhado — 2026-10-23](validation/2026-10-23-query-source-knowledge-reset.md).

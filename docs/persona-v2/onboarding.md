@@ -77,6 +77,11 @@ abortadas/ignoradas. Copie o Bearer antes de sair: não fica no storage do naveg
 
 ## Roteiro de teste manual do treinamento
 
+A [correção de troca de base e candidato atualizado](validation/2026-10-23-query-source-knowledge-reset.md)
+identifica a imagem local mais recente, os 61 casos do console e a jornada
+persistente de treinamento nos três motores. Para iniciar uma sessão humana,
+use esse ID explícito e uma fixture nova; os ensaios automáticos foram encerrados.
+
 A [consolidação do candidato](validation/2026-10-23-training-candidate-consolidated.md)
 identifica a imagem local testada, revisões, resultados e limitações. Use o
 procedimento de sessão com fixture nova quando iniciar o ensaio; os testes

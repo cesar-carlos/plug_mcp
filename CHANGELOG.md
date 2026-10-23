@@ -210,6 +210,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- Instruções MCP v2 deixam de negar descoberta/importação administrativa já
+  disponível e passam a orientar histórico de consultas e operações SQL,
+  preservando o alcance editorial e as permissões existentes.
+
 - CI Windows prepara o checkout exato do hub e sua ancestralidade antes do gate
   de release, preservando a verificação do contrato sem fallback ou bypass.
 

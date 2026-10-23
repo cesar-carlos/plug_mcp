@@ -1,5 +1,18 @@
 # Catálogo e publicação em desenvolvimento
 
+## Orientações ao consumidor
+
+As instruções MCP refletem as capacidades anunciadas, sem substituir a
+autorização. Descoberta/importação administrativa pode usar
+`propor_contrato_externo` quando disponível, com escopo, versão e revalidação;
+o resultado continua sendo proposta, sem salvar, publicar ou executar ações.
+[Contrato](external-integrations.md).
+
+`listar_historico_conhecimento` admite skills concedidas de consulta ou operação
+SQL. O contexto de ambos os tipos é lido por `obter_skill`; `obter_padrao`
+conserva seu alcance editorial de consultas. Histórico não abre o catálogo
+integral, adota versões ou concede execução. [Contrato](shared-knowledge.md).
+
 ## Casos e relatórios por administração delegada
 
 Sessão Client do console usa GET `/api/admin/personas/:personaId/skills/:skillId/testes-consulta`

@@ -195,6 +195,34 @@ export async function exerciseChainBrowser(input: {
     const independentToken = await page
       .getByLabel("Token para conectar o cliente ou testar", { exact: true })
       .inputValue();
+    phase = "instruções MCP de treinamento";
+    const initialized = await request(input.url)
+      .post("/mcp")
+      .set("Host", new URL(input.url).host)
+      .set("Accept", "application/json, text/event-stream")
+      .set("Authorization", `Bearer ${independentToken}`)
+      .send({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "manual-training-fixture", version: "1" },
+        },
+      });
+    expect(initialized.status).toBe(200);
+    const initializedResult = parseMcpPayload(initialized).result as { instructions?: string };
+    expect(initializedResult.instructions).toContain(
+      "adotadas por skills de consulta ou operação SQL concedidas",
+    );
+    expect(initializedResult.instructions).not.toContain(
+      "Não há tool de descoberta/importação administrativa nesta entrega",
+    );
+    expect(initializedResult.instructions).toContain(
+      "Runners de publicação são exclusivos do operador",
+    );
+    phase = "token e conexão";
     const connection = page.getByRole("region", { name: "Conexão do consumidor", exact: true });
     await connection.getByRole("button", { name: "Testar conexão", exact: true }).click();
     await expect(connection.getByRole("status")).toContainText(

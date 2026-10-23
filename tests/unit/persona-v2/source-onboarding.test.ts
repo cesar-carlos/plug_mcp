@@ -27,6 +27,22 @@ it("orienta o treinamento com runners separados sem anunciar entregas existentes
   expect(PERSONA_V2_INSTRUCTIONS).toContain("Runners de publicação são exclusivos do operador");
   expect(PERSONA_V2_INSTRUCTIONS).toContain("não execute runners por MCP");
   expect(PERSONA_V2_INSTRUCTIONS).not.toMatch(/runners genéricos[^.]*permanecem pendentes/);
+  expect(PERSONA_V2_INSTRUCTIONS).toContain("Quando anunciada, propor_contrato_externo");
+  expect(PERSONA_V2_INSTRUCTIONS).not.toContain(
+    "Não há tool de descoberta/importação administrativa nesta entrega",
+  );
+});
+it("histórico orienta os dois tipos concedidos sem ampliar a leitura editorial", () => {
+  const history = /listar_historico_conhecimento\(\{skillId,afterSkillId\?\}\)[^.]+/u.exec(
+    PERSONA_V2_INSTRUCTIONS,
+  )?.[0];
+  expect(history).toContain("skills de consulta ou operação SQL concedidas");
+  expect(PERSONA_V2_INSTRUCTIONS).toContain(
+    "Para o contexto de consultas ou operações SQL, use obter_skill",
+  );
+  expect(PERSONA_V2_INSTRUCTIONS).toContain(
+    "obter_padrao mantém seu alcance editorial de consultas",
+  );
 });
 it.each(["mssql", "postgres", "sybase"] as const)(
   "%s valida schema exato, alias e recortes",
