@@ -210,6 +210,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Fixed
 
+- CI Windows prepara o checkout exato do hub e sua ancestralidade antes do gate
+  de release, preservando a verificação do contrato sem fallback ou bypass.
+
 - Troca de base no treinamento de consulta exige confirmação e descarta o
   vínculo compartilhado anterior apenas do rascunho, sem reassociar perfil ou
   alterar a publicação ativa. Cancelamento conserva a base e o vínculo.

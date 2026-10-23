@@ -125,8 +125,16 @@ jobs:
     timeout-minutes: 20
     env:
       CI: "false"
+      PLUG_SERVER_ROOT: ${{ github.workspace }}/plug_server_contract
     steps:
       - uses: actions/checkout@v7
+      - name: Checkout plug_server contract
+        uses: actions/checkout@v7
+        with:
+          repository: cesar-carlos/plug_server
+          path: plug_server_contract
+          ref: 8a4d9a559702cc742a839b0b6b3b70ec3b7aa4a2
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"

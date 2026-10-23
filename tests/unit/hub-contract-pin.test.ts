@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import {
   HUB_CONTRACT_HASH,
   HUB_CONTRACT_SNAPSHOT_HASH,
@@ -13,6 +14,36 @@ import { OPERATION_FAILURE_CODES } from "../../src/domain/persona-v2/operation.j
 describe("contrato coordenado do hub", () => {
   const bytes = readFileSync("contracts/plug-mcp-rest-v1.json");
   const contract = JSON.parse(bytes.toString("utf8"));
+  it.each(["verify", "windows"])(
+    "fornece o checkout upstream exato antes do gate no job %s",
+    (jobName) => {
+      const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
+        jobs: Record<
+          string,
+          {
+            env: Record<string, string>;
+            steps: { uses?: string; run?: string; with?: Record<string, unknown> }[];
+          }
+        >;
+      };
+      const job = workflow.jobs[jobName]!;
+      const gate = job.steps.findIndex((step) => step.run === "npm run release:check");
+      expect(gate).toBeGreaterThan(-1);
+      const upstream = job.steps.findIndex(
+        (step) =>
+          step.uses?.startsWith("actions/checkout@") &&
+          step.with?.repository === "cesar-carlos/plug_server",
+      );
+      expect(upstream).toBeGreaterThan(-1);
+      expect(upstream).toBeLessThan(gate);
+      expect(job.steps[upstream]!.with).toMatchObject({
+        ref: HUB_CONTRACT_REF,
+        path: "plug_server_contract",
+        "fetch-depth": 0,
+      });
+      expect(job.env.PLUG_SERVER_ROOT).toBe("${{ github.workspace }}/plug_server_contract");
+    },
+  );
   it("fixa os bytes do contrato e o snapshot reproduzível, sem inventar commit upstream", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(HUB_CONTRACT_HASH);
     expect(
