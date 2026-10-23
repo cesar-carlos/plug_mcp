@@ -30,6 +30,16 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Persona-v2
 
+- Limpeza de conhecimento aguarda as conexões da base aleatória criada pela
+  fixture encerrarem, com prazo finito e falha explícita em vazamento ou
+  indisponibilidade da observação. Remover sem FORCE; não encerrar backends,
+  ignorar 57P01 ou esconder erros do pool para considerar uma rodada aprovada.
+
+- Inventário compara raízes pela resolução nativa do filesystem, preservando
+  checagem exata de raiz, links e bytes. Alias de caixa/nome curto no Windows
+  não é divergência de checkout; não resolver por lowercase textual ou ignorar
+  falhas de inventário. Exercitar alias legítimo e recusas em fixtures Git.
+
 - Cópias de fixture do plugin filtram caminhos relativos à raiz de origem.
   Diretório ancestral chamado build não exclui o pacote inteiro; artefatos
   gerados internos continuam excluídos. Validar a montagem real nesse cenário,

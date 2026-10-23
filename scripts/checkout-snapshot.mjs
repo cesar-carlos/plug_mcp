@@ -10,14 +10,14 @@ export function captureCheckout(root, excluded = []) {
     throw new Error("Checkout inválido para inventário.");
   };
   if (lstatSync(root).isSymbolicLink()) fail();
-  const canonical = realpathSync(root);
+  const canonical = realpathSync.native(root);
   const git = (...args) =>
     execFileSync("git", ["-C", canonical, ...args], {
       encoding: "utf8",
       stdio: "pipe",
       maxBuffer: 16 * 1024 * 1024,
     });
-  if (realpathSync(git("rev-parse", "--show-toplevel").trim()) !== canonical) fail();
+  if (realpathSync.native(git("rev-parse", "--show-toplevel").trim()) !== canonical) fail();
   const revision = git("rev-parse", "HEAD").trim();
   if (!/^[a-f0-9]{40}$/.test(revision)) fail();
   const paths = [

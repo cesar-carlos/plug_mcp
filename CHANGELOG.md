@@ -214,6 +214,14 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
   disponível e passam a orientar histórico de consultas e operações SQL,
   preservando o alcance editorial e as permissões existentes.
 
+- Limpeza da fixture de contexto compartilhado aguarda as conexões PostgreSQL
+  encerrarem antes de remover a base, sem FORCE; vazamento ou falha de observação
+  reprova a rodada em vez de encerrar clientes à força e gerar erro não tratado.
+
+- Inventários resolvem aliases de caixa e nome curto do Windows pela identidade
+  nativa do diretório, preservando rejeição de links e verificação exata de raiz,
+  conteúdo e hashes nas evidências de release e homologação.
+
 - CI Windows prepara o checkout exato do hub e sua ancestralidade antes do gate
   de release e preserva os bytes LF do contrato durante esse checkout, sem
   normalizar hashes ou dispensar a verificação do contrato e do snapshot.
