@@ -218,6 +218,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
   encerrarem antes de remover a base, sem FORCE; vazamento ou falha de observação
   reprova a rodada em vez de encerrar clientes à força e gerar erro não tratado.
 
+- Gate de navegador OAuth recebe a URL explícita do PostgreSQL de teste v2,
+  preservando a recusa de configuração ausente e o isolamento do banco legado.
+
 - Inventários resolvem aliases de caixa e nome curto do Windows pela identidade
   nativa do diretório, preservando rejeição de links e verificação exata de raiz,
   conteúdo e hashes nas evidências de release e homologação.

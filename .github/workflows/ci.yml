@@ -116,6 +116,7 @@ jobs:
         run: npm run test:chatgpt:browser
         env:
           NODE_ENV: test
+          PERSONA_V2_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_persona_v2_test
       - run: npm run runtime:check
         env:
           CI: "true"
