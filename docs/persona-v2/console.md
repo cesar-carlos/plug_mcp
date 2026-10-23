@@ -1,5 +1,29 @@
 # Console persona-v2 — desenvolvimento
 
+## ERP no cadastro de bases
+
+A área Bases oferece uma segunda etapa opcional, **ERP / padrão de estrutura da
+base**, depois da confirmação de identidade e dialeto. Reutiliza o seletor do
+catálogo autorizado, versões publicadas, perfis físicos, inspeção e comparação
+existentes. Também atende bases já cadastradas, sem migrations ou alterações nos
+cadastros. Não cria um catálogo Data7 fictício quando não houver material publicado.
+
+A inspeção e a compatibilidade continuam usando os serviços autenticados e os
+metadados do hub/agente. Incompatibilidade, prova insuficiente e revogação não
+habilitam adoção. Seleções e inspeções pendentes têm proteção de navegação; não
+são um vínculo permanente na fonte. A referência executável fica no rascunho da
+skill após adoção explícita, e exige publicação e concessão próprias. Selecionar
+ERP não converte SQL entre dialetos nem transfere vínculos a uma base substituta.
+
+O cadastro técnico pode ser concluído sem ERP. Campos de credenciais continuam
+sendo descartados após a tentativa; a segunda etapa não repete o cadastro.
+
+Validação desta integração: Chromium em PostgreSQL descartável com hub sintético,
+cobrindo seleção no cadastro, inspeção, compatibilidade, proteção de navegação e
+regressão da adoção existente em skills. Não certifica os agentes das bases
+cadastradas nem substitui a cadeia persistente nos três motores. A implantação do
+console atualizado permanece separada da implementação local.
+
 Trocar a base de um treinamento de consulta com referência compartilhada exige
 confirmação. Cancelar preserva fonte e vínculo; confirmar remove somente o
 vínculo do rascunho local, sem reassociar padrão/perfil à nova base. Estrutura,

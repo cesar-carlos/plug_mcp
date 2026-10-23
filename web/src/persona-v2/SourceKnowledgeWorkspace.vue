@@ -26,6 +26,8 @@ const props = defineProps<{
   api: <T>(url: string, body?: unknown) => Promise<T>;
   disabled: boolean;
   confirmDiscard: () => Promise<boolean>;
+  initialSourceId?: string;
+  registration?: boolean;
   training?: Training;
   operationTraining?: OperationTraining;
 }>();
@@ -36,7 +38,7 @@ const emit = defineEmits<{
   operationTraining: [value: OperationTraining];
 }>();
 const draftTraining = computed(() => props.operationTraining ?? props.training);
-const sourceId = ref(draftTraining.value?.sourceId ?? "");
+const sourceId = ref(draftTraining.value?.sourceId ?? props.initialSourceId ?? "");
 const source = computed(() => props.sources.find((s) => s.id === sourceId.value));
 const sourceBase = computed(() => `${props.personaBase}/fontes/${sourceId.value}`);
 const selection = ref<KnowledgeSelection>(),
@@ -72,6 +74,12 @@ const dirty = computed(
     pendingAdoption.value ||
     curationDirty.value ||
     reviewDirty.value,
+);
+watch(
+  () => props.initialSourceId,
+  (value) => {
+    if (!sourceId.value && !dirty.value && value) sourceId.value = value;
+  },
 );
 watch(dirty, (value) => emit("dirty", value), { immediate: true });
 onBeforeUnmount(() => {
@@ -319,7 +327,9 @@ async function reload() {
           : 'Conhecimento das bases da persona'
     "
   >
-    <h2 v-if="!draftTraining">Conhecimento da persona</h2>
+    <h2 v-if="!draftTraining">
+      {{ registration ? "ERP / padrão de estrutura da base" : "Conhecimento da persona" }}
+    </h2>
     <h3 v-else>
       {{
         operationTraining
@@ -330,6 +340,12 @@ async function reload() {
     <p>
       Escolha uma versão publicada, inspecione a base e confira a compatibilidade. Nenhum padrão ou
       perfil é adotado automaticamente.
+    </p>
+    <p v-if="registration" class="notice">
+      Etapa opcional após conectar a base. Reutilize um ERP do catálogo autorizado, como Data7,
+      selecionando sua versão publicada. A inspeção usa somente metadados pelo plug_server e agente.
+      A seleção fica em memória; o vínculo executável será salvo no treinamento da skill após adoção
+      explícita. Compatibilidade não publica consultas nem concede permissões.
     </p>
     <p v-if="error" ref="errorSummary" role="alert" tabindex="-1" class="error">{{ error }}</p>
     <p v-if="message" role="status">{{ message }}</p>
@@ -380,7 +396,7 @@ async function reload() {
         @selection="selection = $event"
         @profiles="page = $event"
         @curator="curator = $event"
-        @touched="pendingAdoption = !!draftTraining"
+        @touched="pendingAdoption = !!draftTraining || registration === true"
       />
       <p v-if="selection?.profile" class="notice">
         Perfil selecionado: {{ selection.profile.name }} · revisão {{ selection.profile.revision }}.

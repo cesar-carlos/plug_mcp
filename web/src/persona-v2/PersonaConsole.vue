@@ -414,6 +414,7 @@ function areaDirty(current: ConsoleArea) {
       ? sourceKnowledgeDirty.value || explorerDirty.value || knowledgeMaintenanceDirty.value
       : current === "sources"
         ? sourceDirty.value ||
+          sourceKnowledgeDirty.value ||
           Object.values(sourcesDirty).some(Boolean) ||
           Object.values(sourceLifecycleDirty).some(Boolean)
         : current === "overview"
@@ -459,6 +460,8 @@ function discardArea(current: ConsoleArea) {
   }
   if (current === "training") resetTraining();
   if (current === "sources") {
+    sourceKnowledgeDirty.value = false;
+    sourceKnowledgeKey.value++;
     resetSourceForm();
     sourceOpen.value = false;
     for (const id of Object.keys(sourcesDirty)) {
@@ -1904,6 +1907,11 @@ onBeforeUnmount(() => {
                   O banco será identificado pela autorização do agente. Credenciais ficam cifradas
                   no servidor.
                 </p>
+                <p>
+                  Depois de conectar, selecione abaixo o ERP / padrão de estrutura e confira a
+                  compatibilidade pelo agente. Essa etapa é opcional; treinamento privado continua
+                  disponível. Uma base substituta exige nova inspeção, sem herdar vínculos.
+                </p>
                 <template v-if="sourceReplacement">
                   <p>
                     O vínculo anterior será preservado e ficará bloqueado. Treinamento, permissões e
@@ -1923,6 +1931,19 @@ onBeforeUnmount(() => {
               </fieldset>
             </form>
           </details>
+          <SourceKnowledgeWorkspace
+            v-if="sources.length && area === 'sources'"
+            :key="`source-erp:${personaId}:${sourceKnowledgeKey}`"
+            :sources="sources"
+            :initial-source-id="highlightedSourceId"
+            :persona-base="path()"
+            :api="api"
+            :disabled="busy"
+            :confirm-discard="confirmDiscard"
+            registration
+            @dirty="sourceKnowledgeDirty = $event"
+            @lock="busy = $event"
+          />
         </section>
         <section v-if="sources.length" v-show="area === 'training'">
           <h2>Treinar consultas</h2>

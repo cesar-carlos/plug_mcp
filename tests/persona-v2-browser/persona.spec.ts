@@ -6125,3 +6125,75 @@ test("cadastro aponta campo inválido e descarta credenciais sem refletir seu co
   await expect(form.getByLabel("CLIENT_TOKEN", { exact: true })).toHaveValue("");
   await expect(page.getByRole("alert")).not.toContainText("fixture-password");
 });
+
+test("seleciona ERP no cadastro e verifica compatibilidade sem conceder acesso", async ({
+  page,
+}) => {
+  const { csrfToken } = await login(page);
+  const personaName = `Perfil físico ${Date.now()}`;
+  await createPersona(page, personaName);
+  await addSource(page, "a");
+
+  const headers = { "X-CSRF-Token": csrfToken, Origin: "http://127.0.0.1:5188" };
+  const post = async (url: string, data: unknown) => {
+    const result = await page.request.post(url, {
+      headers,
+      data: withReviewDeadline(url, data as object),
+    });
+    expect(result.ok(), await result.text()).toBe(true);
+    return result.json();
+  };
+  // Fixture setup only; the journey under review uses the real console editors.
+  const catalog = await post("/api/admin/catalogos", { name: `Catálogo físico ${Date.now()}` });
+  const baseContent = structureContent();
+  const table = baseContent.tables[0]!;
+  const content = {
+    ...baseContent,
+    examples: [],
+    dialects: ["postgres"],
+    tables: [
+      {
+        ...table,
+        physicalNames: [{ dialect: "postgres", name: "public.orders" }],
+        columns: table.columns.map((c) => ({
+          ...c,
+          nullable: c.name !== "id",
+          nativeTypes: [{ dialect: "postgres", type: c.name === "id" ? "int4" : "numeric" }],
+        })),
+        keys: [{ id: "pk-orders", kind: "primary", columns: ["id"], status: "enabled" }],
+      },
+    ],
+  };
+  const pattern = await post(`/api/admin/catalogos/${catalog.catalog.id}/padroes`, {
+    slug: "profile-fixture",
+    name: "Padrão comprovável",
+    content,
+  });
+  const patternRoot = `/api/admin/catalogos/${catalog.catalog.id}/padroes/${pattern.pattern.id}`;
+  const preview = await post(`${patternRoot}/preview`, {});
+  const publication = await post(`${patternRoot}/publicar`, {
+    confirmationHash: preview.confirmationHash,
+  });
+  await go(page, "Bases");
+  const knowledge = page.getByRole("region", {
+    name: "Conhecimento das bases da persona",
+    exact: true,
+  });
+  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base a — postgres" });
+  await knowledge.getByRole("button", { name: "Atualizar versões disponíveis" }).click();
+  await knowledge.getByLabel("Catálogo autorizado").selectOption(catalog.catalog.id);
+  await knowledge
+    .getByRole("combobox", { name: "Versão do padrão", exact: true })
+    .selectOption(publication.publication.id);
+  await knowledge.getByRole("button", { name: "Preencher escopo da versão selecionada" }).click();
+  await go(page, "Treinamentos");
+  await page.getByRole("button", { name: "Continuar editando", exact: true }).click();
+  await expect(knowledge.getByLabel("Tabela ou view 1")).toHaveValue("orders");
+  await knowledge.getByRole("button", { name: "Inspecionar estrutura", exact: true }).click();
+  await expect(knowledge.getByText(/Primária orders_pkey/)).toContainText("Habilitada e validada");
+  await knowledge.getByRole("button", { name: "Verificar compatibilidade" }).click();
+  await expect(
+    knowledge.getByRole("heading", { name: "Estrutura compatível", exact: true }),
+  ).toBeVisible();
+  await expect(knowledge.getByText(/o vínculo executável será salvo/)).toBeVisible();
+});

@@ -5,6 +5,12 @@ alwaysApply: true
 
 # Persona-v2
 
+A área Bases reutiliza o workspace de conhecimento para escolher ERP/versão após
+identificar a fonte. Seleção é local e protegida contra descarte; inspeção e
+compatibilidade usam hub/agente. Não persistir seleção como adoção implícita,
+copiar conteúdo do catálogo ou ampliar concessões. Vínculo executável continua
+exigindo adoção no rascunho, publicação e autorização vigentes.
+
 Troca de fonte no editor de consulta com sharedKnowledge exige confirmação e
 remove somente o vínculo local após aceite. Cancelamento/contexto obsoleto não
 altera a edição. Não reassociar prova/perfil nem mudar publicação ativa; fonte

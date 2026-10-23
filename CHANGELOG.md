@@ -13,6 +13,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- Seleção opcional de ERP/padrão publicado na área Bases após o cadastro técnico,
+  reutilizando catálogo, perfis, inspeção e compatibilidade pelo hub/agente.
+  Proteção de seleção pendente e preservação dos vínculos publicados existentes.
+
 - Baseline persona-v2 integrado aos caminhos reais de desenvolvimento, com pin
   revisado do hub e evidências dos gates. Entrada legada preservada e publicação
   de produção bloqueada até aceite integral.
