@@ -215,7 +215,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
   preservando o alcance editorial e as permissões existentes.
 
 - CI Windows prepara o checkout exato do hub e sua ancestralidade antes do gate
-  de release, preservando a verificação do contrato sem fallback ou bypass.
+  de release e preserva os bytes LF do contrato durante esse checkout, sem
+  normalizar hashes ou dispensar a verificação do contrato e do snapshot.
 
 - Troca de base no treinamento de consulta exige confirmação e descarta o
   vínculo compartilhado anterior apenas do rascunho, sem reassociar perfil ou
