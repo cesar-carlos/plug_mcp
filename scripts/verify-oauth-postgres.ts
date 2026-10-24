@@ -18,6 +18,7 @@ import { NodeCryptoAdapter } from "../src/infrastructure/crypto/node-crypto.adap
 import { sessionContext } from "../src/application/session-context.js";
 import { RotacionarTokenMcp } from "../src/application/use-cases/cofre.js";
 import { SetupCodeStore } from "../src/infrastructure/http/setup-code-store.js";
+import { cleanupFixture } from "./homologation/cleanup.js";
 
 const config = loadConfig();
 if (config.NODE_ENV !== "test" || !config.DATABASE_URL || !process.argv.includes("--ci"))
@@ -30,6 +31,7 @@ databaseUrl.pathname = `/${name}`;
 const admin = new pg.Client({ connectionString: adminUrl.toString() });
 await admin.connect();
 let pool: pg.Pool | undefined;
+let primaryFailure: { error: unknown } | undefined;
 try {
   await admin.query(`CREATE DATABASE ${name}`);
   await applyMigrations({
@@ -309,8 +311,20 @@ try {
   process.stdout.write(
     "OAuth PostgreSQL: upgrade 0033, hashes, código/refresh concorrentes, unidade de trabalho explícita, rollback multirrepositório e corridas de publicação/remoção/rotação aprovados.\n",
   );
+} catch (error) {
+  primaryFailure = { error };
+  throw error;
 } finally {
-  await pool?.end();
-  await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
-  await admin.end();
+  // pool.end() can resolve before PostgreSQL processes every socket close.
+  // FORCE can kill a still-closing idle client and mask the original assertion
+  // with an unhandled pool error. Normal DROP waits for disconnects and refuses
+  // a genuine leaked session instead of terminating it.
+  await cleanupFixture(
+    [
+      async () => pool?.end(),
+      () => admin.query(`DROP DATABASE IF EXISTS ${name}`),
+      () => admin.end(),
+    ],
+    primaryFailure,
+  );
 }

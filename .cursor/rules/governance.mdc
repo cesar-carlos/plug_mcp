@@ -6,6 +6,17 @@ alwaysApply: false
 
 # Governança
 
+DV2-016 (2026-10-24) dispensa teste específico de compatibilidade do agente 1.8.6,
+inclusive instalado/VM. Não muda contratos ou comprova extensões; preservar
+testes gerais de negociação/segurança e dos três motores.
+
+DV2-015 (2026-10-24) dispensa validação manual real de HTTPS/ChatGPT e aceite
+funcional humano, por decisão explícita do responsável. Não marcar como passed.
+Preservar testes técnicos, segurança, três motores, identidade do candidato e
+todos os outros gates; aprovação Client de operações não é dispensada. Registro
+técnico `technically_verified` não é aceite humano. Ver decisions.md e
+docs/persona-v2/release-evidence.md. Deploy permanece bloqueado sem evidência.
+
 A ordem canônica está em `AGENTS.md`: persona-v2 prevalece sobre invariantes
 de produto legados incompatíveis. Não criar outra ordem neste arquivo.
 

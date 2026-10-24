@@ -135,7 +135,11 @@ export function verifyEvidence(manifest, gates) {
       reference(check.artifact);
     }
     const approval = report.approval;
-    requireThat(approval?.status === "accepted" && text(approval.reviewer));
+    // Technical verification is not human acceptance (DV2-015).
+    requireThat(
+      (approval?.status === "accepted" || approval?.status === "technically_verified") &&
+        text(approval.reviewer),
+    );
     requireThat(timestamp(approval.reviewedAt) >= end);
     reference(approval.record);
   }

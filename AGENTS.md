@@ -1,5 +1,10 @@
 # Orientação para agentes
 
+DV2-015 (2026-10-24): o responsável dispensou validação manual real de
+HTTPS/ChatGPT e aceite funcional humano. Não declarar essas atividades aprovadas.
+Preservar testes técnicos e demais gates, incluindo aprovação Client de operações.
+Ver docs/persona-v2/decisions.md e docs/persona-v2/release-evidence.md.
+
 ## Contrato ativo
 
 O projeto está em refatoração para **persona-v2**: um responsável administra

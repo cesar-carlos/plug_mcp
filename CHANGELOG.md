@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Dispensas DV2-015/DV2-016 registradas sem aprovação fictícia; testes técnicos preservados.
+- Fixture OAuth fecha sem FORCE e conserva falha original quando a limpeza também falha, com regressão PostgreSQL real.
+
 ### Added
 
 - Seleção opcional de ERP/padrão publicado na área Bases após o cadastro técnico,

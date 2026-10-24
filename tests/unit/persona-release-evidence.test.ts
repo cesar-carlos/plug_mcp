@@ -156,6 +156,15 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 describe("release evidence integrity", () => {
+  it("accepts technical verification without inventing human acceptance", () => {
+    const f = fixture();
+    for (const report of f.reports) report.approval.status = "technically_verified";
+    f.save();
+    expect(() => f.run()).not.toThrow();
+    f.reports[0]!.checks[0]!.result = "pending";
+    f.save();
+    expect(() => f.run()).toThrow();
+  });
   it("binds loaded image identity to every accepted gate", () => {
     const f = fixture();
     const proofPath = "docs/persona-v2/release-evidence/image-proof.json";

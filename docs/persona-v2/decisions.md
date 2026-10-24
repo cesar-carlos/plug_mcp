@@ -182,6 +182,33 @@ Quotas globais, limpeza de expirados e rotação do cofre mantêm vínculo e dea
 Implementação autorizada em 2026-10-16; homologação não libera produção.
 [Contrato](attachments.md) e [pendências](remaining-plan.md#etapa-11--cache-e-anexos).
 
+## DV2-015 — Dispensa das validações manuais de liberação — 2026-10-24
+
+O responsável respondeu “pode remover estas validações” à pergunta explícita
+sobre validação manual real de HTTPS/ChatGPT e aceite funcional humano.
+Esses requisitos deixam de bloquear a liberação; não foram executados nem aprovados.
+A decisão substitui somente essas exigências nos documentos anteriores.
+
+Permanecem obrigatórios OAuth/HTTPS técnicos, segurança, avaliação automatizada
+da IA quando exigida, três motores, imagem/fontes exatas, Node 24, compatibilidade
+com agente 1.8.6 (posteriormente dispensada por DV2-016) e os demais critérios técnicos. Aprovação humana de operações
+de negócio não é dispensada. Produção não é liberada por esta decisão.
+
+Relatórios podem registrar `approval.status: technically_verified`, identificando
+o verificador em `reviewer`, horário e artefato técnico por hash; isso não significa
+aceite humano. Não registrar verificações manuais dispensadas como `passed`.
+O manifesto permanece `ready: false` até comprovação dos critérios técnicos.
+
+## DV2-016 — Dispensa do teste específico do agente 1.8.6 — 2026-10-24
+
+O responsável determinou: “nao precrisa fazer teste de compatibilidade com
+plug_agente 1.8.6 . remova se tiver em alguma documentacao exigencia”.
+O teste específico dessa versão, instalado ou em VM, deixa de ser requisito.
+Não há declaração de teste aprovado ou de suporte comprovado às extensões novas.
+Contratos/runtime, testes gerais de negociação e recusa segura, três motores,
+segurança, Node 24 e evidência do candidato exato permanecem exigidos.
+Regressões úteis existentes e registros históricos não são apagados.
+
 ## Manutenção do registro de decisões
 
 Nota de implementação de DV2-009 — 2026-10-12: núcleo OAuth e montagem candidata

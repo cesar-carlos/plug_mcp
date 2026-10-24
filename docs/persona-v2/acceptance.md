@@ -11,7 +11,10 @@ formal; produção e publicação de imagens continuam bloqueadas.
 
 O escopo vigente exige PostgreSQL, SQL Server e SQL Anywhere. Relatórios antigos
 podem tratar de Firebird ou de capacidades posteriormente entregues; descrevem
-somente aquela rodada. HTTPS/ChatGPT permanecem para validação manual.
+somente aquela rodada. DV2-015 dispensa somente validação manual real de
+HTTPS/ChatGPT e aceite funcional humano. Os testes técnicos continuam obrigatórios.
+DV2-016 dispensa também teste específico do agente 1.8.6, inclusive instalado/VM,
+sem dispensar negociação de capabilities, segurança ou a cadeia nos três motores.
 
 Uma evidência precisa identificar revisão/hash, ambiente, versões, casos,
 omissões e limpeza. Testes locais ou uma rodada aprovada não encerram

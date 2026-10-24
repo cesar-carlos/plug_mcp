@@ -1275,3 +1275,9 @@ Uma etapa termina com a implementação na composição real, permissões nas
 chamadas diretas, migrations quando necessárias, documentação coerente e
 verificações proporcionais. Este arquivo não executa reset, DML, migration,
 publicação nem deploy.
+
+# Atualização de precedência — 2026-10-24
+
+DV2-015 dispensa somente validação manual real de HTTPS/ChatGPT e aceite
+funcional humano. Referências anteriores a essas atividades são históricas;
+não representam testes aprovados. Todos os critérios técnicos continuam vigentes.

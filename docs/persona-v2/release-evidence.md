@@ -1,5 +1,13 @@
 # Evidências verificáveis de liberação
 
+Desde DV2-015 (2026-10-24), validação manual real de HTTPS/ChatGPT e aceite
+funcional humano estão dispensados, não aprovados. Essa decisão prevalece sobre
+menções anteriores a esses requisitos. Nenhum teste técnico ou gate é dispensado.
+O campo `approval.status` aceita também `technically_verified`, com `reviewer`
+identificando o verificador técnico, `reviewedAt` e `record` com hash obrigatórios.
+Esse registro não declara uma revisão humana. Falhas e omissões técnicas continuam
+bloqueando. Aprovações humanas de operações de negócio permanecem obrigatórias.
+
 O comando `npm run persona:release-check` exige os treze gates canônicos,
 `ready: true` e evidências íntegras do candidato. O manifesto atual continua
 bloqueado. Não criar registros de aceite a partir de resultados históricos ou
