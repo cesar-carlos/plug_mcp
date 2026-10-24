@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Teste de revisão temporal aguarda o vencimento pelo relógio PostgreSQL antes do poll, sem aumentar timeouts ou alterar o worker.
+
 - Referência revisada do hub em 8f7cf8a, com contrato e snapshot histórico inalterados; training:check e 12 regressões aprovados.
 
 - Atualiza body-parser 2.4.0 e Zod 4.6.7 para corrigir avisos de negação de serviço, sem reduzir o gate npm audit.
