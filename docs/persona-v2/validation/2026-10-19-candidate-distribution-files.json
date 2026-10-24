@@ -1,0 +1,46 @@
+[
+  {
+    "sha256": "eb5845fc2ce52827bcd3b4e67031a15aa59cb4f6dbac150fb941e24c6399e4f1",
+    "path": "Dockerfile"
+  },
+  {
+    "sha256": "86efe9a451ae806e953506b3c61dfda68579c83994001396b6b798a965528105",
+    "path": "docker-entrypoint-persona-v2.sh"
+  },
+  {
+    "sha256": "a8b5490bf949e14dd5c794bdd49815d43dd36aa7a50e1254b623e1c2adb411e7",
+    "path": "docker-compose.persona-v2.yml"
+  },
+  {
+    "sha256": "62f716fa2107c9400f7c70c83816395b6f2db37ad07cb165dd8530d43e47ed57",
+    "path": "scripts/homologation/test-persona-candidate.ps1"
+  },
+  {
+    "sha256": "140cd2b45518563155f348d3286ecaf810d5b1420cc09dfdf9b05effd64744eb",
+    "path": "docs/persona-v2/candidate-distribution.md"
+  },
+  {
+    "sha256": "e08fcfb1990f53b34aa1a947d4302647d4ef17281480a3f7bb10e258374c9c56",
+    "path": "docs/persona-v2/remaining-plan.md"
+  },
+  {
+    "sha256": "128ce2002151c664d14934061a9b37f4cb7c395fefd0abcf03a4b798ce4e3121",
+    "path": "docs/persona-v2/acceptance.md"
+  },
+  {
+    "sha256": "e2dc3beb51049d1cfcd1ab242bc07bf1ef2e5be9f38ebe35190cd9643c74d16e",
+    "path": "docs/README.md"
+  },
+  {
+    "sha256": "02e162e0b6b349826edde085984b6fd546908aa7080acde3c00ab0dcb6724c23",
+    "path": ".cursor/rules/governance.mdc"
+  },
+  {
+    "sha256": "22ad53cea1e59ebb35bc44f88728db52e62dfe892899f201504954173c233101",
+    "path": "AGENTS.md"
+  },
+  {
+    "sha256": "f8aaedd08c75da6a89aacd78f79663423aa4618d566486b8e6293001ee4c4c04",
+    "path": "CHANGELOG.md"
+  }
+]

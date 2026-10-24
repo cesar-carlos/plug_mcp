@@ -1,0 +1,261 @@
+{
+  "date": "2026-10-13",
+  "scope": "central-files-only-not-full-checkout",
+  "files": [
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/administrative-authorization.ts",
+      "sha256": "44f70982d54f4f9eae1b080914de25f004ed4f2f6ab97213653c9a115d07e8ff"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/delegated-tokens.ts",
+      "sha256": "a744f22f839d04fd62e67db097daf886175290ab7ba723510f93bed7911c0ee9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/catalog.ts",
+      "sha256": "27bdc3c8391384cf2830e5b441d706975c8c3dcb635d1a9c55cb73574e921348"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/owner-delegation.ts",
+      "sha256": "c7258da8d42f0d0266273e3533889c9da426b8e2bd4fadd8ee03d75290a04da9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/setup.ts",
+      "sha256": "78b2cbb3857f1b0620d4e62601946ef9a476447d4689751c2111373584d66870"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/oauth.ts",
+      "sha256": "83e6b15fecd7143bff73def958b6af84c3f0c4d5d4c2063953e74cbea77c7399"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "f51603a5dd3c9dcbf2f8661f57d22424668176733163db9141e0e1edafeaf70f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/persona-security.port.ts",
+      "sha256": "20468b73d5797643b7316e4ca6bc8ea9f61ae259f1898b75d2edd9dd358d1009"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/persona-v2.port.ts",
+      "sha256": "584bbd825ccb8ebd3d3ef699aafa0dfc9c22f40af8dc569a442a8111b6fe8396"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/catalog.ts",
+      "sha256": "37cdb6736e16e441a45284a97327ac0044dc0282039a396beb00e715285466d6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/administrative-permissions.ts",
+      "sha256": "1b29e94053f499133bfba31acd300a42d86df9d969a3c83ba7411e37da919ed6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/permissions-schema.ts",
+      "sha256": "843b9842d940ad9a817ed09c9a60106c3f165c94a172afcbc36cc6c04c6b05fd"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-delegated-administration.ts",
+      "sha256": "14e2fd3d19cfd457cbabb57a569678caddc04325b78fbd05e4f449e94f323cad"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-admin.ts",
+      "sha256": "fb70ec42a46c6793fe1f8a599d4259c8bce78335fc24d25045d03012e1d9fb7c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-oauth.ts",
+      "sha256": "119a2c3e4d067c63eda4b4a50b0f07b592a9c8a3003cda603894ca2c3f1494c3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/mcp/persona-v2-administration-tools.ts",
+      "sha256": "9a8e1487a6e28bf0e1f631793d9acb01b85005363d852daddb4ce9c58b2cd8ab"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/mcp/persona-v2-http.ts",
+      "sha256": "bfb1f51f6bd7d65ad9a6e3224303025ba86d62c8dbc4975c2e40e093430815ea"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/plug-server/persona-owner-delegation.ts",
+      "sha256": "a77b17ea6ef64230b0fea66f997795314b371bc644ed23432436d8282777d783"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/plug-server/hub-http.ts",
+      "sha256": "c6928b2abe0e9488d5bec5a4c3f556f43fcfb8532539b77b72bd7a18f36e4640"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/security.ts",
+      "sha256": "5c4154949c34148c43e8d564370dfc219ca1c0b132c94b12cfb22bdc04d374f7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/catalog.ts",
+      "sha256": "753336770e447e5c3fc3658729dcef7c5354392953bda6e5dc5e7f38b11939b5"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/history.ts",
+      "sha256": "e3bc8ed0b539d755400529106e2459e0934617ec047619fbb55b1e06877a7037"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/repository.ts",
+      "sha256": "95058cceccb2d9823aecbc0f5c507f844a2ec1668742e106ec0ff7d8d8b9af9c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/composition/compose-persona-v2.ts",
+      "sha256": "40d7078efdd841a5ced69753b30c494b0117963c0095d1c695b5297314eae5bf"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0012_administrative_authority.sql",
+      "sha256": "3af970767077f34f4432ea6b76e7457dd1a1bdef0c1b547b5c92a50f09a6b640"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/OwnerDelegationPanel.vue",
+      "sha256": "a94edaa016a54ed33cdfa01eec0423acdbca454ff6f67301502f966acf20bc57"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/TokenManager.vue",
+      "sha256": "b97e9ca1a00350f40f5edb4a12b9dc354042aa4747e7e3c5a08fde31f43c94c6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "d8ac72b36351f331212ee4c91e4839fc1d6fd31ae821474217f6bf130bb2d393"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/administrative-options.ts",
+      "sha256": "99fc0f49bed8382815a22f6c2e01cc4cac8889798853856adf764892e0ccbc4e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/setup-delegation.postgres.test.ts",
+      "sha256": "8f5fab0492718984b1a3a99caebcd6ddff884dabb04a3c778a2f82eb2cbe5e61"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/source-lifecycle-migrations.postgres.test.ts",
+      "sha256": "a38a1f7cb847d0fa3dad401ea318e86115f7b762e33e3ebf9e3af7b671801482"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/homologation/persona-chain.test.ts",
+      "sha256": "6af6ba429655c3da1b71aa49aa128ca56c17b91e31238b665fa5f6abe7e33077"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/browser/persona-v2-oauth.spec.ts",
+      "sha256": "817de1e7150eab1d200e8f5e91d534bbb73734ebd240808c52d6761b0abdfd26"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "57fc789c10824aae87a962ffe930ac23ae927b06f24355801a74d0b0ae1f0826"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/hub-http.test.ts",
+      "sha256": "248bfdb17888d91ab50d559c192dee6994a134a479c17329ec2d059a869f149c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/hub-contract-pin.test.ts",
+      "sha256": "503b31defbaef33bdec4593a6182599c1531ca023cc36c2296da6fbe39339c83"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "3c55b34913e46cdc8e7b7758b89f0b90697bf861f692d29101561fe458cb4b91"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/hub-persona-v2.snapshot.patch",
+      "sha256": "9694c856d5b32a60271cd1771f0bf71293a82d08610afccfb9d3a097dafc4870"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/domain/ports/client_delegation.port.ts",
+      "sha256": "1c9c1595f9707322b037e92679da82f395cd2f5f8afa686f5e224c616340874d"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/application/services/client_delegation.service.ts",
+      "sha256": "2c3ca75e5bdd39e35f718bd409f867e45da5ed6a3acd3ef9129789ac80149b1c"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/presentation/http/validators/client_delegation.validator.ts",
+      "sha256": "d8b195404143be76502810557e8a7cde8e20fa23ea95a0467d9cf8d9446ad5f3"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/presentation/http/controllers/client_delegation.controller.ts",
+      "sha256": "1edd247d8927f01a68bf774fe31fdddce17b613fdc41e3d61a1bd706082eedd7"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/presentation/http/routes/client_delegation.routes.ts",
+      "sha256": "5f79f1698b78c1f12725392dd770e9d9f029ba133a6cb547df6b66f9a3a118bc"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/infrastructure/repositories/prisma_client_delegation.repository.ts",
+      "sha256": "5a39085aae91a2e70b83a84d0b088bc9c21d6c60547fd1e5e1b781e2878cf958"
+    },
+    {
+      "project": "plug_server",
+      "path": "prisma/schema.prisma",
+      "sha256": "d1d2453b594e8f37d44b7a2f93357345936de20241e6a8cd182fa17277814da8"
+    },
+    {
+      "project": "plug_server",
+      "path": "prisma/migrations/20261013000000_persona_delegation_permissions/migration.sql",
+      "sha256": "9f03602558d12f91e948983e69d03a6831741da82595e33271da7605c9c57bd5"
+    },
+    {
+      "project": "plug_server",
+      "path": "tests/unit/application/services/client_delegation.service.test.ts",
+      "sha256": "121d5ced9a203d703b75abaf4241dd4fee8a9951f62a0d52385d50e6c35a0c3b"
+    },
+    {
+      "project": "plug_server",
+      "path": "tests/integration/client_delegation.integration.test.ts",
+      "sha256": "b4ff682112bf3cc5310d6fc12b31f78286d7c6c14a575c321bb540f05eba339d"
+    },
+    {
+      "project": "plug_server",
+      "path": "scripts/generate-plug-mcp-contract.ts",
+      "sha256": "54869ecfb1df1c6a0d16fde5e4c03cf5801120b864534cc3bc285b94c6922698"
+    },
+    {
+      "project": "plug_server",
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "3c55b34913e46cdc8e7b7758b89f0b90697bf861f692d29101561fe458cb4b91"
+    },
+    {
+      "project": "plug_server",
+      "path": "contracts/plug-mcp-rest-v1.compatibility.json",
+      "sha256": "70279b31cbe8302bbc246bc233ca5d5365d15ba62b26a5cacce7723b4831839a"
+    }
+  ]
+}

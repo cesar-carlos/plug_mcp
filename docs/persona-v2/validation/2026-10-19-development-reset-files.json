@@ -1,0 +1,26 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": "src/infrastructure/persistence/persona-v2/reset-development.ts",
+      "sha256": "b4955e38dbae49055a1418047c065c4f4a79c5df244c8a34829dc4a7f41d216e"
+    },
+    {
+      "path": "scripts/reset-persona-development.ts",
+      "sha256": "4facdb5757294e7f2d3f1c879924d8b8788acbfdef15d90bad72e8459a7a44ad"
+    },
+    {
+      "path": "tests/unit/persona-v2/reset-development.test.ts",
+      "sha256": "56b200d997afbd4c2b65d6f395aac9a29fc42ea60aa03bb59970fda6c926664c"
+    },
+    {
+      "path": "tests/persona-v2/reset-development.postgres.test.ts",
+      "sha256": "6c05b1bb3c97a38b9c9314574b36739cea3a8226ae436e096ef927ffc1e2c4b2"
+    },
+    {
+      "path": "package.json",
+      "sha256": "62d92535cc8b21b3fcd2ffaf5c154747a4ca4f477cf93fb8369b3d59ace3eacb"
+    }
+  ],
+  "note": "Local snapshot; no commit or deploy."
+}

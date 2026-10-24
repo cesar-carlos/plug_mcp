@@ -1,21 +1,32 @@
 ---
-description: "Stack e bibliotecas do se7e-mcp-server"
-globs: ["src/**/*.ts", "tests/**/*.ts"]
+description: "Stack, configuração e dependências dos dois runtimes"
+globs: ["src/**/*.ts", "tests/**/*.ts", "web/**", "package.json"]
 alwaysApply: false
 ---
 
 # Stack
 
-Node.js 24 LTS (Krypton, `.nvmrc` = 24.21.0), TypeScript ESM (`NodeNext`, imports com `.js`).
+Versões normativas: package.json/package-lock.json, .nvmrc e configurações de build.
+Node 24 LTS na versão fixada pelo projeto; TypeScript 7 real nos gates de compilação.
+O alias da API TypeScript para tooling não substitui o compilador. Tipos mais novos
+não autorizam APIs indisponíveis no runtime. Não reduzir gates para a máquina local.
 
-Produção: `@modelcontextprotocol/server + core + node + express`, `express`, `cors`, `compression`, `helmet`, `zod`, `pino`/`pino-http`, `drizzle-orm`, `pg`, `redis`, `node-sql-parser`, `sharp`, `file-type`, `pdfkit`. Console em `web/`: Vue 3, Vue Router, Pinia, Vite (`npm run web:build`); o Express serve `web/dist` em `/app`.
+Backend ESM/NodeNext, SDK MCP modular, Express, Zod, Pino, Drizzle/PostgreSQL,
+Redis e parsers SQL. Firebird v2 tem parser próprio. Console Vue/Pinia/Vue Router
+e Vite em web/, com entradas legada e persona-v2 separadas.
 
-Não usar: `jose`, `bcryptjs`, `cookie-parser`, `jsonwebtoken`, `dotenv`, `uuid`, `moment`, `jimp`, `pdf-lib`, `puppeteer`. Sem embeddings (busca é FTS léxica). Sem conversor Office/HEIC.
+- Instale com npm ci e lockfile; não use force/legacy-peer-deps.
+- Configuração de produção centralizada em src/config/env.ts. Configuração de
+  fixtures isoladas em src/config/persona-v2-test.ts; não ler env no domínio.
+- Carregue .env pelo Node; UUID e criptografia usam APIs nativas.
+- Não adicione bibliotecas para duplicar crypto, JWT, env ou mídia já atendidos
+  pelo projeto. Sem embeddings, conversor Office ou HEIC.
+- Integração de negócio somente REST pelo hub; limites/timeout no contrato e
+  nos adapters, não no fetch global. Ver plug_server_client.mdc.
+- Persistência v2 usa migrations/persona-v2 e banco dedicado; não compartilhar
+  nem converter o banco legado implicitamente.
 
-Env só em `src/config/env.ts`. `.env` via `--env-file-if-exists`. `PLUG_SERVER_HTTP_TIMEOUT_MS` (default 35s, máx. 60s) é piso de login/policy — não corta `sql.execute`. Cliente HTTP do hub: dois `http(s).Agent` (auth 4 / SQL 16); keep-alive = probe TCP 30s; idle até o peer; não o `fetch` global undici.
-
-UUID: `crypto.randomUUID()`. Crypto: AES-256-GCM + SHA-256 nativos.
-
-Postgres em produção. FTS: `unaccent`, `btree_gin`, `pg_trgm` (`npm run db:migrate` precisa de `CREATE EXTENSION`). Servidor Redis 7 opcional (`redis:7-alpine`, independente do cliente npm): rate limit, caches auxiliares/resultado e lease singleflight (policy sempre revalidada; `QUERY_CACHE_TTL_MS`, prefixo `mcp:query:acesso:{acessoId}:`). `REDIS_URL` vazio usa memória; URL configurada conecta no startup. Compose não publica Redis no host por padrão; Node/PM2 usa overlay local documentado em docs/operations/redis.md. Sessão MCP fica in-process (sticky `mcp-session-id`), Redis não a replica. Compose local publica Postgres na porta **5433** (CI usa 5432).
-
-TypeScript 7 real em compiler:check/typecheck/build; typescript é alias da API 6 somente para tooling, @typescript/native é alias do compilador 7. ESLint 10 com lint tipado, Vitest 5, Express 5, Zod 4, SDK MCP v2 modular. Runtime Node 24 LTS; @types/node na versão estável mais recente por decisão do usuário. Tipos mais novos não autorizam usar APIs indisponíveis no Node 24; verificar execução nesse runtime. npm ci normal, lockfile obrigatório, não force/legacy-peer-deps. Redis não autoriza policy antiga. CI Windows/Linux e native musl x64/arm64.
+Redis é auxiliar, nunca autoridade de policy. O uso atual de cache/singleflight,
+rate limit e sessões pertence à composição legada; consultas v2 não usam esse
+cache. Servidor Redis e cliente npm têm versões independentes.
+Configuração de portas, Compose e diagnóstico: docs/operations/redis.md.

@@ -1,21 +1,48 @@
 ---
-description: "Convenções Express: health, setup, MCP e metadata sem AS"
-globs: ["src/infrastructure/http/**/*.ts", "src/infrastructure/mcp/**/*.ts", "src/main.ts", "src/composition/**/*.ts"]
+description: "HTTP, console e autenticação por runtime"
+globs:
+  [
+    "src/infrastructure/http/**/*.ts",
+    "src/infrastructure/mcp/**/*.ts",
+    "src/main*.ts",
+    "src/composition/**/*.ts",
+  ]
 alwaysApply: false
 ---
 
 # HTTP
 
-- `GET /health` público. Não fala com o plug-server.
-- `GET /docs/mcp/error-mapping.md` público: matriz de erros do envelope (`documentationUrl`). Markdown, sem HTML extra.
-- GET /setup/:code mostra formulário e não consome; POST valida CSRF, Origin, finalidade/vínculo e identidade no hub, conclui uma vez e mostra Bearer. Código hash de 256 bits/15 minutos. `Accept: application/json` no POST devolve `{ token, acessoId }` ou `{ code, message, hint }` sem ecoar segredo. Console Vue em `/app`; BFF `/app/api` chama os casos de uso das tools com o Bearer da persona.
-- `GET /.well-known/oauth-protected-resource` público: metadata do recurso **sem** Authorization Server (só `bearer_methods_supported: header`).
-- `POST|GET|DELETE /mcp` Streamable HTTP. CORS expõe `Mcp-Session-Id` e `mcp-protocol-version`. Origin inválido → 403.
-- Rotas OAuth opcionais para /mcp/chatgpt; cookie temporário de transação, sem login persistente. /mcp mantém seu contrato.
-- Rate limit: bootstrap por IP; autenticado por hash do Bearer. Redis se `REDIS_URL`.
-- `helmet` ligado; não comprimir `text/event-stream`.
-- `compose().close()` fecha sweep de sessões, pool Postgres, Redis e os dois `http(s).Agent` do hub (`destroyHubHttpAgents`).
+Requisitos de navegador e segredos em `security.mdc`.
 
-## Delegação ChatGPT opcional
-
-OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
+- Health público não chama hub. Readiness verifica dependências/migrations
+  exigidas pela entrada, sem DDL.
+- V2: console `/app`, sessão administrativa Client/cookie HttpOnly de 15 minutos,
+  CSRF e rotas `/api/admin`; contrato em `docs/persona-v2/onboarding.md`.
+  Rotas de revisão/aprovação de operação não recebem confirmação da IA.
+  Assets v2 usam allowlist de arquivos, sem expor o diretório inteiro de build;
+  manifesto próprio não altera o legado. ADMIN_SESSION_EXPIRED retorna HTTP 401.
+  Validação retorna somente nomes públicos de campos, nunca valores ou mensagens
+  Zod. Revisão de impacto da fonte é informativa, com versão/CAS e responsável.
+  Tokens e listagem administrativa de operações seguem docs/persona-v2/console.md.
+  Suspensão/recuperação/substituição de fontes exigem sessão Client/CAS e revisão
+  explícita; recuperação prova a mesma identidade fora da transação MCP.
+  Substituição nunca recebe ID de vínculo existente para reassociar treinamento.
+  Progresso/histórico também exigem responsável vigente e os mesmos controles;
+  cursores compostos preservam microssegundos. Diagnóstico Bearer usa os serviços
+  reais de visibilidade e não consulta dados de negócio nem reserva autorização.
+- Administração v2 sem segredos usa `/api/consumer/bearer/administration` e
+  `/api/consumer/oauth/administration`, sem cookie como autoridade. Serviços
+  aplicam token/consentimento/teto do hub; aprovação de lançamentos continua
+  somente na sessão Client. Alcance no onboarding v2.
+- Legado: `/app/api` usa os casos de uso existentes e Bearer do acesso.
+  Setup GET não consome código; POST reautentica/CSRF e entrega Bearer uma vez.
+  `docs/clients/console.md` e `docs/auth/vault-and-mcp-token.md`.
+- `/mcp` segue o transporte próprio da entrada. Não assumir GET/SSE persistente
+  na v2. OAuth `/mcp/chatgpt` usa stores próprios por entrada:
+  `docs/auth/chatgpt-oauth.md` no legado, `docs/persona-v2/oauth.md` na v2.
+  Setup v2 `/app/setup/:code` exige Host/Origin, CSRF e responsável no POST;
+  GET não consome. Não transportar segredos em tools nem reutilizar setup legado.
+- Preservar CORS, Host/Origin, rate limits e helmet; não comprimir event-stream.
+  Metadata pública não concede autorização.
+- Shutdown fecha recursos da composição: sessões, pool, Redis e Agents HTTP
+  quando presentes. Não compartilhar stores entre runtimes.

@@ -499,7 +499,7 @@ export const coerceBoundParams = (
 
 export const sqlValidacaoVazia = (dialeto: Dialeto, sql: string): string => {
   const inner = stripOrderByExterno(sql.trim().replace(/;+\s*$/, ""));
-  const wrapped = `SELECT * FROM (${inner}) AS _validacao`;
+  const wrapped = `SELECT * FROM (${inner}) AS ${dialeto === "firebird" ? "MCP_VALIDACAO" : "_validacao"}`;
   switch (dialeto) {
     case "mssql":
     case "sybase":

@@ -1,0 +1,394 @@
+{
+  "capturedAt": "2026-10-14T22:16:54.088Z",
+  "scope": "Scoped shared-operation flow, not whole combined production candidate",
+  "node": "24.21.0",
+  "compiler": "7.0.2",
+  "baseCommits": {
+    "mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "hub": "bfb40becd42c5452b19b0df13698d212a0238ddc",
+    "agent": "fdb44d86b2a36df85c0133cf72167217fc1bd16e"
+  },
+  "release": {
+    "ready": false,
+    "requiredGates": 13,
+    "completedGates": 0
+  },
+  "sourceWindow": {
+    "capturedAt": "2026-10-14T22:07:30.678Z",
+    "scope": "shared-operation-flow-files-only",
+    "files": [
+      {
+        "path": "src/domain/persona-v2/knowledge-adoption.ts",
+        "sha256": "c215a7868c9873ead0167d22c19be6f6eca9ab2ea35b9f4a43f5faee0368a9e5",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/domain/persona-v2/catalog.ts",
+        "sha256": "0bfb6bc7acab610ea91e5db401b786a37e3feb279567f39befafb5bff180f11d",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/domain/persona-v2/operation-training.ts",
+        "sha256": "a87c9a1bb8808dd8200d20a6378805ecec801c2d3edb52f2eefbcbacdbf543b9",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/domain/persona-v2/operation.ts",
+        "sha256": "8d84c89ce59225397fcdfb91628ca9ecf7ad68c5b130e150955cfe86213b6a5d",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/domain/ports/sql-operation-store.port.ts",
+        "sha256": "2159e297247c0a8f9c38322f2c96012c53d1a3611defbaf2271bb2dd8a0bc153",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/query-training.ts",
+        "sha256": "f9545ffb293b31d135dc8a1c46eb62e42e51333f2cee97cc2ea3899eed2e47b4",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/query-relationship-paths.ts",
+        "sha256": "05b513f094eb813e86920d0960e451bffb1c16ef7e3a3d82d4762a5e99c4e5e0",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/shared-query-adoption.ts",
+        "sha256": "93289529da52c09241878fc1a50748f13805d4d9feb333aba92b7f4207f2bdfc",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/shared-operation-adoption.ts",
+        "sha256": "1d83e10e9d87c4b7502d99b7bf544eb7cbc19ec3cad96bb5a4576da46478d25e",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/operation-training.ts",
+        "sha256": "da683124a08d7d2d57ac68d3e95c7fdef0d42afc479108ae075773b0d4c496e2",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/catalog.ts",
+        "sha256": "e6543377bc020b0fadb7f9aae62abab8efb9edecc1448ebc844f74d76b94a3fc",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/operation-cases.ts",
+        "sha256": "5c597e6d5e11d5004fce5b2a85ed8d115bfc43fa3e6e45d5d12fdbbba884ca47",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/operation-authority.ts",
+        "sha256": "ebc464879ec9df5fe13e20f1887b058a65b3a29892d94ea7368807ecc3e8d801",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/operation-reconciliation.ts",
+        "sha256": "c4e2ded3d6ef974206c5f4d1df3c133b4d09f664cd8791955f83bdb962ca3ced",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/consumer-catalog.ts",
+        "sha256": "ec6f3f77aaa93bd82688e6e2c6d442f187102614f90f708976dff0809d2e126c",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/sql-operations.ts",
+        "sha256": "a89ad476edca8e11cc4ad8091839730b1ed752f64c4bc4b9721d8cf52d32dea9",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/training-base.ts",
+        "sha256": "b6cba0f434333a4866fe9790eb0670032ed67a7d3aa6955494a63ae93cfc97c0",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/application/persona-v2/runtime-instructions.ts",
+        "sha256": "6cc86eb27dae068b5a8e8306791201e01492cb83b0fc749585a7c727f918f515",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "src/infrastructure/persistence/persona-v2/sql-operations.ts",
+        "sha256": "33cdf3b56b2665486c8f4e9ce6db5ab53da43715ef771fb397a6866f17637ef6",
+        "currentlyMatchesTested": true
+      },
+      {
+        "path": "tests/homologation/persona-chain.test.ts",
+        "sha256": "a1b43e672f9620cbd8a141cbb808aea5d6488828e7c3c5fca0c30df753052052",
+        "currentlyMatchesTested": false
+      }
+    ],
+    "verifiedBeforeHandoff": true
+  },
+  "currentFiles": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "8e2626d7e61a608c0d447311736cc2add8c6c8750fcfcfc5efec103ef6bb9d27"
+    },
+    {
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "e4d69e7f536aea120c7f66f36ceab51fed4f382d4f422a98b78e94e3bef6360e"
+    },
+    {
+      "path": "docs/persona-v2/README.md",
+      "sha256": "ea4e998c65b11590e534f7e8c2ac9de748b78c60a388e3b17465111fba4f519a"
+    },
+    {
+      "path": "docs/persona-v2/shared-knowledge.md",
+      "sha256": "c9884ebfe1d34d6d5653c2f5c6320380a73a7996f076c6fcf46f31da080076cf"
+    },
+    {
+      "path": "docs/persona-v2/sql-operations.md",
+      "sha256": "4f5ab64521b13ebbb5065e69da93cbdb61a161faed35efcefbc5de11eacdb1c0"
+    },
+    {
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "b69e50cd125539819072f94056f8ca9c1523d90a1e3e071c6660247f98022633"
+    },
+    {
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "5c7f9ccb4dbde0ccd7ad52095ae4d92c5a8c23d868c07aac743ab7141acb634f"
+    },
+    {
+      "path": "docs/persona-v2/validation.md",
+      "sha256": "9ff941e7d52e98674ce8b9f8482bed095e9b23af3a638b019820484faefd2377"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "581d1d76817fa07b5d0d8bd1c62f68084dbd68ede21bb94cf01cfb9689df617a"
+    },
+    {
+      "path": "tests/unit/persona-v2/shared-operation-adoption.test.ts",
+      "sha256": "b3372acdf907f293d74cdf6860342917a7a8dc878657008f4459aae9f21373be"
+    },
+    {
+      "path": "tests/unit/persona-v2/sql-operations.test.ts",
+      "sha256": "ce41937a59fa0886149e31f532eb6cf93f51e59fd2c56a8b322bfbb37bbd5e10"
+    },
+    {
+      "path": "tests/persona-v2/postgres.test.ts",
+      "sha256": "c04932b833f2a2fbf20c9cf422b43bac0f9a28d5fde7a0ce9f98359de19cdd29"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "path": "docs/persona-v2/validation/2026-10-14-shared-sql-operation-adoption.md",
+      "sha256": "b5fe61cd8cfe9928aec176fb21b089390156c64ae36788ce3f00d760950527ce"
+    }
+  ],
+  "migrations": [
+    {
+      "path": "migrations/persona-v2/0001_baseline.sql",
+      "sha256": "8a60ca9662fe2876702bc9a8716206ba4e88f803fed389fba131d625251b4229"
+    },
+    {
+      "path": "migrations/persona-v2/0002_catalog.sql",
+      "sha256": "82c0557980980edd4c3e90d177d04665cbc531b870d41b224d2d1d93562a4ff2"
+    },
+    {
+      "path": "migrations/persona-v2/0003_operation_integrity.sql",
+      "sha256": "eda3656432657c9626bf42e775d1a198d9f3cbad75531f1d2d03769c3c8aed11"
+    },
+    {
+      "path": "migrations/persona-v2/0004_operation_reconciliation.sql",
+      "sha256": "6e175098df510209ff85ddf020fda3c386135c20aa5982281e48e14efc95e91d"
+    },
+    {
+      "path": "migrations/persona-v2/0005_source_identity.sql",
+      "sha256": "33191d4d3f01f5e1acd139e70b5496deb8d38e27a8e1a8be8f9bba9ca3e5ffff"
+    },
+    {
+      "path": "migrations/persona-v2/0006_shared_knowledge.sql",
+      "sha256": "835d1eb621fd2ca1fafdd3f20f356a51adf6c03cbc90e3a109014476dd477e0d"
+    },
+    {
+      "path": "migrations/persona-v2/0007_shared_preview_authority.sql",
+      "sha256": "d0f635f96a5635b0b50d0666bbc6fc859bcaa25f444c4093d43aee3fa3e15e63"
+    },
+    {
+      "path": "migrations/persona-v2/0008_console_history.sql",
+      "sha256": "4e3554c0403a7c19156801505947678fef2a6079f9a64cbe53c1b734c7eee3c9"
+    },
+    {
+      "path": "migrations/persona-v2/0009_oauth_integrity.sql",
+      "sha256": "71a9c14a7a7aae91d14bf10554563885ffb30a7fd55f7f69f188eb2e5a0bac1b"
+    },
+    {
+      "path": "migrations/persona-v2/0010_delegation_and_setup.sql",
+      "sha256": "a0d5121b953795b38e89e1d9ec68dc310111341599e77492ac866a31f808add2"
+    },
+    {
+      "path": "migrations/persona-v2/0011_source_replacement.sql",
+      "sha256": "fff2dcf750729354e2cda4c2d4aab09a84bcbe5653449a2b9266f8ffbdc94966"
+    },
+    {
+      "path": "migrations/persona-v2/0012_administrative_authority.sql",
+      "sha256": "3af970767077f34f4432ea6b76e7457dd1a1bdef0c1b547b5c92a50f09a6b640"
+    },
+    {
+      "path": "migrations/persona-v2/0013_source_structure_evidence.sql",
+      "sha256": "756b1cd58ceddf31b61480cac788a665219c1f2d1641e1e91d827bf44aa277ea"
+    },
+    {
+      "path": "migrations/persona-v2/0014_physical_profiles.sql",
+      "sha256": "c3aad4944e1291693aa980dd610bce8937f6b87abb7406b338f5b0faaf2d37e8"
+    },
+    {
+      "path": "migrations/persona-v2/0015_physical_native_identity.sql",
+      "sha256": "73211592456e46906fdbfca1c28a9d27371b55d87e49b35fc1b8866e8f06381b"
+    },
+    {
+      "path": "migrations/persona-v2/0016_knowledge_curation.sql",
+      "sha256": "14430a996d7da56c716dc16cf0b9698b3c1a14c0fca43dd2c7ef13aa1b2b0618"
+    },
+    {
+      "path": "migrations/persona-v2/0017_publication_knowledge_index.sql",
+      "sha256": "3abd6614c72cc2539c64500d036c2dab0ad3b72319260df7b210b8891feb823c"
+    },
+    {
+      "path": "migrations/persona-v2/0018_physical_knowledge_curation.sql",
+      "sha256": "4e2f80cb124d547fdff3efd5844d21ad349762aa1992bc208c8fa457a0be0fdd"
+    },
+    {
+      "path": "migrations/persona-v2/0019_knowledge_feedback_review.sql",
+      "sha256": "85bd592886781aa6826d108598d35f405d0e1c6927237d03215d476ecb567f9a"
+    },
+    {
+      "path": "migrations/persona-v2/0020_review_publication_worker.sql",
+      "sha256": "36f16fc719c1ba041335ae35c18e91667b9a13726253efcab3699054e86f411e"
+    },
+    {
+      "path": "migrations/persona-v2/0021_knowledge_library.sql",
+      "sha256": "48739cbf0bce08850827d2bf2fdf242e55761a4985875b088991419e13dafbb2"
+    },
+    {
+      "path": "migrations/persona-v2/0022_structure_evidence_composition.sql",
+      "sha256": "15017c548d18124c0530b4af2a9a0bd64114f9a2d52d1fad81024ec275a29c54"
+    }
+  ],
+  "firstRound": {
+    "runId": "se7e_persona_0153e424f1d2_test",
+    "engines": ["sybase", "mssql", "postgres"],
+    "published": [
+      {
+        "dialect": "mssql",
+        "training_version": "persona-v2-qualified-operation-resources-1",
+        "shared": true,
+        "guarded_resources": 1
+      },
+      {
+        "dialect": "postgres",
+        "training_version": "persona-v2-qualified-operation-resources-1",
+        "shared": true,
+        "guarded_resources": 1
+      },
+      {
+        "dialect": "sybase",
+        "training_version": "persona-v2-qualified-operation-resources-1",
+        "shared": false,
+        "guarded_resources": 0
+      }
+    ],
+    "operations": [
+      {
+        "estado": "aprovada",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "cancelada",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "concluida",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "resultado_desconhecido",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "rollback_confirmado",
+        "count": 3,
+        "encrypted_payloads": 3
+      }
+    ],
+    "passed": 32,
+    "durationSeconds": 158.88,
+    "fixtureCleaned": true
+  },
+  "reuseAttempt": {
+    "runId": "se7e_persona_0153e424f1d2_test",
+    "setupFailed": true,
+    "executedCases": 0,
+    "accepted": false
+  },
+  "finalRound": {
+    "runId": "se7e_persona_9eb97fc07843_test",
+    "engines": ["mssql", "sybase", "postgres"],
+    "published": [
+      {
+        "dialect": "mssql",
+        "training_version": "persona-v2-shared-operation-knowledge-1",
+        "shared": true,
+        "guarded_resources": 1
+      },
+      {
+        "dialect": "postgres",
+        "training_version": "persona-v2-shared-operation-knowledge-1",
+        "shared": true,
+        "guarded_resources": 1
+      },
+      {
+        "dialect": "sybase",
+        "training_version": "persona-v2-shared-operation-knowledge-1",
+        "shared": false,
+        "guarded_resources": 0
+      }
+    ],
+    "operations": [
+      {
+        "estado": "aprovada",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "cancelada",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "concluida",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "resultado_desconhecido",
+        "count": 3,
+        "encrypted_payloads": 3
+      },
+      {
+        "estado": "rollback_confirmado",
+        "count": 3,
+        "encrypted_payloads": 3
+      }
+    ],
+    "passed": 32,
+    "durationSeconds": 176.87,
+    "fixtureCleaned": true
+  },
+  "checks": {
+    "mcpPassed": 1294,
+    "optInNotExecuted": 91,
+    "postgresPassed": 194,
+    "directedFinalPassed": 40,
+    "chromiumExecuted": false,
+    "consumerAiEvaluated": false,
+    "genericRunnerCertified": false
+  }
+}

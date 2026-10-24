@@ -1,0 +1,41 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": "scripts/accepted-image-origin.mjs",
+      "sha256": "3d1d9e310e8172321d0bd031139d8af25ae6dda56cec117400704f47df06875f"
+    },
+    {
+      "path": "scripts/persona-release-evidence.mjs",
+      "sha256": "b7c602c8c14b57da381dd9ec3ae12e16f5f5964f4706ec28a175c0c3fee692e3"
+    },
+    {
+      "path": "scripts/tested-image.mjs",
+      "sha256": "8d063606893dc99495576d0f1850769d80d9cbb9cdc95cd860f133b3ee08aff8"
+    },
+    {
+      "path": "scripts/should-publish-production.sh",
+      "sha256": "a2196aa7efa5eb79650ff9e20966369c9821342572331639a9e42596cd51dfe1"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "91193684883ba477580c93f50df0043961e08f61d6ac5ac7e7ad85e4c818bbf7"
+    },
+    {
+      "path": ".github/workflows/deploy.yml",
+      "sha256": "9e04807b8548b388b59118a5e9da7e713c77d5b30f6b565b78d1ddca430a160c"
+    },
+    {
+      "path": "tests/unit/accepted-image-origin.test.ts",
+      "sha256": "63bf071754f6c9cef5fafb97896eaba91a34f87a9c79139ad87ab01c05669898"
+    },
+    {
+      "path": "tests/unit/persona-release-evidence.test.ts",
+      "sha256": "d187d545f961602151038c4e1a368695d739521bcb718532aeb5a8d455d3d339"
+    },
+    {
+      "path": "tests/unit/tested-image.test.ts",
+      "sha256": "1e7b4545c01d9e0e3ba867875212732ca9ed9a1c7f4a13815bdd253d68b03d77"
+    }
+  ]
+}

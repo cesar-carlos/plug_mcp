@@ -1,0 +1,161 @@
+{
+  "scope": "Prova SQL Anywhere16; inventário parcial, não candidato integral de produção",
+  "capturedAt": "2026-10-15T12:26:04.333Z",
+  "baseCommits": {
+    "mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "hub": "bfb40becd42c5452b19b0df13698d212a0238ddc",
+    "agent": "fdb44d86b2a36df85c0133cf72167217fc1bd16e"
+  },
+  "node": "24.21.0",
+  "fixture": "se7e_persona_f4c57c9659b4_test",
+  "engines": [
+    {
+      "dialect": "mssql",
+      "version": "16.00.4236"
+    },
+    {
+      "dialect": "postgres",
+      "version": "17.0.11"
+    },
+    {
+      "dialect": "sybase",
+      "version": "16.00.0000"
+    }
+  ],
+  "release": {
+    "generation": "persona-v2",
+    "ready": false,
+    "requiredGates": [
+      "shared-knowledge-and-compatibility",
+      "identity-and-authorization",
+      "training-and-local-query",
+      "federation",
+      "agent-operation-journal",
+      "hub-operation-contract",
+      "operation-approval-and-reconciliation",
+      "external-rest-and-mcp",
+      "oauth-and-console",
+      "postgres-real",
+      "mssql-real",
+      "sybase-real",
+      "coordinated-cutover"
+    ],
+    "completedGates": []
+  },
+  "files": [
+    {
+      "path": "src/application/persona-v2/training-base.ts",
+      "sha256": "94ee6584866bf9de7d11d25381e0ce98fe02108102e3c0735288ff21f548b697",
+      "currentSha256": "94ee6584866bf9de7d11d25381e0ce98fe02108102e3c0735288ff21f548b697",
+      "unchanged": true
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "55f29ac20acad29d80f3d3d4244264d66d35d61b38f522f8304e7fa0a3c63876",
+      "currentSha256": "55f29ac20acad29d80f3d3d4244264d66d35d61b38f522f8304e7fa0a3c63876",
+      "unchanged": true
+    },
+    {
+      "path": "tests/homologation/persona-chain.test.ts",
+      "sha256": "8c617b411c631acbd4d1884d9cca624c23dd0ce5eec7de60554226ecdcdea4c9",
+      "currentSha256": "8c617b411c631acbd4d1884d9cca624c23dd0ce5eec7de60554226ecdcdea4c9",
+      "unchanged": true
+    },
+    {
+      "path": "../plug_agente/lib/infrastructure/external_services/source_schema_sql.dart",
+      "sha256": "97e7a762521d8de45a46647d8826c327391bffbc347c7de7afc9e1aaccc03234",
+      "currentSha256": "97e7a762521d8de45a46647d8826c327391bffbc347c7de7afc9e1aaccc03234",
+      "unchanged": true
+    },
+    {
+      "path": "../plug_agente/lib/infrastructure/external_services/sql_anywhere_constraint_sql.dart",
+      "sha256": "ed6a6a00b5d2de5f3abd75f1a1a851af007099b558d37ffbdfce47982d3d11b7",
+      "currentSha256": "ed6a6a00b5d2de5f3abd75f1a1a851af007099b558d37ffbdfce47982d3d11b7",
+      "unchanged": true
+    },
+    {
+      "path": "../plug_agente/lib/infrastructure/external_services/odbc_source_schema.dart",
+      "sha256": "1c94d60920448ebfce0181a4afb77f327a96e62eb4a4599a11679830405d211e",
+      "currentSha256": "1c94d60920448ebfce0181a4afb77f327a96e62eb4a4599a11679830405d211e",
+      "unchanged": true
+    },
+    {
+      "path": "../plug_agente/tool/homologation/sql_anywhere_constraints_test.dart",
+      "sha256": "e378ec9723994c3b61c0504d85b5f829b751e3167c5721ff61259380c0668a36",
+      "currentSha256": "e378ec9723994c3b61c0504d85b5f829b751e3167c5721ff61259380c0668a36",
+      "unchanged": true
+    },
+    {
+      "path": "../plug_agente/tool/homologation/persona_chain_structure_fixture.dart",
+      "sha256": "7c6e38b4e0078546ee8022ffd99eb4de1ba19d0fa2e2356b0ffbbf5cc407f78d",
+      "currentSha256": "7c6e38b4e0078546ee8022ffd99eb4de1ba19d0fa2e2356b0ffbbf5cc407f78d",
+      "unchanged": true
+    }
+  ],
+  "agentFiles": [
+    {
+      "path": "lib/infrastructure/external_services/sql_anywhere_constraint_sql.dart",
+      "sha256": "ed6a6a00b5d2de5f3abd75f1a1a851af007099b558d37ffbdfce47982d3d11b7"
+    },
+    {
+      "path": "tool/homologation/sql_anywhere_constraints_test.dart",
+      "sha256": "e378ec9723994c3b61c0504d85b5f829b751e3167c5721ff61259380c0668a36"
+    },
+    {
+      "path": "tool/homologation/persona_chain_agent_test.dart",
+      "sha256": "b45f0a887fbaee2bf55394ba87bccb330897be24305fd3ff313dcde3f7160ad2"
+    },
+    {
+      "path": "lib/infrastructure/external_services/source_schema_sql.dart",
+      "sha256": "97e7a762521d8de45a46647d8826c327391bffbc347c7de7afc9e1aaccc03234"
+    },
+    {
+      "path": "lib/infrastructure/external_services/odbc_source_schema.dart",
+      "sha256": "1c94d60920448ebfce0181a4afb77f327a96e62eb4a4599a11679830405d211e"
+    },
+    {
+      "path": "tool/homologation/persona_chain_structure_fixture.dart",
+      "sha256": "7c6e38b4e0078546ee8022ffd99eb4de1ba19d0fa2e2356b0ffbbf5cc407f78d"
+    },
+    {
+      "path": "tool/homologation/persona_chain_storage.dart",
+      "sha256": "d8ad76ace297e5c232ac7870dcc2c20832d37e1bc585bfe288328edcb94504d8"
+    }
+  ],
+  "chain": {
+    "note": "UNIQUE declarada corrigida na fixture, sem promover índice comum.",
+    "durationSeconds": 241.73,
+    "passed": 35,
+    "firstChainPassed": 34,
+    "failed": 0,
+    "firstFixture": "se7e_persona_8328750e74ad_test",
+    "firstChainFailed": 1
+  },
+  "checks": {
+    "typescript": "7.0.2",
+    "nativeAndGuardTests": 33,
+    "consumerAiEvaluated": false,
+    "productionReleased": false,
+    "postgresIntegrationTests": 194,
+    "node": "24.21.0",
+    "personaUnitTests": 396,
+    "chromiumExecuted": false
+  },
+  "driverFiles": [
+    {
+      "version": "18.00.0000",
+      "file": "podbc35w.dll",
+      "sha256": "452afccffb9b7ffbdb736b8ba1cba9d7b1e11b09ffaee9cf85d6d3788cace991"
+    },
+    {
+      "version": "16.0.0.2043 (64-bit)",
+      "file": "dbodbc16.dll",
+      "sha256": "571e105fb3e14e754b16863739d402022d0e1f64a10d0b224c4e6dd429d5e8be"
+    },
+    {
+      "version": "2018.0186.0001.01 ((DS_Main).170626-2112)",
+      "file": "msodbcsql18.dll",
+      "sha256": "b510668814e68df5018f6f3de0d203fd9b8628b1901d46ed3762ee263b87bbbb"
+    }
+  ]
+}

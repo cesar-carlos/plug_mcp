@@ -1,0 +1,29 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "54d7c0fa55baeaeae58d3ecd856abc9757f8c9ba0c9877bd50e0f0c78d04beb5"
+    },
+    {
+      "path": "scripts/homologation/test-persona-candidate.ps1",
+      "sha256": "157482ca02d10a40d3e46984eba0cea7b5b9e38520346433400e977fdfd414c8"
+    },
+    {
+      "path": "docker-compose.persona-v2.yml",
+      "sha256": "f340971494d0d64b3e6fb38abd93978e2d873f98bf46770a196ddfcc285cffe8"
+    },
+    {
+      "path": "scripts/accepted-image-origin.mjs",
+      "sha256": "36e0a9ce8fb8750010b6af339587d89c8e2b0938718bb34eb2d52f9aaf5b9b7e"
+    },
+    {
+      "path": "tests/unit/accepted-image-origin.test.ts",
+      "sha256": "274aef11e193dbd63d98b489b42987cfb704908f63daa0b759922920b2706c73"
+    },
+    {
+      "path": "tests/unit/tested-image.test.ts",
+      "sha256": "2dbb16347d2f57554719b19a3b560e59577c46a899092006c31ab5851aa3a14f"
+    }
+  ]
+}

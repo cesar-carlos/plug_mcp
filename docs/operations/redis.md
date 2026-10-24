@@ -1,5 +1,8 @@
 # Redis 7: configuração e diagnóstico
 
+> Operação da composição legada. Consultas persona-v2 não usam esse cache/worker;
+> consulte o [estado v2](../persona-v2/README.md).
+
 O servidor Redis do projeto usa `redis:7-alpine` no `docker-compose.yml` e na CI. O pacote npm `redis` 6.3.0 é o cliente Node: sua versão não indica a versão do servidor. As versões instaladas estão em `package-lock.json`; a versão efetiva do servidor é obtida com `INFO server`. A tag `7-alpine` acompanha patches da linha 7.
 
 ## Escolher a conexão

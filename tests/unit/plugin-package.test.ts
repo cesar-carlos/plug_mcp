@@ -11,6 +11,7 @@ describe("pacote Se7e", () => {
     const outputRoot = await mkdtemp(resolve(tmpdir(), "se7e-package-"));
     const input = {
       root: resolve("plugins/se7e-chatgpt"),
+      runtime: "legacy" as const,
       outputRoot,
       publicBaseUrl: "https://synthetic.example.test/",
     };

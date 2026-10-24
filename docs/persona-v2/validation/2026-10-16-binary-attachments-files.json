@@ -1,0 +1,281 @@
+{
+  "scope": "persona-v2-binary-attachments",
+  "baseRef": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "generatedAt": "2026-10-16T19:00:47.1984762Z",
+  "partial": true,
+  "productionReady": false,
+  "files": [
+    {
+      "path": ".cursor/rules/mcp_protocol.mdc",
+      "sha256": "e2b4eba7dc539c30500f6d548a93ae7736fa9b2f34cca1c299cd80de3df145b4"
+    },
+    {
+      "path": ".cursor/rules/performance.mdc",
+      "sha256": "10ffacca3e650d488c37f462658081326b1ff407eeacf838fcbb61db99430a28"
+    },
+    {
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "6bb0700befbb3fbe7399d30b8eaab3142b348fd5ead67a597a10ae097bf3d587"
+    },
+    {
+      "path": ".cursor/rules/plug_server_client.mdc",
+      "sha256": "9d328316286828052f65051396d8c185dc19fee00f3e551e1a4bb2830461a4e7"
+    },
+    {
+      "path": ".cursor/rules/security.mdc",
+      "sha256": "a095a75e479b263d86f5b9af07cd96f38688e6123fa025af9122813c22fcacc6"
+    },
+    {
+      "path": ".cursor/rules/testing.mdc",
+      "sha256": "68e5de3e521f4f83746abd2f1bbddfb2b451ddf610648fa6a60521dd20647fd2"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "5581ef64247c1011453f60121ed17d0f3d825fe4cba38c403afe8d306113873b"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "71aaa2c7354c1bf732243035c0090b9428b1da6eec6fccc031a7ae8b7ad558e0"
+    },
+    {
+      "path": "contracts/hub-persona-v2.snapshot.patch",
+      "sha256": "7f1b746a782b5023aed562cb40edbf72dbe39a15498fcba2e36a949604aa1948"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "a8e8bc82a9b6d995c8637bf47bc35e17d44c5b21aba60889be25654ac60f4e60"
+    },
+    {
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "c2c009a960b0e12acb343dc81e6e334e730338f8e4f0fe4216a459dacc286ae6"
+    },
+    {
+      "path": "docs/persona-v2/attachments.md",
+      "sha256": "2539fc6071151a30c539743c8f807c4d94a99851c2e77f18c56d4a2f2243c8e9"
+    },
+    {
+      "path": "docs/persona-v2/catalog.md",
+      "sha256": "e6a01b1810f668aa43794ba40fd9ea790239a767845f3540f4d1001978c85a7c"
+    },
+    {
+      "path": "docs/persona-v2/console.md",
+      "sha256": "523d3520a39569251177b44bce96fc165427abdcdfb9f8eb87863baea361791c"
+    },
+    {
+      "path": "docs/persona-v2/oauth.md",
+      "sha256": "da3804edb7b9df1817d1177f8dec2b5cc20148f1f2c56a181efc74cea388d81e"
+    },
+    {
+      "path": "docs/persona-v2/plugin.md",
+      "sha256": "afbbd2a106543e97ff904880f23cdca1113bcf542e38737480236e1039b7eaae"
+    },
+    {
+      "path": "docs/persona-v2/query-cache.md",
+      "sha256": "0fb7ee903d57e968fa814613316839da3a00cd7b8bd1dee46da7e348b5845fb2"
+    },
+    {
+      "path": "docs/persona-v2/README.md",
+      "sha256": "8f00b0dafa77d095ed1dc19e701ed006f1965d33de0e6943b40927b59c02461a"
+    },
+    {
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "38e3019e622d483a47943ab5446c75114b72bb22e454901e6c94915996d3211f"
+    },
+    {
+      "path": "docs/persona-v2/source-queries.md",
+      "sha256": "a51221761e30b5d1e7900df5b3925b41114524378bef6d9de9e77f495824d7ea"
+    },
+    {
+      "path": "docs/persona-v2/validation.md",
+      "sha256": "73802a54868f5f7a8fdb6fc5403d54529c57113e5b8d0dad84c2ee0dfb70d60f"
+    },
+    {
+      "path": "docs/persona-v2/validation/2026-10-16-binary-attachments.md",
+      "sha256": "e05927018dff847cd3341aabac9c9e3b739db0b54b37df46e91abd664b92f888"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "ed75e16b1bf48040fc7f6f76ea1ab9c7a5cef7281ae27a7ba8a98390ef0431a5"
+    },
+    {
+      "path": "migrations/persona-v2/0038_attachment_audit.sql",
+      "sha256": "4566945562075f1a99a1e21bbc8e077b0f7705f6fd33bec2bc8f2f25aa46b147"
+    },
+    {
+      "path": "playwright.persona-v2.config.ts",
+      "sha256": "05515dc41d49951ed2bbc7c2fbde867d8a183c8fb6a3e1e61d45273a67ee6938"
+    },
+    {
+      "path": "plugins/se7e-persona-v2/skills/se7e-consulta/SKILL.md",
+      "sha256": "64aea2833304dbd7c5b08f3a541c203da99d350d2c6dbf93130e7e2cdda70894"
+    },
+    {
+      "path": "README.md",
+      "sha256": "9f23f4cb7270b42f746b6bffec6d0f00d4670236e24277fe92f4a06ff4ba68a0"
+    },
+    {
+      "path": "src/application/persona-v2/attachment-structure.ts",
+      "sha256": "55aac05195291f94991b41bc91ce0d3d6c2105219f76978826b7fd04f562f7e0"
+    },
+    {
+      "path": "src/application/persona-v2/attachments.ts",
+      "sha256": "29b6107e21b77ee41d868e90f58197fbb5dda341036c643eae32962aa8054e2f"
+    },
+    {
+      "path": "src/application/persona-v2/binary-attachment.ts",
+      "sha256": "82034af7d0866138a6c78732240c053fa70e198f19fbf248a2b125be564127e3"
+    },
+    {
+      "path": "src/application/persona-v2/consumer-catalog.ts",
+      "sha256": "f114edc8f2992109639d709086cacf31f06ecfb8b2014f8d02dd5ce6c2387525"
+    },
+    {
+      "path": "src/application/persona-v2/query-field-uses.ts",
+      "sha256": "0f9f6be33d4e97ff19c78e4502085dc74324d495802aa5a1dd6b31974eba2fa7"
+    },
+    {
+      "path": "src/application/persona-v2/query-training.ts",
+      "sha256": "56c71dde8acbd04f8c73920d8ca5253a79ebe6150c48db766e3ff6b1eac51400"
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "4d125ef09305f1b6adfe4ae129ebe6136440369368009f5e1c65fdcc7940e1b6"
+    },
+    {
+      "path": "src/application/persona-v2/source-query.ts",
+      "sha256": "e5d2e25d48511372f5a10386c4193fb9100fe63fb297ad3078d22789ce5e3f3f"
+    },
+    {
+      "path": "src/application/persona-v2/training-base.ts",
+      "sha256": "7ce440a2f1925e9595ff30f0f451017d60e2d2b864dbddc44dae50b87f61d211"
+    },
+    {
+      "path": "src/application/use-cases/shared/sql-ast.ts",
+      "sha256": "e7b2b2f14889f27b7f3a7b1767e0141de015cd1a07924b9e6e1f7f87e1981527"
+    },
+    {
+      "path": "src/composition/compose-persona-v2.ts",
+      "sha256": "4b0557430ffe815fd0bcd0b9ec523c629ecf261a955c2655ae05faeae3c6f37d"
+    },
+    {
+      "path": "src/domain/persona-v2/attachments.ts",
+      "sha256": "fd177345f448bc511cf7f4d6cbca61ff7c04233aba3960f954c5c4e727c0260c"
+    },
+    {
+      "path": "src/domain/persona-v2/model.ts",
+      "sha256": "c6e6b7c427d1022b64f6ff6d28120c798d86a3e76ff91a14247c8f3c7ff31432"
+    },
+    {
+      "path": "src/domain/ports/persona-attachment.port.ts",
+      "sha256": "e4b970bf84f87dd141a3363e69dd705fea97aa9689c22315c1e4ae2099e4c118"
+    },
+    {
+      "path": "src/domain/ports/persona-v2.port.ts",
+      "sha256": "6f1a5427e0f102eeec657b537f7976e69558653b1aaf35ff1d172c1dbb3d7ab3"
+    },
+    {
+      "path": "src/domain/ports/plug-server-gateway.port.ts",
+      "sha256": "fa72c0aa4bfe5828763bcae3729150f245744dc0c4026204181a7ff02f4aea1b"
+    },
+    {
+      "path": "src/domain/ports/source-query.port.ts",
+      "sha256": "3d459595c7dbdd2cf5638ccb160feff03d962a7b2feda8c40f26cc7a4eba6e91"
+    },
+    {
+      "path": "src/infrastructure/http/persona-v2-admin.ts",
+      "sha256": "b2e546300e099bfa7205f93aac14058f8bf09275162ef6e0b3714d4017efad79"
+    },
+    {
+      "path": "src/infrastructure/http/persona-v2-attachments.ts",
+      "sha256": "042c1cfb56db012f66194afdce22f7802995c87da95c202791da4b28c039e8b1"
+    },
+    {
+      "path": "src/infrastructure/mcp/persona-v2-http.ts",
+      "sha256": "7e8f39a64d80f1e82bcf2682b1392d55a8d9450d2e933b4e792df613e50bf139"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/history.ts",
+      "sha256": "cf3baaac7abee96b2a3f804b379f5ca1f2ce883599bf3bef3d21ed717130d939"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/repository.ts",
+      "sha256": "5f750ef6a970230392b7f8adc4b08ce01133c6b09641d4329615f7f7b27915ee"
+    },
+    {
+      "path": "src/infrastructure/persona-v2/attachment-store.ts",
+      "sha256": "791979db793b68704ec1f7399a39ad2306b1e0dae6187bf3df178cfae6fb94c3"
+    },
+    {
+      "path": "src/infrastructure/plug-server/persona-source-query.ts",
+      "sha256": "0684b8871a8e1b12f0c82c63f831ed12588145c964a313deec8de9325b7c2ab0"
+    },
+    {
+      "path": "src/infrastructure/plug-server/plug-server-rest.adapter.ts",
+      "sha256": "5e5f2c7d203001b237d8a8cd9104ab6a46e9909a6c2e2d6a3b49a9b4876c7199"
+    },
+    {
+      "path": "src/infrastructure/plugins/tool-catalog.ts",
+      "sha256": "00eb6668c39d4bd2ea7b104702887f4e32b00ec72603a09a97375e16ad0f1860"
+    },
+    {
+      "path": "tests/helpers/persona-v2-browser-server.ts",
+      "sha256": "8c0b00391692c80980262eadf60e4739100f7e54ac5ae083d68f0d6a8e8b27ce"
+    },
+    {
+      "path": "tests/helpers/persona-v2-training.ts",
+      "sha256": "7b740b566a5d965397737978d0a3f3241d4708069ea98e334975d96e5d63e8e9"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "6a399432f9fbb582f364e87ca1b8b8efc909e4874054d244eee09bb214e95dfe"
+    },
+    {
+      "path": "tests/persona-v2/postgres.test.ts",
+      "sha256": "d418f72ea304612f6613727dcc3d2fe69448912547b98a6a9c04d57edd1f5d94"
+    },
+    {
+      "path": "tests/persona-v2/source-query.postgres.test.ts",
+      "sha256": "40a59abdddf28685b0170b90f49057fba8be3209e91c1c4179a12b227d0cabd3"
+    },
+    {
+      "path": "tests/unit/persona-v2/attachments.test.ts",
+      "sha256": "de47f624664a7cf9ac579a29b22e851e7ef8cf933d1eea87172b07369e318970"
+    },
+    {
+      "path": "tests/unit/persona-v2/field-uses.test.ts",
+      "sha256": "00a0d8ec8accaa88792dd569551ae553b7850027e49e57de2a3ecbbadcae2340"
+    },
+    {
+      "path": "tests/unit/plug-server-rest.adapter.test.ts",
+      "sha256": "6e399f13512c4b1531a481876dc1e31ed4e50c5786d0d8b082b62b12c3b59c78"
+    },
+    {
+      "path": "web/src/persona-v2/BinaryAttachmentEditor.vue",
+      "sha256": "f82e54f3c8dd210165184801ec9b0c47f836d78d277db9bdb8d10bef901a0a15"
+    },
+    {
+      "path": "web/src/persona-v2/field-capabilities.ts",
+      "sha256": "c090c597edc3c368116f19f7462a7a157c006682ec11b38b73318427cbe61c6e"
+    },
+    {
+      "path": "web/src/persona-v2/FieldUseEditor.vue",
+      "sha256": "06080cbaf2e83e3e5506281f75cd1ee934b6a263bad737677122095e009928b1"
+    },
+    {
+      "path": "web/src/persona-v2/history-labels.ts",
+      "sha256": "a73f8f0cdabf62af02d8f2a62d9c7f770ec6500d957121de3c5171ae6eb05de6"
+    },
+    {
+      "path": "web/src/persona-v2/model.ts",
+      "sha256": "63582e99afb2bf3eabc45c8eb4d9d796108aaa400a13ede19dff9ce5e44bf227"
+    },
+    {
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "402da79752b72796ff1c7c92bbb3a462d83ec38c9219bc5a13d6b9121e26df08"
+    }
+  ]
+}

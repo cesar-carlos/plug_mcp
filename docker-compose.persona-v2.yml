@@ -1,0 +1,88 @@
+name: se7e-persona-v2-candidate
+
+x-candidate: &candidate
+  image: ${PERSONA_V2_CANDIDATE_IMAGE:-se7e-persona-v2-candidate:${PERSONA_V2_CANDIDATE_TAG:-local}}
+  build:
+    context: .
+    target: persona-v2-candidate
+    args:
+      GIT_SHA: ${PERSONA_V2_CANDIDATE_REVISION:-unaccepted-local}
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  environment: &candidate-env
+    NODE_ENV: development
+    HOST: 0.0.0.0
+    PORT: "3333"
+    DATABASE_URL: postgresql://persona_v2:${PERSONA_V2_POSTGRES_PASSWORD:?Dedicated hexadecimal password required}@database:5432/se7e_persona_v2_candidate
+    MCP_ENCRYPTION_KEY: ${PERSONA_V2_ENCRYPTION_KEY:?Dedicated 64-character hexadecimal key required}
+    MCP_ENCRYPTION_KEY_ID: ${PERSONA_V2_ENCRYPTION_KEY_ID:-candidate-1}
+    PUBLIC_BASE_URL: ${PERSONA_V2_PUBLIC_BASE_URL:-http://127.0.0.1:3334}
+    PLUG_SERVER_BASE_URL: ${PERSONA_V2_HUB_URL:?Explicit isolated hub URL required}
+    PERSONA_V2_REDIS_URL: redis://redis:6379
+    PERSONA_V2_QUERY_CACHE_TTL_MS: ${PERSONA_V2_QUERY_CACHE_TTL_MS:-0}
+    PERSONA_V2_OAUTH_ENABLED: ${PERSONA_V2_OAUTH_ENABLED:-false}
+    PERSONA_V2_OAUTH_CLIENTS: "${PERSONA_V2_OAUTH_CLIENTS:-{}}"
+  depends_on:
+    database:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: persona_v2
+      POSTGRES_PASSWORD: ${PERSONA_V2_POSTGRES_PASSWORD:?Dedicated hexadecimal password required}
+      POSTGRES_DB: se7e_persona_v2_candidate
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U persona_v2 -d se7e_persona_v2_candidate"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  server:
+    <<: *candidate
+    command: [server]
+    ports:
+      - "127.0.0.1:${PERSONA_V2_LOCAL_PORT:-3334}:3333"
+  worker:
+    <<: *candidate
+    command: [worker]
+    environment:
+      <<: *candidate-env
+      PERSONA_V2_WORKER_HEALTH_PORT: "3335"
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3335/health',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 6
+    stop_grace_period: 30s
+  migrate:
+    <<: *candidate
+    profiles: [maintenance]
+    command: [migrate]
+    healthcheck:
+      disable: true
+
+volumes:
+  database:

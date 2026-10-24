@@ -1,8 +1,43 @@
 # Se7e MCP Server
 
-Servidor MCP remoto (Streamable HTTP) que conecta um Client já existente no `plug-server` ao ERP. O MCP é **cofre + base de conhecimento**: guarda e-mail/senha (só autenticação — **não** particiona o catálogo), `agentId` e `client_token`, emite **um token MCP opaco por acesso**, e dá à IA o pacote da skill publicada **daquele acesso**. **1 `client_token` = 1 persona = 1 catálogo isolado = 1 Bearer.** Mesmo e-mail/`agentId` + outro token (`adicionar_acesso` / `registrar_acesso`) começa vazio e ganha outro Bearer. Tools omitem `acessoId`. Resource `skill://{acessoId}/{slug}`. Cache `mcp:query:acesso:{acessoId}:`. Hub SQL continua `agentId` + `client_token` daquele acesso. A **base comum** de todo consumidor: SQL no plug_server, dialeto do acesso, resources (`guia://`, `skill://`, `persona://`) e estrutura pelas skills publicadas (consultas dinâmicas no pacote, fail-closed). Sem embeddings. Persona no acesso oriente tom/uso e **não** recorta skills **neste acesso** (outro token = outro catálogo) nem licencia SQL. O domínio (atendimento, pagamentos, KPI/gestão, etc.) é o que o usuário treinou e publicou neste acesso, mais o chapéu da persona.
+Servidor de treinamento, cofre e execução de skills publicadas pelo plug_server.
+O projeto está em refatoração para persona-v2: persona central, múltiplas fontes
+e tokens com concessões explícitas.
 
-OAuth opcional delega um acesso existente ao ChatGPT por token MCP no navegador. Sem novas contas, catálogo pronto com seed ou Client de serviço no `.env`.
+| Entrada                                     | Estado                                                                     | Referência                                       |
+| ------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------ |
+| `src/main-persona-v2.ts` / `dev:persona-v2` | Desenvolvimento separado; baseline própria, console inicial e contratos v2 | [Estado e pendências](docs/persona-v2/README.md) |
+| `src/main.ts` / `dev` / imagem atual        | Runtime legado por acesso, ainda em manutenção                             | [Tools legadas](docs/mcp/tools.md)               |
+
+**Publicação de imagem e deploy bloqueados até aceite integral.** Os procedimentos
+abaixo documentam a entrada legada; não autorizam o corte da refatoração.
+
+[Documentação](docs/README.md) · [Orientações e rules](AGENTS.md) ·
+[Fluxo inicial v2](docs/persona-v2/onboarding.md) ·
+[Conhecimento compartilhado v2](docs/persona-v2/shared-knowledge.md) ·
+[Plugin privado e candidato v2](docs/persona-v2/plugin.md) ·
+[OAuth legado](docs/auth/chatgpt-oauth.md)
+
+Persona-v2 possui [OAuth próprio de desenvolvimento](docs/persona-v2/oauth.md),
+com consentimento limitado e pacote candidato ChatGPT. Instalação privada e
+aceite integral continuam pendentes; deploy/imagens bloqueados.
+
+[Cache e singleflight v2](docs/persona-v2/query-cache.md) são opt-in por
+`PERSONA_V2_QUERY_CACHE_TTL_MS`, com Redis próprio opcional, cifras e revalidação
+por consumidor. Não usam o cache legado nem substituem prova estrutural.
+
+[Anexos JSON v2](docs/persona-v2/attachments.md) exigem contrato publicado e
+exportação explicitamente concedida. Handles cifrados/opacos são temporários e
+isolados por consumidor; downloads HTTP/MCP revalidam permissões. Binários exigem
+contrato separado, metadados positivos e um único registro completo. Reinício
+invalida os handles, sem consulta automática; não há conversão de arquivos.
+
+Casos externos têm editor/relatórios no console v2 e runner de operador
+`persona:test-external`, somente em fixtures explícitas e isoladas.
+[Contrato do CLI e controles da fixture](docs/persona-v2/external-integrations.md#runner-cli-e-casos-no-console).
+
+Rotação de chaves do cofre v2: `vault:rotate:persona-v2`, com simulação,
+operador de banco separado, lock e retomada. [Procedimento](docs/persona-v2/vault-rotation.md).
 
 ## Requisitos
 
@@ -59,26 +94,27 @@ Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a con
 
 ## Scripts
 
-| Script                         | Função                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------ |
-| `npm run dev`                  | `tsx watch`                                                              |
-| `npm test`                     | Unitários, contratos e integrações; PostgreSQL/Redis quando configurados |
-| `npm run test:live`            | plug-server real (`E2E_*`)                                               |
-| `npm run lint` / `format`      | ESLint + Prettier                                                        |
-| `npm run release:check`        | Compilador 7, lint, formatação, tipos, testes, build e `web:check`       |
-| `npm run web:check`            | Lint Vue/TypeScript, tipos, Vitest e build do console                    |
-| `npm run test:console:browser` | Chromium do console, separado do OAuth, com `FakePlugServer`             |
-| `npm run db:migrate`           | Aplica `drizzle/*.sql`                                                   |
-| `npm run test:migrations`      | Banco novo, upgrades `0023`/`0027` e reaplicação em DB efêmero de CI     |
-| `npm run runtime:check`        | Servidor, worker e componentes nativos em banco CI isolado               |
-| `npm run test:evaluation`      | Avaliação determinística dos 100 cenários sintéticos                     |
-| `npm run evaluate:consumer`    | Avaliação explícita com adaptador/modelo de IA configurados              |
-| `npm run worker:operacoes`     | Processa SLO, revisões e outbox de webhook (requer banco)                |
-| `npm run db:backfill-escopo`   | Preenche `skill.escopo` vazio a partir do `sql_modelo`                   |
+| Script                         | Função                                                                                 |
+| ------------------------------ | -------------------------------------------------------------------------------------- |
+| `npm run dev`                  | `tsx watch`                                                                            |
+| `npm test`                     | Unitários, contratos e integrações; PostgreSQL/Redis quando configurados               |
+| `npm run test:live`            | plug-server real (`E2E_*`)                                                             |
+| `npm run docs:check`           | Links locais/âncoras, rules no AGENTS, JSON/schemas e matriz de aceite, sem rede/banco |
+| `npm run lint` / `format`      | ESLint + Prettier                                                                      |
+| `npm run release:check`        | Compilador 7, lint, formatação, tipos, testes, build e `web:check`                     |
+| `npm run web:check`            | Lint Vue/TypeScript, tipos, Vitest e build do console                                  |
+| `npm run test:console:browser` | Chromium do console, separado do OAuth, com `FakePlugServer`                           |
+| `npm run db:migrate`           | Aplica `drizzle/*.sql`                                                                 |
+| `npm run test:migrations`      | Banco novo, upgrades `0023`/`0027` e reaplicação em DB efêmero de CI                   |
+| `npm run runtime:check`        | Servidor, worker e componentes nativos em banco CI isolado                             |
+| `npm run test:evaluation`      | Avaliação determinística dos 100 cenários sintéticos                                   |
+| `npm run evaluate:consumer`    | Avaliação explícita com adaptador/modelo de IA configurados                            |
+| `npm run worker:operacoes`     | Processa SLO, revisões e outbox de webhook (requer banco)                              |
+| `npm run db:backfill-escopo`   | Preenche `skill.escopo` vazio a partir do `sql_modelo`                                 |
 
 Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.21.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
 
-Para rodar todas as integrações, configure bancos exclusivos de teste em `DATABASE_URL` e `REDIS_URL`. `CI=true` exige PostgreSQL e impede omissão silenciosa do FTS; migrações e avaliação exigem banco efêmero de CI. Sem as URLs, as integrações correspondentes são ignoradas; isso não certifica bancos reais. Consulte as [verificações executadas](docs/product/implementation-plan.md).
+Para rodar todas as integrações, configure bancos exclusivos de teste em `DATABASE_URL` e `REDIS_URL`. `CI=true` exige PostgreSQL e impede omissão silenciosa do FTS; migrações e avaliação exigem banco efêmero de CI. Sem as URLs, as integrações correspondentes são ignoradas; isso não certifica bancos reais.
 
 ### Contratos e consulta inteligente
 
@@ -100,9 +136,9 @@ Ver [docs/clients/connecting-clients.md](docs/clients/connecting-clients.md).
 2. Tools e erros — [docs/mcp/tools.md](docs/mcp/tools.md), [docs/mcp/error-mapping.md](docs/mcp/error-mapping.md)
 3. Hub REST — [docs/plug-server/communication.md](docs/plug-server/communication.md) (adapter: [rest-integration.md](docs/plug-server/rest-integration.md))
 4. Modelo e FTS — [docs/data/data-model.md](docs/data/data-model.md)
-5. Índice — [`docs/README.md`](docs/README.md). Changelog — [`CHANGELOG.md`](CHANGELOG.md). Histórico das três camadas — [docs/proposta-arquitetura-mcp-se7e.md](docs/proposta-arquitetura-mcp-se7e.md)
+5. Índice — [docs/README.md](docs/README.md). Changelog — [CHANGELOG.md](CHANGELOG.md). Arquitetura legada — [docs/architecture/hexagonal-architecture.md](docs/architecture/hexagonal-architecture.md)
 
-TypeScript 7 compila e checa tipos; a API TypeScript 6 é usada apenas pelas ferramentas de lint. `npm run compiler:check` confirma o compilador real. Dependências são fixadas pelo lockfile e instaladas por `npm ci`, sem force/legacy-peer-deps. CI inclui Windows, Linux, Redis/PostgreSQL e musl x64/arm64. [Escopo e verificações](docs/product/implementation-plan.md), [cadastro/rotação](docs/auth/vault-and-mcp-token.md).
+TypeScript 7 compila e checa tipos; a API TypeScript 6 é usada apenas pelas ferramentas de lint. `npm run compiler:check` confirma o compilador real. Dependências são fixadas pelo lockfile e instaladas por `npm ci`, sem force/legacy-peer-deps. CI inclui Windows, Linux, Redis/PostgreSQL e musl x64/arm64. Cadastro e rotação: [cofre](docs/auth/vault-and-mcp-token.md).
 
 ## Plugin privado do ChatGPT
 

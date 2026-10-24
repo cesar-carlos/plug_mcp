@@ -46,7 +46,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM alpine:3.24 AS runtime
+FROM alpine:3.24 AS runtime-base
 ARG GIT_SHA=unknown
 WORKDIR /app
 ENV NODE_ENV=production
@@ -58,6 +58,7 @@ COPY --chown=mcp:mcp --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=mcp:mcp --from=build /app/dist ./dist
 COPY --chown=mcp:mcp --from=build /app/web/dist ./web/dist
 COPY --chown=mcp:mcp drizzle ./drizzle
+COPY --chown=mcp:mcp migrations ./migrations
 COPY --chown=mcp:mcp docs/mcp/error-mapping.md ./docs/mcp/error-mapping.md
 COPY --chown=mcp:mcp docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh && chown mcp:mcp /app
@@ -66,3 +67,14 @@ EXPOSE 3333
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3333/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["./docker-entrypoint.sh"]
+
+# Explicit local candidate target; the default final stage remains legacy.
+FROM runtime-base AS persona-v2-candidate
+ENV NODE_ENV=development
+COPY --chown=mcp:mcp --chmod=755 docker-entrypoint-persona-v2.sh ./
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=6 \
+  CMD node -e "fetch('http://127.0.0.1:3333/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+ENTRYPOINT ["./docker-entrypoint-persona-v2.sh"]
+CMD ["server"]
+
+FROM runtime-base AS runtime

@@ -8,6 +8,7 @@ import { SilentTestLogger } from "../helpers/silent-logger.js";
 import { completeBrowserSetup } from "../helpers/secure-setup.js";
 import { parseMcpPayload } from "../helpers/mcp-rpc.js";
 import { sessionContext } from "../../src/application/session-context.js";
+import { assertPluginToolsAvailable } from "../../src/infrastructure/plugins/tool-catalog.js";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
@@ -248,6 +249,10 @@ describe("ChatGPT OAuth HTTP/MCP", () => {
             tools: { name: string; securitySchemes?: unknown; _meta?: Record<string, unknown> }[];
           }
         ).tools;
+      assertPluginToolsAvailable(
+        "legacy",
+        tools.map((tool) => tool.name),
+      );
       expect(tools.find((t) => t.name === "get_profile")?._meta?.["openai/profile"]).toBe(true);
       expect(tools.every((t) => t._meta?.securitySchemes)).toBe(true);
       for (const tool of tools)

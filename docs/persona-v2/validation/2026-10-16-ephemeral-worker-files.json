@@ -1,0 +1,38 @@
+{
+  "kind": "partial-local-development-inventory",
+  "date": "2026-10-16",
+  "mcpBase": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "approvedHub": "e8f56db8e0205b94b99b5ac7dabd41655f4fd2c0",
+  "observedHubHead": "e602597e390e283a1560015246d62cd818afcc84",
+  "node": "24.21.0",
+  "compiler": "7.0.2",
+  "fixture": {
+    "container": "se7e_persona_5efeff910213_test",
+    "image": "pgvector/pgvector:pg16",
+    "imageId": "sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b",
+    "postgres": "16.15",
+    "bind": "loopback",
+    "port": 49315
+  },
+  "ready": false,
+  "files": {
+    "migrations/persona-v2/0028_ephemeral_worker.sql": "174f33b5793a885aad669dba1752ecc9f3eba17ee40144ea17ef5477c00ab8a4",
+    "src/domain/ports/persona-ephemeral-worker.port.ts": "1d89b7a3d6fa3f5340f9b837cd93e127e54c8ea126fca4d3d28ac1ef301ef39c",
+    "src/application/persona-v2/ephemeral-worker.ts": "c3ee9445ede9fdacbe4809c84fcff6660218084a5cae3a2ae5cf98989b101947",
+    "src/infrastructure/persistence/persona-v2/ephemeral-worker.ts": "f5d915e2c01ff065c5817837913c31409f806dc40a2850bfc670f4ee57097bb9",
+    "src/worker-persona-v2.ts": "e2dae36cfac3495f3765dad1c5ca1072aac651be5d1499d9e007bfd82830d37a",
+    "tests/persona-v2/ephemeral-worker.postgres.test.ts": "60b79cc4e8ce228a086a76a6097100fc8ee5f9a521826224271aa44bf7265014",
+    "tests/persona-v2/postgres.test.ts": "eafdecfc02bac09b2623e4857d42885b28b41a6991eb0a8b137593c9b07d6860",
+    "tests/persona-v2/oauth.postgres.test.ts": "980d8ca862a14ddb3d0418b20a4f36acc202389ba00d6a4af4af92511aa8cf94",
+    "tests/persona-v2/sql-operations.postgres.test.ts": "722904e3bbefb5747a9cabf435fdf0496e227176e90030c36c4cabb8aec703ac",
+    "contracts/persona-v2-release.json": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2",
+    "contracts/plug-mcp-rest-v1.json": "a8e8bc82a9b6d995c8637bf47bc35e17d44c5b21aba60889be25654ac60f4e60",
+    "contracts/hub-persona-v2.snapshot.patch": "7f1b746a782b5023aed562cb40edbf72dbe39a15498fcba2e36a949604aa1948",
+    "src/application/use-cases/shared/treinamento-base.ts": "aa3f4d92ed41f3df9c176dc658c8c83014d9ee793153d241f961ce2586e4c652",
+    "AGENTS.md": "ab8e46aca0238d481998903afe95677f4b478caa76e01fca45e5e2433f0f9db0",
+    ".cursor/rules/persona_v2.mdc": "43cb1fbe5c0e12ddd2fcf4cd1e010dc6811bd31fd9f01b4641e460decf2a29f8",
+    ".env.example": "0dc602658a770f3504fe34f34d82da69bb5f61c2c076a2bc83dc3ea6f9155a61",
+    "docs/persona-v2/review-worker.md": "434c18a9bfa25014a69e223dd6b5836ad8d91006ff329c96818dbda05e6e7882",
+    "docs/persona-v2/oauth.md": "8e14c760f94bf0a367d68d7099d0730c3d1e5c510d58c75d425b00b9aedb6192"
+  }
+}

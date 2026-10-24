@@ -1,34 +1,239 @@
 ---
-description: "Grafo de treino vs pacote publicado: autoridade de consulta, gates e conhecimento skill-scoped"
-globs: ["src/domain/**/*.ts", "src/application/use-cases/**/*.ts", "src/infrastructure/persistence/**/*.ts"]
+description: "Rascunho, publicação, treinamento e concessões"
+globs: ["src/domain/**/*.ts", "src/application/**/*.ts", "src/infrastructure/persistence/**/*.ts"]
 alwaysApply: false
 ---
 
-# Grafo e skills
+# Catálogo e treinamento
 
-Não existe catálogo `Fonte` nem seed `vendas/produtos/clientes`. Schema vive no **grafo** por `acesso_id` (**1 `client_token` = 1 catálogo = 1 Bearer**). Consulta só com **pacote** de skill publicada (`EscopoSkill` + `sqlModelo`). Grafo não licencia JOIN. Persona (`nomePersona`/`instrucoesPersona`) vive no **acesso**, não no pacote — não recorta skills **neste acesso** (outro token = outro catálogo) nem licencia SQL. Senha autentica; não particiona. Hub SQL continua `agentId` + `client_token`. **Várias personas = vários acessos = vários Bearers**.
+Abertura de rascunho importado é explícita e relê o destino antes de substituir
+o contexto do console. Cancelamento ou destino indisponível preservam edição;
+foco aguarda editor desbloqueado, sem timeout arbitrário ou nova importação.
+Referência fica em memória e não concede autoridade. Contrato: knowledge-library.md.
 
-- Escrita do grafo é por acesso (não acumula entre tokens do mesmo `agentId`). `listColunas` / `mergeColuna` / `deleteRelacionamento` (e writes chaveados por UUID) recortam por `acesso_id` ou JOIN via tabelas daquele acesso — UUID de outro catálogo é no-op, não oráculo. Leitura recortada pela policy do `client_token` daquele acesso. `acesso_id` NULL (órfão de cutover) **não** vira tenant `""`. `remover_acesso` CASCADE apaga skills/grafo/anotações/aprendizado (memória e Postgres).
-- Proveniência: `confirmado_usuario` > `validado_execucao` > `inferido`. Empate de texto → `conflito` até `resolver_conflito`. Merge de relacionamento: origem mais fraca **não** sobrescreve `tipoJoin` (LEFT confirmado permanece se o incoming for `inferido`).
-- Dialeto: primeiro escritor trava; outro → `DIALECT_CONFLICT` (use `atualizar_dialeto`).
-- `treinar_com_sql`: SELECT com colunas nomeadas; proibir `SELECT *`; JOIN se >1 tabela; `ON` com igualdade `alias.coluna = alias.coluna`. Merge só após `sql.execute` + policy. Gravar **nomes físicos**; alias/expressão → `metricasSaida`. JOIN isolado coberto por composto é podado no grafo. Firebird: treino **não** é `DIALECT_UNSUPPORTED`; não coloque `FIRST`/`TOP`/`LIMIT` no `sqlModelo` (`INVALID_SQL`). Aviso `PAGINACAO_MODELO` se o SQL já declara corte (`options.page` será recusado). Inspeção (`inspecionar_consulta`) é variação livre (`SELECT *` de uma tabela, teto 100) e não substitui o treino consolidado; célula binária vira stub **sem handle**. `confirmar_coluna` aceita `colunas[]`.
-- `mapear_tabela` preenche tipo/formato vazio sem rebaixar origem validada **e** corrige tipo físico **incompatível** (ex. `uniqueidentifier` vs `datetime2`) sem apagar descrição/dicionário/`sensibilidade` confirmada.
-- Escopo da skill: `tabelas`, `colunasPorTabela` físicas, relacionamentos compostos, `graoPorTabela`/`graoResultado`, `metricasSaida` (KPI overlay só de aliases já no pacote: `definicao`/`grao`/`dimensoesPermitidas`/`statusIncluidos`/`statusExcluidos`/`colunaData`), `pacoteVersao`. SQL imparesável não publica.
-- Status: `rascunho` → `validada` → `publicada`. Cutover/backfill rebaixa a `rascunho_revalidacao` (`motivoRevalidacao`; `fluxoTreino` pede `validar_skill` → republicar). `despublicar_skill` rebaixa publicada → validada sem apagar pacote. Gates em `gates-skill.ts`: fatos `validado_execucao`/`confirmado_usuario` no grafo do escopo; JOIN com cardinalidade; params com `descricao`. `PACOTE_INCOMPLETO` na publicação.
-- Status: `rascunho` → `validada` → `publicada`. Cutover/backfill rebaixa a `rascunho_revalidacao` (`motivoRevalidacao`; `fluxoTreino` pede `validar_skill` → republicar). `despublicar_skill` rebaixa publicada → validada sem apagar pacote. Gates em `gates-skill.ts`: fatos `validado_execucao`/`confirmado_usuario` no grafo do escopo; JOIN com cardinalidade; params com `descricao`. `PACOTE_INCOMPLETO` na publicação. Cada publicação guarda snapshot/hash; preview/diff deve ser confirmado atomicamente.
-- `confirmar_relacionamento` com `skillId` persiste o JOIN em `skill.escopo` e **remove** JOINs isolados cujo conjunto de pares é subconjunto do composto. Sem `skillId` o JOIN fica só no grafo — o validador publicado não o vê. Sem `tipoJoin`, preserva o tipo já inferido do SQL/grafo (não grava `inner` sobre LEFT). `remover_relacionamento` apaga um fingerprint (grafo + pacote se `skillId`) com `confirmadoPeloUsuario`. `confirmar_coluna` com `skillId` persiste a coluna em `colunasPorTabela` e sincroniza com o grafo. Sensibilidade (`livre|pessoal|sensivel|segredo`) só com `confirmadoPeloUsuario`; `confirmar_coluna` aplica a classe mesmo após `validado_execucao`; merge não deixa perfil (`validado_execucao`) apagar classe `confirmado_usuario`. Cardinalidade (`1:1`, `1:N`, `N:1`, `N:N`) só é aceita quando confirmada pelo usuário. Sem isso o validador recusa (`JOIN_DESCONHECIDO`). JOIN composto: se o pacote tem `pares.length > 1` para o par de tabelas, o `ON` precisa do conjunto inteiro (fallback v1 só quando não há composto).
-- `listar_skills` / `obter_skill` incluem `faltas[]` (`kind`, `alvo`, `nextAction`: inclui `atualizar_skill` e `remover_relacionamento`). `kind: kpi` (agregação sem `definicao` **ou** coluna `papel=medida` no SELECT sem overlay, **exceto** quantidade/parcelas/`NroParc`/`Qtde`), `kind: param` (tipo default `string`) e JOIN isolado coberto por composto **não** bloqueiam `podeLiberar`. Skill `validada` com publicar bloqueado: `proximoPasso` = tool da primeira falta bloqueante (nunca `null`). `PACOTE_INCOMPLETO.nextAction` do envelope é essa primeira falta (não o fallback `validar_skill`). `listar_conflitos` lista ids para `resolver_conflito`. `sqlModelo` ilegível em `listar_skills`/`obter_skill` vira falta `kind: sql` (`nextAction: atualizar_skill`, bloqueia `podeLiberar`) e não apaga as outras skills.
-- Validador fail-closed (`validar-escopo.ts` + AST completa): cada ramo UNION/subquery/CTE, alias desconhecido (`ALIAS_DESCONHECIDO`), coluna ambígua (`COLUNA_AMBIGUA`). Tokenizer ignora `::cast`, `@@var` e comentários.
-- Pacote vs grafo: `validar_skill` e `atualizar_skill` (SQL novo) unem `escopoFromSqlModelo` ao escopo persistido (`unirEscopoSqlComPacote`) — não apagam `confirmar_coluna` / `confirmar_relacionamento` / `expandir_escopo`. Overlay de cardinalidade só nos JOINs já no pacote; grafo `inferido` não entra. `sincronizarEscopoComGrafo` overlay de cardinalidade/tipo no JSON da skill (criar/validar/mapear/confirmar/treino). `uniaoEscopos` não apaga cardinalidade já gravada. `PERFIL_TETO.details.retomavel` pula JOIN/coluna já perfilados.
-- Conhecimento skill-scoped: `anotacao_grafo.skill_id`; `consulta_aprendida_skill` (N:N). `skill_id` nulo não é global silencioso. `anotar_grafo` / `registrar_aprendizado` recusam `skillId`/`alvoId` de outro acesso (`SKILL_NOT_FOUND`). `obter_skill` / `skill://` devolvem **só** o pacote, não o grafo inteiro.
-- `buscar_contexto`: `cobertura` (`completa|parcial|desconhecida|composta`) + `consultaPermitida` se completa ou composta (`fatias[]` = várias `consultar_dados`, não SELECT cruzado). Capacidade por nome/slug/descrição/params/`metricasSaida` (não o SQL nem o corpo da regra). Negação na descrição (“não agrega estoque”; lista “não autoriza cruzar vendas, compras nem títulos”) não entra em `termosEncontrados`. Stem léxico une inflexão na cobertura; tokens de calendário não baixam cobertura. `conhecimentos[]` é evidência FTS/`ILIKE` (não embeddings/RAG; não autoriza SQL). Sinônimo resolve skill por id/slug/nome — **não** concatena UUID na tsquery. Envelope sem `sqlModelo` nem SQL aprendido; reuse `consultasAprendidas[].id`. `consultaSemanticaSugerida` com `consultaPermitida` + KPI de agregação (escolhe alias com maior overlap da pergunta; empate: IR persistido, depois `definicao`; CAST/data e IR órfão não entram; quantidade/`NroParc` só se a pergunta falar de volume; score 0 sem IR omite) **ou** listagem só com dimensões/filtros. `metricasSemOverlay[]` não inventa `definicao`. Cobertura parcial: hint de `registrar_aprendizado tipo=sinonimo` mesmo sem slot narrativo (não se o ausente veio de negação na descrição). `SKILL_GAP` não pede sinônimo e omite `fluxoTreino` salvo skill em andamento; hint de cruzamento só na pergunta de cruzamento. Skill encontrada só pela nota entra em `candidatos` (hint `obter_skill` se houver regra em `conhecimentos[]`). `skillsParaTreino` só as que cobrem a pergunta. Sem skill capaz, não derivar SQL do grafo. Telemetria em `audit_log` sem a pergunta.
-- `buscar_contexto` também retorna `diagnosticoCobertura` factual (status, necessidades, termos ausentes, skills relacionadas e plano); nunca transformar evidência em autorização. Anotações futuras/expiradas/obsoletas ficam fora do contexto. `revisarEm`/`periodoRevisaoDias` alimentam somente a fila de revisão de `listar_anotacoes`; não tornam uma nota inativa, não mudam a cobertura e não autorizam SQL.
-- `herdar_catalogo`: template ilustrativo (`pagar` + JOINs compostos empresa+filial) só no grafo. Envelope `origem: "inferido"`, `publicaSkill: false`. Não autoriza consulta. `expandir_escopo` em skill publicada **não** copia essas arestas para o pacote — só `confirmado_usuario` / `validado_execucao` (`exigirEscopoNoGrafo`). Sem igualdade coluna=coluna: `JOIN_DESCONHECIDO` com `nextAction: confirmar_coluna` (tabela isolada; não invente JOIN).
-- `descobrir_tabela`: colunas e JOINs do **pacote publicado** (fingerprint como `obter_skill`), não vizinhança extra do grafo (treino, isolados, herdar).
-- `decidirMerge`: origem mais fraca não sobrescreve `tipoJoin` (LEFT confirmado vs inner de template).
-- `treinar_com_sql` também poda JOIN isolado coberto por composto no grafo (não só `confirmar_relacionamento`).
-- `fluxoTreino.pacoteMinimo`: orientação (uma tabela, WHERE ou agregação; CAST não é KPI); gates de publicação inalterados. `mapear_tabela` não rebaixa skill só por tipo compatível com o papel ou catálogo físico mais largo que o pacote.
+Sementes de dataset associado ao template exigem sessão Client, origem/revisão
+exatas e papel editorial vigente. A leitura não cria caso ou relatório; tipos,
+campos e limites do runner são conferidos, sem truncar/converter por inferência.
+Console copia só para edição em memória com confirmação de substituição.
+Linhas não são expostas por MCP/Bearer/OAuth. Contrato: knowledge-library.md.
 
-Revisão editável não é publicação. Pacote snapshot ativo inclui conhecimento congelado; consultas/resources/estrutura/exemplos autorizados não leem mudanças do grafo. Restrições atuais só podem reduzir acesso; ampliação exige preview/hash/republicação. Candidata não é conhecimento confirmado; aprendizado técnico não altera semântica publicada. 0028 preserva histórico com baseline migracao e suspende pacotes inseguros; 0031 impede UPDATE de snapshots.
+Nova origem editorial de sementes exige sessão Client. Edição delegada conserva
+origem já salva, com fonte/versão e papel vigente no catálogo. Hash/status são
+recalculados; omissão conserva a origem salva. Não inferir linhagem de casos
+antigos nem aprovar testes por correspondência. Referência entra no hash dos
+casos, sem virar autoridade ou dependência executável. Contrato: knowledge-library.md.
 
-Curadoria no console: candidata existente é somente leitura; edição prepara novo exemplo sem o ID anterior e preserva múltiplas skills. Inativação devolve `preview` com exatamente acesso/consulta (id, versão, SQL, pergunta, paramsContrato, publicacoes, status)/motivo usados no hash. Confirmação humana separada por operação; contexto/conteúdo alterado invalida preview e exige revisão nova. A resposta adicional não altera CAS nem reativa inativas. Atualizar runtime/docs/testes juntos.
+Escolha de dataset é explícita, pelo console Client e pela versão exata do
+template de origem. Cada página revalida sessão/fonte/papel e retorna só
+referências. Preparar sementes exige ID/versão/hash e confirmação de substituição;
+não salva caso ou atualiza origem da importação. Delegação conserva a origem do
+caso, sem poder trocá-la. Contrato: knowledge-library.md#escolher-uma-versão-de-dataset.
+
+Histórico MCP limita-se a vínculos de versões do mesmo padrão adotadas por
+skills de consulta ativas e integralmente concedidas. Autorizar âncora e cada
+vínculo antes de listar; locks de catálogos em ordem estável e autorização na
+mesma transação. Paginar somente itens visíveis; cursor oculto/revogado é
+recusado. Não entregar conteúdo ou total global, adotar versões novas nem
+ressuscitar acesso histórico. História integral do catálogo continua no console.
+
+Inativar exemplo delegado altera somente seu estado no rascunho privado de
+consulta, com ID/revisão exatos e mesma unidade autorizada de treinar. Preservar
+conteúdo e snapshot publicado; não apagar ou aprovar. Ausente/inativo/substituído
+e revisão obsoleta são conflitos. Nova revisão invalida preview antigo.
+
+Listagem própria de particularidades físicas filtra no banco por perfil e
+identidade física, além de persona/fonte/skill/token/conexão. Revalidar acesso
+remoto a cada página e hash do conteúdo; retornar só referências/estado. Cursor
+é do mesmo escopo, sem reutilizar lista do padrão ou fila administrativa.
+
+Listagem delegada de propostas compartilhadas filtra no banco por catálogo,
+versão-base, persona, fonte, skill, token e concessão OAuth (ou Bearer). Cursor
+precisa pertencer ao mesmo escopo; revalidar autoridade a cada página. Máximo
+vinte referências sem conteúdo ou revisão do curador. Não abrir fila geral nem
+tratar ordem por ID como cronologia ou listagem como aprovação.
+
+Releitura de proposta física com includeContent exige conexão autora e acesso
+remoto vigente à mesma base. Retorna somente envio original, overrideCommon e
+referências de perfil/base; não expõe identidade interna, revisão do curador ou
+rascunho atual. Nunca incorpora, publica ou concede acesso por leitura.
+
+Releitura editorial de proposta compartilhada é explícita (includeContent),
+limitada ao conteúdo original e à mesma conexão Bearer/OAuth do autor. Revalidar
+skill, catálogo, papel e delegação; não devolver revisão do curador ou conteúdo
+do rascunho atual. Estado da proposta não concede aprovação/publicação/execução.
+
+Correção delegada de exemplo SQL exige replace:true, mesmo ID e revisão vigente.
+Sempre retorna a candidato; não herda aprovação nem altera modelo/parâmetros ou
+publicação ativa. ID ausente/duplicado indevido e revisão obsoleta são conflitos.
+Não executa SQL nem modifica versões compartilhadas; treinamento e delegação
+continuam obrigatórios. Contrato: docs/persona-v2/catalog.md.
+
+Casos externos delegados exigem treinar/delegação e contrato publicado exato
+concedido por skill/operação em token/OAuth. Ler/editar revalida integração e
+publicação; CAS altera só casos e invalida relatórios. Não delega runner,
+aprovação de evidência, contrato novo, credencial ou efeito externo. Alcance em
+docs/persona-v2/catalog.md; serviço ausente não anuncia kind externo nas tools.
+
+Diagnóstico visual não reserva autoridade. Confirmação de fonte exige resposta
+com fonte/dialeto exatos e indicadores explícitos de verificação por metadados.
+Contagem de fontes por skill usa só dependências concedidas; confirmação parcial
+não licencia execução. Limites exibidos vêm do servidor, sem defaults locais.
+
+Painel de testes de consulta descarta resultados ao mudar contexto/revisão ou
+editar treinamento. Paginação exige os mesmos hashes e revisão. Erro/revogação
+não conserva relatório como diagnóstico atual; leitura não executa runner.
+Editor visual preserva caso local após conflito, exige remoção confirmada e
+revisão exata. Casos fora do schema não são convertidos silenciosamente; nenhuma
+gravação executa sementes/SQL, aprova evidência ou altera snapshot publicado.
+
+Leitura delegada de template exige referência exata, fonte ativa/versão/dialeto,
+treinar, teto/consentimento e papel editorial vigente. Retorna só conhecimento
+declarado e variantes do dialeto, sem datasets ou autoridade de execução.
+Não lista biblioteca nem prova compatibilidade; importação revalida separadamente.
+
+Impacto do padrão publicado filtra personas pelo responsável antes da paginação
+e inclui dependências transitivas. Papel no catálogo não revela outros responsáveis
+ou seus totais. Mapa usa nomes publicados; não reserva autoridade ou adota versões.
+Impacto físico exige fonte ativa, acesso remoto e identidade/hash do perfil;
+dependências usam a versão exata do perfil, não apenas seu padrão-base.
+Filtro de recurso usa expectedStructure publicado antes da expansão transitiva;
+schema nulo não é wildcard. Não inferir colunas por texto ou conteúdo integral.
+
+Comparação física usa snapshots do mesmo perfil e identidade, hashes conferidos
+e acesso vigente à base/catálogo. Não altera adoção, rascunho ou concessões.
+
+Leitura de casos/relatórios de consulta, operação SQL e cruzamento por MCP/HTTP delegado reutiliza autoridade
+transacional do catálogo: treinar, fontes, consentimento e teto do hub vigentes.
+Editar exige revisão/CAS; ler não executa runner, grava relatório ou aprova efeito.
+Consulta confere revisão/pacote/casos para marcar relatórios atuais; leitura não
+transforma ausência de casos obrigatórios em aprovação ou habilita edição de DML.
+Edição de caso de consulta por CAS usa o schema declarativo do runner isolado;
+não executa SQL, converte casos antigos ou altera publicação ativa. Falha de
+referência reverte o incremento da revisão junto com a mutação.
+
+Precedência em `AGENTS.md`. Contrato v2: `docs/persona-v2/catalog.md`.
+
+## Regras comuns
+
+- Identidade da skill, rascunho editável e publicação ativa são separados.
+  Edição preserva a anterior; consulta/resource usa somente snapshot utilizável.
+- Publicação usa preview/hash/CAS ligado à revisão, base, fonte e autoridade.
+  Confirmação obsoleta exige novo preview. Snapshots/dependências são imutáveis.
+  Na v2, prazo futuro escolhido no console pelo responsável/curador vincula
+  revisão/hash, plano e preview. Consumidor não define data; mudança do plano
+  invalida preview. Publicação e primeiro calendário são transacionais.
+- Grafo e evidência lexical apoiam curadoria; não licenciam tabela, coluna ou JOIN.
+  Execução técnica não substitui significado, classificação ou cardinalidade confirmados.
+- Restrições e revogações suspendem o uso afetado imediatamente. Ampliação exige
+  republicação e concessões vigentes; não amplia tokens por efeito colateral.
+- Relatórios de casos vêm do runner separado e precisam corresponder ao conteúdo
+  atual. IA não grava aprovação; templates/candidatas não herdam autoridade.
+
+## Persona-v2
+
+- Importação externa/descoberta produz propostas em memória e só cria rascunho
+  por confirmação explícita no editor. Sem captura de dados, execução de tool,
+  publicação ou grants. Gramática fechada recusa constraints não representáveis;
+  schemas MCP são preservados. Revalidar integração/autoridade e nunca importar
+  credenciais ou destino do documento. Contrato: external-integrations.md.
+
+- Biblioteca editorial exige papel e catálogo vigentes; versões cifradas são
+  imutáveis, dataset fixa template/versão/hash e proveniência explícita. Copiar
+  template cria só rascunho de consulta com fonte/dialeto selecionados e exemplos
+  candidatos. Não herda publicação, relatório ou permissão. DDL não executa,
+  não comprova estrutura/semântica e não habilita adoção. Contrato: knowledge-library.md.
+  Dataset respeita o tipo lógico e a precisão/escala declarados no template;
+  comprimento lógico de texto conta pontos de código Unicode, sem truncamento
+  ou promessa de equivalência a bytes/charset nativos. Formulário editorial
+  conserva versão exata, proveniência, vazio/nulo e decimal textual; servidor
+  revalida. Arquivo DDL exige UTF-8 válido, sem substituição silenciosa.
+  tipo desconhecido exige revisão humana, sem conversão presumida. DDL deve
+  produzir declarações dentro dos limites compartilhados e recusar o marcador
+  técnico reservado de identidade.
+  Importação delegada de versões/hashes exatos exige treinar, teto do hub,
+  consentimento aplicável, fonte concedida e papel editorial vigente. Não abre
+  catálogo nem devolve linhas de dataset. Exemplos adicionais são selecionados
+  e candidatos, com os mesmos parâmetros; DDL conserva precisão/escala lógica.
+
+- Skills por persona/fonte, com credenciais independentes. Padrões estruturais
+  compartilhados usam catálogo autorizado e versões imutáveis (DV2-008).
+  SQL adicional recebe a mesma validação AST/recortes/fanout do modelo principal;
+  exemplos alteram o contrato concedido. Padrão publicado não comprova uma base.
+  Persona pode existir
+  sem fontes; vários tokens têm concessões diferentes sobre publicações.
+- Tipos: consulta, cruzamento, operação SQL e ação externa têm publicação em
+  desenvolvimento, com contratos próprios. Casos externos são tipados e usam CAS;
+  relatórios vêm somente do runner de operador em fixture separada. Claim único,
+  identificação e limpeza confirmadas são obrigatórios; não repetir rodada incerta.
+  Console não executa/aprova relatório técnico. Contrato: external-integrations.md.
+  Editor externo altera contrato só antes da primeira publicação e por CAS,
+  preservando operationId. Contrato publicado exige nova skill/operação e novos
+  testes/concessões. Cópia de ação restabelece aprovação humana inicial.
+  Copiar contrato não herda autoridade; comparação da prévia
+  vem do servidor com destino/credencial/campos/efeitos/conciliação exatos.
+- Consulta exige fonte inequívoca, classificação/finalidades concedidas por campo, nomes físicos exatos,
+  grão, JOIN composto, parâmetros e recortes. `schema.tabela` não vira só `tabela`.
+  Caminho N:N exige IDs/intermediárias/elos explícitos, conservados na importação
+  e adoção; somente relações diretas entram no allowlist SQL. Prova física usa
+  a FK na filha mesmo em 1:N; 1:1 exige unicidade/cobertura e direção inequívoca.
+  Snapshot compartilhado sem caminho explícito exige revisão/republicação.
+- Cruzamentos fixam publicações dependentes; cada skill/fonte exige concessão.
+  Editor conserva referências e exige correção explícita após mudança do grafo.
+  Casos sintéticos/de transporte usam schemas próprios e CAS; leitura paginada
+  de relatórios não executa runner ou aprova evidência. Publicação conserva o
+  mesmo preview/hash/CAS e calendário humano do catálogo.
+  Operações fixam identidade, concorrência, valores, efeitos, recortes e outputs.
+- Leitura direta, busca, listagem e resources usam as mesmas permissões.
+  `buscar_contexto` é lexical e não certifica cobertura semântica.
+- Mudança de fonte/credencial/casos invalida preview e relatórios aplicáveis.
+  Não copiar treinamento entre identidades físicas automaticamente.
+- Hash de pacote novo de consulta inclui fingerprint do cadastro completo da fonte.
+  Edição/rotação suspende publicações dessa fonte e dependências transitivas;
+  fontes independentes e snapshots são preservados.
+
+Curadoria v2: propostas explícitas tipadas não alteram publicações. Consumidor
+precisa treinar, delegação/consentimento e skill concedida com padrão adotado,
+além de papel colaborador/curador do responsável. Leitura MCP entrega apenas o
+recorte da skill. Curador autenticado incorpora com preview/hash/CAS de 15 minutos
+somente ao rascunho. Exemplos enviados entram candidatos; publicação exige
+revisão editorial explícita. Auditoria não copia payload/SQL/justificativa.
+Contrato e limites: `docs/persona-v2/shared-knowledge.md#curadoria-e-ferramentas-mcp`.
+
+Particularidades físicas usam propostas próprias, vinculadas ao perfil publicado,
+padrão-base e identidade comprovada. Curador precisa de acesso vigente à mesma
+base; preview/hash/CAS incorpora somente ao rascunho. Exemplos candidatos também
+bloqueiam publicação do perfil. Revisar não adota versões nem amplia concessões.
+Contrato: `docs/persona-v2/shared-knowledge.md#curadoria-de-particularidades-físicas`.
+
+Busca/grafo v2 usam snapshots concedidos. Índice é derivado, reconstruível e
+checado somente depois da autorização; cache hit não reserva acesso. Grafo
+preserva chaves/caminho N:N e não infere relações de operações/cruzamentos.
+Paginações não representam dados ou prova de execução. Calendário separado tem
+prazo definido pelo curador (DV2-010), CAS/histórico e aviso, sem
+suspensão automática por idade. Feedback explícito vincula item/publicação
+concedidos e não modifica treinamento; encaminhar não incorpora uma proposta.
+Worker v2 de revisão usa lease e unicidade por calendário/versão; gera somente
+tarefas/notificações internas. Ler não conclui revisão. Contrato: review-worker.md.
+
+## Manutenção legada
+
+Runners v2 de publicação recebem casos declarativos e manifesto de fixture
+isolada explícito. Fonte pretendida e fonte de teste têm identidades registradas
+separadamente. SELECT/DML passam pelo hub/agente; provisionamento local aceita
+somente seeds tipados. Relatório é invalidado antes da execução e revalidado por
+conteúdo, casos, fonte e dependências antes de aprovar. Falha de transporte ou
+limpeza incerta não aprova um caso negativo nem autoriza retry. Cruzamentos
+exigem SELECTs reais e revalidação de todas as dependências. Resultado técnico
+não aprova significado comercial. Contrato: homologation-chain.md.
+
+Somente a entrada principal usa catálogo por `acesso_id`, `EscopoSkill`,
+grafo e tools `treinar_com_sql`/`validar_skill`/`publicar_skill`.
+Preservar isolamento por acesso, precedência de fatos confirmados e união do SQL
+novo ao rascunho sem apagar confirmações. JOIN composto exige todos os pares;
+omissão de tipo não troca LEFT confirmado por INNER.
+
+`obter_skill` lê publicação por padrão, rascunho explicitamente; `skill://` só
+ativo. Captura gera candidata; confirmação humana por preview/hash/CAS licencia
+reuso somente nas publicações vigentes. Inativas não reativam por execução.
+Fluxos, faltas e curadoria: `docs/mcp/tools.md`, `docs/product/training.md`
+e `docs/data/data-model.md`. Não portar esses formatos automaticamente para v2.

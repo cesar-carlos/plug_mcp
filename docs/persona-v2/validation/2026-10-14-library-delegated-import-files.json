@@ -1,0 +1,166 @@
+{
+  "capturedAt": "2026-10-14T17:40:15.9862310Z",
+  "baseCommit": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "scope": "Arquivos relacionados à entrega MCP e inputs; não é snapshot integral dos três projetos.",
+  "node": "24.21.0",
+  "compiler": "TypeScript 7.0.2",
+  "release": {
+    "ready": false,
+    "requiredGates": 14,
+    "completedGates": 0
+  },
+  "files": [
+    {
+      "path": ".cursor/rules/catalog.mdc",
+      "sha256": "c52f18b9ffe180227deed7fb639dd6a94fbe7cef6ec8c19ed7781be63c14f767"
+    },
+    {
+      "path": ".cursor/rules/mcp_protocol.mdc",
+      "sha256": "079cf1d1c239af7b4f502363507c01ad4f5365a2f8a97fc7623976842844f578"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "32fb42b02223758f8cf950c0d0c507723ef703c660845462ac224cb648f637a9"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "1cf05db67be50447467031f407f348249ff41fc3175f102752835f1e949cfd1a"
+    },
+    {
+      "path": "contracts/hub-persona-v2.snapshot.patch",
+      "sha256": "e6bf46538a24b7da33ac1f1815322312a28f2ad3f856fbf415ae7d6db509f99e"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "212dc6bb71232a8bdb8ffe57e5ac78cd21c152b5383ef8689d3c8df55ed0cbcd"
+    },
+    {
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "0257b75fe8ec2a10a3b43d7f454884b23bc24b64c941e83e545dba1f135f9457"
+    },
+    {
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "57b6999ceb85f8ac1b80346740e381f3d02ccd214e6ed0cdd6e758d0528bec5e"
+    },
+    {
+      "path": "docs/persona-v2/catalog.md",
+      "sha256": "f066099ccfcbc4b22aafe2882b7927e94969401de86d45979962f15c41716a69"
+    },
+    {
+      "path": "docs/persona-v2/console.md",
+      "sha256": "11ab0147861d82a742e751b10882b23a05b74c233d546fa2cebce2d0fcf3b3d7"
+    },
+    {
+      "path": "docs/persona-v2/knowledge-library.md",
+      "sha256": "d25610f01530d254369a60ad7c675da2156c2a84f597b6e5b72376f0c12cca31"
+    },
+    {
+      "path": "docs/persona-v2/onboarding.md",
+      "sha256": "ad389303d631e3dbe7d8f306d6a8b5f3a5ad37ec2e14bde05dbe581464d99ee6"
+    },
+    {
+      "path": "docs/persona-v2/README.md",
+      "sha256": "b0af4907926e00c4deae2e3ae41f69237cd6890f72d1b3e09e1c3e93ec5496b4"
+    },
+    {
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "fa5c9c3c5c56b0a3041a77abe559fec8eab7ea5ce46f8a156ed5a536d1894d99"
+    },
+    {
+      "path": "migrations/persona-v2/0021_knowledge_library.sql",
+      "sha256": "48739cbf0bce08850827d2bf2fdf242e55761a4985875b088991419e13dafbb2"
+    },
+    {
+      "path": "migrations/persona-v2/0022_structure_evidence_composition.sql",
+      "sha256": "15017c548d18124c0530b4af2a9a0bd64114f9a2d52d1fad81024ec275a29c54"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "0d02d026421bb15fca54abff0bbde7ba6ad659ead437dc9f6c48b14f9c862547"
+    },
+    {
+      "path": "package.json",
+      "sha256": "1e6eca44edef8f9bb99e90b8e5805bf0b3d963e858d9d7b758d19e21d865da1e"
+    },
+    {
+      "path": "src/application/persona-v2/administrative-authorization.ts",
+      "sha256": "44f70982d54f4f9eae1b080914de25f004ed4f2f6ab97213653c9a115d07e8ff"
+    },
+    {
+      "path": "src/application/persona-v2/catalog.ts",
+      "sha256": "7daa30f0bc2469179158924d78da1984c42f9d8a8fa5d5a253742c5a577eb069"
+    },
+    {
+      "path": "src/application/persona-v2/dataset-types.ts",
+      "sha256": "474379bd8321659dd4d13f55d2950c741d6e33318b2e10d90cd37651f6189d1a"
+    },
+    {
+      "path": "src/application/persona-v2/knowledge-library-schema.ts",
+      "sha256": "85a8fa4e854b5228b46851883da416936b1d50012b768725c658c851607479fb"
+    },
+    {
+      "path": "src/application/persona-v2/knowledge-library.ts",
+      "sha256": "5bc8d8ae2aba4ea4b5e6430c4fd27a5592d32f02d240e2839192d91d45572443"
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "87ccd70a1bcf5df3f90308845f08a2f63e5787efad1db66c044110589cc3b2d3"
+    },
+    {
+      "path": "src/application/persona-v2/structural-ddl.ts",
+      "sha256": "c5f6bbc4397e752c2d5086be8799bf687a09bf40e4c66a3dcf008685dcdae4b4"
+    },
+    {
+      "path": "src/application/persona-v2/training-base.ts",
+      "sha256": "d20ea080979856b01d1a5e43e13bb8d7ec76d4311c84c421f0dbb47aae39ddc8"
+    },
+    {
+      "path": "src/domain/ports/knowledge-library.port.ts",
+      "sha256": "2bfb92dfe76358cd662d315f7f59d001a5cddc47d54abbbfa2731cacbd024234"
+    },
+    {
+      "path": "src/infrastructure/http/persona-v2-delegated-administration.ts",
+      "sha256": "198b9f1e4bc7ae8c7efb8110949169364bbea4a901a1742ab48b09a4f1323028"
+    },
+    {
+      "path": "src/infrastructure/mcp/persona-v2-administration-tools.ts",
+      "sha256": "f72f8158218bc7cf919694a3e7a50c06952d8a0c86766812a13d079aeb51bed4"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/knowledge-library.ts",
+      "sha256": "110ace3a0aeaf004e775430ca7459c2b8f01a87aaeca9e422fe74c8214b460ba"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "0761fb2a0b5700eecc9bfedbbf2c6354cc95d8f4d556b36f4b1229df45e2e8f7"
+    },
+    {
+      "path": "tests/persona-v2/postgres.test.ts",
+      "sha256": "52c49d323353fee0fb9925d9c44a02a25808e19c27d7b368e98d55e9adcfdfbb"
+    },
+    {
+      "path": "tests/persona-v2/setup-delegation.postgres.test.ts",
+      "sha256": "2f5c0bd99532c48b8784d7b338ac197ea0db9a8c1f53f9bf14541fd306e5b9e6"
+    },
+    {
+      "path": "tests/persona-v2/shared-knowledge.postgres.test.ts",
+      "sha256": "97a6c865db590d3b7684faf9f78ee85af33d70904fc63fe44b1c242b85b462f0"
+    },
+    {
+      "path": "tests/unit/persona-v2/knowledge-library.test.ts",
+      "sha256": "54a06d5aa4f288a7df2b9d2d60358c7c1e1926e066ea867f88c58c7beaf958a0"
+    },
+    {
+      "path": "web/package-lock.json",
+      "sha256": "cab25aa3ee3f1b50410851757b3b63148de9d69971c9f1e2e64607bb6153e880"
+    },
+    {
+      "path": "web/package.json",
+      "sha256": "0fdc66747667afd9651fd9b12f5b5480dfe9edd607225f53b2f7eff4553ca07a"
+    },
+    {
+      "path": "web/src/persona-v2/KnowledgeLibraryPanel.vue",
+      "sha256": "9111ffd966db9f2ed3cc01d2f41388d377b198c92778d75cbfb94ffab372d4e9"
+    }
+  ]
+}

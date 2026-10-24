@@ -11,7 +11,862 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Registra DV2-015: dispensa estrita de validação manual HTTPS/ChatGPT e aceite
+  funcional humano; evidências técnicas e bloqueio de deploy permanecem.
+- Limpeza da fixture OAuth usa DROP sem FORCE após fechar o pool, evitando
+  encerrar à força conexões em fechamento e ocultar erros do teste.
+
 ### Added
+
+- Procedimento de operador persona-v2 com verificação de evidências/origem/imagem,
+  migração e inicialização separadas, lock por host e recusa de serviços ativos.
+  Não altera o deploy legado nem remove bloqueios de produção.
+
+- Preflight de produção v2 recusa parâmetros PostgreSQL que substituem destino
+  ou credenciais da URL, preservando opções TLS e o bloqueio de liberação.
+
+- Seleção opcional de ERP/padrão publicado na área Bases após o cadastro técnico,
+  reutilizando catálogo, perfis, inspeção e compatibilidade pelo hub/agente.
+  Proteção de seleção pendente e preservação dos vínculos publicados existentes.
+
+- Medições por etapa e jornadas OAuth independentes na cadeia compartilhada,
+  preservando verificações e prazo de 60 segundos. Matriz integral de 85 casos
+  aprovada nos três motores; falha anterior e limites registrados na documentação.
+
+- Homologação de views regulares nos três motores verifica inspeção, identidade,
+  tipo publicado, paginação e recusas sem novo SQL para recursos não permitidos.
+
+- Editor privado de consultas permite escolher tabela ou view, preserva o tipo
+  na releitura/publicação e mantém a aplicação independente da policy da fonte.
+
+- Editor de consultas permite identificar relações e editar intermediárias/elos
+  ordenados N:N, reutilizando os campos das operações. Preserva referências
+  pendentes; prévia continua recusando caminho incompleto ou JOIN direto.
+
+- Jornada isolada `manual-publication` liga casos obrigatórios do console ao
+  runner CLI real nos três motores, com publicação e relatório obsoleto após
+  edição. Preserva o ensaio separado de consultas/tokens e as cotas do hub.
+  Diagnóstico do CLI conserva códigos/origem seguros sem conteúdo upstream e
+  sem autorizar repetição de efeitos.
+
+- Editor de consultas permite recarregar o treinamento salvo no servidor, com
+  descarte confirmado, preservação da edição em erro e reset de casos locais.
+  Não publica nem altera o snapshot ativo; facilita recuperação após conflito.
+
+- Ensaio Chromium da sessão manual verifica tokens distintos, omissão de skills,
+  recusa MCP direta após retirada de concessão, consumidor independente e logout,
+  pela cadeia persistente dos três motores. Emissão sucessiva aguarda o novo
+  Bearer confirmado, sem registrar segredos nem liberar deploy.
+
+- Sessão local descartável para treinamento manual de personas, com controle
+  inicialmente vazio, cadeia real dos três motores, servidor/worker candidatos,
+  prazo limitado, credenciais privadas e parada cooperativa. Não libera deploy.
+
+- Editor de casos permite escolher uma versão autorizada de dataset do mesmo
+  template, com paginação e preparação explícita das sementes, sem adotar a
+  versão mais recente ou salvar o caso automaticamente.
+
+- Casos de consulta preservam origem editorial do dataset e distinguem sementes
+  editadas, com referências e hashes conferidos pelo servidor ao salvar pelo
+  console Client. Não herda aprovação nem modifica casos antigos.
+
+- Console prepara sementes tipadas do dataset associado ao template para revisão
+  em casos de consulta. Exige sessão Client, origem/revisão e papel editorial
+  vigentes; não salva/aprova casos nem executa SQL automaticamente.
+
+### Changed
+
+- Biblioteca oferece abertura explícita do treinamento importado na persona
+  correta, com releitura autorizada, edição protegida e foco após carregamento,
+  eliminando a necessidade de trocar o seletor de persona para atualizar a lista.
+
+- Runner de homologação v2 registra e reconfere os arquivos efetivos de MCP,
+  hub e agente, recusando divergência durante a rodada sem alterar os checkouts.
+  Registro local não libera deploy nem substitui aceite dos gates.
+
+- Editor de skills externas associa erros ao nome/identificador ou à seção do
+  contrato, sem descartar rascunhos; API identifica o campo público `contract`.
+
+- Editores de operação SQL e cruzamento associam recusas aos campos informados
+  pelo servidor, com foco e descrição acessível, preservando a edição.
+
+- Descoberta MCP e importação OpenAPI delegadas respeitam IDs de integrações
+  concedidos e revalidam acesso antes da entrega das propostas.
+
+- Tools MCP de skills externas e casos de rascunhos não publicados usam escopo
+  editorial explícito; publicação conserva prazo humano e autoridade vinculada.
+
+- Serviços/HTTP de rascunhos externos aceitam administração delegada limitada
+  à integração; publicação vincula prévia à autoridade e exige prazo humano prévio.
+
+- Console v2 permite selecionar integrações administráveis na emissão/edição
+  de tokens; OAuth exige consentimento separado da execução, limitado aos IDs
+  e à permissão administrativa oferecidos.
+
+- Rotas Bearer/OAuth e tools MCP de gestão de integrações usam escopo explícito,
+  revisão de impacto e CAS; sem entrada de credenciais ou ativação automática.
+
+- Fundação da gestão delegada de integrações adiciona escopo explícito por ID,
+  limites de delegação e filtragem no serviço, sem ampliar tokens/OAuth antigos.
+  Exposição em rotas, tools e console permanece em implementação.
+
+- Upgrade da outbox preserva notificações históricas e cifras até o prazo de
+  limpeza; atualização sem mudança de estado não reinicia a retenção terminal.
+
+- Retenção da outbox v2 remove metadados e cópias históricas de credenciais
+  após 90 dias do encerramento registrado, preservando deduplicação e estado
+  terminal. Migração aditiva e limpeza em lotes pelo worker.
+
+- Recusa vigente do hub prevalece sobre aprovação histórica de acesso ao agente.
+  A revalidação v2 bloqueia a entrega por perda de autoridade, sem classificar
+  o conflito como capability ausente ou restaurar concessões.
+
+- Cruzamentos recusam inteiros numéricos fora da precisão segura, evitando
+  associar identificadores distintos após arredondamento. Texto exato é preservado.
+
+- Cruzamentos conferem novamente o prazo após revalidar a autoridade, impedindo
+  enviar a próxima consulta quando essa revalidação consumir o orçamento global.
+
+- Editor de consulta associa erros seguros de nome/identificador aos campos
+  e direciona recusas do conteúdo ao aviso de treinamento, preservando a edição.
+
+- Emissão de token sem confirmação exige conferir os cadastros e iniciar nova
+  emissão explicitamente, sem reaproveitar automaticamente as concessões do
+  formulário anterior nem recuperar o segredo perdido.
+
+- Gestão de tokens bloqueia novas mutações após confirmação perdida, limpa o
+  Bearer exibido e exige releitura explícita antes de continuar; falha nessa
+  leitura preserva edição e bloqueio, sem repetir a alteração.
+
+- Console preserva nome e revisão nos seletores de consultas; a descrição
+  adicional de efeitos fica nas concessões SQL/externas, sem alterar os rótulos
+  usados pelo percurso de consulta e anexos.
+- Console orienta conferir o estado após perder a confirmação de uma alteração,
+  em vez de recomendar nova tentativa; detalhes de falhas de rede não são expostos.
+- Console permite selecionar capacidades externas publicadas na emissão e
+  edição de tokens, vinculando a operação exata e iniciando ações com aprovação
+  adicional, sem conceder efeitos SQL.
+
+- Console permite emitir e editar concessões de operações SQL a partir da
+  publicação exata, com efeitos necessários e aprovação adicional inicial.
+  Fontes continuam explícitas; selecionar a capacidade não executa lançamentos.
+
+- Histórico e comparação de conhecimento agora incluem operações SQL concedidas, com autorização DML vigente e sem ampliar ferramentas editoriais ou permitir execução pela leitura.
+
+- Comparação delegada de conhecimento por seção entre consultas concedidas do mesmo padrão, com referências publicadas exatas e sem ampliar acesso ao catálogo.
+
+- Histórico de conhecimento homologado com duas versões adotadas pela cadeia
+  persistente dos três motores, sem ampliar tokens antigos; suspensão e
+  revogação removem apenas os acessos correspondentes.
+
+- Consumidor MCP pode listar histórico de versões do mesmo padrão adotadas por
+  consultas ainda concedidas, com paginação e referências exatas. Versões não
+  adotadas, suspensas ou fora das concessões não são reveladas.
+
+- Inativação editorial homologada por OAuth com hub persistente nos três motores:
+  consentimento sem treinar/fonte e conexão revogada não alteram o rascunho;
+  publicação ativa e demais acessos permanecem preservados.
+
+- Homologação da inativação delegada de exemplos usa hub persistente nas adoções
+  dos três motores, conferindo concorrência, preservação da publicação e recusa
+  após revogação remota sem alteração indevida do rascunho.
+
+- Administração editorial delegada pode inativar exemplo SQL no rascunho privado
+  por ID e revisão, preservando conteúdo e publicação ativa. Concorrência, replay,
+  falta de concessão e revogação são recusados pela unidade autorizada existente.
+
+- Regressão de propostas físicas cobre conexões OAuth do mesmo token, paginação,
+  cursores isolados, consentimento restrito e revogação individual, preservando
+  a outra conexão e o Bearer. HTTPS público e ChatGPT continuam manuais.
+
+- Lista delegada de particularidades físicas permite localizar propostas próprias
+  por perfil concedido, com paginação, isolamento e acesso remoto revalidado;
+  não expõe conteúdo, identidade interna ou fila do curador.
+
+- Homologação persistente da lista de propostas próprias cobre duas páginas,
+  isolamento de cursores e revogação remota nas adoções dos três motores,
+  sem confundir o recorte com aceite integral.
+
+- Gestão editorial delegada lista propostas próprias por skill/versão concedida,
+  com paginação e cursores isolados por token/conexão, sem abrir a fila do
+  catálogo ou devolver conteúdo e revisões do curador.
+
+- Propostas de particularidades físicas permitem releitura editorial explícita
+  pelo autor, com referências de perfil/base, isolamento da conexão e nova
+  verificação de acesso remoto, sem delegar revisão ou incorporação.
+
+- Cadeia persistente verifica releitura editorial de propostas compartilhadas
+  nas skills adotadas dos três motores, incluindo outro token e revogação
+  diretamente no hub com delegação local ainda ativa.
+
+- Gestão editorial delegada permite reler o conteúdo originalmente enviado em
+  proposta compartilhada, sob autorização vigente e isolamento da conexão
+  Bearer/OAuth, sem expor revisões do curador ou abrir o catálogo.
+
+- Exemplos SQL podem ser corrigidos pela administração delegada com substituição
+  explícita por ID e revisão. A correção volta a candidato e preserva modelo,
+  parâmetros e publicação ativa, sem execução ou aprovação herdada.
+
+- Homologação da administração delegada de casos externos usa hub Prisma real,
+  reconstrução do MCP e revogação remota independente do registro local;
+  evidência editorial continua separada da execução de provedores externos.
+
+- Administração delegada lê e edita casos de skills externas concedidas por
+  MCP/HTTP, com contrato publicado exato, CAS e consentimento OAuth. Não executa
+  provedor/runner nem aprova relatórios; edição preserva publicação ativa.
+
+- Plugin privado persona-v2 orienta treinamento delegado, casos/relatórios,
+  templates exatos e revisão/publicação pelas ferramentas já implementadas.
+  Descoberta/permissões continuam obrigatórias; prazo humano fica no console e
+  runners/aprovação de efeitos não são delegados pelo pacote.
+
+### Fixed
+
+- Parada do servidor persona-v2 compartilha fechamento único entre sinais,
+  trata falhas HTTP/runtime e mantém prazo total sem rejeição não tratada.
+
+- Instruções MCP v2 deixam de negar descoberta/importação administrativa já
+  disponível e passam a orientar histórico de consultas e operações SQL,
+  preservando o alcance editorial e as permissões existentes.
+
+- Troca de base no treinamento de consulta exige confirmação e descarta o
+  vínculo compartilhado anterior apenas do rascunho, sem reassociar perfil ou
+  alterar a publicação ativa. Cancelamento conserva a base e o vínculo.
+
+- Sair de Consultas limpa também os modos nulo/vazio/omitido dos parâmetros,
+  evitando reutilizar escolhas antigas ao voltar para a mesma publicação.
+
+- Orientação de treinamento v2 deixa de anunciar runners existentes como
+  pendentes. Onboarding corrige o alcance de integrações, setups de tokens e
+  busca/grafo, mantendo execução de testes separada e segredos no navegador.
+
+- Homologação instalada privada do agente corrigiu isolamento do mutex auxiliar
+  e compatibilidade do bootstrap com a checagem real de assets. Após falha
+  registrada e limpeza, nova rodada UAC passou reparos, reinstalação e controles
+  sem elevação; não certifica atualização automática nem libera deploy.
+
+- Inspeção estrutural do console impede submissões duplicadas no mesmo evento
+  e descarta tentativas cujo contexto mudou antes do envio, preservando a
+  paginação e a autorização no servidor.
+
+- Console permite conferir novamente a delegação após falha e bloqueia mutações
+  até recuperar o estado, preservando edição e focando o erro. Confirmação perdida
+  não repete a solicitação; rótulo de integrações distingue gestão de execução.
+
+- Referência coordenada do hub revisada após CI aprovado, preservando os hashes
+  do contrato público e do snapshot histórico. Homologação de reinício da cadeia
+  passa a reservar tempo para as transições sequenciais, sem ampliar limites de SQL.
+
+- Descoberta v2 anuncia OAuth e integrações externas conforme os serviços ligados
+  ao endpoint, corrigindo indicadores falsos fixos. Orientação de verificação de
+  fonte distingue metadados de dados de negócio e conserva o suporte aos três motores.
+
+### Fixed
+
+- Console v2 confere fonte, dialeto e indicadores da resposta antes de mostrar
+  acesso remoto verificado; apresenta progresso das fontes por skill e limites
+  efetivos legíveis, sem transformar diagnóstico em autorização de execução.
+
+- Editor visual de casos de consulta inclui sementes/resultados tipados, parâmetros,
+  proteção de edição, revisão concorrente e remoção confirmada, sem disparar runners.
+
+- Console lê casos/relatórios de consulta por revisão, descartando resultados
+  obsoletos em edição local ou concorrente, sem executar testes ou aprovar evidência.
+
+- Edição delegada de casos de consulta aceita cadastro, correção e remoção por
+  revisão/CAS, com formato do runner isolado e sem aprovação ou execução implícita.
+
+- Consumidores com treinamento delegado podem ler casos e relatórios de consulta
+  por MCP/HTTP, com fontes concedidas, paginação e indicação de evidência obsoleta,
+  sem executar runners ou gravar aprovações.
+
+- Leitura v2 de templates por MCP/HTTP delegado permite revisar versão/hash exatos
+  antes da importação, com fonte, consentimento e papel editorial vigentes, sem
+  devolver datasets ou conceder execução.
+
+- Mapa de impacto v2 filtra tabela/schema/coluna pela dependência estrutural
+  publicada, preservando dependentes indiretos e evitando homônimos indevidos.
+
+- Fixture Chromium v2 passa a encerrar HTTP, pools e bancos próprios pelo ciclo
+  do runner, evitando finalização retida no Windows após sucesso ou falha.
+
+- Impacto de perfis físicos no console confere identidade/acesso atual e distingue
+  dependências da particularidade de skills que adotam somente o padrão-base.
+
+- Catálogo v2 mostra impacto paginado de versões do padrão sobre publicações das
+  próprias personas, incluindo dependências indiretas e nomes dos snapshots.
+
+- Console v2 compara versões publicadas de perfis físicos por diferenças calculadas
+  no servidor, com identidade e autorização atuais, sem adoção automática.
+
+- Administração delegada v2 expõe leitura de casos/relatórios e edição por revisão
+  para operações SQL e cruzamentos via MCP/HTTP, reutilizando autorização vigente.
+  Não executa runners ou concede aprovação de efeitos.
+
+- Worker persona-v2 ganha probe de saúde somente em loopback, com ciclo completo,
+  falha e atraso monotônico; compose verifica saúde e parada fecha o listener.
+  Sem reinício automático, retry de efeitos ou liberação de produção.
+
+- CI ganha produtor separado de imagem candidata v2 com ensaio de empacotamento antes de exportar; fixture fixa ID Docker local e recusa fallback. Artefato não autoriza publicação ou deploy.
+
+- Promoção persona-v2 seleciona artefato aceito por ID e confere origem GitHub, commit, sucesso e digest; separa revisão de build da revisão de aceite, sem reconstrução ou fallback. Validação efetiva no GitHub permanece pendente.
+
+- Release persona-v2: evidências v2 vinculam o ID da imagem a cada gate; CI/deploy recusam imagem divergente ou legada antes de publicação/envio. Promoção e aceite operacional permanecem pendentes.
+
+- Console v2: preparação SQL pela publicação concedida, parâmetros tipados e adaptação por etapa, sem aprovação/execução automática. Validação visual integrada permanece pendente.
+
+- Console v2: preparação de ações externas por campos do contrato concedido,
+  Bearer e publicação esperada conferida na transação. Sem aprovação/execução
+  automática; resposta perdida bloqueia reenvio da tentativa.
+
+- Persona-v2: composição de produção separada, com imagem por digest, segredos
+  externos obrigatórios e preflight local sem rede. Entrada legada preservada;
+  runtime de produção, publicação e deploy continuam bloqueados até aceite.
+
+- Reset de desenvolvimento: schemas de usuário como `pgx` não são mais confundidos
+  com namespaces internos `pg_`; recursos estranhos bloqueiam a limpeza.
+
+- Persona-v2: reset de dados separado para desenvolvimento, com simulação,
+  confirmação exata, marca prévia de descarte e recusa de schema/conexões indevidos.
+  Preserva migrations; não toca hub/agente/bases de negócio nem libera produção.
+
+- Publicação aguarda todos os checks do CI e reutiliza a imagem testada por
+  artefato com hash/revisão/identidade conferidos; deploy consome a mesma rodada,
+  sem reconstrução ou pull por tag. Falha na detecção de alterações bloqueia.
+  Manifesto e bloqueio de produção permanecem obrigatórios.
+
+- Persona-v2: runner persistente aceita imagem candidata local por ID imutável
+  para o percurso Chromium de criar persona, cadastrar três bases, treinar,
+  publicar e consultar pela cadeia real. Sem simulação do gateway ou alteração
+  de contratos públicos; aceite integral e deploy continuam bloqueados.
+
+- Persona-v2: imagem candidata local com servidor, worker e migração explícita,
+  composição PostgreSQL/Redis isolada e segredos obrigatórios. Startup não aplica
+  DDL; produção continua recusada. Alvo padrão e distribuição legada preservados.
+
+- Persona-v2: verificação de liberação exige relatórios íntegros dos treze gates,
+  inventário do candidato e registro de aceite. Declarações no manifesto sem
+  evidências não liberam publicação. Captura do candidato é somente leitura;
+  homologação da imagem e aceite humano permanecem obrigatórios.
+
+- Persona-v2: cadastro direto REST/MCP no console pelo responsável, com
+  reautenticação Client, confirmação, credencial técnica cifrada e integração
+  inativa. UUID estável impede duplicatas por replay; confirmação perdida exige
+  conferir a lista. Credenciais são descartadas após tentativa. Não cria
+  operações, publicações ou concessões. HTTPS/ChatGPT seguem manuais; deploy bloqueado.
+
+- Persona-v2: gestão de integrações no console com estado/impacto, suspensão,
+  recuperação sem reativação e rotação de credenciais mediante reautenticação
+  do mesmo Client. Revisão/CAS, limpeza de segredos e migration aditiva preservam
+  snapshots e journals; operações antigas não são restauradas. Deploy bloqueado.
+
+- Persona-v2: descoberta MCP paginada e importação OpenAPI JSON no console,
+  com seleção explícita, schemas preservados e recusa de restrições não
+  suportadas. Produzem somente propostas/rascunhos, sem efeitos, publicação ou
+  concessões. Revalidam autoridade e versão da integração; deploy bloqueado.
+
+- Persona-v2: editor de skills externas com contrato REST/MCP, campos, efeitos,
+  aprovação, conciliação, casos/relatórios e revisão/publicação. Rascunhos usam
+  CAS e operação estável; contrato publicado exige nova skill/operação, sem
+  testes ou concessões herdados. Console não envia ações ou aprova relatórios.
+  HTTPS/ChatGPT seguem manuais e deploy permanece bloqueado.
+
+- Persona-v2: editor visual de cruzamentos com dependências publicadas exatas,
+  etapas, semântica e limites; casos sintéticos e de transporte editados por CAS,
+  relatórios somente leitura e revisão/publicação com prazo humano. Preserva
+  snapshots e permissões; console não executa runners nem aprova relatórios.
+  HTTPS/ChatGPT seguem manuais e deploy permanece bloqueado.
+
+- Persona-v2: cache Redis reconfere a entrada após obter o claim, evitando SELECT
+  duplicado quando outra instância publica entre miss e lock. Envelope autentica
+  criação e vencimento, respeitando o TTL menor de quem lê; namespace v3 impede
+  reaproveitar formatos anteriores. Homologação passa a exercitar dois processos
+  MCP com Redis, isolamento, revogação e falha após SQL. Deploy continua bloqueado.
+
+- Persona-v2: anexos cifrados no PostgreSQL de controle podem ser recuperados por
+  outra instância e após reinício, com origem/consumidor/concessão e prazo originais.
+  Quotas globais transacionais, limpeza de expirados pelo worker e rotação do cofre
+  preservam isolamento; download revalida autoridade e não repete SQL de negócio.
+  Falha do armazenamento não usa fallback em memória. Deploy continua bloqueado.
+
+- Persona-v2: correção do transporte binário real distingue discriminantes
+  odbc_fast de códigos ODBC nativos por type_system. Criação exige teto de duas
+  linhas e truncated:false explícito sem paginação gerenciada; cache usa namespace
+  novo para não reaproveitar respostas anteriores. Fixture fechada dos três
+  motores cobre bytes, isolamento, revogação e reinício; deploy continua bloqueado.
+
+### Added
+
+- Persona-v2: edição visual dos relacionamentos e vínculos de conhecimento das
+  operações SQL, com pares compostos, caminhos N:N, padrão/perfil, inspeção e
+  confirmação de adoção no rascunho. Preserva parâmetros, etapas, tipos, identidade,
+  escrita e publicação ativa; seleção inicial aguarda o editor ficar disponível.
+  JSON continua opcional; deploy permanece bloqueado.
+
+- Persona-v2: editor de skills de operação SQL no console, com contrato estruturado,
+  casos sintéticos por revisão/CAS, relatórios paginados e revisão/publicação por
+  hash e prazo humano. Alterar contrato/casos invalida aprovação técnica anterior,
+  preservando a publicação ativa. Testes continuam exclusivos do runner isolado;
+  publicar não aprova ou executa lançamentos. Deploy continua bloqueado.
+
+- Persona-v2: anexos binários de uma coluna física/registro completo, com contrato,
+  MIME e capability próprios, metadados positivos e base64 canônico. Preserva
+  tipo ODBC recebido do agente, bytes originais, isolamento e revalidação nos
+  downloads HTTP/MCP. Console edita/publica e baixa; consulta comum/JSON não
+  expõe a coluna. Sem conversão, cache, ampliação de tokens antigos ou deploy.
+
+- Persona-v2: anexo JSON de SELECT fresco, com exportação explícita por campo,
+  contrato publicado e nova capability concedida. Handle opaco/cifrado em memória,
+  isolado por persona/token/concessão; HTTP/MCP/resources revalidam autoridade,
+  policy, identidade, fence físico e estrutura relevante. Console publica contrato
+  e cria/baixa arquivos; migration 0038 guarda somente metadados. Primeira entrega
+  JSON, ampliada acima por contrato binário separado; sem retry ou persistência
+  de anexos. Deploy bloqueado.
+- Persona-v2: checagem de finalidade adicional das saídas passa a conferir todos
+  os ramos posicionais de UNION, mesmo com aliases diferentes. Impede contorno
+  de exportação ou dos usos exigidos pelas combinações entre fontes.
+
+- Persona-v2: cache cifrado e singleflight local/Redis opt-in de consultas locais,
+  com chaves HMAC, isolamento por consumidor/fonte/publicação e revalidação em
+  cada hit/seguidor. Revisão física invalida vínculos entre personas sem compartilhar
+  dados; operações pendentes/desconhecidas desativam reuso. Sem retry/takeover,
+  preservando horário e completude. Guardas estruturais continuam no executor;
+  deploy bloqueado.
+
+- Persona-v2: responsável lista consentimentos OAuth e revoga uma conexão no
+  console com confirmação, fingerprint e auditoria transacional. Preserva token
+  originador e outras conexões; datas históricas ausentes não são inventadas.
+
+- Persona-v2: outbox transacional de notificações externas com configuração humana
+  no console, HMAC, HTTPS público/IP fixado, fencing/lease, orçamento e retomada.
+  Envia só metadados de revisões privadas e estados SQL/externos; não repete ações
+  nem exporta catálogo. Segredos entram no cofre e suspensões desativam envios.
+  Desenvolvimento validado em fixtures; deploy permanece bloqueado.
+
+- Persona-v2: rotação do cofre por operador com simulação somente leitura, lock
+  exclusivo, lotes/CAS e retomada durável. Abrange credenciais, delegação,
+  operações, setups, OAuth, outbox e biblioteca; preserva autoridade/estados.
+  Guards vinculam exceções de cifra ao backend/transação e verificam chave ativa
+  no startup/escrita. Não reutiliza IDs de chave nem libera deploy.
+
+- Persona-v2: retenção de payloads/resultados por 24h e comprovantes por 90 dias
+  do desfecho local conhecido, com lease/CAS, relógio protegido e identidade
+  permanente contra repetição. Desconhecidos são preservados; API/console
+  distinguem conteúdo removido, sem inventar dados ou habilitar reenvio.
+
+- Persona-v2: manutenção de setups e prévias expirados pelo worker, com lease
+  independente, lotes limitados e rollback por expiração do lease. Registros
+  OAuth vinculados permanecem até o prazo da concessão para preservar replay;
+  journals, publicações e permissões não são alterados. Deploy segue bloqueado.
+
+- Persona-v2: runner CLI de ações/consultas externas com manifesto de fixture,
+  journal de rodada, reprovação preventiva e limpeza confirmada; console oferece
+  casos tipados por CAS e relatórios paginados, sem disparar ações pelo navegador.
+
+- Persona-v2: conciliação explícita de ações externas por leitura treinada REST/MCP,
+  chave original e evidência append-only; mantém comprovante/estado técnico e
+  impede retry de efeitos incertos. Fixtures PostgreSQL/TLS exercitam confirmação
+  perdida e reabertura do runtime; HTTPS público/ChatGPT continuam manuais.
+
+- Persona-v2: ações REST/MCP remotas com preparação cifrada, aprovação Client no
+  console, claim CAS antes do efeito e journal próprio aditivo 0025. Recuperação,
+  revogação e perda de confirmação não autorizam reenvio; saída permanece cifrada
+  e comprovante técnico não prova efeitos comerciais. Conciliação automática e
+  homologação dos provedores continuam pendentes; deploy permanece bloqueado.
+- Referência do hub revisada para `693da92a334c98ae911c329d52006456ce768b09`,
+  preservando bytes do contrato, snapshot histórico e verificações estritas de
+  ancestralidade/incorporação. HTTPS público e ChatGPT seguem para validação manual.
+
+- Persona-v2: adapters REST GET e MCP remoto para consultas com contrato publicado,
+  casos obrigatórios, prazo humano e concessões explícitas por operação/skill.
+  DNS público fixado no TLS, respostas limitadas e revalidação antes do envio e
+  entrega. Rotação bloqueia contratos antigos; nenhum retry ou efeito é habilitado.
+  Consentimento passa a admitir gerenciar_integracoes dentro da delegação vigente.
+  Console completo, ações externas e homologação pública continuam pendentes.
+
+- Persona-v2: setups de cadastro e rotação de credenciais técnicas de integrações,
+  com gerenciar_integracoes, consentimento/delegação, reautenticação, confirmação,
+  uso único e CAS. Bearer/API key/Basic ficam cifrados; destino/tipo são fixos na
+  rotação e operações permanecem inativas. Migração aditiva 0024 registra a
+  integração/versão na auditoria sem segredos. Não habilita chamadas externas.
+
+- Persona-v2: setup de emissão com proposta imutável e concessões/prazo limitados
+  pelo originador, consentimento e delegação; revisão humana, consumo atômico e
+  Bearer mostrado somente uma vez no navegador, sem ampliar o solicitante.
+
+- Persona-v2: setup temporário para rotacionar o token originador, com
+  reautenticação/confirmação humana, consumo transacional e revogação dos
+  derivados OAuth; novo Bearer exibido somente uma vez no navegador.
+
+- Homologação persona-v2: verificador HTTPS próprio, sem `.env` ou credenciais,
+  para discovery, challenge, CIMD e pacote da geração correta; roteiro manual
+  distingue conexão real de checks locais e mantém publicação bloqueada.
+
+- Contrato do hub fixado no commit que incorpora o snapshot revisado; CI e
+  `training:check` verificam sua presença sem reaplicar o patch histórico.
+  Acrescentado percurso Chromium com cadastro, treinamento e consulta pela
+  cadeia persistente dos três motores, sem hub sintético ou liberação de deploy.
+
+- Persona-v2: fixtures privadas com CHECK de intervalo inteiro, cascatas
+  compostas UPDATE/DELETE e triggers de cópia NEW/OLD; casos de contagem direta,
+  preservação de tenant e rollback dos efeitos indiretos, sem SQL livre de setup.
+
+- Persona-v2: matriz privada dos runners com BIGINT/decimal exatos, datas,
+  booleanos, UUID, Unicode/nulos, PK/UNIQUE, FK composta e trigger de auditoria;
+  falha nativa esperada exige rollback confirmado e preservação das sementes.
+
+- Persona-v2: runners genéricos de publicação por manifesto de operador,
+  com casos de consulta adaptável, operações e cruzamentos executados pelo
+  hub/agente em fixtures vinculadas. Relatórios recebem evidência de versões e
+  identidades, sem payload; falha, limpeza incerta ou alteração concorrente impede
+  aprovação. Marcadores de conciliação usam UUID novo por execução. Deploy bloqueado.
+
+- Persona-v2: limites redutíveis de consulta, lançamentos e cruzamentos por
+  publicação, token e concessão, com consentimento OAuth restritivo, diagnóstico
+  e editores do console. Orçamento DML integra o fingerprint preparado. Correção
+  de paginação no agente usa aliases de saída comprovados, inclusive no cursor.
+  Não amplia concessões, altera snapshots antigos ou libera deploy.
+
+- Persona-v2: finalidades por campo nas consultas publicadas, com justificativa
+  para pessoal/sensível, capacidades explícitas e validação de linhagem SQL e
+  combinações. Console configura os usos e exibe concessões. Token/OAuth exige
+  publicação integral; segredo/inferido, exportação e DML sensível não são liberados.
+  Snapshots/migrations preservados; deploy permanece bloqueado.
+
+- Persona-v2/agente: prova nativa limitada de PK/UNIQUE/FK declaradas no SQL
+  Anywhere 16 por catálogos públicos e índices físicos, com guarda da configuração
+  de integridade na conexão. Casos não comprovados continuam bloqueados.
+
+- Persona-v2: operações SQL adotam relacionamentos compostos, reversos e caminhos
+  N:N como dependências estruturais verificadas; não ampliam permissão de escrita
+  nem admitem JOIN em DML. Enforcement desconhecido continua bloqueando adoção.
+
+- Persona-v2: adoção compartilhada inicial em operações SQL fixa padrão/perfil,
+  prova, dependências utilizadas e chaves comprovadas no pacote preparado.
+  Revalida catálogo/publicações em autorização, aprovação e entrega; recusa
+  estrutural persiste receipt e suspende a publicação afetada. SQL Anywhere com
+  enforcement desconhecido e runners sem guarda real continuam recusados.
+  Não amplia tokens nem libera deploy.
+
+- Persona-v2: criação de datasets por formulário a partir de versão exata do
+  template, com campos livres, proveniência explícita, valores tipados e edição
+  protegida. Validação editorial confere comprimento Unicode sem truncar;
+  importação de arquivo DDL recusa UTF-8 inválido. Não executa SQL nem herda
+  casos/aprovações; deploy permanece bloqueado.
+
+- Persona-v2: operações citam schema/tabela separadamente em PostgreSQL,
+  SQL Server e SQL Anywhere; Firebird conserva recurso sem schema. Helpers,
+  conciliação, recortes e adaptação mantêm alvo exato. Policy transacional do
+  agente recusa homônimo e não usa cache/fallback legado. Não altera snapshots
+  ou amplia concessões; adoção compartilhada em DML e deploy seguem bloqueados.
+
+- Persona-v2/agente/hub: motivo de falha enumerado persiste no journal aditivo
+  v3 e acompanha receipts no contrato 1.15.0 e no MCP. Reinício e duplicatas
+  preservam a recusa; registros antigos não recebem causas inventadas. Sem
+  mensagens nativas, retry ou mudança das garantias de incerteza; deploy bloqueado.
+
+- Persona-v2: importação estrutural aceita constraints inline nomeadas e em
+  sequência, preservando seus nomes. Recusa nomes explícitos repetidos na mesma
+  tabela e evita colisão com IDs anônimos. Material continua inferido/unknown,
+  sem execução, publicação ou autoridade herdada; deploy permanece bloqueado.
+
+- Persona-v2/hub: contrato aditivo 1.14.0 transporta expectativa estrutural de
+  lançamentos, exigindo capability exata e revalidação após esperas. Carrier MCP
+  preserva a expectativa, confere leitura exata das dependências e orçamento
+  nativo. Adoção/publicação compartilhadas em DML seguem pendentes; deploy bloqueado.
+
+- Persona-v2: importação e adoção preservam IDs, intermediárias e elos N:N no
+  contrato de consulta; a relação conceitual não autoriza JOIN direto. Prova de
+  FK reversa usa a tabela filha; 1:1 exige unicidade e direção comprovadas.
+  Snapshots compartilhados sem caminho explícito exigem revisão/republicação.
+  Enforcement desconhecido permanece bloqueado e deploy não foi liberado.
+
+- Persona-v2/agente: corrigida inspeção de views regulares SQL Anywhere usando
+  o tipo legível do catálogo, sem tratar materialized views como views comuns.
+  Homologação isolada ampliada para 16 recursos paginados, view com concessão
+  explícita e drift de coluna treinada; alterações fora do treinamento devem
+  preservar consultas independentes. Deploy permanece bloqueado.
+
+- Persona-v2: importação de versões exatas de templates por Bearer/OAuth e MCP,
+  com delegação vigente, fonte concedida e papel editorial no catálogo. Console
+  permite selecionar exemplos adicionais compatíveis, sempre candidatos; datasets
+  são revalidados na importação e DDL conserva precisão/escala no tipo lógico.
+  Nenhuma publicação, caso aprovado ou concessão é herdada; deploy bloqueado.
+
+- Persona-v2: composição explícita de páginas de inspeção por console e MCP,
+  linhagem imutável e isolamento por fonte/versões/identidade (migration 0022).
+  Preserva menor validade, cobertura e constraints desconhecidas; compara e
+  publica/adota somente pelos fluxos próprios. Revalida sourceSchema v1 no hub.
+  Contrato RPC permanece limitado a quatro recursos por página; deploy bloqueado.
+
+- Persona-v2: datasets recusam tipos divergentes do template, tipos lógicos
+  desconhecidos e decimais fora da precisão/escala declaradas, sem arredondamento.
+  DDL importado respeita os limites estruturais compartilhados e recusa o marcador
+  reservado de identidade. Mantidos rascunhos sem autoridade herdada e deploy bloqueado.
+
+- Persona-v2: biblioteca editorial cifrada/versionada de templates e datasets,
+  importação explícita de rascunhos com fonte/variante e exemplos candidatos,
+  sem aprovação herdada. DDL estrutural usa gramática fechada e nunca executa ou
+  comprova uma base (migration aditiva 0021). Deploy permanece bloqueado.
+
+- Persona-v2: prazo futuro obrigatório na publicação de padrão, perfil e skill,
+  vinculado à prévia e ao conteúdo; calendário gravado na mesma transação.
+  Worker de revisão separado, com lease, retomada, tarefas únicas por calendário
+  e notificações internas reautorizadas no console (migration aditiva 0020).
+  Vencimento não suspende execução; deploy permanece bloqueado.
+
+- Persona-v2: feedback por item concedido com autoria/proveniência imutáveis,
+  fila editorial e encaminhamento explícito. Calendários por publicação com prazo
+  escolhido pelo curador, CAS, histórico e avisos sob demanda, sem suspensão
+  automática ou alteração dos snapshots (migration aditiva 0019). Console e MCP
+  integram os fluxos; deploy permanece bloqueado.
+
+- Persona-v2: curadoria de particularidades físicas com propostas imutáveis e
+  previews próprios (migration aditiva 0018), tools MCP condicionadas à autoridade
+  delegada e formulários no console. Curador com acesso vigente à mesma base
+  incorpora por hash/CAS somente ao rascunho; versões publicadas permanecem
+  intactas. Perfis recusam publicação com exemplos candidatos. Deploy bloqueado.
+
+- Persona-v2: busca lexical de significados, relacionamentos, regras e exemplos
+  aprovados com índice reconstruível por publicação/hash (migration aditiva 0017).
+  Grafo MCP autorizado preserva recursos físicos, chaves e caminhos declarados,
+  com paginação cifrada e proveniência; console usa token do consumidor. Nenhuma
+  busca, desenho ou índice amplia concessões. Deploy permanece bloqueado.
+  O console também envia propostas de tabelas e relacionamentos reutilizando os
+  editores existentes e selecionando explicitamente uma definição da versão-base.
+  Corrigida a criação de relacionamentos de negócio: eles não carregam estado de
+  constraint física; trocar a origem remove declarações incompatíveis.
+
+- Persona-v2: fila de propostas tipadas com proveniência imutável, revisão
+  por curador autenticado e incorporação ao rascunho por hash/CAS de 15 minutos.
+  MCP lê padrões somente pelo recorte das skills concedidas e recebe propostas
+  mediante treinamento/delegação/papel vigentes. Exemplos SQL explícitos entram
+  candidatos, sem execução ou aprovação automática; publicação exige revisão.
+  Migration aditiva 0016 preserva conteúdo v2 existente. Deploy continua bloqueado.
+
+- Persona-v2: console com inspeção estrutural paginada, diagnóstico de
+  compatibilidade, edição/publicação de perfis físicos e adoção explícita no
+  rascunho de consultas. Listagens autorizadas separam versões publicadas,
+  rascunhos e suspensões por catálogo/base/padrão; alteração pendente é protegida.
+  Aplicação preserva SQL, parâmetros e exemplos, sem atualizar skills ou tokens
+  automaticamente. Deploy permanece bloqueado.
+
+- Persona-v2: perfis físicos com rascunho CAS, substituições explícitas,
+  revisão por curador com acesso vigente à mesma base, publicação imutável e
+  adoção explícita pelas consultas. Migrations aditivas 0014–0015 preservam
+  identidade interna/nativa; suspensão bloqueia dependentes. Contrato hub 1.12.0
+  acrescenta `sourceConstraints` v1 para verificar PKs, índices únicos e FKs
+  utilizadas antes/depois do SELECT na mesma conexão. SQL Anywhere mantém
+  enforcement desconhecido, sem habilitar dependências não comprovadas.
+- Persona-v2: inspeção estrutural pelo hub/agente nos quatro dialetos, evidência
+  imutável e comparação técnica. Consultas podem adotar explicitamente versões
+  compartilhadas, com hashes e colunas conferidas antes/depois do SELECT na mesma
+  conexão. Revogação/suspensão bloqueia dependentes; constraints desconhecidas
+  não habilitam execução. Contrato inicial hub 1.10.0. DML e editores de adoção
+  permanecem pendentes; nenhum gate de release concluído.
+- Agente: metadados usam consultas fixas por motor; transporte preserva nulos
+  obrigatórios e separa paginação de metadados da paginação de resultados SQL.
+
+- Persona-v2: teto administrativo explícito no hub/MCP, preservando fontes como
+  único teto das delegações anteriores. Treinamento/publicação privados e
+  manutenção limitada de outros tokens aceitam Bearer/OAuth com fontes
+  concedidas, CAS, prazos, preview vinculado à autoridade e autoria transacional.
+  Console oferece seleção de permissões/fontes/delegação. Integrações e setups
+  delegados de emissão/rotação de tokens permanecem pendentes; deploy bloqueado.
+- Transporte do hub: respostas HTTP sem conteúdo, incluindo revogação 204,
+  deixam de causar erro local após a mutação remota já concluída.
+
+- Governança persona-v2: guards e manifestos do hub/agente alinhados aos 14 gates
+  do MCP, incluindo conhecimento compartilhado. Testes recusam omissão do gate;
+  `ready: false` e zero gates concluídos continuam nos três projetos.
+
+- Persona-v2: suspensão e recuperação de fontes por sessão Client/CAS, com prova
+  da mesma identidade pelo hub/agente e credenciais opcionais renovadas no navegador.
+  Substituição cria outro vínculo/credencial e preserva o anterior no histórico,
+  sem transferir treinamento ou permissões. Migration aditiva 0011 impede
+  recuperação de fonte substituída e referências entre personas. Console inclui
+  revisão de impacto, edição protegida e descarte de segredos por tentativa.
+  Homologação integral e deploy continuam bloqueados.
+
+- Homologação persona-v2: configuração persistente do agente com repositório
+  Drift e cofre Windows DPAPI real pelos adapters FlutterSecure. Reinício dos
+  três processos recupera fontes, treinamento e tokens sem bootstrap; segundo
+  reinício confere os quatro journals incertos e duplicatas pela cadeia real.
+  SQLite não guarda segredos em claro. Bootstrap/instalador desktop e aceite
+  integral continuam pendentes; deploy e imagens permanecem bloqueados.
+
+- Homologação persona-v2: cadeia padrão com autoridade PostgreSQL/Prisma,
+  bancos separados, aprovação real de ClientAgentAccess e processos HTTP
+  independentes MCP/hub. Reinício verifica fontes, publicações e concessões
+  nos quatro motores; sessões administrativas antigas são recusadas. O modo
+  em memória continua explícito. Bootstrap desktop, matriz integral e deploy
+  permanecem pendentes/bloqueados.
+
+- Persona-v2: delegação opaca do responsável no hub, cifrada no MCP, CAS e
+  revogação/renovação pelo console. OAuth pode consentir gerenciar_fontes para
+  iniciar setups de cadastro/rotação de credenciais, com reautenticação no
+  navegador, CSRF, prazo de 15 minutos, consumo e auditoria transacionais.
+  Migration aditiva 0010; contrato aditivo do hub 1.7.0 e instruções do plugin
+  sincronizadas. Demais permissões, instalação ChatGPT e aceite integral
+  continuam pendentes; deploy/imagens bloqueados.
+
+- Persona-v2: OAuth próprio opcional em `/mcp/chatgpt`, consentimento por
+  fonte/skill/operação, PKCE S256, código único, refresh rotativo e revogação
+  terminal da conexão atual. Stores cifrados, migration aditiva 0009, deadline
+  do access revalidado e metadados OAuth no catálogo MCP. Candidato ChatGPT
+  pode ser montado com ID real; console copia endereço sem token. Instalação
+  privada, administração OAuth via delegação do hub e aceite integral pendentes;
+  deploy/imagens permanecem bloqueados.
+
+- Persona-v2: suspensão e recuperação administrativa com CAS, bloqueio de uso,
+  suspensão das publicações, revogação das conexões derivadas e histórico na
+  mesma transação. Console exige revisão explícita, protege edição e descarta
+  contexto carregado. Recuperar preserva snapshots e não ressuscita concessões
+  ou publicações; homologação persistente completa permanece pendente.
+
+- Plugin Se7e: perfil local versionado valida manifesto, frontmatter, geração,
+  ferramentas, referências, arquivos permitidos, marca oficial e inventário
+  SHA-256. Skills legadas passam a ter pasta/nome iguais; montagem exige geração
+  explícita, valida staging e recusa sobrescrita. Novo candidato v2 portátil e
+  comando `plugin:check`; evolução OAuth v2 descrita acima, com homologação
+  privada ainda pendente. Plano restante distingue implementação, homologação e dependências
+  externas, incluindo delegação no MCP/hub. Deploy permanece bloqueado.
+
+- Persona-v2: roteiro por registros reais, diagnóstico local de concessões e
+  teste de conexão sem SQL; histórico administrativo paginado com autoria e
+  versões transacionais, migration aditiva 0008. Revisão de publicação compara
+  conteúdo anterior/proposto no servidor; editores exibem relacionamentos e
+  sugestões conservadoras de exemplos duplicados. Inspeção/compatibilidade
+  compartilhada e aceite integral continuam pendentes; deploy bloqueado.
+
+- Persona-v2: revisão de impacto transitivo antes de alterar bases/credenciais,
+  erros seguros por campo e cruzamentos publicados no console, com combinação
+  fixa, SQL local adaptável, paginação final e revalidação por token. Emissão de
+  token exige seleção explícita das consultas dependentes. Deploy bloqueado.
+
+- Persona-v2: console separado por áreas, marca Se7e oficial, favicon e manifesto
+  próprio sem cache offline. Proteção de edição/cadastro, nomes de snapshots
+  publicados e consultas paginadas. Catálogo recebe editor estrutural mantendo
+  importação JSON; compatibilidade e adoção executável continuam pendentes.
+- Persona-v2: listagem/edição CAS/rotação de tokens, Bearer de uso único e
+  invalidação de derivados. Console lista preparações e permite revisão/aprovação
+  exata pelo responsável; demais jornadas continuam pendentes. Deploy bloqueado.
+
+- Persona-v2: catálogo compartilhado privado, membros/papéis, padrões com
+  variantes SQL e publicação imutável por preview/hash/CAS; console importa e
+  revisa conteúdo JSON, compara versões e suspende publicações. Estrutura inclui
+  tipos nativos, chaves e caminhos N:N explícitos. Consultas privadas aceitam vários exemplos validados
+  e entregues em obter_skill. Associação executável ao padrão e inspeção pelo
+  hub/agente seguem pendentes; novo gate mantém deploy bloqueado.
+
+- Persona-v2: edição de persona e de fontes/recortes por versão, com rotação de
+  credenciais verificada pelo plug_server/plug_agente e cifrada no cofre. Mudanças
+  suspendem publicações dependentes e invalidam relatórios antigos sem ampliar
+  tokens ou reassociar bases. Console inclui revisão e descarte de credenciais;
+  deploy continua bloqueado até o aceite integral.
+
+- Homologação persona-v2: runner explícito MCP → REST do hub → Socket.IO do
+  agente → ODBC nos quatro motores, com publicação, aprovação Client, rollback,
+  cruzamentos, identidade, revogação e commit incerto sem reenvio. Provisionamento
+  e limpeza limitados a fixtures novas, com nomes próprios e portas locais.
+  Corrigidos no agente a entrada `expectedSource`, a confirmação de completude
+  para cruzamentos e o tratamento de perfil remoto incompleto. Deploy bloqueado;
+  alcance e limites em `docs/persona-v2/homologation-chain.md`.
+
+- Persona-v2: SQL Anywhere admite UUID provisionado manualmente pelo DBA
+  (DV2-007), verificado na conexão executora. Tabela técnica reservada, sem DDL
+  automático; permissões mínimas e procedimento para cópias/restaurações.
+  Contrato aditivo do hub 1.6.0 e snapshot sincronizados. Deploy segue bloqueado.
+
+- CI: validação documental offline em Linux/Windows e no release:check para
+  links/âncoras, rules vinculadas ao AGENTS.md, exemplos JSON/contratos e cobertura
+  dos gates na matriz de aceite. Decisões e relatórios históricos organizados
+  sem alterar a autoridade ou o bloqueio de release da persona-v2.
+
+- Persona-v2: identificação física/dialeto por RPC `sql.describeSource` v1 do
+  hub/agente, sem conexão MCP/ERP. Migração 0005 põe fontes sem prova em
+  quarentena; divergência suspende vínculos/publicações dependentes. Locator é
+  recusado; SQL Anywhere admite somente o UUID provisionado conforme DV2-007.
+  Identidade na conexão executora implementada; homologação integral pendente.
+
+- Persona-v2: console inicial para persona vazia, várias bases, treino estruturado,
+  preview/publicação e tokens restritos. Cadastro infere banco da policy a partir
+  dos cinco campos de conexão. Contexto preserva significados dos relacionamentos;
+  busca lexical/resources de fonte respeitam concessões. SELECT por schema exato
+  com alias e policy sem equivalência pelo nome final. Guias v2 corrigidos para
+  pageSize/pagination e orientações de resposta factual, vazios e incompletude.
+  Base comum `persona-v2-source-onboarding-1`; previews/relatórios devem ser atuais.
+  Entrada principal continua legada; deploy permanece bloqueado.
+
+- Persona-v2: SELECT Firebird adaptável com parser próprio e gramática fechada;
+  saídas de escrita SQL Anywhere recuperadas por chave UNIQUE/identidade na mesma
+  transação, com SELECT concedido e bindings posteriores. Matriz ampliada de
+  55 testes ODBC reais, sem liberação de deploy. Corrigido alias Firebird do
+  envelope vazio; nova versão da base comum exige revalidação dos relatórios.
+
+- Persona-v2: matriz obrigatória de 48 testes de lançamentos nos quatro motores
+  ODBC reais; correções de identidade da base, DBN do SQL Anywhere e RETURNING
+  interno PostgreSQL/Firebird. Prova e contagens entram no teto de 32 comandos.
+  Node 24.21.0 local verificado, contrato hub 1.3.0 e snapshot reproduzível fixado;
+  deploy e aceite integral permanecem bloqueados.
+- Persona-v2: SQL adaptável de operações com gramática fechada por dialeto,
+  reordenação de SET/AND e filtros restritivos publicados; valores, identidade,
+  concorrência, recortes e saídas preservados. Runner exige casos aceitos/recusados.
+  `conciliar_operacao` verifica marcador UUID único da transação; migration 0004
+  mantém evidências imutáveis separadas do comprovante técnico, sem retry ou
+  inferência de rollback. Produção e homologação ODBC permanecem bloqueadas.
+
+- Persona-v2 em desenvolvimento: publicação imutável de operações SQL somente_parametros,
+  recortes/colunas/identidade/concorrência, casos obrigatórios em PostgreSQL isolado
+  com rollback, concessões por hash exato, preparação/aprovação e transporte REST v1
+  concreto na composição nova. Estado desconhecido pode ser resolvido por consulta
+  ao journal sem reexecução. Hub expõe capacidades autenticadas por vínculo.
+  SQL adaptável de escrita, homologação dos quatro motores e deploy seguem bloqueados.
+
+### Added
+
+- Fundação de lançamentos persona-v2: serviço de preparação/aprovação com payload
+  cifrado, claim único, comprovante e invalidação física; store PostgreSQL e migração
+  0003 protegem conteúdo e transições. Journal Drift separado no agente e contratos
+  aditivos `sql.operation.*` no hub (REST 1.2.0). Agente integra bootstrap/RPC,
+  hash local, transação ODBC, parâmetros/outputs e guardas antes do commit.
+  Negociação `sqlOperations` v1 e transporte REST/agents:command/relay implementados,
+  com opt-in do agente desligado por padrão, limites, revalidação da sessão e
+  ausência de reenvio por ACK. Comprovante preserva contagem nula e incerteza após
+  perda da resposta. Harness Node/Dart isolado cobre journal temporário real e
+  transação simulada. Publicação de operações, homologação e ligação padrão MCP
+  permanecem pendentes; escrita no runtime padrão e deploy seguem bloqueados.
+
+- Cruzamentos persona-v2 vinculados a skills publicadas: dependências imutáveis,
+  concessões de todas as fontes/skills, SQL local adaptável com projeção fixa,
+  combinação tipada, limites por skill/token/requisição e paginação final.
+  `validar_cruzamento` usa envelopes vazios; `executar_cruzamento` exige entradas
+  completas e revalida todas as leases antes da entrega. Runner separado de casos
+  sintéticos com hashes de revisão/pacote/casos. SELECTs reais em duas bases
+  PostgreSQL de teste; hub simulado. Deploy e aceite integral seguem bloqueados.
+
+- Consultas persona-v2 por fonte: `consultar_dados`, `validar_consulta`,
+  `verificar_fonte` e `obter_capacidades`, parâmetros tipados, database explícito,
+  credenciais independentes, policy completa e revalidação antes da entrega.
+  Recortes físicos dominantes com bindings reservados, limites/projeção e
+  proveniência; testes SELECT reais em PostgreSQL efêmero com hub simulado.
+  Corrigida detecção de LIMIT vazio do parser PostgreSQL para permitir paginação.
+  Firebird, escrita e aceite integral continuam pendentes.
+
+- Catálogo persona-v2 por fonte com rascunho CAS, casos, preview/diff/hash,
+  publicação imutável, expiração/consumo único e suspensão. Novo MCP stateless
+  expõe contexto e publicações concedidas em tools/resources nos dois protocolos;
+  execução ligada na etapa de consultas por fonte. Migração aditiva `0002_catalog.sql` e testes
+  PostgreSQL de concorrência, revogação, dependências e confirmação obsoleta.
+
+- Fundação `persona-v2` em entrada separada de desenvolvimento: responsável Client,
+  persona sem fonte, tokens explícitos, fontes com credenciais independentes,
+  baseline novo, guardas de autorização e executor interno de cruzamentos.
+  Testes PostgreSQL reais do baseline/administração e testes unitários de autorização,
+  cruzamento e estados de lançamento. Escopo e pendências em `docs/persona-v2/README.md`.
+- Bloqueio de publicação de imagem e deploy enquanto o manifesto `persona-v2` não
+  tiver aceite completo. O runtime principal ainda é legado; escrita no agente,
+  contratos novos do hub, execução MCP/OAuth/console e homologação de quatro motores pendentes.
 
 - Console: temas Sistema/Claro/Escuro com tokens semânticos, menu móvel acessível, confirmações e componentes compartilhados; `web:check` com lint Vue/TypeScript, tipos, Vitest e build no gate de release. Suíte Chromium do console separada do OAuth com `FakePlugServer` e fixtures sintéticas em Linux/Windows.
 - Console: tela **SQL de treino** (`/skills/sql`) lista o `sqlModelo` de cada skill desta persona e grava pelo mesmo `atualizar_skill`. O GET é `/app/api/skills/modelos`; a tool MCP `listar_skills` continua sem SQL.
@@ -20,6 +875,35 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Procedimento para conferir a allowlist OAuth do piloto ChatGPT e recriar só o serviço `mcp`, sem imprimir segredos: `docs/operations/chatgpt-oauth-allowlist.md`.
 
 ### Fixed
+
+- Persona-v2: comparação de publicação mostra a ordem das etapas de execução,
+  mesmo quando IDs/conteúdo são preservados; reordenar SQL não equivale a
+  reordenar uma lista de definições físicas.
+
+- Persona-v2: console permite acompanhar, executar com confirmação, cancelar e
+  conciliar preparações SQL/externas pelo token solicitante. Mantém aprovação
+  humana separada, revalida persona/estado, envia só ID/fingerprint e descarta
+  respostas antigas. Clique duplo/retorno perdido não oferece reenvio. Plano
+  restante distingue funcionalidades entregues das lacunas; deploy bloqueado.
+
+- Persona-v2: leases de manutenção e vencimentos de revisão passam a usar o
+  relógio PostgreSQL, impedindo tomada/antecipação por relógios divergentes.
+  Encerramento fica registrado antes do primeiro ciclo e interrompe novos
+  jobs/claims, aguardando o atual. Homologação inclui dois processos, quedas,
+  rollback e retomada real com receptor deduplicador; deploy continua bloqueado.
+
+- Console persona-v2: conflito de edição de base não aguarda recarregamento
+  automático nem troca a recusa por falha de atualização. Preserva os campos
+  até a decisão explícita de recarregar.
+
+- Referência coordenada do hub revisada para o commit aprovado `7695049`.
+  Verificação histórica usa índice temporário do ancestral revisado, preservando
+  patch/hash e exigindo checkout/candidato/contrato exatos, sem modificar o hub.
+
+- Referência do hub e checkout do CI sincronizados com o commit aprovado
+  `e8f56db8e0205b94b99b5ac7dabd41655f4fd2c0`; `training:check` restaurado,
+  preservando contrato, snapshot histórico e verificações estritas. HTTPS
+  público/ChatGPT permanecem manuais e o deploy continua bloqueado.
 
 - Console: salvar antes de validar, preservar edições pendentes, separar rascunho/publicação ativa e impedir confirmações obsoletas ou envios repetidos. Consultas distinguem candidata de novo exemplo, preservam múltiplas skills e isolam inativação. Anotações preservam governança, grafo mantém destino e JOIN composto, escopo permite remover vínculos, operação carrega seções independentemente e respostas antigas são descartadas na troca de sessão.
 - As páginas do plugin e do cofre usam o ícone Se7e de `/app/icon-192.png`. A CSP dessas respostas libera imagem só do próprio servidor.
@@ -223,6 +1107,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Security
 
+- Controlador de treinamento manual confere a ACL Windows antes de gravar
+  credenciais ou iniciar serviços, inclusive fora do lançador. Pastas com
+  permissões adicionais são recusadas sem alteração automática das permissões.
+
 - `sanitizeEngineMessage` redige JSON `"client_token":"..."` (aspas na chave), além de `client_token=` / Bearer / JWT.
 
 ## [0.2.0] - 2026-08-30
@@ -420,3 +1308,13 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 ### Added
 
 - Commit inicial do servidor MCP Se7e (Streamable HTTP, Express, Drizzle).
+
+### Persona-v2 — identidade na conexão executora (em desenvolvimento)
+
+- Contrato aditivo do hub 1.5.0: expectedSource e sourceIdentity v1 negociada,
+  com recusa no MCP e no dispatch para agentes incompatíveis.
+- SELECT dedicado no agente verifica hash/dialeto antes do SQL e da entrega;
+  lançamentos verificam na conexão da transação antes de qualquer etapa.
+- Prova esperada integra hash local e escopo do journal. Nenhum fallback ou
+  retry sem prova; SQL Anywhere locator permanece recusado no fluxo v2.
+- Deploy bloqueado; aceite integral e cadeia real ainda pendentes.

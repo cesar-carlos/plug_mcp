@@ -203,11 +203,16 @@ export const createPooledFetch = (agents: HubHttpAgentPair): typeof fetch => {
                 }
               }
               resolve(
-                new Response(decoded, {
-                  status: res.statusCode ?? 0,
-                  statusText: res.statusMessage ?? "",
-                  headers: outHeaders,
-                }),
+                new Response(
+                  [204, 205, 304].includes(res.statusCode ?? 0) || method === "HEAD"
+                    ? null
+                    : decoded,
+                  {
+                    status: res.statusCode ?? 0,
+                    statusText: res.statusMessage ?? "",
+                    headers: outHeaders,
+                  },
+                ),
               );
             })
             .catch(reject);

@@ -18,6 +18,11 @@ O MCP **nunca** faz `auth/login` nem `agent-login` nem `client-auth/register`. L
 
 ## Três checagens em cascata
 
+Uma recusa atual de acesso ao agente não pode ser substituída pela aprovação
+histórica de uma solicitação. Nesse conflito, o adapter informa estado `unknown`
+não autorizado; não presume revogação nem ausência de capability. A v2 recusa
+com `AUTHORIZATION_DENIED`, inclusive na revalidação antes de entregar resultados.
+
 Cada `consultar_dados` passa por **três** portões independentes. Falhar em qualquer um bloqueia a query.
 
 ```text
@@ -87,7 +92,9 @@ Revogação (owner ou o próprio Client) derruba o acesso imediato. Socket `/con
 
 Não é o JWT do Client. É um token **opaco** (ou JWT próprio do agente) emitido pelo admin do ERP. O `plug_agente` classifica o SQL e aplica a política (`all_tables`, regras por tabela, permissões read/update/delete/ddl).
 
-- Obrigatório em `sql.execute` quando `enableClientTokenAuthorization` está ativo no agente (aliases aceitos pelo hub: `client_token`, `clientToken`, `auth`).
+- O MCP exige policy vigente em toda execução. No caminho v2 verificado, o agente
+  exige token e banco mesmo com a flag legada enableClientTokenAuthorization desligada.
+  Aliases do campo no hub: client_token, clientToken e auth.
 - O MCP persiste criptografado (`acesso.client_token_enc`) e só descriptografa ao montar o body do RPC.
 - Nunca vai para log, resposta de tool ou `hint` de erro.
 - Introspecção **sem SQL**: RPC `client_token.getPolicy` no mesmo `POST /agents/commands`.
@@ -96,7 +103,12 @@ SQL precisa ser **classificável**: o agente identifica tabela/view no `FROM`. `
 
 ## O que o usuário final informa (e o que não informa)
 
-Informa, via tools MCP: e-mail e senha do Client (`registrar_acesso`), depois `agentId`, `dialeto`, `client_token`. Acessos extras (`adicionar_acesso`) não pedem senha de novo.
+No legado, `registrar_acesso`, `adicionar_acesso`, `atualizar_credenciais` e
+`rotacionar_token_mcp` recebem objeto vazio estrito e retornam setupUrl/expiresAt.
+E-mail, senha do Client, agentId, dialeto e client_token são preenchidos somente
+no navegador; o POST confirmado com CSRF reautentica e verifica o vínculo no hub.
+Na persona-v2, o [console inicial](../persona-v2/onboarding.md) recebe os dados da
+fonte e exige [prova nativa](../persona-v2/source-identity.md).
 
 Não informe senha, JWT do hub, `client_token` ou token MCP em log/tool. Ver [`../auth/vault-and-mcp-token.md`](../auth/vault-and-mcp-token.md).
 

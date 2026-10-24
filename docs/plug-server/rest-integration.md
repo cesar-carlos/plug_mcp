@@ -1,5 +1,9 @@
 # Adapter REST neste MCP
 
+> Este adapter descreve o runtime legado. Adapters v2 por credencial, prova nativa
+> e operações: [identidade](../persona-v2/source-identity.md),
+> [consultas](../persona-v2/source-queries.md) e [operações](../persona-v2/sql-operations.md).
+
 Canal do MCP: **somente REST**. Contrato do hub: [communication.md](communication.md). Autenticação Client / aprovação / `client_token`: [auth.md](auth.md).
 
 Fonte normativa no hub: `plug_server/docs/api/api_rest_bridge.md` e OpenAPI `GET /docs`. Base URL: `PLUG_SERVER_BASE_URL`. Prefixo: `/api/v1`.

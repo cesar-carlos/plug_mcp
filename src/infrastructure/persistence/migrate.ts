@@ -30,6 +30,12 @@ export const applyMigrations = async (input: {
   const client = new pg.Client({ connectionString: input.databaseUrl });
   await client.connect();
   try {
+    const generation = await client.query<{ generation_table: string | null }>(
+      "SELECT to_regclass('public.mcp_schema_generation')::text AS generation_table",
+    );
+    if (generation.rows[0]?.generation_table) {
+      throw new Error("Runner legado recusado em banco versionado; use db:migrate:persona-v2.");
+    }
     await client.query(`
       CREATE TABLE IF NOT EXISTS _mcp_migrations (
         filename text PRIMARY KEY,

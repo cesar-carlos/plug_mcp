@@ -1,0 +1,29 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": "web/src/persona-v2/sql-preparation.ts",
+      "sha256": "3242479b0fc26dbe816e1efd796a5eab6a69a1568c65b06aaf03e3315fb5883a"
+    },
+    {
+      "path": "web/src/persona-v2/sql-preparation.test.ts",
+      "sha256": "2609d899f0bedb0c046d27c1be7331421849de3d34bb4e980d3da81da5736d3f"
+    },
+    {
+      "path": "web/src/persona-v2/SqlPreparationPanel.vue",
+      "sha256": "9caf45124633d31e1939989e5c61f059968ec9f44903d9b28a715ba780bb4a8a"
+    },
+    {
+      "path": "web/src/persona-v2/OperationScalarInput.vue",
+      "sha256": "388081170e1c76dd8ebdd9b8178632af7ceccab47a3feb595dd68fa0b3a816bd"
+    },
+    {
+      "path": "web/src/persona-v2/OperationsPanel.vue",
+      "sha256": "ef36ad09127ccaacbf66111117e6d53d0ab3538ba5cd361aa139540d3069d57f"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "bdacf9fb61c12da06103504b3d14a42713e6fecc71a40bb47f28d4fa8660bc90"
+    }
+  ]
+}

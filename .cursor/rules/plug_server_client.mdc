@@ -1,29 +1,84 @@
 ---
-description: "Integração com o plug-server: gateway, token por usuário, paginação e erros"
-globs: ["src/infrastructure/plug-server/**/*.ts", "src/domain/ports/plug-server-gateway.port.ts", "src/application/use-cases/**/*.ts"]
+description: "Integração REST, identidade da fonte e origem das falhas"
+globs:
+  ["src/infrastructure/plug-server/**/*.ts", "src/domain/ports/**/*.ts", "src/application/**/*.ts"]
 alwaysApply: false
 ---
 
 # Plug-server
 
-O MCP autentica **como o Client do usuário** (e-mail/senha do cofre). Não cadastra User/Client/Agent. Canal do MCP: só REST (`POST /agents/commands`). Socket `/agents` é do `plug_agente`. Socket/relay de consumer fora de escopo.
+Recusa atual de acesso ao agente prevalece sobre solicitação histórica aprovada.
+O fallback pode informar estados não autorizados; aprovação histórica após 403
+vira unknown, nunca approved. Não inferir revogação ou recuperar concessões.
 
-`PlugServerGatewayPort`: `login`, `refresh`, `requestAgentAccess`, `getAgentAccessStatus`, `putClientToken`, `getClientTokenPolicy`, `executeSql`.
+- MCP autentica como Client autorizado; não cadastra User/Client/Agent nem usa
+  Client de serviço. Banco de negócio só é acessado pelo agente.
+- Canal do MCP é REST `POST /api/v1/agents/commands`. Socket/relay são canais
+  do hub/agente, não uma nova conexão consumer deste MCP.
+- Hub valida/encaminha; não interpreta SQL nem reescreve dialeto.
+- Contrato fixado em `contracts/plug-mcp-rest-v1.json`: commit upstream exato e
+  `hub-persona-v2.snapshot.patch` histórico com SHA-256, já incorporado naquele commit.
+  CI/`training:check` verificam ancestralidade e bytes commitados no candidato
+  exato. A incorporação histórica é comprovada no ancestral revisado fixado,
+  por `apply --reverse --check --cached` em índice temporário separado;
+  mudanças posteriores exigem revisão, sem modificar o checkout ou reaplicar o patch.
+  Não relaxar o pin para aceitar qualquer HEAD com o mesmo contrato.
+  Manter `training:check` e `contract:check` no checkout do hub.
 
-Rotas (prefixo `/api/v1`): `POST /client-auth/login|refresh`, `POST /client/me/agents`, `GET /client/me/agents/{id}`, `GET /client/me/agent-access-requests?search=`, `PUT .../client-token`, `POST /agents/commands`.
+## Persona-v2
 
-RPCs: `sql.execute`; `client_token.getPolicy`. Contrato vivo: `plug_server/docs` e `GET /docs` no hub.
+JWT por persona/credencial/versão; policy completa e banco explícito.
+Anexo binário usa sql.execute já contratado: agente serializa bytes em base64,
+adapter preserva odbc_type inteiro e type_system. Discriminante 7 somente com
+type_system=odbc_fast comprova bytes; código nativo ODBC 7 não é binário.
+Sem SQL convertido para texto/hex ou inferência
+de string. Metadados positivos e contrato publicado são obrigatórios; nenhuma
+conexão direta ao ERP. Contrato: docs/persona-v2/attachments.md.
+`sql.describeSource` exige descoberta v1 negociada e prova nativa compatível.
+Não usar cache/policy/gerenciador de usuário legado.
 
-- Sem paginação: enviar `execution_mode: preserve` (não deixar o hub reescrever `SUM`/`COUNT`).
-- Com `page`+`page_size`: **omitir** `execution_mode` (hub usa `managed`). Sem metadata `pagination` do agente → `METADATA_CONTRATO`.
-- SQL que o agente não classifica (`-32002` + classification) → `INVALID_SQL` + `source: sql_engine`, não `ACCESS_REVOKED`. Hint cita tabelas e dialeto.
-- SQL Server 1033/4104 (ORDER BY / multi-part identifier no wrap `managed`) → `INVALID_SQL` + `source: sql_engine`, não `PLUG_SERVER_ERROR`. Hint: sem `options.page`, `TOP n` + `guia://dialeto/mssql`. `nextAction: consultar_dados` (não `validar_consulta` — o dry-run não aplica o wrap). Não acrescente `OFFSET`/`FETCH` com `page`. O rewrite é do `plug_agente`.
-- Execução/validação no motor (`-32101`/`-32102`/`-32107`) → `INVALID_SQL` / `QUERY_TIMEOUT` + `source: sql_engine` (a IA distingue do validador do pacote, `source: sql`). `-32009` `reason: invalid_payload` é transporte (`PLUG_SERVER_ERROR` + `plug_server_http`) mesmo se `looksLikeEngineSql` — reason ganha. Haystack de motor só promove a `sql_engine` se a reason **não** for `invalid_payload` (1033 já coberto antes, salvo `invalid_payload`). `-32001` ramifica por `data.reason`: `missing_client_token` → `MISSING_CLIENT_TOKEN`; `invalid_signature` / `authentication_failed` → `ACCESS_REVOKED` + `client_token_rpc` (não peça cadastrar token como se faltasse). HTTP 404 de agentId nunca registado → `AGENT_UNAVAILABLE` sem retry cego. HTTP 400 / JSON-RPC `-326xx` / falha de rede (`ECONNREFUSED`) → `PLUG_SERVER_ERROR` + `plug_server_http` (**não** reescrever SQL; rede é retryable, distinto de `INTERNAL_ERROR`). Wrap genérico do driver (sem ODBC) no `engineMessage` → `mapear_tabela` / `obter_skill`, sem pedir rewrite de transporte. `SQLSTATE` `42703`/`42P01` no hint quando o motor já mapeia identificador Postgres. HTTP 429/503 → `source: plug_server_http`. HTTP 5xx com haystack `denied`/`permission` **sem** RPC de policy → `PLUG_SERVER_ERROR` + `plug_server_http` (não `PERMISSION_DENIED`). `-32014` replay → `PLUG_SERVER_ERROR` (não altere o SQL). `-32105` `result_too_large` → `CONSULTA_ORCAMENTO` + `sql_engine`. Células `varbinary`/`bytea`/`image` no result são **string base64** (agente); o MCP não inventa RPC. Não persista SQL recusado pelo hub.
+`sql.describeSchema` exige `sourceSchema` v1 e identidade esperada. Inspeção
+usa somente metadados fixos; cobertura insuficiente e status desconhecido de
+constraints não habilitam dependências. SELECT com `expectedStructure` confere
+as colunas utilizadas na própria conexão antes/depois da consulta, sem fallback.
+Expectativas de constraints exigem também `sourceConstraints` v1 negociada.
+Estado desconhecido, inclusive enforcement SQL Anywhere, não habilita dependências.
+Contrato e adoção inicial: `docs/persona-v2/shared-knowledge.md`.
 
-`UsuarioTokenManager`: JWT por `usuarioId`, refresh ~60s antes do `exp`, `inflight` por usuário. HTTP 401: invalida JWT, reloga com senha do cofre e **repete uma vez**. Senha recusada → `CREDENTIAL_STALE`.
+SELECT não tem retry. Operações usam `sql.operation.execute/get/cancel`,
+negociação `sqlOperations` v1 e opt-in do agente. Sem replay por 401, timeout,
+falta de ACK ou desconexão. Resultado incerto é acompanhado pelo journal/conciliação.
+Prova nativa na conexão executora e limites: `docs/persona-v2/source-identity.md`.
+Transporte e comprovantes: `docs/persona-v2/sql-operations.md`.
 
-429: `Retry-After` / `RateLimit-Reset`. Cache de policy (memória + Redis) por `agentId` + hash do `client_token`.
+Carrier estrutural de operações exige structureGuard:1, sourceSchema/sourceIdentity
+e sourceConstraints quando houver chaves. Conferir leitura exata das dependências
+e orçamento nativo de 32 comandos antes do envio. Não anunciar adoção DML
+compartilhada pela existência do transporte; publicação/preparação continuam próprias.
 
-Timeouts: `PLUG_SERVER_HTTP_TIMEOUT_MS` é piso de login/policy (teto Zod 60s; não corta SQL). `sql.execute` alinha `timeoutMs` do bridge a `options.timeout_ms + 5s` (teto hub 360s / agente 300s) e o `AbortSignal` HTTP a esse wait + download. Dois `http(s).Agent`: auth 4 (login/refresh/`getPolicy`) e SQL 16. Probe TCP keepalive 30s (`keepAliveMsecs`) — não o `fetch` global undici (idle 4s); o socket fica até o peer fechar (Nginx `keepalive_timeout`). Sem retry de SQL. `proxy_read_timeout` da borda do hub (ex. 180s) ainda corta skills ~≥175s; 120s passa se o `location` de commands estiver deployado.
+Delegação usa `/api/v1/client-auth/persona-delegations`, credencial opaca de
+30 dias e verificação própria vinculada a Client/persona/origem/época de credenciais.
+Não é JWT, não acessa agentes nem aprova operações. Guardar cifrada no MCP;
+sem retry e fora das transações. Indisponibilidade bloqueia setups.
+Contrato e limites: `docs/persona-v2/oauth.md`.
 
-`isHubConnected` é snapshot — `false` não prova agente offline. Distinga falhas do JWT Client, `ClientAgentAccess`, policy do `client_token` e SQL inválido; não tente SQL amplo nem retry cego como diagnóstico.
+## Manutenção legada
+
+`UsuarioTokenManager` isola JWT por usuário; `withHubAuth` permite uma
+reautenticação após 401. Essa política não se aplica às operações v2.
+Sem página, SQL usa `execution_mode: preserve`; com page/page_size, managed.
+Exigir metadata de paginação, sem confundir página com completude.
+
+Timeout/bridge, pools HTTP e keep-alive: `docs/plug-server/rest-integration.md`.
+Não adicionar retry genérico de SQL nem agrupar policy+SQL em batch.
+
+## Falhas
+
+Preservar distinção entre JWT, ClientAgentAccess, policy, validador e GDBR.
+`invalid_payload` continua transporte mesmo se a mensagem parecer erro SQL;
+429/503 não provam recusa de policy. `isHubConnected=false` não prova offline.
+Não usar SQL amplo como diagnóstico nem persistir SQL recusado.
+Receipt v2 preserva `failureCode` opcional enumerado, nunca mensagem nativa.
+Ausência em registro antigo não informa causa; código não prova commit/rollback
+nem autoriza repetição ou reassociação de treinamento.
+Mapa: `docs/mcp/error-mapping.md`.

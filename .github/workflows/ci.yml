@@ -6,6 +6,27 @@ on:
   pull_request:
 
 jobs:
+  documentation:
+    name: Documentation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+      - run: npm ci
+      - run: npm run node:check
+      - run: npm run docs:check
+      - name: Documentation checker lint
+        run: npx eslint scripts/check-docs.ts scripts/docs tests/unit/docs-check.test.ts
+      - name: Documentation checker regressions
+        run: npx vitest run tests/unit/docs-check.test.ts
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -46,12 +67,15 @@ jobs:
         with:
           repository: cesar-carlos/plug_server
           path: plug_server_contract
-          ref: 0d2c6b488438a77be71b39e514cd06ab11fbb95e
+          ref: 0dc94d6990167f65e093b1fb68a8150630e2057c
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
           cache: npm
       - run: npm ci
+      - name: Verify exact hub candidate and incorporated historical snapshot
+        run: npm run training:check
       - run: npm ci --prefix web --include=dev
       - run: npm run compiler:check
       - run: npm audit --omit=dev --audit-level=high
@@ -66,12 +90,28 @@ jobs:
           CI: "true"
           NODE_ENV: test
       - run: npm run db:migrate
+      - name: Persona-v2 baseline and administrative isolation
+        run: npm run test:persona-v2:postgres
+        env:
+          NODE_ENV: test
+          PERSONA_V2_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_persona_v2_test
+          PERSONA_V2_TEST_REDIS_URL: redis://localhost:6379
+      - name: Persona-v2 isolated Redis cache and singleflight
+        run: npm run test:persona-v2:cache
+        env:
+          NODE_ENV: test
+          PERSONA_V2_TEST_REDIS_URL: redis://localhost:6379
       - name: Release gate
         run: npm run release:check
       - name: Install Chromium for browser tests
         run: npx playwright install --with-deps chromium
       - name: Console browser regressions
         run: npm run test:console:browser
+      - name: Persona-v2 onboarding with two dedicated PostgreSQL sources
+        run: npm run test:persona-v2:browser
+        env:
+          NODE_ENV: test
+          PERSONA_V2_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_persona_v2_test
       - name: OAuth HTTPS browser and ephemeral PostgreSQL
         run: npm run test:chatgpt:browser
         env:
@@ -100,11 +140,11 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
 
   native-musl:
+    needs: documentation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -122,6 +162,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
+      - name: Load candidate ancestry for release evidence
+        run: git fetch --unshallow origin
       - run: docker build --platform linux/${{ matrix.arch }} --build-arg GIT_SHA=${{ github.sha }} -t se7e-native .
       - run: docker run --rm --platform linux/${{ matrix.arch }} --entrypoint node se7e-native --input-type=module -e "import sharp from 'sharp'; import { fileTypeFromBuffer } from 'file-type'; const png=await sharp({create:{width:2,height:2,channels:3,background:'red'}}).png().toBuffer(); if((await fileTypeFromBuffer(png))?.mime!=='image/png') process.exit(1);"
       - name: Packaged migrations, server and worker
@@ -132,25 +177,116 @@ jobs:
           -e PLUG_SERVER_BASE_URL=http://plug-server.test
           -v ${{ github.workspace }}/scripts/smoke-runtime.mjs:/app/smoke-runtime.mjs:ro
           --entrypoint node se7e-native smoke-runtime.mjs --migrate
+      - name: Preserve the tested amd64 image
+        if: matrix.arch == 'amd64' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/tested-image"
+          docker save --output "$RUNNER_TEMP/tested-image/image.tar" se7e-native
+          node scripts/tested-image.mjs record "$RUNNER_TEMP/tested-image" se7e-native
+      - uses: actions/upload-artifact@v7
+        if: matrix.arch == 'amd64' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: tested-image-amd64
+          path: ${{ runner.temp }}/tested-image/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  persona-v2-candidate:
+    needs: documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
+      - name: Build isolated v2 candidate
+        run: docker build --platform linux/amd64 --target persona-v2-candidate --build-arg GIT_SHA=${{ github.sha }} -t se7e-native .
+      - name: Verify packaged v2 runtime in disposable infrastructure
+        shell: pwsh
+        run: ./scripts/homologation/test-persona-candidate.ps1 -Image se7e-native
+      - name: Preserve verified v2 candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/persona-image"
+          docker save --output "$RUNNER_TEMP/persona-image/image.tar" se7e-native
+          node scripts/tested-image.mjs record "$RUNNER_TEMP/persona-image" se7e-native
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: persona-v2-tested-image-amd64
+          path: ${{ runner.temp }}/persona-image/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish-image:
+    needs: [documentation, verify, windows, native-musl, persona-v2-candidate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
       - id: changes
         name: Decide se a imagem de produção deve ser publicada
-        if: matrix.arch == 'amd64' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" --jq '.files[].filename' \
-            | bash scripts/should-publish-production.sh; then
+          if ! node --input-type=module -e "import {readFileSync} from 'node:fs'; process.exit(JSON.parse(readFileSync('contracts/persona-v2-release.json','utf8')).ready === true ? 0 : 1)"; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Production publication blocked; candidate artifacts do not grant acceptance."
+            exit 0
+          fi
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" --jq '.files[].filename' > "$RUNNER_TEMP/changed-files"
+          if bash scripts/should-publish-production.sh < "$RUNNER_TEMP/changed-files"; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Require accepted release evidence
+        if: steps.changes.outputs.publish == 'true'
+        run: node scripts/check-persona-release.mjs
+      - id: accepted-image
+        name: Validate accepted artifact origin
+        if: steps.changes.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/accepted-image-origin.mjs
+      - uses: actions/download-artifact@v8
+        if: steps.changes.outputs.publish == 'true'
+        with:
+          artifact-ids: ${{ steps.accepted-image.outputs.artifact_id }}
+          run-id: ${{ steps.accepted-image.outputs.run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: ${{ runner.temp }}/tested-image/
+          digest-mismatch: error
       - name: Publish production image
         if: steps.changes.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          export PERSONA_V2_IMAGE_REVISION="${{ steps.accepted-image.outputs.image_revision }}"
+          node scripts/tested-image.mjs verify "$RUNNER_TEMP/tested-image"
+          docker load --input "$RUNNER_TEMP/tested-image/image.tar"
+          node scripts/tested-image.mjs verify-loaded "$RUNNER_TEMP/tested-image" se7e-native
+          node scripts/check-persona-release.mjs --image-proof "$RUNNER_TEMP/tested-image/image-proof.json"
           image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]'):${GITHUB_SHA}"
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker tag se7e-native "$image"

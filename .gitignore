@@ -9,5 +9,6 @@ logs/
 .DS_Store
 drizzle/meta/
 plugins/se7e-chatgpt/build/
+plugins/se7e-persona-v2/build/
 test-results/
 playwright-report/

@@ -1,12 +1,24 @@
-# Treinamento compartilhado e curadoria
+# Treinamento compartilhado e curadoria — runtime legado
 
-Todas as personas recebem a mesma base SQL + plug_server, versão 1.0.0, compilada no servidor. A identidade completa (hash e referência do contrato) é devolvida por `obter_treinamento_base`, pelos recursos públicos `guia://treinamento-base`, `guia://sql`, `guia://plug-server`, pelo diagnóstico e por `planoConsulta`. A base não inclui catálogo, persona, credenciais ou autorização. O bootstrap permanece público; pacotes e persona exigem Bearer do acesso. Cada Bearer representa um catálogo, sem união automática entre personas.
+> Treinamento persona-v2: [onboarding](../persona-v2/onboarding.md),
+> [catálogo](../persona-v2/catalog.md), [cruzamentos](../persona-v2/federation.md) e
+> [operações SQL](../persona-v2/sql-operations.md). Identidade nativa na conexão
+> executora: [contrato de fonte](../persona-v2/source-identity.md).
+> A base v1 e os fluxos por acesso abaixo pertencem à entrada principal legada.
+
+Todas as personas recebem a mesma base SQL + plug_server, versão 1.1.0, compilada no servidor. A identidade completa (hash e referência do contrato) é devolvida por `obter_treinamento_base`, pelos recursos públicos `guia://treinamento-base`, `guia://sql`, `guia://plug-server`, pelo diagnóstico e por `planoConsulta`. A base não inclui catálogo, persona, credenciais ou autorização. O bootstrap permanece público; pacotes e persona exigem Bearer do acesso. Cada Bearer representa um catálogo, sem união automática entre personas.
 
 A composição é: base comum → publicação ativa do acesso → persona. `pre_treino` entrega instruções e contexto da sessão; não treina pesos de modelos. O protocolo legado e o moderno usam a mesma composição. Os validadores aplicam as regras mesmo que o consumidor diga que leu os guias.
 
 ## Fonte e conteúdo
 
-A base canônica está em `src/application/use-cases/shared/treinamento-base.ts`. Os módulos cobrem SQL seguro, dialetos/capacidades, hub e procedimento de consulta/correção. O contrato revisado do plug_server está empacotado em `contracts/plug-mcp-rest-v1.json`, commit `0d2c6b488438a77be71b39e514cd06ab11fbb95e`; `npm run training:check` verifica o hash, os schemas e o adapter. Havendo checkout do hub (`PLUG_SERVER_CHECKOUT`, `plug_server_contract` ou `../plug_server`), verifica também o commit. Atualizar a fonte exige revisão dos módulos e testes, sem internet no runtime.
+A base legada canônica está em `src/application/use-cases/shared/treinamento-base.ts`.
+O contrato empacotado em `contracts/plug-mcp-rest-v1.json` é fixado por commit-base,
+hash do JSON e SHA-256 do patch `contracts/hub-persona-v2.snapshot.patch`.
+O snapshot reproduzível inclui extensões de desenvolvimento; não significa que
+elas existam no commit upstream. `npm run training:check` verifica os hashes,
+schemas e adapter; com checkout do hub, confere também base e contrato local.
+Mudanças exigem revisão coordenada da base, snapshot e testes, sem internet no runtime.
 
 Normas do hub: `docs/PROJECT_OVERVIEW.md`, `docs/api/api_rest_bridge.md`, `docs/api/client_agent_business_rules.md` no checkout fixado. A [documentação web](https://plug-server.se7esistemassinop.com.br/docs/) é complementar. O MCP envia `POST /api/v1/agents/commands`; JWT Client, aprovação ClientAgentAccess e policy do client_token continuam obrigatórios. O agente/GDBR executa SQL e aplica paginação gerenciada. REST materializa o resultado; HTTP 200 pode conter erro JSON-RPC. A IA não manipula os envelopes/segredos do adapter. Escrita, batch, cursor e Socket do hub não são capacidades expostas neste MCP.
 
@@ -58,4 +70,4 @@ Migrações novas: `0032` adiciona versão/fingerprint/estado de curadoria e rev
 
 ## Conexão ChatGPT
 
-[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+Contrato de delegação e isolamento: [OAuth do runtime legado](../auth/chatgpt-oauth.md).

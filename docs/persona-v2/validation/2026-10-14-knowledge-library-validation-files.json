@@ -1,0 +1,1451 @@
+{
+  "date": "2026-10-14",
+  "scope": "Editorial library types/decimal/DDL validation, local checks; native restart failed before latest editorial corrections",
+  "fixture": "se7e_persona_62250b8377ea_test",
+  "engineAndDriverVersionsRecollected": false,
+  "revisions": [
+    {
+      "project": "plug_mcp",
+      "head": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+      "dirty": true
+    },
+    {
+      "project": "plug_server",
+      "head": "bfb40becd42c5452b19b0df13698d212a0238ddc",
+      "dirty": true
+    },
+    {
+      "project": "plug_agente",
+      "head": "18b7bc74eee1af25b7fdf91a71b973252dbcbe1e",
+      "dirty": false
+    }
+  ],
+  "release": [
+    {
+      "project": "plug_mcp",
+      "ready": false,
+      "required": 14,
+      "completed": 0
+    },
+    {
+      "project": "plug_server",
+      "ready": false,
+      "required": 14,
+      "completed": 0
+    },
+    {
+      "project": "plug_agente",
+      "ready": false,
+      "required": 14,
+      "completed": 0
+    }
+  ],
+  "changedAppliedMigrations": [],
+  "files": [
+    {
+      "project": "plug_agente",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "212dc6bb71232a8bdb8ffe57e5ac78cd21c152b5383ef8689d3c8df55ed0cbcd"
+    },
+    {
+      "project": "plug_agente",
+      "path": "docs/communication/openrpc.json",
+      "sha256": "a33b4c8d5728c7955c63e525dd210c7fd05b4053688c4ea977984dbd517c6306"
+    },
+    {
+      "project": "plug_agente",
+      "path": "docs/communication/schemas/rpc.params.source-schema.schema.json",
+      "sha256": "37d40a52f2fc4093baae8798dac0e82db2fb041cdc25b387506c8d14d5473bf0"
+    },
+    {
+      "project": "plug_agente",
+      "path": "docs/communication/schemas/rpc.params.sql-execute.schema.json",
+      "sha256": "b70e710446c54e00481d23640067147abb9f043a54ae0cec2e5856bbb53a84a5"
+    },
+    {
+      "project": "plug_agente",
+      "path": "docs/communication/schemas/rpc.result.source-schema.schema.json",
+      "sha256": "29b7b6ec68525c2a2600412269957144202524ff7b8dd2eb1442d1c6889a4318"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/application/rpc/source_schema_rpc_handler.dart",
+      "sha256": "09431eefc158671d4f1b019bc395b4e0d3bb5de7c9e5f5f318111f1910cfde0a"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/application/rpc/sql_execute_handler.dart",
+      "sha256": "cea7968de1f2015ffb5c44734c779938dc2aaa1c080f502e6e34b344aaa59ca9"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/application/services/protocol_negotiator.dart",
+      "sha256": "53382c1857d6f8fd9008d551c111f732fd3cc1d023f69476cd415a5c6f1fce5d"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/bootstrap/bootstrap_dependency_registrar_rpc.dart",
+      "sha256": "eaad8bd72344b6e64950b96cf080aa6b18a33ba3c28f2bc7b53621249621ec06"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/bootstrap/bootstrap_dependency_registrar.dart",
+      "sha256": "a68c7f4fda0733e2f806dc55298374b265469ea51160bd019702639e89f7b69e"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/core/utils/rpc_wire_map.dart",
+      "sha256": "2b93d45bb73c0c0da0d7c2d4163eb176bb9467f6cdb7ed57e83980d86a85981b"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/domain/entities/expected_structure.dart",
+      "sha256": "de8211a7e5fd07ff56e01f5577e54729f29b466c5b365cd6c6192b7356c354b8"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/domain/entities/query_request.dart",
+      "sha256": "cbfd4be014efc047b44bd2872d65f23c9d5fa82baddd1008a7ce28baaba7e7ed"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/domain/entities/source_schema.dart",
+      "sha256": "d93a4fc1d9e1973fa77ede02aade4d153945a17d4f236a95449eda0ca2361d82"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/domain/protocol/protocol_capabilities.dart",
+      "sha256": "235d6360d75bf93850c37e4cf212eaec735327df8c78b7a1c3e830d02d6b2b2a"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/infrastructure/external_services/odbc_source_schema.dart",
+      "sha256": "4f085e63a776dc1bdd777e1f270a8591574d257bcd3bd4456dc4bcf9f687b0b8"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/infrastructure/external_services/odbc_verified_query.dart",
+      "sha256": "5a56fd31dec417c8014855626f8a823f3362332100c5c85662160fd6d1313a00"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/infrastructure/external_services/source_schema_sql.dart",
+      "sha256": "27bf3889bf8c608741a43a9d468e0282c60fd27f06c3e7b5d6977db5468cab90"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/infrastructure/validation/rpc_method_schema_catalog.dart",
+      "sha256": "2cf2556a0bc124eb0d7f9b65454202efd440c0e5a519c7fd246032b025a9167f"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/infrastructure/validation/rpc_request_schema_sql_params_validator.dart",
+      "sha256": "7b3af4019b42ca05fab5df0e6aa143e1490c9a7bbdd1663ac4c63cdf61327cbc"
+    },
+    {
+      "project": "plug_agente",
+      "path": "lib/infrastructure/validation/schema_loader.dart",
+      "sha256": "5917cb17652e982f191e20e0166108b22f05b53dfd213d61af49af696fa1739b"
+    },
+    {
+      "project": "plug_agente",
+      "path": "test/infrastructure/external_services/odbc_verified_query_test.dart",
+      "sha256": "eb892da6c8ccbd757c81dbb0a5da0e7476fb37bd7a26da5fa1e84f79c2fbc247"
+    },
+    {
+      "project": "plug_agente",
+      "path": "tool/homologation/persona_chain_agent_test.dart",
+      "sha256": "ba1c9ed8a6200e2dd45be301b4691f4c68d4e6a5e486da7cf27518e57683dba3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/catalog.mdc",
+      "sha256": "49b41dafbc6c25a50e918ebdd69491b2867a0efb173ed655f3eb2f50d643f890"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/mcp_protocol.mdc",
+      "sha256": "425f8f3b982bf378020e1f20f8dd9bf49e05c05bb7c7d5287084f0f3a3cbcd4b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "da9eb8a92e22b0c8b0ab5783e78f9845050e81f140f387c389d69e8958c11967"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".cursor/rules/testing.mdc",
+      "sha256": "8ad219fec7d63b949d49d3e46d9466ab13d0f69395d19f0742ddd7ef09cbbdc9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": ".env.example",
+      "sha256": "7e19e9f5d148e5e4f760979ac3008712ef5da6cc415fc744d738a33549f714d9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "AGENTS.md",
+      "sha256": "da1603edac66fb101fdb91869422fcbd0fbfce30c0d94069a59ecc580e83247b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "CHANGELOG.md",
+      "sha256": "2c28b1be08592ebf2ee720d005a23dd2cd94bdbb301de28a9d822a7233600cce"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/hub-persona-v2.snapshot.patch",
+      "sha256": "4a46ee3db954130fafa74736824678ed7e66efccf72928def5345d19f7122493"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "212dc6bb71232a8bdb8ffe57e5ac78cd21c152b5383ef8689d3c8df55ed0cbcd"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "45589c3da2f94639c097893abf73e91360f0cbe2a3c48399ee36444be39f1092"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/operations/worker.md",
+      "sha256": "c0083df984647817d9477363f62ab23e56898c9ee78af8213c9c53a528079a5e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "0ffe0cbc9b43199f0a80e6e56011005fe842efd31090642e7c43233a2eac6564"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/catalog.md",
+      "sha256": "2671d35b6288003f207f246adecfdbeaefc7dc2105e4467aa8e92d614f535a52"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/console.md",
+      "sha256": "3798a4c9bc744cee43b50f371254d8a150d2a5452470a4944ed7d5b9ce32d488"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/decisions.md",
+      "sha256": "c76f57ed3652b02062a0d1b383bc98519e46e85064455b5f1e948e4e2cd4a97e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/federation.md",
+      "sha256": "144dae4d1316582c753df5eac35c75c080f7a6246f6818addbe5fa049c45468a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/firebird-sql.md",
+      "sha256": "04a76c58d185417eb897575f0346f718a2ab2e9d80c9456d1d994d1d38c8f20e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/homologation-chain.md",
+      "sha256": "1ec18dc0f5d8a9afa9b68fdb8bf5b2bf1ead6be3280803c132dc8df4cb4f2cb6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/knowledge-library.md",
+      "sha256": "86912c9b58c6fc22a97fb4b4f1152da28ebdbc3f4d52263a4824a24cde6272aa"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/oauth.md",
+      "sha256": "db7eb00c42e766db47c642ad1f13a845cacd5aa73cefacc22a8d238ce7afca46"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/onboarding.md",
+      "sha256": "464fffb0d0693990ffa689c281b608ecb1dcedfd2455e5a4bc0ffaf0edab66a7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/plugin.md",
+      "sha256": "592df42ea5ae93f4fb483a9b652e22326acdec68e540a2265a4f191bf72c196a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/README.md",
+      "sha256": "ef0e816ec78e14a5bc5d330431e229ff63c622542505aa99fb87721f0065cdd7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "6fa8344d9361bafc15fd15cac3557d80d035e0015afd2c5d49324da6ad73b4db"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/review-worker.md",
+      "sha256": "10f55cd867c1a7b62ce708f4ae7dd22a2020a4d44aa3fbc42100210c07a602df"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/shared-knowledge.md",
+      "sha256": "05cdc2529a9f85f537f6a3adc1dff02f7c538a7f517e821474c26b4acb16a4fe"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/source-identity.md",
+      "sha256": "c0ddadea6fdaed00fbc22efc44377ed7c95a471c69ca2e161540f559b3defbe3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/source-queries.md",
+      "sha256": "40d56017f11ea6fb9e1ab345e2a234801ff183f6bdf698de5a5354608128affe"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/sql-operations.md",
+      "sha256": "2db7ab461322abd51d53e0abbe33bc7e6c9f9d9e07cf8c0a6d3f49da71c88b9b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation.md",
+      "sha256": "53c2b55ea8aa486ed6bc40f5d3672403232dbcae1af1734387b872fa566a8c3e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-14-knowledge-feedback-review.md",
+      "sha256": "3cd8d37a052a22b10f58c73d2d5e7c2683623871ddcf21e6377d56d8d84c7e4d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-14-knowledge-library-validation.md",
+      "sha256": "58c9fd256a110f468dbbb574ff9f85127b40b8127b2a0772887840581c468dee"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-14-knowledge-library.md",
+      "sha256": "f30945a8362fb23d9b75e1330d88f974c231bbf4cec4d14f66e6e87816c16657"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-14-knowledge-search-graph.md",
+      "sha256": "1187b365b89f2089e80ef927ef53ae0e38a7c01a5b63feebcd6580b77f10301e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-14-physical-curation.md",
+      "sha256": "f4f2000d2cf816c2841f9d0497fc6be0510b5ab779bfc0392efe4d442f59eaff"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/persona-v2/validation/2026-10-14-publication-review-worker.md",
+      "sha256": "891b7592133e85553af3b73d3b598486aef2f1aa8ca0661e53da98a519c01e94"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "docs/README.md",
+      "sha256": "5a5db1503a7f5f0a99c447d9dfff716bcb4c54de6a0ec68d40eeb8b6d83ac90c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0001_baseline.sql",
+      "sha256": "8a60ca9662fe2876702bc9a8716206ba4e88f803fed389fba131d625251b4229"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0002_catalog.sql",
+      "sha256": "82c0557980980edd4c3e90d177d04665cbc531b870d41b224d2d1d93562a4ff2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0003_operation_integrity.sql",
+      "sha256": "eda3656432657c9626bf42e775d1a198d9f3cbad75531f1d2d03769c3c8aed11"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0004_operation_reconciliation.sql",
+      "sha256": "6e175098df510209ff85ddf020fda3c386135c20aa5982281e48e14efc95e91d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0005_source_identity.sql",
+      "sha256": "33191d4d3f01f5e1acd139e70b5496deb8d38e27a8e1a8be8f9bba9ca3e5ffff"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0006_shared_knowledge.sql",
+      "sha256": "835d1eb621fd2ca1fafdd3f20f356a51adf6c03cbc90e3a109014476dd477e0d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0007_shared_preview_authority.sql",
+      "sha256": "d0f635f96a5635b0b50d0666bbc6fc859bcaa25f444c4093d43aee3fa3e15e63"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0008_console_history.sql",
+      "sha256": "4e3554c0403a7c19156801505947678fef2a6079f9a64cbe53c1b734c7eee3c9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0009_oauth_integrity.sql",
+      "sha256": "71a9c14a7a7aae91d14bf10554563885ffb30a7fd55f7f69f188eb2e5a0bac1b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0010_delegation_and_setup.sql",
+      "sha256": "a0d5121b953795b38e89e1d9ec68dc310111341599e77492ac866a31f808add2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0011_source_replacement.sql",
+      "sha256": "fff2dcf750729354e2cda4c2d4aab09a84bcbe5653449a2b9266f8ffbdc94966"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0012_administrative_authority.sql",
+      "sha256": "3af970767077f34f4432ea6b76e7457dd1a1bdef0c1b547b5c92a50f09a6b640"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0013_source_structure_evidence.sql",
+      "sha256": "756b1cd58ceddf31b61480cac788a665219c1f2d1641e1e91d827bf44aa277ea"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0014_physical_profiles.sql",
+      "sha256": "c3aad4944e1291693aa980dd610bce8937f6b87abb7406b338f5b0faaf2d37e8"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0015_physical_native_identity.sql",
+      "sha256": "73211592456e46906fdbfca1c28a9d27371b55d87e49b35fc1b8866e8f06381b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0016_knowledge_curation.sql",
+      "sha256": "14430a996d7da56c716dc16cf0b9698b3c1a14c0fca43dd2c7ef13aa1b2b0618"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0017_publication_knowledge_index.sql",
+      "sha256": "3abd6614c72cc2539c64500d036c2dab0ad3b72319260df7b210b8891feb823c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0018_physical_knowledge_curation.sql",
+      "sha256": "4e2f80cb124d547fdff3efd5844d21ad349762aa1992bc208c8fa457a0be0fdd"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0019_knowledge_feedback_review.sql",
+      "sha256": "85bd592886781aa6826d108598d35f405d0e1c6927237d03215d476ecb567f9a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0020_review_publication_worker.sql",
+      "sha256": "36f16fc719c1ba041335ae35c18e91667b9a13726253efcab3699054e86f411e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "migrations/persona-v2/0021_knowledge_library.sql",
+      "sha256": "48739cbf0bce08850827d2bf2fdf242e55761a4985875b088991419e13dafbb2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "package.json",
+      "sha256": "1e6eca44edef8f9bb99e90b8e5805bf0b3d963e858d9d7b758d19e21d865da1e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "scripts/docs/examples.ts",
+      "sha256": "a00489195e49acfd911d90f88d54f7c5b02a5c2987eb756323291da0e77ab8fe"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "scripts/run-persona-chain-homologation.ps1",
+      "sha256": "c033afb07dafae6786402a27ffdfbfa9821ee58e9ac3354b106066751da893b8"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/administration.ts",
+      "sha256": "5c14db341a4491ba268d75c9e5123aa755e1e3a137f447a300a805d0d625f1ba"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/administrative-authorization.ts",
+      "sha256": "44f70982d54f4f9eae1b080914de25f004ed4f2f6ab97213653c9a115d07e8ff"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/catalog.ts",
+      "sha256": "13f88a734c0d099eda786f749806cfc407d0d1421f0fc574e63bd6a4c3cc75ac"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/constraint-expectation.ts",
+      "sha256": "0ba56cc2eb843194bba0691d76c5a66d10b1a0cd1f1062a5b147b28fa45c5c84"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/consumer-catalog.ts",
+      "sha256": "1d3ca85548fddef6e01c4eca7953c600f066fbb7e6228a10dd9334a585996bf2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/dataset-types.ts",
+      "sha256": "474379bd8321659dd4d13f55d2950c741d6e33318b2e10d90cd37651f6189d1a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/delegated-tokens.ts",
+      "sha256": "a744f22f839d04fd62e67db097daf886175290ab7ba723510f93bed7911c0ee9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/dialect-guide.ts",
+      "sha256": "febf26d164f2d172d7d8b009e4247194823f0592cc48b2e6cb4382cd64ff76f4"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/federation-cases.ts",
+      "sha256": "5b14561d4c93742254229841a9c0cde8f96680002fce35a6d4b0717950a9ff09"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/federation-training.ts",
+      "sha256": "4e20e88b0c285d7680954adb4e9c5fd199e030e3429c7815af016b56f1e88e09"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/federation.ts",
+      "sha256": "646bf29a85bfafa4f81b9036a84885e9273abfd94eeaf7261fcaf5aa18ac3df1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/firebird-select.ts",
+      "sha256": "cf2861ef8e4e11383ac6a9e9396eb5a0b4e63fff5d293be017915ca94351baf3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/knowledge-curation.ts",
+      "sha256": "6e2f3f49c1962cff29da7b514acf6b70174d1cc949178384ce4d8f6de028c635"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/knowledge-documents.ts",
+      "sha256": "4552ba2581dd51de0d4da71f42369672c55828f92c90979088001cd00c168380"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/knowledge-graph.ts",
+      "sha256": "0e2662b21fc9205bc40eafcd3edc673cc32cbbff12a8f0546956dda13b1ee7d3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/knowledge-library-schema.ts",
+      "sha256": "505fa73a49ea41de56c7687bb45e24c2297026d7d0ae5886fac1106e542685f9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/knowledge-library.ts",
+      "sha256": "5bc8d8ae2aba4ea4b5e6430c4fd27a5592d32f02d240e2839192d91d45572443"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/knowledge-maintenance.ts",
+      "sha256": "7a9b277872c3f5e57fcb32e263fb044675ff651222ac379c801df4d590a972a6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/knowledge-training.ts",
+      "sha256": "ad3846fe5342b0a875e7b50ba5f5328740cd87d0b21369db18ccd17982176c8e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/maintenance.ts",
+      "sha256": "577db413504bb22ff42af0de6a63f24b987feaf9a655fbccf0b56b490a1e8096"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/oauth.ts",
+      "sha256": "83e6b15fecd7143bff73def958b6af84c3f0c4d5d4c2063953e74cbea77c7399"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/operation-authority.ts",
+      "sha256": "a780b1c1363990f364e272affedbb19c857cb405258593dd454bba7ff3fb871c"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/operation-cases.ts",
+      "sha256": "a36b33ddc96ddc76778320951da452c913b4cf815ea3529e1ce34457c07e2a42"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/operation-knowledge-scope.ts",
+      "sha256": "3b018aa222d876b648a806b598a0c8bdef30f024b74731cc7a7c579db3580911"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/operation-reconciliation.ts",
+      "sha256": "e4b237ebe93b21f2980ee64b6d5e6ce68e3164a0a7cda04c6391d4b9ee0394e5"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/operation-sql-adaptation.ts",
+      "sha256": "ffe0bdd6e3daf752ff39c08d37843423829dd7cc5672cecb53596afe2ca59359"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/operation-training.ts",
+      "sha256": "cc2075219be9c10e72a5a23e06b2d449e82a402042372ac859019ec4d28a913e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/owner-delegation.ts",
+      "sha256": "c7258da8d42f0d0266273e3533889c9da426b8e2bd4fadd8ee03d75290a04da9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/physical-curation.ts",
+      "sha256": "5138053377be992dbb6248c381a305f9282fe749754bfaf78c12459196a1b6ce"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/physical-knowledge-authority.ts",
+      "sha256": "caa412c0b5678457800d9ae1eb2d93e6047c550493ec0a14a533492d6afd771b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/physical-profiles.ts",
+      "sha256": "04aea3866a713c3e0a4bc874e60c17371213341951ab9e0ca46d66792f584fab"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/publication-review.ts",
+      "sha256": "0ae38da45034faa469fbd954543b51bbede920e70ab6220ef74aff4984ca0b63"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/published-federation.ts",
+      "sha256": "23cfe852738f0fde5e033ae3193d4be4f7f41aff2cd734bebffdb284ee5c78f2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/query-training.ts",
+      "sha256": "4651c7049d028086f5a3544619613c1a6286bae8e04218af9f77cf211b1877d3"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/review-publication.ts",
+      "sha256": "5e8cdae05533f19a1b56398cac82b516f15bf7bbc739671cf7b972cb0ab810bc"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/review-worker.ts",
+      "sha256": "c3fa345bedd266c20cb4c2d3b423e5e4c36fd81971f55916ba25fc39e0a90c72"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "3877c47b97b3b47662c8b14bf73a2d2d82f6c2d61c79f0e6dfb6970fa45a5191"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/schema-inspection.ts",
+      "sha256": "8c745f1f424c9fa1e651051db9c490efc0f78109bad9de9475d30d9034a0e3d9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/setup.ts",
+      "sha256": "78b2cbb3857f1b0620d4e62601946ef9a476447d4689751c2111373584d66870"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/shared-knowledge.ts",
+      "sha256": "b43aeafb8c8c68a2135337fff905ea517a27e67ce2aebbc5f3934fda18294233"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/shared-query-adoption.ts",
+      "sha256": "d86a83c89c5b1b0bee9c47a5ce7e4f46a846da59ed9922d341c1e0072c2d850b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/shared-structure-diff.ts",
+      "sha256": "62048798c6fbe245781b6b0535b43f3c7d39a32ca688f02c92d4d0f74f989381"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/shared-structure-schema.ts",
+      "sha256": "72280a2bd934cec59616368343f8f7a054257e5775892a9cb976b112bbd5b200"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/source-query.ts",
+      "sha256": "fdc71c16f84bf8c060224284f98a2b02d642f4a1ef88a694f7278042b8091d33"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/source-registration.ts",
+      "sha256": "46cca6edf17b091e9f60d707bb9c005660b4141a36018a52422655e2af25e215"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/source-restrictions.ts",
+      "sha256": "317219d7f87bd05018d1793bbbfa8b4082d3926b5cf15ee376b3236b34d90bb1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/source-sql.ts",
+      "sha256": "566876ccd98241bce517a7438d84ed83fa91c05511c6dc0da30632a009703406"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/sql-operations.ts",
+      "sha256": "ae73e1dd0625dadb7db43c7d39e9bc90a2ad17fb161a9356cb24c4b5fb1bc0b7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/structural-ddl.ts",
+      "sha256": "bc2670d4f112118aaeaa7e05907d3d66d2abb56253c74e46a3473413cf69a84f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/structure-compatibility.ts",
+      "sha256": "dcfb43165e74ed7d233e3be51faf4bf488a0d2b0b9d23e7c2c00edd3b8c98aef"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/application/persona-v2/training-base.ts",
+      "sha256": "f98c10ab2b8268d0705fd94cb0cd680622f552f427ae0dbaf3db6b80dc432c9a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/composition/compose-persona-v2.ts",
+      "sha256": "830a65c4be7244eb2daa7b3531108a1c16fe5d20f9df75b0af2ab5800146ae2a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/config/env.ts",
+      "sha256": "bd50773f4967ddc8f5c6bcbe08c267eff179092c13aed76b10db68489b9c49b9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/administrative-permissions.ts",
+      "sha256": "1b29e94053f499133bfba31acd300a42d86df9d969a3c83ba7411e37da919ed6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/authorization.ts",
+      "sha256": "a450b0425ff8b36475c86d07a5bbd2448eb27b8b201d297d12f5d4586c7508b5"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/catalog.ts",
+      "sha256": "79310547cf06cf4cb6d86f9648a52b60d1c4cbaa8ff9d483b53e42c83345ea8a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/console.ts",
+      "sha256": "8b6a6868a438cbba365050006c0bbbe41d2b56339505aa77651c8a156137f019"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/federation-budget-schema.ts",
+      "sha256": "4ffd47dd8fbf93f8709a92cd2e170c70d30308f522546d8cda0ab97946cf9d9f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/federation.ts",
+      "sha256": "6f6c01184bc1825d376746ff40f4ca4200a96b7b61ca06fd1e0125b3d06bb935"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/knowledge-context.ts",
+      "sha256": "0bb0530091c495d3e006ecc6eaca2cead088c632ee41cd074169fe2bf0ae36f0"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/knowledge-curation.ts",
+      "sha256": "c539ee21c4aa2437b0d43f6be7f009b9b5f4fd85ddac5331ed88a10d783d3c69"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/knowledge-maintenance.ts",
+      "sha256": "53bd53ed93b0c63f6cd8472e737535f2fc81bacb35b6db67b7b6418b43cd433e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/model.ts",
+      "sha256": "56dfddfbb1715db1deef080b938d23ab6333029815455ea0eb1bd7212b861c45"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/operation-authorization.ts",
+      "sha256": "9012869a0746b109f7a094780c2226b33d11a62783849a4aa13a15978f41dfae"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/operation-training.ts",
+      "sha256": "a9e84e6fbcb894a820667d94ac60bae58a2e28cc40ead1d72121c74543f62294"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/operation.ts",
+      "sha256": "1dba83893227e7962fe47a2c7c9e5cd21a699a4a85a4a8340890c09c9c2f14e1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/permissions-schema.ts",
+      "sha256": "843b9842d940ad9a817ed09c9a60106c3f165c94a172afcbc36cc6c04c6b05fd"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/physical-curation.ts",
+      "sha256": "20713398873aed004a88d51190850e2a389b1045560ffeeb43891d80841583a0"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/physical-profile.ts",
+      "sha256": "a21bcc3113da4fe8a76f6f69542e4837a582a137fd8859da87d86d2fa8f9237f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/review-publication.ts",
+      "sha256": "8ab971eaa59cacc5b28e3565e67165fdd242c2e3f35eaa851d8254dbc3e8ed33"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/shared-knowledge.ts",
+      "sha256": "8ea6ac6be9f110278ce01104d0c62301636c5406aebb598e3fe327d27638d4a6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/source-discovery.ts",
+      "sha256": "08a9eacb761297e26b728ec0b4c8403ebf59320b190a429144817b2a80df271f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/source-restrictions.ts",
+      "sha256": "97b1da3c0654c01d3c10f202363359d063afa23013452a20c226b92acc0afcd8"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/source-schema.ts",
+      "sha256": "da1b1ce5118f0be7b9f5ce7d82269028e134d3f538ee49591f63fbc4306526fa"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/persona-v2/structure-content-schema.ts",
+      "sha256": "83358db8cf3a974e2cf6e1c24ee2d56e1f95ab49e7c27c28bdf125f7fb549cdc"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/knowledge-library.port.ts",
+      "sha256": "2bfb92dfe76358cd662d315f7f59d001a5cddc47d54abbbfa2731cacbd024234"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/persona-v2.port.ts",
+      "sha256": "a7d953d6b44210c9f078f3a10aae1ae3abccb0ec997ea46b66fbb73a9e5d8f91"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/plug-server-gateway.port.ts",
+      "sha256": "6afd4f5e5e8922bc6231ef47729385d0ef7fa67f25c4700205da8a0318f16a47"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/publication-knowledge.port.ts",
+      "sha256": "8e8d0baa068c41b120e11b2765d9ea1bc12b1d04e3e2ea5f338ce2bbeb8b81f9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/review-worker.port.ts",
+      "sha256": "1d59746cb86a720d34e25b4d42dc5edfaa7fc2089fb54197361c96766499236d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/domain/ports/source-query.port.ts",
+      "sha256": "85580341cef75835315cd217a3b0c4d392630112e604dc445aee1ae042514847"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-admin.ts",
+      "sha256": "262e024edae6557d62a5620db2c2f5720c87e6b6f0d39644973528de59866891"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-knowledge-maintenance.ts",
+      "sha256": "cd75bb8b3d4846c2e433278a5a9438e6f1c652c354f2b9adec5f3af7371b5c95"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-knowledge.ts",
+      "sha256": "f51b2ede8ffc0cf7ca0554c29f6c05b12dfc6ac50514c05c010f1c0d91e4aa5d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/http/persona-v2-physical-curation.ts",
+      "sha256": "fe06ee35005ff9933d4fb4f74483018fc202445b20a41c581f36fda54031b622"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/mcp/persona-v2-administration-tools.ts",
+      "sha256": "a4eb1b224d5d8e8bfb3a437d783832239c148ed8cfee1685871e66f84d941067"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/mcp/persona-v2-http.ts",
+      "sha256": "d38b3c4cafa34c8c3ea7065e9e41817f5c27926c87f6d065d191ac1f3be52af4"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/admin-sessions.ts",
+      "sha256": "31af096b80900a20acd5c4b28b1ebd65807c37d04e7d7fd5fd976714036dfdc7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/catalog.ts",
+      "sha256": "589540f84e698b46ed040c4fd314bc27299b33021c5f2e6f5c34c166d4f20e69"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/history.ts",
+      "sha256": "e3bc8ed0b539d755400529106e2459e0934617ec047619fbb55b1e06877a7037"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/knowledge-curation.ts",
+      "sha256": "25833eb1df9c8eb12f2d70e7523c0365f271f3e78709a76e2e7ba53145a36454"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/knowledge-library.ts",
+      "sha256": "110ace3a0aeaf004e775430ca7459c2b8f01a87aaeca9e422fe74c8214b460ba"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/knowledge-maintenance.ts",
+      "sha256": "404616df9a96afdd9a97d80765f6497b3c8904dc07fb449c920e9f6316c76f6b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/migrate.ts",
+      "sha256": "a6623e6a4a7e9ce6e9108cb4de73059666db0ebd2802f4ac14fd418c0b380503"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/oauth.ts",
+      "sha256": "2c103d63c2532af1bbc3d7fa73b0f8f37465c1641c7203bda0063bfa24976e02"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/operation-case-postgres.ts",
+      "sha256": "a4f0068f49c0e54804573c960c50f465bb8dff93a341756e44f0cb90c92049f6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/permissions-schema.ts",
+      "sha256": "b16e33cba3ba68150df46ff9e0b97fc2d0187a342d5782f13d14057b644295ae"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/physical-curation.ts",
+      "sha256": "07d726806829ad3ce89e2830afd7d2aacb97a2424adb8d814f260fa652ec6ae6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/physical-profiles.ts",
+      "sha256": "ef26c25abec026ad09f56b53a35521d7112ad5ef74d97b634fe11f1336ecae22"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/publication-knowledge.ts",
+      "sha256": "8c83d323b95a69284ef18ebfa734211a3b913d393929d584f542de7f79b412ac"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/repository.ts",
+      "sha256": "f32f202ea9361a16228c98de7e293b031fdfa1aa7c957f91421983252ebc4d08"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/review-worker.ts",
+      "sha256": "0a68fc67075fe02a27b0df6b173987fcbfe4d65168f1b7c111a91e81662fb0b9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/run-federation-cases.ts",
+      "sha256": "9fb829bf0cd891a16bf2bc5a61d4f6c6304f81656263766541042fcb4dc0305a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/run-operation-cases.ts",
+      "sha256": "7757d8a8419b57a1c7ceb955f3cf4452147bad9648f39be9a7a8f51f90188e37"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/security.ts",
+      "sha256": "5c4154949c34148c43e8d564370dfc219ca1c0b132c94b12cfb22bdc04d374f7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/shared-knowledge.ts",
+      "sha256": "1a999df6f452cc360259649e9b9e964be3f5ab4d164df5ae947db6efcd733892"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/source-credentials.ts",
+      "sha256": "1c1a6629bdb7a8e6c73b63c3730c5aeab01a58a27a212e1eeedae81b731ef9d1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/sql-operations.ts",
+      "sha256": "66795fe18c3eac9cae3d3066a427da988e579dd7866d86cdaf244b28724c994a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/persistence/persona-v2/suspend-source-publications.ts",
+      "sha256": "a09d386a231dc4487a5266715cafc8a5026051c0acd5d6b3de02e95ec683ee92"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/plug-server/persona-source-query.ts",
+      "sha256": "43975c21d095197a8a57d83b28103eb5f654709e9ddf1c8567c281680c9d0a2d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/plug-server/plug-server-rest.adapter.ts",
+      "sha256": "2abea1d4ef02858230f43a88d843c78d8e473a4aa947d7e10bcce804ddf6723f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/infrastructure/plugins/tool-catalog.ts",
+      "sha256": "4b0f5a44c93dc46634e563c1a853dba3ba0e7c28cdd5e42d98ea2c3915c4fad1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "src/worker-persona-v2.ts",
+      "sha256": "62ade6e110b3b3646ec12952e134f4b46a14ce9ecbf063f426c0e3dd128cd4f7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/helpers/persona-chain-capabilities.ts",
+      "sha256": "5a7273d53b740eaaef2b030bc6c43e4e99980e9c25be3b8e647b6df9b428c2c1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/helpers/persona-v2-browser-server.ts",
+      "sha256": "f2282962f915bd0730e3b009e69c25b1cd6f8e3d3d2a0f43fa6c1a452f68f02e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/helpers/review-deadline.ts",
+      "sha256": "5154634ccd755da29b89e7d2a56ec8feb5d49bccb5602358e843d314a4f9c78b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/homologation/persona-chain.test.ts",
+      "sha256": "a4e4d0dbc75d3229f46036346a8d0a1c25f2600d542d26fe48ff0ae724b3805e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "e25cabfff454453ad34a2f4a767387372813f59e0c10adc4423e4504c72760e8"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/knowledge-context.postgres.test.ts",
+      "sha256": "640ebc2b5cdda2547ae4865ab8c6e57b0e2d14143eeadff9bc3a0a00e6f79072"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/maintenance.postgres.test.ts",
+      "sha256": "2b70f005f667ea00711c7f290cc44ec4d92e925553333e59a0e93f703caf2676"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/oauth.postgres.test.ts",
+      "sha256": "51569eb012694482dbedf861bf2bd06651262d5c7a66740104fdefe2c3895eae"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/operation-publication.postgres.test.ts",
+      "sha256": "7e8ff124c66fde180d9aede12f01a2e965b16d30adeb448c949d3d55e17e2a1d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/physical-curation.postgres.test.ts",
+      "sha256": "6c5339f4ef4da1397deb845b2e68030aee6fe021ee1dd63ffd8f997e0e3cfeff"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/postgres.test.ts",
+      "sha256": "19f3c119a610d5a516c732ea8f5b24c72f0950f53ac4ae2637ebfefedd690c04"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/setup-delegation.postgres.test.ts",
+      "sha256": "0dbd97c6138ff8b2057d56d96510f688f3c3b6eed08d21d5a00d51478a9e66fe"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/shared-knowledge.postgres.test.ts",
+      "sha256": "cd81d2d904822a65765fbf149a9cb70d1f985c0ebf3c84da2d7319bcde73b9e6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/source-identity.postgres.test.ts",
+      "sha256": "c547100418345529cc4be85c836e4b1337c2bf8d69af31c4d81f9ce88a19b9d0"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/source-lifecycle-migrations.postgres.test.ts",
+      "sha256": "a38a1f7cb847d0fa3dad401ea318e86115f7b762e33e3ebf9e3af7b671801482"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/source-query.postgres.test.ts",
+      "sha256": "e2a4948f8326e5cc46db8afb3606c2b88fd18bdf8d770e98c97893b514f88a83"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/persona-v2/sql-operations.postgres.test.ts",
+      "sha256": "08eaea9460349e092495a594c6afa380379865eb8ad44ae8514ec5ca20c48922"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/hub-contract-pin.test.ts",
+      "sha256": "267df05f67f9392c8c9fb12b1cf0ef60fc36c532dd77db890c72680572990e92"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/fixture-capabilities.test.ts",
+      "sha256": "4b0aa038a5d2540daf02fc3558071d8e4a26cd8ef2a859eef669347affd524c9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/knowledge-context.test.ts",
+      "sha256": "539f4f915d8b794539c71537653e858102f86aae05535ac300909c6867817f89"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/knowledge-curation.test.ts",
+      "sha256": "9e10d3094a186961fbdf133f3f1fbb65f6442d6523cd2607bf47fc93a9235ae6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/knowledge-library.test.ts",
+      "sha256": "29b50613b2f162ce922d9af040190ae0aa55eb8e9cac1ed297c2ef550c0964bc"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/physical-profiles.test.ts",
+      "sha256": "e60e098dc723a87c8e82f429ae350903558fdd9a48a43cf5e3e413225d85ca7f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/source-query.test.ts",
+      "sha256": "1693ddb050fddb9d5ac59807a5f5599b638ab0dcfad0818866fed6c56bbbdeea"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "tests/unit/persona-v2/structure-inspection.test.ts",
+      "sha256": "c349cbfcfb671c41835828b862fb8140d478bbb84283f0afc2db52ab2c04300d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/administrative-options.ts",
+      "sha256": "99fc0f49bed8382815a22f6c2e01cc4cac8889798853856adf764892e0ccbc4e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/BrandLogo.vue",
+      "sha256": "48317142dd50e55c76dc248fbd447099e541a45af5c8f9c0694daaf9a8dc9611"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/ConnectionPanel.vue",
+      "sha256": "8ca55ca2118017a82e17da8695abeac116f454ed3bd129fc5c5710d8500b18a8"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/DiscardDialog.vue",
+      "sha256": "913f87072885a680eaa8a8c9235481df24fb7781ea65c0bfd5f1acce1ec763b9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/FederationPanel.vue",
+      "sha256": "a2ce1186b95adde39be77d089ffd87a166a0a07df45bc0de4fd6a5aab78f308d"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/history-labels.ts",
+      "sha256": "e6621724119e39d9278bcd44bbb8c71a5b1c6707a157f03943476a294ea68968"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/HistoryPanel.vue",
+      "sha256": "6dc33d9941afea97d93db1978348d651363cf17d58acd61dc6bd7b25ee0a601b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/knowledge-model.test.ts",
+      "sha256": "e019ce1a2db615a09aa3a27673077167fad222200df1db50475b74332c9e327f"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/knowledge-model.ts",
+      "sha256": "df9ca4cad375ed3785321f20f62b68c5ad71a90272c04bee381c3fb00b0323ad"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/KnowledgeContentSummary.vue",
+      "sha256": "16620c093c11de51be19e4a2d194b2bc98f3d9fb5b4705e1028c7cd8c5c343c7"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/KnowledgeCurationPanel.vue",
+      "sha256": "daba97c172a8a7b5b6156bfede2e42617c2bc9252219b7ad3f41b0f71bb0ab4a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/KnowledgeExplorer.vue",
+      "sha256": "bfd68b387301cfee2cdfcb3ad15aa62df0caf5dbded307192ab17b3681315873"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/KnowledgeFeedbackForm.vue",
+      "sha256": "c48b6ed5079382220e687019d1e2a2bf1592c71fd8511b386a13147ee2c16150"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/KnowledgeFeedbackPanel.vue",
+      "sha256": "5c83467e8db150569512fb29fffd5b4b5912c86586c45b96644bc0d96db970aa"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/KnowledgeLibraryPanel.vue",
+      "sha256": "048fa8651bb6f025398d254cb1ee9f071cc8e6f0c2d8a64e8e05a36aaa9a8449"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/KnowledgeReviewCalendar.vue",
+      "sha256": "4d475a94e9d02d4730247df0e3b52f45cb84ad733eb822319a0705b20acc1c12"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/main.ts",
+      "sha256": "b16a6a27c1c62e5de019de6613bc336f2d3225881dcac27678c43fa1a6e66beb"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/model.test.ts",
+      "sha256": "ccb31b8268b86642b457446fa7f65a994b75ab06d9a67f0e84c718f1c5b92fa9"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/model.ts",
+      "sha256": "d276cef9586a4ebccb810d29208e826a85b1560f87144e54c28e479e8c0d5cae"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/navigation.ts",
+      "sha256": "36a059d402f55f7291fadacf109009862a6180f6ff1ded8cc1c5cb44fed11c3a"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/OAuthConnectionInfo.vue",
+      "sha256": "2244db4fba8c14785c6d1dfdeb3050ae4cc98f6106ae4a7896c0991f98c46e56"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/OperationsPanel.vue",
+      "sha256": "cf6b4cb346b9b3d28c7dd90a50f1b8172a157852c360f2f2941582a86a7ea258"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/OwnerDelegationPanel.vue",
+      "sha256": "a94edaa016a54ed33cdfa01eec0423acdbca454ff6f67301502f966acf20bc57"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "c6843a97353019408bc18599e0062f0c8c09f05d26aee67756be4c1858e08dd1"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PersonaSettings.vue",
+      "sha256": "6dc1bb2b7a3ce207ddf2d9a736a7590600620e1c466b1f403ecb59f09205415e"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PersonaState.vue",
+      "sha256": "c6c436da869628bf47a81e8e647b21448b44637557a3eee5c63b88b5fb09cb35"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PhysicalProfileEditor.vue",
+      "sha256": "bac04280eafd7dbfba6dc907ea4ef80ad64930154fb1aed25066cb75308956fe"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/ProgressPanel.vue",
+      "sha256": "67b3c89aee35f6221869b8511772b85929ccf075bde1fcac37537365712cb60b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/publication-deadline.ts",
+      "sha256": "3e82661361f8df1cba3116481ea42e3a18a95a2262a1f05341633a4d84c8a5c2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PublicationReview.vue",
+      "sha256": "14bed25137de804679e9c83c3d79cb3ed5f295ec1c8f2930fa9899d8cec19b00"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/PublishedKnowledgePicker.vue",
+      "sha256": "cf3902866fbb316338ddb834d1bd4a140aeae8006f30a9a2705e434b7ef22c71"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/query-parameters.test.ts",
+      "sha256": "2edd3257c1e75bccbce6b7f13f9b972a0b994fe1b69316ca2b1dd8f91d7df700"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/query-parameters.ts",
+      "sha256": "df4d1142f5657b95efd6edd4279477ac71509f964ad7208992cb26c4a65d6d77"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/RelationshipDiagram.vue",
+      "sha256": "e9c978262f86115054af350843d227c8008a55fdd6766aae30121f4e9e61cce2"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/SharedKnowledgePanel.vue",
+      "sha256": "b28bf45b4255bfdec4e20405c141fbc4d54ec705379872e0390cbbae9b70f1eb"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/SourceInspectionPanel.vue",
+      "sha256": "4fd59a715af7abd03f31aeeb3f0485195da8f2fb8999dcc36bb578e74cf847fb"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/SourceKnowledgeWorkspace.vue",
+      "sha256": "399ce449515de43111aeec86c5335f8a7c29b5be1b65f0037550bbbca9d5b937"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/SourceLifecycle.vue",
+      "sha256": "778a7ae022ebbbba64258b2c7e15ad4699b0414e36e18afaf95336227ffbabbe"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/SourceSettings.vue",
+      "sha256": "33fa2625986e5c7f88efadbf241649cbd6ef102a536bb0b1150fc11bb47bbfce"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/StructureEditor.vue",
+      "sha256": "eb3c1a17fe40ffd6b8de00a1c96072dd26a8aeae0ff863bef5a0340e6498c085"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/style.css",
+      "sha256": "b9fbd47f3538b797d8e8a4ee0161978df791e353e8127a0641885b06130f415b"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/TokenManager.vue",
+      "sha256": "b97e9ca1a00350f40f5edb4a12b9dc354042aa4747e7e3c5a08fde31f43c94c6"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/training-visual.test.ts",
+      "sha256": "71dbbc9f1a55f44e078facf6f4a21cd8dd874ac0076d347476c5e375ee0e4e33"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/training-visual.ts",
+      "sha256": "aa64b7635b79ab4d00396c6e7c034aab876ee8726e210c7606c259f8d8b81bd5"
+    },
+    {
+      "project": "plug_mcp",
+      "path": "web/src/persona-v2/useErrorSummary.ts",
+      "sha256": "4d3e1a058eb8cc788705c4ccfb54629097ae0997f2baab5e32e5a81c373baf23"
+    },
+    {
+      "project": "plug_server",
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "212dc6bb71232a8bdb8ffe57e5ac78cd21c152b5383ef8689d3c8df55ed0cbcd"
+    },
+    {
+      "project": "plug_server",
+      "path": "contracts/plug-mcp-rest-v1.compatibility.json",
+      "sha256": "b2629d275d901881d6f8e375fa06c530bd112e2efabc7f62232ace841b6a797a"
+    },
+    {
+      "project": "plug_server",
+      "path": "contracts/plug-mcp-rest-v1.json",
+      "sha256": "45589c3da2f94639c097893abf73e91360f0cbe2a3c48399ee36444be39f1092"
+    },
+    {
+      "project": "plug_server",
+      "path": "scripts/generate-plug-mcp-contract.ts",
+      "sha256": "fd6f78f08b87d1ab1881e7f9c6d3e88acc6819c6ce2477c6ba63a466022af829"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/application/agent_commands/sql_operation_transport_guard.ts",
+      "sha256": "29f0c0145a0de33c003180dbb6f95366156bcfc4146bb6a2fe02584639904cc0"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/presentation/docs/swagger.ts",
+      "sha256": "7fa328a57174cc4c218892f095b8bc2c25b2592d7bca09de43928eaf1d06183b"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/presentation/docs/swagger/bridge_schemas.ts",
+      "sha256": "29fcf489f446530453bd1102098a4c6c355150e0bade4e4d33ae8faa04fb54b2"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/presentation/docs/swagger/source_discovery_schemas.ts",
+      "sha256": "7e2f687cfa23ef5695694ba1f8970c390fa0a42a70af656092c719dfbccfd622"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/shared/constants/agent_bridge_parity.ts",
+      "sha256": "4b18a5b8b79b94a3aeee774c6f33965ae597f03c388ab738253dcbd73ee7c7d2"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/shared/constants/agent_transport_contract.ts",
+      "sha256": "37921a0f127f4c8bce3d21bbd3997e3beccb9fc799611893661a29863ee56a09"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/shared/validators/agent_command.ts",
+      "sha256": "cf7e8899da8a72c9a9bd85765dd2fffad09c2d64d85d16f7f142a7677ec04542"
+    },
+    {
+      "project": "plug_server",
+      "path": "src/shared/validators/source_schema.ts",
+      "sha256": "c4ea13b0b27412ac40eec6de22d744f75abdaf4d43c8fe1f6b37c360c8746914"
+    },
+    {
+      "project": "plug_server",
+      "path": "tests/contract/agent_bridge_parity.contract.test.ts",
+      "sha256": "0c8a97199a218f51c6ae1b6e245f83f98be823a52fbf97d13f1cf3bfc0a7dd7f"
+    },
+    {
+      "project": "plug_server",
+      "path": "tests/unit/application/agent_commands/source_schema.test.ts",
+      "sha256": "1261e740ad4212766fe11067c8aef34c9220d185386478926eebad9086f9fa35"
+    }
+  ]
+}

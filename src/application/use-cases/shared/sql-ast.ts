@@ -20,7 +20,7 @@ const { Parser } = require("node-sql-parser") as {
 
 const parser = new Parser();
 
-export type ParserDatabase = "transactsql" | "postgresql";
+export type ParserDatabase = "transactsql" | "postgresql" | "firebird";
 
 export const parserDatabaseForDialeto = (dialeto: Dialeto): ParserDatabase => {
   if (dialeto === "postgres") {
@@ -74,6 +74,10 @@ export interface SqlAstColumnRef {
 }
 
 export interface SqlAstSelect {
+  readonly unresolvedFieldUses?: boolean;
+  readonly usageRefs?: Readonly<
+    Record<"projecao" | "filtro" | "join" | "agrupamento" | "ordenacao", readonly SqlAstColumnRef[]>
+  >;
   readonly whereAst: unknown;
   readonly sql: string;
   readonly database: ParserDatabase;
@@ -264,6 +268,7 @@ const collectFiltroRefs = (ast: Record<string, unknown>): SqlAstColumnRef[] => [
   ...collectRefsFromNode(ast.having),
   ...collectRefsFromNode(ast.groupby),
   ...collectRefsFromNode(ast.orderby),
+  ...collectRefsFromNode(ast.distinct),
   ...collectFromOnNodes(ast.from).flatMap(collectRefsFromNode),
 ];
 
@@ -334,6 +339,7 @@ const joinTipo = (join: unknown): string => {
 };
 
 interface FromItem {
+  db?: unknown;
   table?: unknown;
   as?: unknown;
   join?: unknown;
@@ -370,10 +376,12 @@ const parseFromItem = (
         : null,
     };
   }
-  const nome = readString(from.table);
-  if (!nome) {
+  const tableName = readString(from.table);
+  if (!tableName) {
     return { tabela: null, join: null };
   }
+  const schema = readString(from.db);
+  const nome = schema ? `${schema}.${tableName}` : tableName;
   const alias = readString(from.as);
   const tabela: SqlAstTabela = {
     nome,
@@ -518,7 +526,74 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     subqueries.some((sub) => sub.temAgregacao) || setBranches.some((sub) => sub.temAgregacao);
   const groupCols = groupByColumns(ast);
   const filtroRefs = collectFiltroRefs(ast);
+  const clauseRefs = (nodes: unknown): SqlAstColumnRef[] => {
+    const refs = collectRefsFromNode(nodes);
+    for (const item of asArray(nodes)) {
+      const expr = isRecord(item) && isRecord(item.expr) ? item.expr : item;
+      if (isRecord(expr) && expr.type === "number") {
+        const index = Number(expr.value) - 1;
+        if (Number.isInteger(index) && colunas[index]) refs.push(...colunas[index].refs);
+      }
+    }
+    return refs;
+  };
+  const windowGrouping: SqlAstColumnRef[] = [],
+    windowOrdering: SqlAstColumnRef[] = [],
+    conditions: SqlAstColumnRef[] = [];
+  const nestedUseQueries: unknown[] = [];
+  for (const node of [
+    ast.columns,
+    ast.where,
+    ast.having,
+    ast.groupby,
+    ast.orderby,
+    ...collectFromOnNodes(ast.from),
+  ])
+    collectSelectsIn(node, nestedUseQueries);
+  let unresolvedFieldUses = ast.window != null;
+  const distinct =
+    (typeof ast.distinct === "string" && ast.distinct.toUpperCase() === "DISTINCT") ||
+    (isRecord(ast.distinct) && ast.distinct.type != null && ast.distinct.type !== "null");
+  walkNodesSkipNestedSelect(ast.columns, (node) => {
+    if (node.type === "case") {
+      conditions.push(...collectRefsFromNode(node));
+      collectSelectsIn(node, nestedUseQueries);
+    }
+    if (node.type === "aggr_func") windowGrouping.push(...collectRefsFromNode(node.args));
+    if (isRecord(node.over)) {
+      if (!isRecord(node.over.as_window_specification)) unresolvedFieldUses = true;
+      // Parsers wrap window specifications in `as_window_specification`.
+      const wrapper = isRecord(node.over.as_window_specification)
+        ? node.over.as_window_specification
+        : node.over;
+      const spec = isRecord(wrapper.window_specification) ? wrapper.window_specification : wrapper;
+      windowGrouping.push(...collectRefsFromNode(spec.partitionby));
+      windowOrdering.push(...collectRefsFromNode(spec.orderby));
+    }
+  });
+  for (const clause of [ast.having, ast.orderby]) {
+    walkNodesSkipNestedSelect(clause, (node) => {
+      if (node.type === "aggr_func") windowGrouping.push(...collectRefsFromNode(node.args));
+    });
+  }
   return {
+    unresolvedFieldUses: unresolvedFieldUses || nestedUseQueries.length > 0,
+    usageRefs: {
+      projecao: collectRefsFromNode(ast.columns),
+      filtro: [
+        ...collectRefsFromNode(ast.where),
+        ...collectRefsFromNode(ast.having),
+        ...conditions,
+      ],
+      join: collectFromOnNodes(ast.from).flatMap(collectRefsFromNode),
+      agrupamento: [
+        ...clauseRefs(groupCols),
+        ...windowGrouping,
+        ...(distinct ? collectRefsFromNode(ast.columns) : []),
+        ...collectRefsFromNode(ast.distinct),
+      ],
+      ordenacao: [...clauseRefs(ast.orderby), ...windowOrdering],
+    },
     whereAst: ast.where,
     sql,
     database,
@@ -531,7 +606,11 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     temAgregacao: temAgregacao || nestedAggr,
     temGroupBy: groupCols.length > 0,
     temOrderBy: ast.orderby != null && asArray(ast.orderby).length > 0,
-    temLimite: ast.limit != null || ast.top != null,
+    // PostgreSQL parser emits limit:{value:[]} even when SQL has no LIMIT/OFFSET.
+    temLimite:
+      (ast.limit != null &&
+        (!isRecord(ast.limit) || !Array.isArray(ast.limit.value) || ast.limit.value.length > 0)) ||
+      ast.top != null,
     temStar: temStar || nestedStar,
     temLiteralTextoFiltro:
       hasStringLiteral(ast.where) ||
@@ -552,7 +631,11 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
 const tryAstify = (sql: string, database: ParserDatabase): unknown =>
   parser.astify(sql, { database });
 
-export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
+export const parseSelect = (
+  sql: string,
+  dialeto: Dialeto,
+  options: { allowSchemaQualifiedTables?: boolean } = {},
+): SqlAstSelect => {
   if (sql.length > 100_000) {
     throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_ORCAMENTO,
@@ -593,7 +676,7 @@ export const parseSelect = (sql: string, dialeto: Dialeto): SqlAstSelect => {
       hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
     });
   }
-  assertReadOnlyAst(first, dialeto);
+  assertReadOnlyAst(first, dialeto, options.allowSchemaQualifiedTables === true);
   return fromSelectAst(first, sql, database);
 };
 
@@ -658,7 +741,11 @@ const functionName = (value: unknown): string => {
     .toUpperCase();
 };
 
-const assertReadOnlyAst = (root: unknown, dialeto: Dialeto): void => {
+const assertReadOnlyAst = (
+  root: unknown,
+  dialeto: Dialeto,
+  allowSchemaQualifiedTables = false,
+): void => {
   const pending: { value: unknown; depth: number }[] = [{ value: root, depth: 0 }];
   let count = 0;
   while (pending.length > 0) {
@@ -675,12 +762,32 @@ const assertReadOnlyAst = (root: unknown, dialeto: Dialeto): void => {
     }
     const node = entry.value;
     if (isRecord(node)) {
+      if (
+        allowSchemaQualifiedTables &&
+        node.type === "column_ref" &&
+        (node.db != null || node.schema != null || node.server != null)
+      ) {
+        throw DomainError.pacote({
+          code: ERROR_CODES.SQL_EFEITO_COLATERAL,
+          message: "Qualifique colunas somente pelo alias local publicado.",
+          hint: "Use alias.coluna e schema.tabela AS alias no FROM; referências entre bancos não são permitidas.",
+        });
+      }
       if (node.type === "select") {
         for (const from of asArray(node.from)) {
           const item = isRecord(from) ? from : null;
           if (
             !item ||
-            item.db != null ||
+            item.server != null ||
+            item.schema != null ||
+            (item.db != null &&
+              (!allowSchemaQualifiedTables ||
+                typeof item.db !== "string" ||
+                !/^[a-z_][a-z0-9_$]*$/.test(item.db) ||
+                typeof item.table !== "string" ||
+                !/^[a-z_][a-z0-9_$]*$/.test(item.table) ||
+                typeof item.as !== "string" ||
+                !/^[a-z_][a-z0-9_$]*$/i.test(item.as))) ||
             (item.expr != null &&
               !(isRecord(item.expr) && isRecord(item.expr.ast) && item.expr.ast.type === "select"))
           ) {

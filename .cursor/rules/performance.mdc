@@ -1,22 +1,54 @@
 ---
-description: "Performance: teto de linhas, cache de policy/resultado e sessões MCP"
+description: "Limites, prazos e isolamento das otimizações"
 globs: ["src/**/*.ts"]
 alwaysApply: false
 ---
 
 # Performance
 
-- `consultar_dados`: `QUERY_DEFAULT_MAX_ROWS` / `QUERY_ABSOLUTE_MAX_ROWS`. Resposta inteira em memória. `truncated` = teto `max_rows` (caminho sem página). `paginacao.hasNextPage` = próxima página. Resource `guia://paginacao` explica a distinção.
-- Cache de resultado agregado: `QUERY_CACHE_TTL_MS` (Redis se `REDIS_URL`). Chave `mcp:query:acesso:{acessoId}:{hash}` isola `usuarioId`, acesso, token, fingerprint da policy e versões da skill. Não reaproveite cache entre tokens/policies. Deriva invalida só o prefixo daquele acesso. Resultado com anexo (stub `kind: anexo`) **não** é gravado no cache — o blob fica só no handle em memória.
-- `exportar_anexo`: decode ≤4 MiB por célula (cap da string encoded antes de `Buffer.from`), soma ≤8 MiB, até 8 células, conversão ≤12 s, resize lado ≤1280. 1 anexo por call. Handle HMAC+TTL (~15 min), máx. **64 por `usuarioId`** (FIFO; inspeção não consome o cap), **não** Redis.
-- `treinar_com_sql` valida envelope vazio, sem carregar valores. `enriquecer=completo`: teto de 16 queries de perfil; `sql.execute` em paralelo com `PERFIL_SQL_CONCURRENCY` (4), sem fundir `getPolicy` + SQL e sem retry; falha isolada vira aviso e não desfaz o merge. `GROUP BY` acima de 16 expressões → `VALIDATION_ERROR`.
-- Policy sempre vigente: não usar cache auxiliar para autorizar entrega. Revalidar os três portões em cache hit, exportação e antes da entrega.
-- `UsuarioTokenManager`: refresh 60s antes do `exp`; `inflight` por usuário.
-- Cliente REST do hub: dois `http(s).Agent` — auth (login/refresh/`getPolicy`, até 4) e `sql.execute` (até 16). Probe TCP keepalive 30s (`keepAliveMsecs`, `node:https`); idle até o peer fechar (Nginx `keepalive_timeout`). `PLUG_SERVER_HTTP_TIMEOUT_MS` é piso de login/policy (teto 60s). `sql.execute` aborta o HTTP no wait do bridge (`timeout_ms` + 5s, teto 360s) + download — não em 35s fixos. Sem retry de SQL. Borda Nginx do hub (`proxy_read_timeout`, ex. 180s) ainda corta skills ~≥175s.
-- Sessões MCP in-process; sticky `mcp-session-id`. Redis não replica sessão MCP.
-- `JSON.stringify` de tool sem pretty-print.
-- Sweep de sessões idle: `MCP_SESSION_IDLE_TIMEOUT_MS`.
-- Preflight é compartilhado por validação e execução e deve terminar antes do hub; seu `planoConsulta` permite observar fanout, modo, tabelas, paginação e limite sem carregar linhas. `CONSULTA_ORCAMENTO` retorna recomendações estruturadas (`AGREGAR`, `RECORTAR_PERIODO`, `REDUZIR_JOINS`, `PAGINAR`) sem reescrever a consulta.
-- `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (0..100, default 10) controla pedidos de `serverTimings`; registre somente amostra, fases e durações, nunca SQL ou payload.
-- Singleflight: somente consultas agregadas e cacheáveis podem coalescer. A chave é a mesma chave já isolada do cache; Redis usa lease com espera limitada e falha aberta para coalescência local. Não cacheie falhas nem anexos e não transforme a espera em retry cego de SQL.
-- Operação proativa roda em processo separado (`worker:operacoes`), com lease/outbox para impedir duplicação entre réplicas. SLO usa janela e mínimo de observações configuráveis; webhook tem timeout curto, backoff+jitter e dead-letter após 10 tentativas.
+Otimização nunca substitui autorização, completude ou isolamento.
+
+## Persona-v2
+
+- SELECT por fonte: limites/paginação no banco; prazo inclui autorização e entrega.
+  Contrato e tetos em `docs/persona-v2/source-queries.md`.
+- Cruzamentos: fontes, etapas, memória, linhas e tempo só podem ser reduzidos por
+  skill/token/concessão/requisição. Entrada limitada/incompleta é recusada.
+  Paginar após combinar; `docs/persona-v2/federation.md`.
+- Cache/singleflight v2 são opt-in, com namespace próprio, cifras e chaves opacas.
+  Revalidar local/hub por consumidor em hit/seguidor; revisão física invalida
+  vínculos de todas as personas, sem compartilhar resultados. Pending/unknown
+  desativam reuso. Estrutura compartilhada, validação, cruzamento e SQL volátil
+  seguem execução completa. Falha/lease vencido não autorizam retry/takeover.
+  Contrato: `docs/persona-v2/query-cache.md`. Não cachear anexos nem usar cache legado.
+  JWT só coalesce na mesma credencial/versão.
+  Cache reconfere entrada após claim; idade autenticada respeita o TTL de quem lê
+  e o vencimento original, inclusive entre instâncias com configurações distintas.
+- Anexo JSON vem de SELECT fresco, com teto de bytes/prazo, quotas cifradas por
+  consumidor e banco de controle, incluindo payloads expirados até limpeza pelo
+  worker. Cifra compartilhada entre instâncias da mesma origem/keyring permite
+  recuperação sem renovar prazo. Quotas são transacionais; falha não usa fallback
+  local. Download não reexecuta SQL de negócio, mas revalida fonte/policy/estrutura.
+  Sem retry por handle ausente. Contrato: `docs/persona-v2/attachments.md`.
+- Binário usa o mesmo armazenamento isolado, com limite antes/depois do base64
+  e do envelope MCP. Teto de duas linhas e truncated:false explícito no caminho
+  verificado comprovam completude, sem paginação gerenciada. DISTINCT, agrupamento ou limite SQL não
+  escondem duplicatas. Nenhuma conversão/descompressão ou cache de bytes.
+- Operação conta prova da base, helpers e contagens no teto nativo. Timeout não
+  autoriza execução concorrente, replay ou liberação prematura da conexão.
+
+## Entrada legada
+
+- Cache agregado/singleflight usa a mesma chave isolada por usuário/acesso/token/
+  policy/publicações. Revalidar portões na entrega; não cachear erro/anexo.
+- Redis coordena lease com proprietário/renovação e espera limitada. Indisponibilidade
+  reduz otimização, não autorização; não criar retry de SQL.
+- Anexos ficam só em memória com HMAC/TTL e quotas de bytes/quantidade/conversão.
+  Sessão MCP também é local; Redis não a replica.
+- Perfilamento tem orçamento e concorrência limitada; falha isolada vira aviso.
+  Preflight compartilhado termina antes do hub.
+- Timings opt-in amostrados guardam só metadados. Worker separado usa outbox/lease.
+
+Valores e procedimentos: `docs/operations/redis.md`,
+`docs/plug-server/rest-integration.md`, `docs/operations/worker.md` e
+`docs/mcp/tools.md`. Não replicar números de configuração nesta rule.

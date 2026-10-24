@@ -5,7 +5,12 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     // tests/live/ chama o plug-server real e roda só via `npm run test:live` (vitest.live.config.ts).
-    exclude: ["tests/live/**", "**/node_modules/**"],
+    exclude: [
+      "tests/live/**",
+      "tests/persona-v2/**",
+      "tests/homologation/**",
+      "**/node_modules/**",
+    ],
     fileParallelism: false,
     testTimeout: 20_000,
   },

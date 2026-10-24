@@ -1,0 +1,188 @@
+{
+  "scope": "persona-v2-operation-knowledge-console",
+  "generatedAt": "2026-10-17T13:29:51.6412767Z",
+  "partial": true,
+  "productionReady": false,
+  "cleanupConfirmed": true,
+  "revisions": {
+    "plug_server": "76950497dc386130e13b7d6afc0678e50208e985",
+    "plug_agente": "7d00ae8a8f822605d76e775fb5659f27e29df539",
+    "plug_mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f"
+  },
+  "environment": {
+    "node": "24.21.0",
+    "postgres": "17.11",
+    "typescript": "7.0.2",
+    "hub": "synthetic",
+    "fixture": "se7e-operation-knowledge-fce045b67c72",
+    "chromium": "153.0.8010.12",
+    "chatgpt": "manual",
+    "https": "manual"
+  },
+  "runs": [
+    {
+      "suite": "browser-final-complete",
+      "skipped": 0,
+      "passed": 36,
+      "duration": "3.4m"
+    },
+    {
+      "suite": "browser-new-scenarios",
+      "skipped": 0,
+      "durationSeconds": 9.8,
+      "passed": 2
+    },
+    {
+      "suite": "postgres-knowledge-and-operation-publication",
+      "skipped": 0,
+      "durationSeconds": 15.72,
+      "passed": 28
+    },
+    {
+      "suite": "frontend-final",
+      "skipped": 0,
+      "durationSeconds": 0.812,
+      "passed": 53
+    },
+    {
+      "suite": "root-final",
+      "skipped": 91,
+      "durationSeconds": 74.25,
+      "passed": 1471
+    }
+  ],
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "b846e515ebf687ac5c73fa36dfd5a5197d23aa498fc84bcb0f0217ca5b3e863b"
+    },
+    {
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "111a7716ef3150d34a90bbf790584b8c8b7641450829eea863efc1e23c056376"
+    },
+    {
+      "path": ".cursor/rules/testing.mdc",
+      "sha256": "019a6ba4fb96cc543025ff82a1f24072233e94b23b68901e2d233157f69467ed"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "23929e16c0473f0ac8506dbf8458edac2c954c30bfda4adafebae65068761814"
+    },
+    {
+      "path": "package.json",
+      "sha256": "23c98290e07d98589776c6f85bf7d64f7a87360009e5c8cdf451535affe5aa4f"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "0d02d026421bb15fca54abff0bbde7ba6ad659ead437dc9f6c48b14f9c862547"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "path": "src/domain/persona-v2/operation-training.ts",
+      "sha256": "f023eb7b9922566c67d6c1ab994526155cb9ff403ca0b9bd93b8d1c9a08f9f29"
+    },
+    {
+      "path": "src/domain/persona-v2/knowledge-adoption.ts",
+      "sha256": "5834f7870cba575d3f73621a84189d3c7a5c12b4e7e2d807d3ed5feda39b2c00"
+    },
+    {
+      "path": "src/domain/persona-v2/structure-content-schema.ts",
+      "sha256": "e181dc4f910751202a0934a4fb7da88ef9784abb916430c6441a283f884cfa39"
+    },
+    {
+      "path": "src/application/persona-v2/shared-operation-adoption.ts",
+      "sha256": "29ffc72712f0831472ed07675b12a54a1d91701d7c844e0627c8f1685c0c51dc"
+    },
+    {
+      "path": "src/application/persona-v2/schema-inspection.ts",
+      "sha256": "7715df50b0df54649fe00650263f65c7eea3b83b64f6c27aa36fa4a7b842b4af"
+    },
+    {
+      "path": "src/application/persona-v2/dataset-types.ts",
+      "sha256": "0d1731efc2de81625dcd5108aa97e91b95719db11fd0d274d3d83e9b12f6ad29"
+    },
+    {
+      "path": "web/package.json",
+      "sha256": "0fdc66747667afd9651fd9b12f5b5480dfe9edd607225f53b2f7eff4553ca07a"
+    },
+    {
+      "path": "web/src/persona-v2/OperationSkillEditor.vue",
+      "sha256": "5e56cdd2458adfc9acc232d58d75e6297fa2a9f6d1efc272250f4cd1a41b6bfd"
+    },
+    {
+      "path": "web/src/persona-v2/OperationRelationshipsEditor.vue",
+      "sha256": "ce36b63860231077085975fe55dd2ec3de733398826cc943a37f9b53a51f94ec"
+    },
+    {
+      "path": "web/src/persona-v2/SourceKnowledgeWorkspace.vue",
+      "sha256": "fbb7dbb2373a99678b4fee68ee8e213c205d6ab9b1612ab4093ea5667b68489a"
+    },
+    {
+      "path": "web/src/persona-v2/PublishedKnowledgePicker.vue",
+      "sha256": "040ce2cbcd0119e0eded964234ec7db66c08bc2e98fbb9131cc41439cba1bca0"
+    },
+    {
+      "path": "web/src/persona-v2/operation-knowledge.ts",
+      "sha256": "f4ea06b95a9a2488b83ec961385a036e27aec999da5cbf703ca6844afa9f9c91"
+    },
+    {
+      "path": "web/src/persona-v2/operation-knowledge.test.ts",
+      "sha256": "8b72481b7d4351b12e224cfc88cec0e71fde3dcbd586eb642b09945b6279ca2b"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "d7df4da58b872eb1a119bbcab884afa7b1545a0d59f493045027e39945892c00"
+    },
+    {
+      "path": "docs/persona-v2/console.md",
+      "sha256": "ab3cf6eee650372d20234c3f7e5ad0bcb0b00636122d7e7abd6c2b767edd18d1"
+    },
+    {
+      "path": "docs/persona-v2/sql-operations.md",
+      "sha256": "b008aa957c4fbd1586f639427e0a7ad0f55973b468123bac9f37158fb9fbc612"
+    },
+    {
+      "path": "docs/persona-v2/shared-knowledge.md",
+      "sha256": "9a4e433c8cc10ac72cb8e7c9a32f46abe748be16908be6475cf84006904d24ba"
+    },
+    {
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "259de8525933ed05caafa02b6fe82e2745225138fe734e26307662656d50ca22"
+    },
+    {
+      "path": "docs/persona-v2/README.md",
+      "sha256": "7ed9d9d84b614fb33d51a1b6b091859840f10649cb8899eedbb1c1cc16319ee1"
+    },
+    {
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "3a2ee24b32dce06cfce16fdac28f4ed75cab01c767ab0994e962ca63f605d6ed"
+    },
+    {
+      "path": "docs/persona-v2/validation.md",
+      "sha256": "0a854d7d1569706d1ee672cbbfd610c7a4ed290c998db65affd3686354f42a12"
+    },
+    {
+      "path": "docs/persona-v2/validation/2026-10-17-operation-knowledge-console.md",
+      "sha256": "acf0a45b1889827de30b444e4436d8d1ca175d0e4747dbe3efb5eb1451bce2b8"
+    },
+    {
+      "path": "web/dist/persona-v2.html",
+      "sha256": "b1b84a14de9fc2b36a8427b61ba884efd281b0b325593300ac6b59d71b051bb4"
+    },
+    {
+      "path": "web/dist/assets/persona-tzxKcFxY.js",
+      "sha256": "a67e9b0b298fd943a04d8fb010b31fe8d2a1fcf421cdda7bc791f92093502279"
+    },
+    {
+      "path": "web/dist/assets/persona-BlK0PRLn.css",
+      "sha256": "7ffd218762c2073237c97ee04a1443acc1dad4d8e007e254dfb1500802e07cda"
+    },
+    {
+      "path": "web/dist/assets/vue-router-BiNHuAwK.js",
+      "sha256": "3159d3ad3fa428bb10be2e91bc4acd0385c35ff43d9dc062ae02d79af84e3c04"
+    }
+  ]
+}

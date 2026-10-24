@@ -1,0 +1,109 @@
+{
+  "capturedAt": "2026-10-15T21:06:38.1514927Z",
+  "ready": false,
+  "generation": "persona-v2",
+  "scope": "Selected files of the dirty local candidate, not a committed release or full workspace snapshot",
+  "baseCommit": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "sha256": "c9484d6e737e8cc42c9eca2a13da1459cfd8e63ac590b78bf108114d2933c2bf",
+      "path": "migrations/persona-v2/0026_external_reconciliation.sql"
+    },
+    {
+      "sha256": "0d02d026421bb15fca54abff0bbde7ba6ad659ead437dc9f6c48b14f9c862547",
+      "path": "package-lock.json"
+    },
+    {
+      "sha256": "b4a3978545cf4057368490f7089d5a28f24f03de1b092d0dcdda1e6c5d232a6a",
+      "path": "plugins/se7e-persona-v2/skills/se7e-treinamento-administracao/SKILL.md"
+    },
+    {
+      "sha256": "dcc947adb7c42b8978c8f8096d8ba722cf7f00c5588df4746904f1a6da9e70c7",
+      "path": "src/application/persona-v2/external-actions.ts"
+    },
+    {
+      "sha256": "9e403c9fa584b54cb9cbe94230e8fa61e371d319080b6ca18161e069d09cc350",
+      "path": "src/application/persona-v2/external-integrations.ts"
+    },
+    {
+      "sha256": "2876037aefa53f2649cc9e0ed748247b10842b4e1961469f81cbdbb7bd50c2dc",
+      "path": "src/application/persona-v2/runtime-instructions.ts"
+    },
+    {
+      "sha256": "f89054a7dc7d76d0e336b3399cd4428f89e9f48c979b29f6fa8269c708e4ece3",
+      "path": "src/application/persona-v2/training-base.ts"
+    },
+    {
+      "sha256": "aa074fe84998516bfc61576b38737e3c45344df16f5975a1dd1ed745a91d1439",
+      "path": "src/composition/compose-persona-v2.ts"
+    },
+    {
+      "sha256": "3f24ac1fac7f566ee6f5d3d456246b663a7a6403e6f1720f3fa254ecf9303967",
+      "path": "src/domain/persona-v2/authorization.ts"
+    },
+    {
+      "sha256": "837fd13a054661c16b3e4a3b00f7c2badb6166dd259e2ba08feb98e525e999bb",
+      "path": "src/domain/persona-v2/external-contract.ts"
+    },
+    {
+      "sha256": "8e15cc5b15568e15139b5d46ed3468ba3270daa761ae4016baebd3eef8a07482",
+      "path": "src/domain/persona-v2/external-reconciliation.ts"
+    },
+    {
+      "sha256": "3119422c717255bccd6558c2b4bc6f3f5ec96da7a3a87a24225d551cb30bb098",
+      "path": "src/domain/ports/external-action.port.ts"
+    },
+    {
+      "sha256": "6880a19f5401731eb298effd314dc7156a440308904d39e3a7b796994ffebc61",
+      "path": "src/infrastructure/mcp/persona-v2-http.ts"
+    },
+    {
+      "sha256": "c915235889d991262a4673998c23643e4bef4db458a1e2dcdabce7836b4c7b6f",
+      "path": "src/infrastructure/persistence/persona-v2/external-actions.ts"
+    },
+    {
+      "sha256": "b1992429b1feae491f0419ac4ae64da9133a2b6d4e0dc5a0a8ecce49b68ed758",
+      "path": "src/infrastructure/persistence/persona-v2/external.ts"
+    },
+    {
+      "sha256": "5efbd823a49abae29fd5bfff6120d0b328c3a74e617a84f1bce53228b1d13b55",
+      "path": "src/infrastructure/persona-v2/external-adapters.ts"
+    },
+    {
+      "sha256": "494705bd61eae006dbf15bfc72b4dc06a5b861510e028b79b81b8a5e2494344a",
+      "path": "src/infrastructure/persona-v2/external-http.ts"
+    },
+    {
+      "sha256": "79336d3116d7fbf1f1146d392f47562dbf3e419335f6241a71373a83d756f6a0",
+      "path": "src/infrastructure/plugins/tool-catalog.ts"
+    },
+    {
+      "sha256": "07b70c534b449a69f842294c75bc8527a343a26c1b4419a3d3094203787d5f4f",
+      "path": "tests/helpers/external-provider.ts"
+    },
+    {
+      "sha256": "fe2aa392a2a7eb014a205d2d5ba7ec3f495bd9faa0da10bf1dc48d6ed126cbf9",
+      "path": "tests/persona-v2/setup-delegation.postgres.test.ts"
+    },
+    {
+      "sha256": "1fd9cb7cb61520d5d0824ebdeb8144b3acdb11c7b7965ff646f25f37ec5771b4",
+      "path": "tests/unit/persona-v2/external-adapters.test.ts"
+    },
+    {
+      "sha256": "b71b16f45d12d3867ee3768857c2371d51bec139572efc9de3bf28cb733ba9f8",
+      "path": "tests/unit/persona-v2/external-https.test.ts"
+    },
+    {
+      "sha256": "2a583f52acd241eae8899bc9a533c6dc0403f4cae18fbe6d1f13e4877b60b454",
+      "path": "tests/unit/persona-v2/external-reconciliation.test.ts"
+    },
+    {
+      "sha256": "cab25aa3ee3f1b50410851757b3b63148de9d69971c9f1e2e64607bb6153e880",
+      "path": "web/package-lock.json"
+    },
+    {
+      "sha256": "40d7ad2d1b8cb262912966ee96a4818690bc961bf1f9dc0efa9033e4aca8ba90",
+      "path": "web/src/persona-v2/ExternalActionsPanel.vue"
+    }
+  ]
+}

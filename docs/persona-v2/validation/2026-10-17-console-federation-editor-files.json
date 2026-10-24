@@ -1,0 +1,198 @@
+{
+  "cleanup": {
+    "databasesInOwnedFixture": 19,
+    "anonymousVolumesRemoved": 1,
+    "temporarySecretsRemoved": true,
+    "consoleListeners": 0
+  },
+  "productionReady": false,
+  "runs": [
+    {
+      "skipped": 0,
+      "suite": "browser-complete",
+      "duration": "3.4m",
+      "passed": 36
+    },
+    {
+      "skipped": 0,
+      "suite": "browser-final-compatibility-and-workflow",
+      "duration": "16.0s",
+      "passed": 1
+    },
+    {
+      "skipped": 0,
+      "suite": "postgres-source-query-and-sql-publication",
+      "duration": "24.29s",
+      "passed": 58
+    },
+    {
+      "skipped": 0,
+      "suite": "frontend-native",
+      "duration": "1.07s",
+      "passed": 58
+    },
+    {
+      "skipped": 91,
+      "suite": "general-native",
+      "duration": "77.02s",
+      "passed": 1471
+    }
+  ],
+  "scope": "persona-v2-console-federation-editor",
+  "partial": true,
+  "files": [
+    {
+      "sha256": "2fab2cd734d655a131ced0e16cc4c1c4cec20666b315be4fe8e9357fb8a3b399",
+      "path": "AGENTS.md"
+    },
+    {
+      "sha256": "b08357c758f82418575e70537ebb725e93f9dfe264ee2da4f65a735476f0d9de",
+      "path": ".cursor/rules/persona_v2.mdc"
+    },
+    {
+      "sha256": "d2e9324d99833365448d33c71b94fb120c5700c82a69eec0fde31e5f462c54ad",
+      "path": ".cursor/rules/catalog.mdc"
+    },
+    {
+      "sha256": "7d849264de528d7a9212a9a825aac4d8d694c8159d8719d4cfa87618bb1e34ab",
+      "path": ".cursor/rules/testing.mdc"
+    },
+    {
+      "sha256": "b4381066a0aa0d01e2596863c711152d782c64d14e26db049917080e4ca1c229",
+      "path": "CHANGELOG.md"
+    },
+    {
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2",
+      "path": "contracts/persona-v2-release.json"
+    },
+    {
+      "sha256": "df0822fd1392db93ae2b4e5f9e0f95327335a3f4a4a356951cbcba397e33b914",
+      "path": "src/domain/persona-v2/federation-training.ts"
+    },
+    {
+      "sha256": "43596bf504acb6371ac595a1fd22dbb64bea775ae7f45051fecbd0a439180791",
+      "path": "src/application/persona-v2/federation-training.ts"
+    },
+    {
+      "sha256": "f5483e131a4a562656ba3573be1af87aa58404dff59603f9248cc5b73989b508",
+      "path": "src/application/persona-v2/federation-cases.ts"
+    },
+    {
+      "sha256": "fd6992ed9804b427988150e4a792d18898e591ac2c91c1692ef5fdef718f21c0",
+      "path": "src/application/persona-v2/federation-publication-cases.ts"
+    },
+    {
+      "sha256": "0c4b42c9d25dd77b870012573a00424f4dc9eb9824dc3f911870c766c20400b8",
+      "path": "src/application/persona-v2/catalog.ts"
+    },
+    {
+      "sha256": "ce08586d8a1d8d434b01fb8eee1c5416af41956342e73b6ae05b1d7c6762ced2",
+      "path": "src/application/persona-v2/runtime-instructions.ts"
+    },
+    {
+      "sha256": "3e6895a0d0f4d7c8c164700b73e57d65ffe3fe2b53bf04e6770aac8281ba74af",
+      "path": "src/infrastructure/http/persona-v2-admin.ts"
+    },
+    {
+      "sha256": "9b98cd69c271d3f6e1fb0410d9136c484ef585865734bfa315198baa290d5372",
+      "path": "web/src/persona-v2/PersonaConsole.vue"
+    },
+    {
+      "sha256": "a723259aca31454bf3cb4f79a308015add3c7407aad5170981c991493a350857",
+      "path": "web/src/persona-v2/FederationSkillEditor.vue"
+    },
+    {
+      "sha256": "d434058178c2cbad1b81b6a57c748f5b811512fc707b6433e0f64e6146d8f400",
+      "path": "web/src/persona-v2/FederationStepsEditor.vue"
+    },
+    {
+      "sha256": "c0520ef07c3a978a2e4bb4a5b7ebc6c98da9a761de4c25967738a05c39738a67",
+      "path": "web/src/persona-v2/FederationCasesPanel.vue"
+    },
+    {
+      "sha256": "b0579d273a787ca9e35a2e1206fe254a1c5bce848f311ed8b617851a2dc99407",
+      "path": "web/src/persona-v2/FederationRowsEditor.vue"
+    },
+    {
+      "sha256": "454b502c5ccc9d80bfdc0435fd00706a8efa3aa61cd3d19f3c9aae835e44560f",
+      "path": "web/src/persona-v2/FederationTypedRowsEditor.vue"
+    },
+    {
+      "sha256": "6320d0603fffd133d4af47b72fc131e15a09eda76a8d64bbdbf04f26dad246b9",
+      "path": "web/src/persona-v2/federation-editor.ts"
+    },
+    {
+      "sha256": "807bc459897b6c2f54aa1b4892465973abef7c606500b3b8e62cb72a131740ee",
+      "path": "web/src/persona-v2/federation-editor.test.ts"
+    },
+    {
+      "sha256": "ac940b257d127499e4e8715222097852ad4298b0017a8b21ec4a5afe1b24c6b0",
+      "path": "tests/persona-v2/source-query.postgres.test.ts"
+    },
+    {
+      "sha256": "326b735cb5d0b7ddc8efe9447ad0186cb26b2c81902f38b0069e139f1a78276a",
+      "path": "tests/persona-v2-browser/persona.spec.ts"
+    },
+    {
+      "sha256": "29384591e9f0083ccd19b1dc716540eb0f6240959970c45e13637978097db04d",
+      "path": "docs/persona-v2/README.md"
+    },
+    {
+      "sha256": "7d2307e04e64bf5099f6d8b2f3bccc7539fb95fd18fa16c18ed38ac8c6bbd54f",
+      "path": "docs/persona-v2/acceptance.md"
+    },
+    {
+      "sha256": "73cd382840ab9a076f4d5c0d64ae510f3104deb25f2f5c9ed1173b51bbce490e",
+      "path": "docs/persona-v2/remaining-plan.md"
+    },
+    {
+      "sha256": "a3cbe02e19f90622999c703e77af468ff17935907e02f11ab7e9bf8cb698eb29",
+      "path": "docs/persona-v2/console.md"
+    },
+    {
+      "sha256": "861b9a9b445b64734227ba8be9b34920e6c490b1e71fe77a29fed765f00bc534",
+      "path": "docs/persona-v2/federation.md"
+    },
+    {
+      "sha256": "c49662502fed29b14ba8ec5bb69506ddea152f5633d49ed1fe0d5ff31004267b",
+      "path": "docs/persona-v2/validation/2026-10-17-console-federation-editor.md"
+    },
+    {
+      "sha256": "79ae08b46a56f78f595fae2653c764a619eeed59b87e9bab5b1eb34382f91064",
+      "path": "web/dist/persona-v2.html"
+    },
+    {
+      "sha256": "109cd9950b9e9085e05f8e744bbff283b07ea5b6d83c7565b4883a520c92345b",
+      "path": "web/dist/assets/persona-D8Re3ixE.js"
+    },
+    {
+      "sha256": "2bead8187cedb657686dae53ebe542a8b99ebba6bb4109d53497122acd0a94c8",
+      "path": "web/dist/assets/FederationSkillEditor-Dwc59mE-.js"
+    },
+    {
+      "sha256": "34bb4f8813937e2450c2ca62dc02eb06d0f3b4b99a7f401b2c483e53648b1554",
+      "path": "web/dist/assets/preload-helper-DSyqeqVq.js"
+    },
+    {
+      "sha256": "7ffd218762c2073237c97ee04a1443acc1dad4d8e007e254dfb1500802e07cda",
+      "path": "web/dist/assets/persona-BlK0PRLn.css"
+    }
+  ],
+  "cleanupConfirmed": true,
+  "generatedAt": "2026-10-17T14:05:13.7586779Z",
+  "revisions": {
+    "plug_agente": "7d00ae8a8f822605d76e775fb5659f27e29df539",
+    "plug_server": "76950497dc386130e13b7d6afc0678e50208e985",
+    "plug_mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f"
+  },
+  "environment": {
+    "hub": "synthetic",
+    "typescript": "7.0.2",
+    "chromium": "153.0.8010.12",
+    "node": "24.21.0",
+    "https": "manual",
+    "fixture": "se7e-federation-editor-99d3db4fdfd9",
+    "chatgpt": "manual",
+    "postgres": "17.11"
+  }
+}

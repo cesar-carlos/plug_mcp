@@ -1,0 +1,173 @@
+{
+  "scope": "Relacionamentos DML; inventário parcial do fluxo, não candidato integral de produção",
+  "capturedAt": "2026-10-15T11:53:23.891Z",
+  "baseCommits": {
+    "mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "hub": "bfb40becd42c5452b19b0df13698d212a0238ddc",
+    "agent": "fdb44d86b2a36df85c0133cf72167217fc1bd16e"
+  },
+  "node": "24.21.0",
+  "fixture": "se7e_persona_0f0627f8d8d4_test",
+  "engines": [
+    {
+      "dialect": "mssql",
+      "version": "16.00.4236"
+    },
+    {
+      "dialect": "postgres",
+      "version": "17.0.11"
+    },
+    {
+      "dialect": "sybase",
+      "version": "16.00.0000"
+    }
+  ],
+  "release": {
+    "generation": "persona-v2",
+    "ready": false,
+    "requiredGates": [
+      "shared-knowledge-and-compatibility",
+      "identity-and-authorization",
+      "training-and-local-query",
+      "federation",
+      "agent-operation-journal",
+      "hub-operation-contract",
+      "operation-approval-and-reconciliation",
+      "external-rest-and-mcp",
+      "oauth-and-console",
+      "postgres-real",
+      "mssql-real",
+      "sybase-real",
+      "coordinated-cutover"
+    ],
+    "completedGates": []
+  },
+  "files": [
+    {
+      "sha256": "5834f7870cba575d3f73621a84189d3c7a5c12b4e7e2d807d3ed5feda39b2c00",
+      "path": "src/domain/persona-v2/knowledge-adoption.ts",
+      "currentSha256": "5834f7870cba575d3f73621a84189d3c7a5c12b4e7e2d807d3ed5feda39b2c00",
+      "unchanged": true
+    },
+    {
+      "sha256": "f023eb7b9922566c67d6c1ab994526155cb9ff403ca0b9bd93b8d1c9a08f9f29",
+      "path": "src/domain/persona-v2/operation-training.ts",
+      "currentSha256": "f023eb7b9922566c67d6c1ab994526155cb9ff403ca0b9bd93b8d1c9a08f9f29",
+      "unchanged": true
+    },
+    {
+      "sha256": "11eef252c8c9b30b029e6329c0134d6adee23315dd927688c091345739c4f3f3",
+      "path": "src/application/persona-v2/query-training.ts",
+      "currentSha256": "11eef252c8c9b30b029e6329c0134d6adee23315dd927688c091345739c4f3f3",
+      "unchanged": true
+    },
+    {
+      "sha256": "b537775d3186bba9302648e23be3beb08ff9f4913061d5fcac833e2caab22a5a",
+      "path": "src/application/persona-v2/query-relationship-paths.ts",
+      "currentSha256": "b537775d3186bba9302648e23be3beb08ff9f4913061d5fcac833e2caab22a5a",
+      "unchanged": true
+    },
+    {
+      "sha256": "61397096616c25d9fe19b119c88f99bf30380b3c887ef1a88c01058a7e4b1945",
+      "path": "src/application/persona-v2/operation-training.ts",
+      "currentSha256": "61397096616c25d9fe19b119c88f99bf30380b3c887ef1a88c01058a7e4b1945",
+      "unchanged": true
+    },
+    {
+      "sha256": "29ffc72712f0831472ed07675b12a54a1d91701d7c844e0627c8f1685c0c51dc",
+      "path": "src/application/persona-v2/shared-operation-adoption.ts",
+      "currentSha256": "29ffc72712f0831472ed07675b12a54a1d91701d7c844e0627c8f1685c0c51dc",
+      "unchanged": true
+    },
+    {
+      "sha256": "93289529da52c09241878fc1a50748f13805d4d9feb333aba92b7f4207f2bdfc",
+      "path": "src/application/persona-v2/shared-query-adoption.ts",
+      "currentSha256": "93289529da52c09241878fc1a50748f13805d4d9feb333aba92b7f4207f2bdfc",
+      "unchanged": true
+    },
+    {
+      "sha256": "2b7667d7937c00c15902662c96aec3526a9aa42af6deeea00a56074bfa3147be",
+      "path": "src/application/persona-v2/constraint-expectation.ts",
+      "currentSha256": "2b7667d7937c00c15902662c96aec3526a9aa42af6deeea00a56074bfa3147be",
+      "unchanged": true
+    },
+    {
+      "sha256": "98a374322183cce8bfd2e76f3ffde3cce27565b5d7ad815fb5aa734d559b74f1",
+      "path": "src/application/persona-v2/relationship-constraints.ts",
+      "currentSha256": "98a374322183cce8bfd2e76f3ffde3cce27565b5d7ad815fb5aa734d559b74f1",
+      "unchanged": true
+    },
+    {
+      "sha256": "b548c6ef8eeb8df311dcf7acaf8d97a6f150375079ad820c47d2f81fd02cbea4",
+      "path": "src/application/persona-v2/training-base.ts",
+      "currentSha256": "b548c6ef8eeb8df311dcf7acaf8d97a6f150375079ad820c47d2f81fd02cbea4",
+      "unchanged": true
+    },
+    {
+      "sha256": "bfdc78dd901ad9aff07519ca014a47877883f9627eaa314edb1e41d96d187d0c",
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "currentSha256": "bfdc78dd901ad9aff07519ca014a47877883f9627eaa314edb1e41d96d187d0c",
+      "unchanged": true
+    },
+    {
+      "sha256": "3a4a96b31ba2f8a6c1371b2cd660faa99dfdcd3774f193108e725cacc7e5e209",
+      "path": "tests/homologation/persona-chain.test.ts",
+      "currentSha256": "3a4a96b31ba2f8a6c1371b2cd660faa99dfdcd3774f193108e725cacc7e5e209",
+      "unchanged": true
+    },
+    {
+      "sha256": "4bc7efed29f176a39da39a9b95e1dca5651f8550874617b53d2601ea380a0182",
+      "path": "tests/unit/persona-v2/shared-operation-adoption.test.ts",
+      "currentSha256": "4bc7efed29f176a39da39a9b95e1dca5651f8550874617b53d2601ea380a0182",
+      "unchanged": true
+    }
+  ],
+  "agentFiles": [
+    {
+      "path": "lib/infrastructure/stores/sql_operation_journal_runtime.dart",
+      "sha256": "d761918428c042e270bcc5c256c078419931daf8d867f90a8bd73b6e0132f55e"
+    },
+    {
+      "path": "lib/infrastructure/external_services/source_schema_sql.dart",
+      "sha256": "7db0b6b8894f657ae5e3c6e56a77e8af9120d9b8883e5fa707b1502b3cd7e570"
+    },
+    {
+      "path": "lib/infrastructure/external_services/odbc_source_schema.dart",
+      "sha256": "4f085e63a776dc1bdd777e1f270a8591574d257bcd3bd4456dc4bcf9f687b0b8"
+    },
+    {
+      "path": "tool/homologation/persona_chain_structure_fixture.dart",
+      "sha256": "d313a5810d1062d4b6b8b4c7bca22566ea48edea58c599c0738721450608f064"
+    },
+    {
+      "path": "tool/homologation/persona_chain_storage.dart",
+      "sha256": "d8ad76ace297e5c232ac7870dcc2c20832d37e1bc585bfe288328edcb94504d8"
+    }
+  ],
+  "driverFiles": [
+    {
+      "version": "18.00.0000",
+      "file": "podbc35w.dll",
+      "sha256": "452afccffb9b7ffbdb736b8ba1cba9d7b1e11b09ffaee9cf85d6d3788cace991"
+    },
+    {
+      "version": "16.0.0.2043 (64-bit)",
+      "file": "dbodbc16.dll",
+      "sha256": "571e105fb3e14e754b16863739d402022d0e1f64a10d0b224c4e6dd429d5e8be"
+    },
+    {
+      "version": "2018.0186.0001.01 ((DS_Main).170626-2112)",
+      "file": "msodbcsql18.dll",
+      "sha256": "b510668814e68df5018f6f3de0d203fd9b8628b1901d46ed3762ee263b87bbbb"
+    }
+  ],
+  "chain": {
+    "durationSeconds": 228.2,
+    "failed": 0,
+    "passed": 35,
+    "note": "Falha inicial no isolamento do objeto editorial de teste; corrigida sem alterar enforcement SQL Anywhere.",
+    "initialPassed": 34,
+    "initialFixture": "se7e_persona_5ab51c7cf1c8_test",
+    "initialFailed": 1
+  }
+}

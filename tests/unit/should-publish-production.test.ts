@@ -18,6 +18,13 @@ describe("publicação de produção", () => {
     expect(publishes("drizzle/0035_exemplo.sql\n")).toBe(true);
     expect(publishes("docs/mcp/error-mapping.md\n")).toBe(true);
     expect(publishes("Dockerfile\n")).toBe(true);
+    expect(publishes("migrations/persona-v2/0001_baseline.sql\n")).toBe(true);
+    expect(publishes("contracts/persona-v2-release.json\n")).toBe(true);
+    expect(publishes("scripts/persona-release-evidence.mjs\n")).toBe(true);
+    expect(publishes("docker-compose.persona-v2.production.yml\n")).toBe(true);
+    expect(publishes("scripts/check-persona-production-config.ts\n")).toBe(true);
+    expect(publishes("scripts/persona-production.ts\n")).toBe(true);
+    expect(publishes("docker-entrypoint-persona-v2.sh\n")).toBe(true);
   });
 
   it("ignora documentação que fica fora da imagem", () => {

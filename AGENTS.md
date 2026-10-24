@@ -1,144 +1,307 @@
 # Orientação para agentes
 
-## Fontes e precedência
+DV2-015 (2026-10-24): o responsável dispensou validação manual real de
+HTTPS/ChatGPT e aceite funcional humano. Não declarar essas atividades aprovadas.
+Preservar testes técnicos e demais gates, incluindo aprovação Client de operações.
+Ver docs/persona-v2/decisions.md e docs/persona-v2/release-evidence.md.
 
-1. `.cursor/rules/product_objective.mdc` — invariantes de produto (base comum SQL+resources;
-   pacote publicado = autoridade).
-2. `.cursor/rules/security.mdc` — cofre, segredos, portões e isolamento de cache.
-3. `src/infrastructure/mcp/server-instructions.ts` — instruções runtime enviadas
-   a IAs consumidoras no `initialize`.
-4. `docs/` — contrato detalhado. Ordem de leitura: `docs/README.md`.
-   `docs/mcp/tools.md` e `docs/mcp/error-mapping.md` são as referências de tools e erros.
-   `docs/proposta-arquitetura-mcp-se7e.md` é histórico (três camadas), não o aceite.
-5. Regras especializadas em `.cursor/rules/` para arquitetura, domínio,
-   catálogo, protocolo MCP, plug-server e testes.
+## Contrato ativo
 
-Em caso de alteração de comportamento de consulta, treinamento ou pre-treino,
-atualize em conjunto as rules aplicáveis, `server-instructions.ts`, a
-documentação de produto e os testes correspondentes.
+O projeto está em refatoração para **persona-v2**: um responsável administra
+personas com várias fontes, skills publicadas e tokens com concessões explícitas.
+Essas decisões substituem os invariantes de produto legados incompatíveis.
 
-## Invariantes do produto
+A entrada principal (`src/main.ts`) ainda é legada. A entrada
+`src/main-persona-v2.ts` é exclusiva de desenvolvimento. Não transferir
+automaticamente contratos, credenciais, dados, caches ou migrations entre elas.
+Não anunciar conclusão nem remover o bloqueio de deploy:
+`contracts/persona-v2-release.json` exige evidência de todos os gates.
 
-- O MCP é cofre + grafo de treinamento + skills; não é um proxy SQL genérico.
-  A **base comum** de todo consumidor: SQL no plug_server, dialeto do acesso,
-  resources (`guia://paginacao`, `guia://dialeto/{mssql|sybase|postgres|firebird}`,
-  `skill://{acessoId}/{slug}` = pacote publicado, `persona://{acessoId}` = tom/uso do acesso), estrutura pelas skills publicadas e consultas
-  dinâmicas só no pacote (fail-closed). Sem embeddings. Guias já no bootstrap
-  (sem Bearer); `skill://` e `persona://` exigem Bearer. Não assuma mssql — leia o guia do
-  acesso. Identificar o GDBR do acesso e emitir SQL compatível é **treino + IA** — o
-  `plug_server` é hub (não implementa linguagem SQL nem rewrite de dialeto);
-  `sql_engine` é o motor/GDBR via `plug_agente`. Skill treinada num dialeto não
-  licencia `TOP`/`OFFSET` de outro GDBR. O **papel** combina a persona do acesso (tom, `atualizar_persona`)
-  com as skills publicadas daquele acesso (pacote). SQL comum primeiro;
-  persona depois; em conflito vale o pacote fail-closed. Persona não recorta
-  skills **neste acesso** (outro token = outro catálogo) nem licencia consulta.
-  Senha autentica, não particiona. Hub SQL continua `agentId` + `client_token`.
-  **1 client_token = 1 persona = 1 catálogo** (`acesso_id`). Mesmo e-mail/`agentId`
-  - outro token (`adicionar_acesso` / `registrar_acesso`) começa vazio e ganha um
-    **Bearer próprio**. **Várias personas = vários acessos = vários tokens MCP**; um
-    Bearer = um chapéu — não concatenar nem unir pacotes. O Bearer autentica
-    exatamente um acesso: omita `acessoId`. `acessoId` de outra persona →
-    `VALIDATION_ERROR`. Resource `skill://{acessoId}/{slug}` só se for desta sessão.
-    `adicionar_acesso` devolve `setupUrl` da persona nova e **não** troca esta sessão.
-    O mesmo `agentId` entre usuários MCP diferentes pode ter textos e skills
-    diferentes; o trio usuário+agentId+token tem uma persona.
-- Só o **pacote** de skill publicada autoriza `consultar_dados`. Grafo não
-  licencia tabela nem JOIN. `obter_skill` / `skill://` não despejam o grafo.
-- A IA executa SQL customizado somente no escopo publicado (validador
-  fail-closed). Sem SQL, executa `sqlModelo`.
-- Nunca inventar tabela, coluna, JOIN, métrica ou regra de negócio.
-- Erro de consulta: a IA lê `code`/`message`/`hint`/`source` (`sql` = validador
-  do pacote, `sql_engine` = motor/GDBR via `plug_agente` — não camada de dialeto
-  do hub; policy/`client_token_rpc`; HTTP/`plug_server_http`).
-  `sql`/`sql_engine` → corrige o SQL no pacote (no dialeto do GDBR) e não
-  repete o padrão recusado. Não espere o hub reescrever dialeto.
-  `plug_server_http` + `invalid_payload` / `PLUG_SERVER_ERROR` de transporte →
-  **não** reescreva o SQL. 429/503 ≠ policy. SQL falho não persiste;
-  sucesso com pergunta segura captura somente candidata; confirmação humana promove; conhecimento explícito usa `registrar_aprendizado`,
-  `salvar_consulta` e `SKILL_GAP` → `lacuna_consulta`.
-- Agregações, filtros e paginação devem acontecer no banco.
-- Treinamento segue `treinar_com_sql` → `criar_skill` → params →
-  `validar_skill` (une `sqlModelo` ao escopo persistido; perfil não apaga
-  `sensibilidade` confirmada; `confirmar_coluna` aplica a classe mesmo após
-  `validado_execucao`) → confirmação → `publicar_skill`. `atualizar_skill`
-  com SQL novo une o AST ao pacote persistido (como `validar_skill`; grafo
-  `inferido` não entra; status volta a rascunho). Firebird: treino parseia o `sqlModelo` (não
-  `DIALECT_UNSUPPORTED`; sem FIRST/TOP/LIMIT no modelo); consulta publicada só
-  exemplo. Aviso `PAGINACAO_MODELO` se o modelo já declara TOP/LIMIT/FIRST.
-  Envelope `PACOTE_INCOMPLETO.nextAction` é a primeira falta bloqueante (não
-  sempre `validar_skill`). `confirmar_relacionamento` sem `skillId` grava só no
-  grafo — o validador publicado não vê o JOIN até ele entrar no pacote. Sem publicação ativa, rascunho, validada ou
-  `rascunho_revalidacao` não consultam (`rascunho_revalidacao`: validar →
-  republicar). `listar_skills` devolve status/`fluxoTreino`/`faltas[]`; SQL ilegível vira falta `kind: sql` naquela skill e o restante da lista continua. O
-  pacote fica em `obter_skill`. Skill `validada` com perfil incompleto:
-  `proximoPasso` é a tool da primeira falta (nunca `null`). `despublicar_skill`
-  rebaixa para validada sem apagar. JOIN composto substitui pares isolados;
-  `confirmar_relacionamento` pede cardinalidade e tipo de JOIN (`tipoJoin`;
-  omitir preserva LEFT do SQL, não grava inner). `remover_relacionamento` apaga
-  um fingerprint. `inspecionar_consulta` aceita
-  `validada` e permite `SELECT *` cortado de uma tabela do allowlist (com projeção segura e omissão de colunas pessoais/secretas/inferidas;
-  colunas novas no grafo `inferido`). Célula binária vira stub `kind: anexo`
-  **sem handle** na inspeção (não invente bytes; não use inspeção
-  como segunda via de foto pessoal). Foto livre: `consultar_dados` +
-  `exportar_anexo`. `consultar_dados` aceita `skillIds` omitido
-  (união das publicadas) e `consultaAprendidaId`. `confirmar_coluna` aceita `colunas[]`.
-  Cobertura de `buscar_contexto` não usa o SQL nem o corpo da regra;
-  `conhecimentos[]` é evidência FTS/`ILIKE` (não RAG), não licença de consulta.
-  Stem léxico une inflexão na cobertura. Negação na descrição (incluindo lista
-  após “não autoriza cruzar”) não conta.
-  Envelope de `buscar_contexto` não inclui `sqlModelo` nem SQL aprendido — reuse
-  `consultasAprendidas[].id` em `obter_skill`. Cobertura `composta` + `fatias[]`
-  orquestra várias `consultar_dados` (não cruzar SELECT). `consultaSemanticaSugerida`
-  com `consultaPermitida` e KPI de agregação (CAST não entra; IR só com alias
-  medida no pacote; score 0 sem IR omite; maior overlap da pergunta) **ou**
-  listagem só com dimensões/filtros. `metricasSemOverlay[]` não inventa `definicao`. `fluxoTreino.pacoteMinimo` oriente (uma
-  tabela; CAST não é medida) sem afrouxar gates. `faltas[]` de KPI (não quantidade/parcelas/`NroParc`/`Qtde`) e JOIN isolado
-  coberto por composto não bloqueiam publicação. Falta `kind: param` (tipo
-  default `string`) também não bloqueia. `SKILL_GAP` omite `fluxoTreino` salvo skill em andamento e não pede sinônimo. Hint de cruzamento só na pergunta de cruzamento.
+O alvo Docker `persona-v2-candidate` e sua composição são exclusivos de
+homologação isolada; não substituem o alvo padrão legado. Servidor/worker não
+aplicam migrations no startup; migração v2 é explícita e produção continua
+recusada. Ver [distribuição candidata](docs/persona-v2/candidate-distribution.md).
 
-## Segurança e autorização
+## Ordem de leitura e precedência
 
-Não exponha senha, `client_token`, JWT do hub ou token MCP. `atualizar_persona` recusa texto que pareça segredo e não persiste. A execução depende
-de três portões: JWT Client, `ClientAgentAccess` e policy do `client_token` no
-`plug_agente`. Cache de query isola usuário/token/policy/versão no prefixo
-`mcp:query:acesso:{acessoId}:` (resultado com anexo **não** é cacheado; handle HMAC+TTL
-só em memória). Preserve a origem de cada falha e não faça retry cego.
+1. Este arquivo e [persona_v2](.cursor/rules/persona_v2.mdc): decisões aprovadas.
+2. [Objetivo](.cursor/rules/product_objective.mdc) e
+   [segurança](.cursor/rules/security.mdc): autoridade, isolamento e dados.
+3. [Índice documental](docs/README.md) e [estado v2](docs/persona-v2/README.md):
+   contratos por subsistema, implementação e pendências.
+4. Regras especializadas abaixo, conforme a alteração. O
+   [console v2](docs/persona-v2/console.md) separa jornadas entregues e pendências,
+   incluindo identidade oficial, edição protegida e aprovação humana.
 
-## Referências rápidas
+Referências **legadas** valem somente para manutenção da entrada principal.
+Relatórios históricos registram a rodada executada; não são regra atual nem
+autorização de produção. Divergência entre código e contrato deve ser apontada,
+sem presumir que funcionalidade aprovada já foi entregue.
 
-- Tools e fluxo: `docs/mcp/tools.md`
-- Erros e avisos: `docs/mcp/error-mapping.md`
-- Objetivo do produto: `docs/product/objective.md`
-- Comunicação e auth do hub: `docs/plug-server/communication.md` e
-  `docs/plug-server/auth.md`
-- Testes: `.cursor/rules/testing.mdc` e `tests/`
+Decisões e regras substituídas: [registro v2](docs/persona-v2/decisions.md).
+Pendências por gate e evidência exigida: [matriz de aceite](docs/persona-v2/acceptance.md).
 
-## Evoluções coordenadas
+Pacotes privados: [contrato do plugin](docs/persona-v2/plugin.md). Montagem exige
+geração explícita e validação offline; não misturar tools do legado/v2 nem
+usar grants ou sessões legadas na v2. [OAuth v2](docs/persona-v2/oauth.md) usa
+scope próprio, consentimento limitado e revogação da conexão atual. Pacote validado não comprova
+instalação no cliente e não libera deploy.
 
-- `consultaSemantica` v2 é união discriminada: `agregacao` exige `metricas[]` e aceita dimensões; `listagem` exige apenas `dimensoes[]`. v1 continua válida e é normalizada internamente. `consultar_dados` e `validar_consulta` compartilham o preflight e devolvem `planoConsulta`; o validador executa somente envelope vazio.
-- `buscar_contexto` devolve `diagnosticoCobertura` factual e lexical (FTS/`ILIKE`, nunca embeddings/RAG). Anotações podem ter governança temporal (`fonteTipo`, responsável, vigência e status) e agenda opcional (`revisarEm`/cadência); a fila de revisão não altera vigência nem licença SQL. Legadas são `legado`/`vigente`, e `atualizar_anotacao` exige confirmação.
-- `publicar_skill` começa com preview/diff e `confirmacaoHash`; publicação efetiva exige confirmação explícita e o hash vigente em transação atômica. Snapshots são imutáveis. Deriva detalha deltas, skills/consultas afetadas e rebaixa somente quando o pacote é incompatível.
-- Auditoria guarda somente metadados permitidos (IDs, origem, contagens, cache, paginação, truncamento, estágio e duração), nunca SQL, pergunta, parâmetros, resultados ou segredos. Painel operacional deriva apenas taxas/tendência/percentis desses metadados. Timings do hub são opt-in amostrado por `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (padrão 10).
-- O contrato REST usado pelo MCP é gerado do OpenAPI do hub em `plug_server/contracts/plug-mcp-rest-v1.json`; o baseline `plug-mcp-rest-v1.compatibility.json` proíbe remoção silenciosa de campos públicos. `npm run contract:check` deve permanecer verde no checkout do `plug_server`.
-- Operação proativa é observabilidade, não conhecimento: alertas/revisões/webhooks ficam isolados por `acesso_id`, guardam só IDs e agregados permitidos e jamais licenciam SQL. URL/segredo de webhook são cifrados, só HTTPS público sem query/user-info, com DNS privado/loopback bloqueado a cada entrega. Worker separado usa outbox+lease, HMAC e retry/dead-letter; tools de configurar/rearmar exigem confirmação.
-- Cache agregado usa singleflight na mesma chave isolada de usuário/token/policy/skill. Redis coordena réplicas por lease e falha aberta; não cachear erro/anexo nem criar retry cego. `test:migrations` valida banco novo e upgrade a partir de `0023` somente em bancos CI efêmeros.
+| Área                  | Rules                                                                                                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Arquitetura e domínio | [architecture](.cursor/rules/architecture.mdc), [domain_layer](.cursor/rules/domain_layer.mdc), [project_structure](.cursor/rules/project_structure.mdc)                                                                                         |
+| Catálogo e interfaces | [catalog](.cursor/rules/catalog.mdc), [mcp_protocol](.cursor/rules/mcp_protocol.mdc), [express_api](.cursor/rules/express_api.mdc), [plug_server_client](.cursor/rules/plug_server_client.mdc)                                                   |
+| Código e ferramentas  | [coding_standards](.cursor/rules/coding_standards.mdc), [typescript](.cursor/rules/typescript.mdc), [project_stack](.cursor/rules/project_stack.mdc), [lint_format](.cursor/rules/lint_format.mdc), [performance](.cursor/rules/performance.mdc) |
+| Entrega               | [testing](.cursor/rules/testing.mdc), [governance](.cursor/rules/governance.mdc), [changelog_and_docs](.cursor/rules/changelog_and_docs.mdc), [git_workflow](.cursor/rules/git_workflow.mdc)                                                     |
 
-## Autoridade ativa e segurança da evolução
+## Invariantes essenciais
 
-Skill tem identidade, rascunho editável e publicação ativa imutável. Edição/validação mantém a anterior; ampliação exige republicação. status=publicada quando há snapshot utilizável e statusRascunho separado. obter_skill default ativo, revisao=rascunho explícito; skill:// só ativo. Publicar usa CAS/hash ligado a acesso/rascunho/base; confirmação obsoleta exige preview novo. Restrições/revogação/deriva/cardinalidade incompatível suspendem publicações afetadas imediatamente.
+Autoridade, identidade, publicação, consulta e operação estão em
+[persona_v2](.cursor/rules/persona_v2.mdc) e no
+[objetivo](.cursor/rules/product_objective.mdc). O procedimento de cada tema
+fica no documento do subsistema.
 
-Tools de credenciais recebem objeto vazio estrito, retornam setupUrl/expiresAt. GET mostra formulário; POST confirmado/CSRF autentica identidade e vínculo no hub, mostra Bearer uma vez. Código hash de 256 bits/15 minutos; rotação só invalida anterior na conclusão. Snapshot/draft não substituem os três portões vigentes, revalidados em cache/exportação/entrega.
+- Não transferir contrato, credencial, cache ou migration entre a entrada legada
+  e a v2, nem anunciar aceite sem a evidência de todos os gates.
+- Inspeção estrutural usa somente metadados fixos pelo hub/agente. A adoção
+  inicial por consultas fixa versão, evidência e colunas no snapshot; confere
+  estrutura e constraints utilizadas na conexão executora. Constraints desconhecidas
+  não habilitam chaves/FKs. Perfis exigem curador com acesso vigente à mesma base;
+  versões não são adotadas automaticamente. Contrato: docs/persona-v2/shared-knowledge.md.
+  Editores do console aplicam conhecimento somente ao rascunho; diagnóstico não
+  reserva autorização, publica a skill ou amplia concessões.
+  Curadoria aceita propostas explícitas por console/MCP; revisão por curador
+  usa preview/hash/CAS e altera somente rascunhos. Exemplos enviados permanecem
+  candidatos até revisão editorial. Tools não concedem navegação pelo catálogo.
+  Propostas físicas têm persistência própria e origem imutável; revisão exige
+  curador com acesso vigente à mesma base, preview/hash/CAS e consumo único.
+  Incorporar altera só o rascunho do perfil, sem publicar/adotar/conceder acesso.
+  Busca/grafo usam o snapshot concedido; índice é reconstruível e não autoriza
+  execução. Revisão temporal aprovada exige prazo definido pelo curador, sem
+  prazo padrão ou suspensão automática por idade (DV2-010).
+  Feedback é explícito, vinculado ao item/publicação concedidos e armazenado fora
+  da auditoria. Calendários e decisões ficam separados dos snapshots; curador
+  escolhe prazo e justifica por CAS. Novas publicações exigem prazo humano
+  vinculado à revisão/hash e ao preview; calendário nasce na mesma transação.
+  Worker v2 de desenvolvimento gera tarefa/notificação interna única por versão,
+  com lease e retomada. Ler o aviso não conclui revisão; não autoriza, suspende
+  ou republica. Manutenção temporária tem lease próprio e lotes: remove
+  setups/prévias expirados e vínculos órfãos. OAuth vinculado conserva registros
+  até o prazo do registro e da concessão para preservar detecção de replay.
+  Não remove journals ou identidades de operações. Retenção própria remove
+  payload/result após 24h e comprovante após 90 dias do desfecho local conhecido,
+  com lease/CAS e tombstone permanente. Unknown/em execução nunca entram;
+  conciliação comercial não habilita limpeza. Rotação de chave do cofre tem
+  CLI de operador separado, simulação, lock de sessão e cursor transacional.
+  Rewrap muda somente cifras, preserva metadata/autoridade e exige papel de banco
+  com permissão específica; GUC não concede exceção. Nova cifra exige chave ativa;
+  startup verifica keyring e rodada vigente. Contrato: docs/persona-v2/vault-rotation.md.
+  Outbox v2 tem assinatura HMAC, destinos HTTPS públicos, claim com fencing/lease,
+  orçamento e retomada. Configuração explícita pelo responsável no navegador;
+  só metadados privados da persona, sem exportar catálogo ou repetir operações.
+  Origem e configuração são revalidadas antes do envio. Entrega pode duplicar;
+  receptor deduplica por ID. Homologação operacional ampliada continua pendente.
+  Contrato: docs/persona-v2/outbox.md.
+  Contrato: docs/persona-v2/review-worker.md.
+  Leases de manutenção usam relógio PostgreSQL e duração limitada; relógio da
+  aplicação não pode roubar lease ou antecipar tarefas. Parada registrada antes
+  do primeiro ciclo aguarda o job atual, sem iniciar outro job ou claim do lote.
+  Queda do cliente não promete cancelamento imediato de SQL ou POST em andamento.
+  Biblioteca editorial v2 de templates/datasets é cifrada e versionada por
+  catálogo; exige sessão Client e papel colaborador/curador/administrador.
+  Importação explícita cria só rascunho de consulta, com fonte/dialeto escolhidos
+  e exemplos candidatos, sem herdar autoridade, casos ou relatórios. DDL usa
+  gramática fechada, nunca executa, conserva inferido/unknown e exige inspeção
+  antes da adoção. Contrato: docs/persona-v2/knowledge-library.md.
+  Importação exata de template por consumidor exige treinar, fonte concedida,
+  teto/consentimento vigentes e papel editorial no catálogo. Não abre navegação
+  pela biblioteca nem devolve linhas de dataset; exemplos ficam candidatos.
+  Composição de inspeções recebe IDs de páginas imutáveis da mesma fonte,
+  identidade, versões e escopo completo; preserva menor validade e linhagem.
+  Lacunas/conflitos são inconclusivos, sem adoção ou execução automática.
+  RPC continua limitado a quatro recursos por página; composição interna até
+  dezesseis não comprova snapshot simultâneo. sourceSchema v1 vigente é obrigatório.
+  Operações SQL adotam versões/provas explícitas com grão/classificação livre e
+  identidade PK/UNIQUE comprovada; pacote/preparação fixam dependências usadas.
+  Revogação bloqueia aprovação/dispatch/entrega; recusa estrutural conserva receipt
+  e suspende a publicação utilizada. SQL Anywhere unknown não habilita adoção.
+  SQL Anywhere 16 prova constraints locais declaradas por catálogos públicos e
+  índices físicos; FK exige configuração vigente verificável. Outras versões,
+  proxies e evidências insuficientes não habilitam. Ver o contrato compartilhado.
+  Runner sem guarda na conexão real da fixture não aprova pacote compartilhado.
+  Relacionamentos DML fixam pares/elos, FKs na filha e unicidade 1:1; tabelas
+  relacionadas exigem leitura estrutural, sem conceder escrita ou JOIN em DML.
+  Contrato: docs/persona-v2/shared-knowledge.md#adoção-por-operações-sql.
+  Consulta preserva IDs/intermediárias/elos N:N; só elos diretos licenciam JOIN.
+  Relação reversa fixa a FK na filha; 1:1 exige unicidade comprovada e direção
+  inequívoca. Snapshot compartilhado sem caminho explícito exige republicação,
+  sem reescrita ou adoção automática. Enforcement desconhecido não é habilitado.
+- Segredos entram somente pelo navegador. Auditoria guarda metadados permitidos,
+  não SQL, pergunta, parâmetro ou resultado.
+- Limites v2 usam o menor teto da plataforma, skill publicada, token, concessão
+  OAuth e requisição. Delegação só reduz. Bytes limitam a resposta materializada
+  no MCP; timeout não promete cancelar SQL já enviado. DML fixa linhas/prazo no
+  fingerprint; 32 comandos continuam teto fixo. Contrato: docs/persona-v2/source-queries.md#limites-redutíveis.
+- Setups v2 de fonte exigem gerenciar_fontes, delegação vigente do hub e
+  reautenticação humana no navegador. OAuth exige consentimento explícito.
+  Código/CSRF por hash, contexto cifrado, até 15 minutos e consumo transacional.
+  Rotação do próprio token exige gerenciar_tokens/consentimento/delegação, login
+  e confirmação humana. Preserva prazo/concessões, consome setup e invalida o
+  Bearer anterior/derivados no mesmo commit; novo segredo só no POST do navegador.
+  Não reautorizar pela identidade antiga após a rotação deliberada. Sem recuperação
+  do segredo: resposta perdida exige console. Emissão limitada fixa proposta
+  cifrada de nome/prazo/concessões/delegação e exige revisão/confirmação no
+  navegador. Revalida teto do originador, consentimento, delegação e prazos;
+  consumo, token e auditoria são atômicos. Novo Bearer nunca volta pela tool.
+  Setups de integrações exigem gerenciar_integracoes/consentimento/delegação,
+  login e confirmação humana. Credencial técnica cifrada, consumo e auditoria
+  são atômicos. Rotação fixa destino/tipo/versão; cadastro e rotação mantêm
+  integração/operações inativas. Não fazem chamadas externas ou publicações.
+  Publicação separada habilita consulta externa REST GET/MCP remoto,
+  com contrato exato, casos, prazo humano e concessão explícita por operação/skill.
+  DNS público fixado no TLS; sem redirects, retry ou encaminhamento de credenciais
+  de outra origem. Revalidar antes do envio e entrega. Ação usa preparação cifrada,
+  aprovação aplicável no navegador Client e claim CAS durável antes do efeito.
+  Desconhecido nunca volta a executável; aprovação não amplia concessões nem
+  existe por tool. Cadastro não ativa ações. Conciliação explícita usa leitura
+  fixada em reconciliationCheck e chave original; evidência append-only separada
+  nunca altera receipt/estado ou autoriza retry. Ausência/falha é inconclusiva.
+  Contratos antigos não ganham essa capacidade automaticamente.
+  Runner CLI externo é de operador, com manifesto exato e integração de fixture
+  separada; claim único, identificação autenticada e limpeza confirmada precedem
+  aprovação técnica. Rodada incerta não repete efeitos. Console edita casos por
+  CAS e lê relatórios; nunca dispara ou aprova testes por HTTP/MCP.
+  Contrato: docs/persona-v2/external-integrations.md.
+  não prometer atomicidade distribuída
+  nem delegar aprovação humana. Contrato: docs/persona-v2/oauth.md.
+- Ciclo explícito de fontes e limites da recuperação/substituição:
+  [onboarding](docs/persona-v2/onboarding.md#suspensão-recuperação-e-substituição-de-fontes).
+- Testes usam fixtures isoladas. Parser, mock ou uma suíte PostgreSQL não
+  certificam os três motores.
+  Runners genéricos são de operador: manifesto/vínculo explícitos, sem SQL em
+  fonte operacional. Casos e pacote capturados, reprovação preventiva, rede fora
+  dos locks, limpeza/revalidação antes do relatório. Evidência guarda metadados;
+  resultados sintéticos não comprovam SELECT. UUID de caso é alias de marcador
+  treinado, sempre materializado em identidade nova, sem reuso de receipt.
+  Contrato: docs/persona-v2/homologation-chain.md#publicação-sql-genérica-em-fixtures-privadas.
+  Matriz privada admite FK composta e cópia de inserção por trigger tipado,
+  sem SQL livre de setup. Falha nativa esperada exige rollback confirmado e
+  sementes intactas; contagem direta não inclui efeitos indiretos.
+  Extensões da matriz privada usam CHECK de intervalo inteiro, cascata explícita
+  e cópia NEW/OLD por UPDATE/DELETE, sempre por declaração tipada, sem scripts.
 
-SQL inteiro somente leitura/funções seguras; recortes físicos dominantes em todos os caminhos e JOINs compostos simultâneos. Ambiguidade/fanout recusados; não SUM(DISTINCT valor) automático. Inspeção/perfil omitem valores inferidos/pessoais/segredos, sensíveis permitidos mascarados. Anexos vinculam origem física/publicações exatas e quotas de bytes.
+Administração por consumidor exige token/consentimento e teto explícito da
+delegação ativa do responsável no hub. Renovar não amplia concessões antigas.
+Prévia de publicação vincula a autoridade exata; publicar nunca substitui a
+sessão humana de aprovação de lançamentos. Alcance no onboarding v2.
 
-Captura segura gera candidata, nunca licença de reuso. Confirmação humana por salvar_consulta vincula à publicação vigente. Retenção 90 dias. Execução técnica preserva definição/classificação/cardinalidade confirmadas; aprendizado semântico altera rascunho. MCP legado mantém sessão fixa por usuário/acesso; 2026-07-28 recompõe contexto por requisição. Origin/Host/proxy explícitos. Node 24 LTS e TypeScript 7 real no gate.
+## Mudanças e validação
 
-## Base comum e curadoria versionada
+Cadastro direto de integrações no console exige sessão Client, CSRF e
+reautenticação do mesmo responsável. UUID estável da tentativa impede replay;
+segredos são cifrados e descartados após envio. Conferir confirmação perdida
+pela listagem, sem retry automático ou recuperação de credencial. Integração
+nasce inativa; não cria operações, publicações, grants ou chamadas externas.
+Setups de consumidores preservam delegação e consentimento.
 
-Base canônica: `shared/treinamento-base.ts`, guias públicos e obter_treinamento_base; ref/hash do contrato fixados. `salvar_consulta` é preview/hash/CAS, aprovar não incrementa execução; inativação não é revertida por captura. Grão de origem não é GROUP BY nem prova automática de unicidade. Casos sintéticos obrigatórios precisam de relatório atual do runner separado; ausência avisa. IA não grava aprovação de relatório. Templates criam rascunhos sem autoridade; datasets separam famílias e não mineram auditoria. Atualizar docs/product/training.md, schemas/runtime/rules/testes juntos.
+Gestão de integrações no console exige sessão Client, impacto/fingerprint e CAS.
+Suspender bloqueia descoberta/publicação e invalida prévias; recuperar não reativa
+contratos. Rotação exige reautenticar o mesmo Client, preserva destino/tipo e
+suspensão, desativa operações e limpa segredos após tentativa. Journals/unknown
+não são alterados; não há execução ou retry. Contrato: external-integrations.md.
 
-## Delegação ChatGPT opcional
+Descoberta externa usa somente initialize/tools/list pela conexão HTTPS protegida,
+com revalidação e limites. OpenAPI JSON é interpretado sem buscar URLs. Propostas
+não publicam, executam ou concedem acesso; schemas incompatíveis são recusados,
+e salvar exige ação explícita e versão da integração ainda vigente. Contrato:
+docs/persona-v2/external-integrations.md#descoberta-mcp-e-importação-openapi.
 
-OAuth se7e:access autentica exatamente um acesso existente, sem ampliar pacote/policy. Concessão vinculada ao hash MCP de origem; refresh não troca persona. /mcp/chatgpt exige OAuth desde initialize. Sessões, assinaturas, cache/singleflight e anexos isolam concessão. Verificar antes do hub, gravação local na mesma transação e entrega. Setup derivado guarda concessão e revalida no navegador. Banco indisponível bloqueia; Redis não autoriza. Contrato: docs/auth/chatgpt-oauth.md. Testes: OAuth/CSRF/PKCE/replay/concorrência/revogação, compatibilidade manual e migração 0034.
+Editor de skills externas cria/edita somente rascunhos não publicados por CAS.
+Contrato publicado exige nova skill/operação; copiar não herda casos, relatórios
+ou concessões. Conexões são listadas sem credenciais; schemas MCP propostos não
+comprovam o serviço remoto. Casos/relatórios reutilizam o runner separado; console
+não envia ações, aprova testes ou substitui aprovação Client de cada efeito.
+Contrato: [integrações](docs/persona-v2/external-integrations.md#editor-de-skills-externas).
 
-Gravações OAuth passam pelo AuthorizedUnitOfWorkPort, com repositórios vinculados à mesma transação e efeitos classificados por método. Adapters não interceptam SQL nem usam Proxy de pg. Acessos existentes envolvidos são declarados e bloqueados em ordem de ID antes da concessão e dos registros de negócio; rede do hub permanece fora da transação. Validar TLS/DNS nativo e formulários no Chromium; chatgpt:check é somente leitura e não comprova instalação no ChatGPT.
+Editor de cruzamentos fixa consultas publicadas e etapas tipadas; casos por CAS
+preservam formatos sintéticos e de transporte. Console só edita/lê relatórios,
+sem executar runner ou aprovar evidências. Revisão/publicação exige conteúdo
+atual e prazo humano; não altera snapshot ativo por edição nem concede acesso.
+Contrato: [cruzamentos](docs/persona-v2/federation.md#editor-e-casos-administrativos).
+
+Editor de operação SQL no console edita contrato/casos por revisão, lê relatórios
+e publica pela prévia vigente. Não executa/aprova testes nem lançamentos; aprovação
+humana de efeito continua separada. Snapshot ativo é preservado ao editar; casos
+alterados exigem nova rodada isolada. Relacionamentos/vínculos existentes não são
+apagados pela edição. Contrato: docs/persona-v2/console.md#editor-de-skills-de-operação-sql.
+
+Relacionamentos de operações têm editor visual com pares/elos ordenados e N:N
+explícito. Adoção visual de padrão/perfil reutiliza prova e compatibilidade, só
+enriquece recursos declarados e preserva tipos, identidade, concorrência, parâmetros,
+etapas, limites e escrita. Aplicar/remover vínculo altera só o rascunho; trocar
+fonte descarta o vínculo local com confirmação, sem reassociação de perfil.
+
+Cache/singleflight v2 são opt-in e isolados do legado. Chaves HMAC, conteúdo
+cifrado e revalidação própria de cada consumidor em hit/espera. Revisão física
+compartilhada invalida resultados entre personas sem compartilhá-los; operações
+pendentes/desconhecidas impedem reuso. Guardas estruturais permanecem na conexão
+executora, sem cache dessa consulta nesta etapa. Redis indisponível reduz a
+otimização; timeout/lease vencido não disparam nova consulta. Ver [cache v2](docs/persona-v2/query-cache.md).
+
+Cache Redis confere novamente a entrada após claim e respeita idade autenticada
+desde a criação, sob o TTL da instância leitora e vencimento original. Namespace
+v3 não reaproveita envelopes antigos. Homologação de dois processos usa Redis e
+bancos próprios; barreiras de publicação não alteram SQL/autoridade. Queda após
+SELECT não autoriza takeover ou reenvio pelo seguidor.
+
+Consultas v2 publicam finalidades por campo; pessoal/sensível exige `uses` e
+`usePurpose`, com capacidade explícita e contrato exato no token/consentimento.
+Concessão incompleta bloqueia a publicação inteira, inclusive contexto/busca/grafo.
+Livre sem `uses` preserva consultas anteriores. Segredo/inferido nunca executam;
+DML segue livre. Anexos JSON locais exigem contrato publicado, capability nova e
+exportacao explícita em toda a linhagem projetada; tokens antigos não são ampliados.
+Anexos cifrados ficam no PostgreSQL de controle v2, com hash do handle e vínculo ao
+consumidor/concessão e à origem. Outra instância/reinício preserva somente conteúdo
+e prazo original, nunca autoridade. Quotas são globais/transacionais; sem fallback
+em memória, extensão de validade ou reconsulta. Worker remove expirados em lotes;
+rotação cobre a cifra sem alterar vínculo/prazo. Handles brutos não são persistidos;
+downloads revalidam fonte/policy/publicações, revisão física e estrutura compartilhada.
+Pendência/unknown bloqueia entrega; não cachear nem repetir SQL. Binários exigem
+binaryAttachments/capability próprias, coluna física direta, metadados positivos,
+namespace explícito de tipos (odbc_fast não é ODBC nativo), base64 canônico e
+um registro completo com truncated:false explícito. Consulta comum/JSON não entrega essa
+coluna; download conserva bytes, MIME publicado e nome seguro, sem conversão.
+Contratos e tokens antigos não ganham binários. Contrato:
+docs/persona-v2/attachments.md. Linhagem insuficiente
+recusa, sem alias ou combinação ampliar autoridade. Contrato:
+[campos e finalidades](docs/persona-v2/source-queries.md#campos-e-finalidades).
+
+Mudança de comportamento atualiza contrato, schemas, instruções do runtime
+afetado, rules e testes na mesma tarefa. O legado usa
+`src/infrastructure/mcp/server-instructions.ts`; a v2 usa base e guias em
+`src/application/persona-v2/`, incluindo `runtime-instructions.ts`. Não aplicar
+instruções de uma entrada à outra. Roteiro, diagnóstico e histórico do console
+não reservam autoridade; comparação de publicação é produzida pelo servidor
+com os pacotes exatos. Auditoria transacional conserva somente metadados.
+
+Console executa somente preparações existentes com Bearer do consumidor,
+persona e estado reconferidos. Aprovação Client é separada; tools de referência
+recebem apenas ID/fingerprint, sem copiar conteúdo administrativo. Clique duplo
+ou confirmação perdida não autoriza retry. Troca de token/contexto descarta
+estado e respostas antigas. Contrato: docs/persona-v2/console.md.
+
+`npm run docs:check` verifica links locais/âncoras, índice das rules, exemplos
+JSON/contratos e cobertura documental dos gates, sem rede ou banco. Uso e limites
+no [índice documental](docs/README.md#validação-automática).
+
+Node 24 LTS e TypeScript 7 real permanecem nos gates. O contrato do hub é fixado
+por commit upstream exato + snapshot histórico SHA-256 já incorporado; CI e
+`training:check` exigem checkout, SHA e contrato exatos. Comprovam incorporação
+no ancestral revisado por índice temporário, sem reaplicar patch ou tocar o index
+do hub; candidato atual exige ancestralidade e revisão própria. Snapshot não é commit.
+Console lista conexões OAuth por persona e revoga somente a escolhida com sessão
+Client, CSRF e fingerprint exato. Auditoria é transacional; access/refresh derivados
+da conexão são bloqueados, sem revogar originador/outras conexões. Datas históricas
+ausentes não são inventadas. Estado local não certifica autoridade remota.
+Migrations aplicadas são imutáveis. Baseline v2 exige banco MCP vazio/dedicado;
+não converter ou resetar banco legado, hub, agente ou ERP automaticamente.

@@ -1,49 +1,99 @@
-# Se7e MCP Server — Documentação
+# Documentação Se7e MCP
 
-O MCP **não** cadastra User/Client/Agent e pode habilitar autorização OAuth delimitada para delegar um acesso existente ao ChatGPT. O usuário já é Client no plug-server. O MCP guarda as quatro credenciais (e-mail, senha cifrada, `agentId`, `client_token`), emite **um token MCP opaco por acesso** e dá à IA uma **base de conhecimento**.
+O contrato ativo da refatoração é **persona-v2**. A entrada principal ainda usa o
+runtime legado; a v2 funciona em uma entrada separada de desenvolvimento.
+Deploy permanece bloqueado pelo [manifesto de aceite](../contracts/persona-v2-release.json).
 
-Norte: [product/objective.md](product/objective.md). Tools: [mcp/tools.md](mcp/tools.md). Erros: [mcp/error-mapping.md](mcp/error-mapping.md). Hub: [plug-server/communication.md](plug-server/communication.md). Histórico: [`../CHANGELOG.md`](../CHANGELOG.md).
+Comece pelo [objetivo](product/objective.md) e pelo [estado da v2](persona-v2/README.md).
+Precedência e índice das rules: [AGENTS.md](../AGENTS.md).
 
-## Documentos
+## Persona-v2
 
-| Área                            | Documento                                                                                                                                                                       | Conteúdo                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`product/`](product)           | [objective.md](product/objective.md)                                                                                                                                            | Norte vivo: SQL+resources+dialeto+skills; papel = persona do acesso + pacote; várias personas = vários acessos = vários Bearers                                                                                                                                                                                                                                       |
-| [`product/`](product)           | [implementation-plan.md](product/implementation-plan.md)                                                                                                                        | Implementação, migração, avaliação e gates externos de liberação                                                                                                                                                                                                                                                                                                      |
-| —                               | [proposta-arquitetura-mcp-se7e.md](proposta-arquitetura-mcp-se7e.md)                                                                                                            | **Histórico** (três camadas). Contrato atual: `objective.md` + `tools.md`                                                                                                                                                                                                                                                                                             |
-| [`architecture/`](architecture) | [hexagonal-architecture.md](architecture/hexagonal-architecture.md)                                                                                                             | Hexágono, ports, composição                                                                                                                                                                                                                                                                                                                                           |
-| [`auth/`](auth)                 | [vault-and-mcp-token.md](auth/vault-and-mcp-token.md)                                                                                                                           | Cofre, token MCP, bootstrap e operações seguras de navegador                                                                                                                                                                                                                                                                                                          |
-| [`data/`](data)                 | [data-model.md](data/data-model.md)                                                                                                                                             | Cofre, grafo composto, FTS (`0016`–`0019`, **não** RAG), skill v2, aprendizado (`0020`), persona (`0021`), catálogo por acesso (`0022`), Bearer por acesso (`0023`), governança/publicações (`0024`), auditoria (`0025`), revisão (`0026`) e operação/outbox (`0027`), autoridade ativa (`0028`), setup seguro (`0029`), candidatos (`0030`) e imutabilidade (`0031`) |
-| [`mcp/`](mcp)                   | [tools.md](mcp/tools.md)                                                                                                                                                        | Contrato das tools e resources (`guia://`, `skill://`, `persona://`)                                                                                                                                                                                                                                                                                                  |
-| [`mcp/`](mcp)                   | [error-mapping.md](mcp/error-mapping.md)                                                                                                                                        | Códigos, `source` (`sql` / `sql_engine` / policy / HTTP) e avisos                                                                                                                                                                                                                                                                                                     |
-| [`plug-server/`](plug-server)   | [README.md](plug-server/README.md) · [communication.md](plug-server/communication.md) · [auth.md](plug-server/auth.md) · [rest-integration.md](plug-server/rest-integration.md) | REST/JSON-RPC como Client; Socket/relay de consumer fora de escopo                                                                                                                                                                                                                                                                                                    |
-| [`operations/`](operations)     | [worker.md](operations/worker.md)                                                                                                                                               | SLO, revisões, outbox e webhook operacional isolados por acesso                                                                                                                                                                                                                                                                                                       |
-| [`clients/`](clients)           | [connecting-clients.md](clients/connecting-clients.md) · [console.md](clients/console.md)                                                                                       | Bearer do token MCP; `initialize` / prompt `pre_treino`; console Vue em `/app` para cadastrar a conexão e manter a persona                                                                                                                                                                                                                                            |
+| Tema                                                   | Referência                                                      |
+| ------------------------------------------------------ | --------------------------------------------------------------- |
+| Capacidades implementadas e pendências                 | [Estado da refatoração](persona-v2/README.md)                   |
+| Decisões aprovadas e regras substituídas               | [Registro de decisões](persona-v2/decisions.md)                 |
+| Pendências e evidência exigida por gate                | [Matriz de aceite](persona-v2/acceptance.md)                    |
+| Implementação e homologação ainda abertas              | [Trabalho restante](persona-v2/remaining-plan.md)               |
+| Integridade das evidências de liberação                | [Contrato do verificador](persona-v2/release-evidence.md)       |
+| Empacotamento isolado para homologação                 | [Distribuição candidata](persona-v2/candidate-distribution.md)  |
+| Limpeza explícita de controle descartável local        | [Reset de desenvolvimento](persona-v2/development-reset.md)     |
+| Configuração separada para o futuro corte              | [Preparação de produção](persona-v2/production-distribution.md) |
+| Interface, navegação, tokens e identidade Se7e         | [Console v2](persona-v2/console.md)                             |
+| Pacotes privados, validador e integração pendente      | [Plugin Se7e](persona-v2/plugin.md)                             |
+| Consentimento, conexão ChatGPT e autorização derivada  | [OAuth persona-v2](persona-v2/oauth.md)                         |
+| Criar persona, conectar fontes, treinar e emitir token | [Fluxo inicial](persona-v2/onboarding.md)                       |
+| Motor, identidade física e suspensão de vínculos       | [Identidade da fonte](persona-v2/source-identity.md)            |
+| Rascunho, casos, preview e publicação                  | [Catálogo](persona-v2/catalog.md)                               |
+| SELECT, validação, recortes e paginação                | [Consultas por fonte](persona-v2/source-queries.md)             |
+| Conhecimento compartilhado e perfis físicos            | [Catálogos estruturais](persona-v2/shared-knowledge.md)         |
+| Contratos e ações REST/MCP remoto                      | [Integrações externas](persona-v2/external-integrations.md)     |
+| Cache isolado, singleflight e invalidação              | [Cache v2](persona-v2/query-cache.md)                           |
+| Combinação tipada de fontes                            | [Cruzamentos](persona-v2/federation.md)                         |
+| Preparação, aprovação, execução e conciliação          | [Operações SQL](persona-v2/sql-operations.md)                   |
+| Rodadas executadas e alcance das evidências            | [Validação](persona-v2/validation.md)                           |
+| Prazo obrigatório, tarefas e notificações internas     | [Worker de revisão v2](persona-v2/review-worker.md)             |
+| Simulação, lock e retomada de chaves do cofre          | [Rotação do cofre v2](persona-v2/vault-rotation.md)             |
+| Assinatura, claims e retomada de notificações externas | [Outbox v2](persona-v2/outbox.md)                               |
+| Anexos JSON/binários, handles e download autorizado    | [Anexos v2](persona-v2/attachments.md)                          |
+| Templates, datasets e importação estrutural de DDL     | [Biblioteca editorial v2](persona-v2/knowledge-library.md)      |
+| Fixture e cadeia real MCP/hub/agente nos três motores  | [Homologação isolada](persona-v2/homologation-chain.md)         |
 
-## Como ler
+## Referências da entrada principal legada
 
-Integração opcional com ChatGPT: [delegação OAuth e pacote privado](auth/chatgpt-oauth.md), com [registro de validação e homologação](operations/chatgpt-validation.md). Allowlists do piloto em produção: [chatgpt-oauth-allowlist.md](operations/chatgpt-oauth-allowlist.md).
+Estes documentos mantêm o contrato da aplicação ainda em uso. Identidade por
+acesso, tools, migrations, cache e OAuth descritos aqui não são o modelo novo.
+Consulte-os para manutenção do legado, sem importar suas restrições para a v2.
 
-Instalação e versões: [README do projeto](../README.md). Redis 7, cliente npm, conexão Node/PM2 versus container, configuração opcional e diagnóstico: [operations/redis.md](operations/redis.md). O [overlay de porta local](operations/redis-host.compose.yml) complementa o Compose padrão sem alterar sua rede interna.
+| Tema                     | Referência                                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Arquitetura e dados      | [Arquitetura](architecture/hexagonal-architecture.md), [modelo de dados](data/data-model.md)                                                               |
+| Tools, resources e erros | [Tools](mcp/tools.md), [erros](mcp/error-mapping.md)                                                                                                       |
+| Credenciais e conexão    | [Cofre](auth/vault-and-mcp-token.md), [clientes](clients/connecting-clients.md), [console](clients/console.md)                                             |
+| Treinamento e curadoria  | [Treinamento](product/training.md)                                                                                                                         |
+| Integração REST          | [Hub](plug-server/README.md), [autenticação](plug-server/auth.md), [comunicação](plug-server/communication.md), [adapter](plug-server/rest-integration.md) |
+| OAuth opcional           | [Contrato](auth/chatgpt-oauth.md), [allowlists](operations/chatgpt-oauth-allowlist.md)                                                                     |
+| Operação                 | [Worker](operations/worker.md), [Redis](operations/redis.md)                                                                                               |
 
-1. [product/objective.md](product/objective.md) — invariantes: SQL no plug-server, dialeto do acesso (identificar o GDBR e emitir SQL compatível é treino + IA; o hub não reescreve dialeto), resources `guia://` (bootstrap), `skill://{acessoId}/{slug}` e `persona://` (Bearer); **1 `client_token` = 1 persona = 1 catálogo isolado = 1 Bearer** (`acesso_id`; senha autentica, não particiona); omita `acessoId`; Hub SQL continua `agentId` + `client_token`; papel = persona (tom; **não** recorta skills **neste acesso**) + skills (pacote); várias personas = vários acessos = vários Bearers; fail-closed; sem embeddings.
-2. [mcp/tools.md](mcp/tools.md) — contrato das tools. Envelope de `buscar_contexto` **sem** `sqlModelo`; `conhecimentos[]` = evidência FTS, não RAG.
-3. [mcp/error-mapping.md](mcp/error-mapping.md) — `source`: `sql` (validador) / `sql_engine` (motor/GDBR via agente, não camada de dialeto do hub) / policy / HTTP; `invalid_payload` **não** reescreve SQL; HTTP 5xx `denied` sem RPC ≠ policy.
-4. [plug-server/communication.md](plug-server/communication.md) — canal REST (Socket `/agents` é do `plug_agente`; consumer `/consumers` fora de escopo). Adapter: [rest-integration.md](plug-server/rest-integration.md) (timeout alinhado ao bridge; dois `http(s).Agent` — auth 4 / SQL 16; keepAlive = probe TCP; Nginx 180s na borda; `enriquecer` concorrência 4). Papéis Client: [auth.md](plug-server/auth.md).
-5. [data/data-model.md](data/data-model.md) — tabelas, FTS, pacote v2.
-6. [auth/vault-and-mcp-token.md](auth/vault-and-mcp-token.md) e [clients/connecting-clients.md](clients/connecting-clients.md) — bootstrap, Bearer, reconectar após deploy.
-7. [proposta-arquitetura-mcp-se7e.md](proposta-arquitetura-mcp-se7e.md) — _porquê_ das três camadas (histórico); “Fase 1” ali é jargão da data, não backlog de Socket.
+## Evidências
 
-## Princípios
+Rodadas da refatoração: [validação persona-v2](persona-v2/validation.md).
+Homologação OAuth do runtime legado ainda aberta:
+[validação ChatGPT](operations/chatgpt-validation.md).
+[Changelog](../CHANGELOG.md) e [instalação](../README.md).
 
-- O usuário informa somente no navegador e-mail/senha/`agentId`/`client_token` (+ dialeto). Um token MCP **por acesso**. Acessos extras (`adicionar_acesso` / `registrar_acesso`) emitem outro Bearer via `setupUrl`.
-- Consulta ao ERP **só com skill publicada**. Sem skill capaz: não inventar especialidade nem schema. Norte: [objective.md](product/objective.md).
-- Busca de contexto é **FTS léxica** no Postgres — **não** RAG. Modelo: [data-model.md](data/data-model.md).
-- Com o hub: **só REST** (`POST /api/v1/agents/commands`). Socket/relay de consumer está fora de escopo.
-- Sem seed `Fonte`. Sem Client de serviço no `.env`. Sem JWT de conta MCP. Autorização SQL = policy do `client_token`.
+Relatórios valem para a revisão e a rodada descritas. Não substituir evidência
+histórica por totais novos sem executar/registrar a rodada correspondente.
 
-## Treinamento compartilhado
+## Material histórico
 
-[Base SQL + plug_server, curadoria, casos, templates e datasets](product/training.md) descreve o contrato implementado e o runner separado.
+[Gramática Firebird anterior](persona-v2/firebird-sql.md) é preservada para
+rastreabilidade, fora do suporte atual da v2. Os relatórios datados ficam no
+índice de evidências; não devem ser usados como contrato vigente. Documentos
+do runtime legado continuam necessários enquanto essa entrada estiver em uso.
 
-[Verificação local e pendências externas](operations/training-validation.md).
+## Validação automática
+
+Execute `npm run docs:check` após alterar documentação, rules ou seus exemplos.
+O CI roda o comando e suas regressões em Linux/Windows, sem serviços externos;
+release:check também o inclui. Falhas informam arquivo, linha e tipo do problema.
+
+O comando verifica:
+
+- Links locais, imagens, referências Markdown e âncoras em Markdown; nomes de
+  arquivos precisam ter caixa exata também no Windows. URLs externas são ignoradas.
+- Todas as rules em `.cursor/rules/` com link Markdown real no AGENTS.md,
+  description e alwaysApply no frontmatter.
+- Sintaxe dos blocos JSON e arquivos JSON em docs/. Exemplos com marcador
+  `json docs:<contrato>` usam schemas da aplicação; consultas e entradas de operações
+  também passam por compilação pura em contexto sintético, sem executar SQL.
+- Exemplos obrigatórios e registro de novos JSONs em persona-v2/examples,
+  definidos em [scripts/docs/examples.ts](../scripts/docs/examples.ts). Remover
+  marcador ou exemplo obrigatório faz a checagem falhar.
+- Seções da matriz de aceite para todos os requiredGates do manifesto.
+
+Ao adicionar exemplo tipado, use o marcador de contrato na abertura do bloco JSON
+ou registre o arquivo no catálogo do checker. Exemplo de concessões:
+[permissions.json](persona-v2/examples/permissions.json).
+Validação documental não confirma semântica, autoridade operacional ou aceite de gate.
+Formatação continua sendo verificada por format:check.

@@ -1,0 +1,58 @@
+[
+  {
+    "sha256": "37e14e29a319521875daecc94f9d55ceab8c322fc4188d04900cdb2999c1a0c8",
+    "path": "scripts/check-persona-release.mjs"
+  },
+  {
+    "sha256": "06a8819812886c6a37042012d28618b62cd7fef284f7efe509dcbec019a0606a",
+    "path": "scripts/persona-release-evidence.mjs"
+  },
+  {
+    "sha256": "64f0a6a216b62d3e79fa974e0e9d441eab9eea83f2667188b422fe6e3b66a2fa",
+    "path": "scripts/should-publish-production.sh"
+  },
+  {
+    "sha256": "5cccfba24f3cd1543c2d900479355e7a07ccc334c4f44ba936cf257195b6c2ef",
+    "path": "tests/unit/persona-release.test.ts"
+  },
+  {
+    "sha256": "6501bb1c16fb3418ef72ec1136021d79f06f7a2d30ae24204b2c0f26968a5850",
+    "path": "tests/unit/persona-release-evidence.test.ts"
+  },
+  {
+    "sha256": "c729bb5883b4279cf0c826406c0b56b8a20056dd70f722e72566861f4901337f",
+    "path": "tests/unit/should-publish-production.test.ts"
+  },
+  {
+    "sha256": "aa9137bfc65152e569b90fba0395bb15ca5023e901d70cc2a1a2caaf5695cb69",
+    "path": ".github/workflows/ci.yml"
+  },
+  {
+    "sha256": "e9d34cb95a5df15509df0d0adfa00826bb5b6aa7e6ccee7e64f33d494e92ee1b",
+    "path": ".github/workflows/deploy.yml"
+  },
+  {
+    "sha256": "7a5b2c5134ed9d69f65dad5cc10390930f558d64d0f3106549cb36b242d1bbfc",
+    "path": ".cursor/rules/governance.mdc"
+  },
+  {
+    "sha256": "881965a8e8dacd62ec95365ac8349302f431790bf4788dabe5e61fe183236b1c",
+    "path": "docs/persona-v2/release-evidence.md"
+  },
+  {
+    "sha256": "838769f23d0c5c2316a7d0123c7d1a06c24e2ac62ff20a621661415221c5b3e7",
+    "path": "docs/persona-v2/remaining-plan.md"
+  },
+  {
+    "sha256": "ab12135342801bc9f1553132a1a1a57340e1c9b4595349030aeaa9dad35788f3",
+    "path": "docs/persona-v2/acceptance.md"
+  },
+  {
+    "sha256": "fd12714f8e0d2d25264593e7d7ceb45085d1b1cee4d1411549a97a668292c2d3",
+    "path": "docs/README.md"
+  },
+  {
+    "sha256": "85bb621d48a7ad96d26fc1cd75d474f04e544ec758e42bc8d5806f6de3bc3810",
+    "path": "CHANGELOG.md"
+  }
+]

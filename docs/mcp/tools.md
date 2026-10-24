@@ -1,8 +1,20 @@
-# Tools MCP
+# Tools MCP — runtime legado
 
-Cadastro seguro por formulário do servidor, sem catálogo pronto. Token MCP **nunca** aparece no JSON da tool.
+> Referência da entrada principal por acesso. Para persona-v2, consulte
+> [catálogo/tools](../persona-v2/catalog.md), [consultas](../persona-v2/source-queries.md),
+> [cruzamentos](../persona-v2/federation.md) e [operações SQL](../persona-v2/sql-operations.md).
 
-Consulta ao ERP: skill **publicada** define o escopo. Sem `sql`/`consultaSemantica`, executa a consulta exemplo. Com `sql`, a IA escreve SELECT no dialeto, validado contra o pacote (JOIN composto = conjunto de `pares[]`). Identificar o GDBR do acesso (`verificar_acesso` / `listar_acessos` / `dialeto`) e emitir SQL compatível é **treino + IA** — o `plug_server` é hub (`sql.execute`, policy, PayloadFrame, timeouts) e **não** implementa linguagem SQL, rewrite de dialeto nem classificação de erro mssql/sybase/postgres/firebird; `source: sql_engine` vem do motor/GDBR via `plug_agente` — corrija no dialeto do pacote, não espere o hub reescrever. Skill treinada num dialeto não licencia `TOP`/`OFFSET` de outro GDBR. Amostra estrutural: `inspecionar_consulta` (aceita validada / `rascunho_revalidacao` / publicada). Sem skill capaz: `SKILL_GAP`. Skill em treino que cobre a pergunta: `blockingReason SKILL_NOT_PUBLISHED` — não inventar tabela, coluna nem JOIN. O `initialize.instructions` / prompt `pre_treino` posiciona a IA como especialista em SQL no pacote **daquele acesso** (`1 client_token = 1 catálogo`). O **papel** combina a **persona do acesso** (tom/uso) com as **skills publicadas** (pacote). SQL comum primeiro; persona depois; em conflito vale o pacote fail-closed. Sem Bearer: só o bloco SQL. Com Bearer: anexa a persona **depois** do SQL e as tools **omitem** `acessoId` — o Bearer autentica um único acesso. **Várias personas = vários acessos = vários Bearers** (`adicionar_acesso` / `registrar_acesso` com outro `client_token`); cada um tem catálogo isolado — não concatenar nem unir pacotes. `listar_acessos` devolve só a persona deste token; `persona://{acessoId}` só se o URI for desta sessão. `adicionar_acesso` devolve `setupUrl` do Bearer **novo** e não troca esta sessão. Persona **não** recorta skills **neste acesso** (outro token = outro catálogo) nem licencia tabela, coluna, JOIN ou `consultaPermitida`. Não inventar especialidade.
+Cadastro recebe credenciais somente pelo formulário do servidor; o token MCP
+nunca aparece no JSON da tool. Na consulta, apenas a publicação ativa autoriza
+SQL no dialeto do acesso. Sem SQL/IR, usa-se o modelo publicado. Grafo, persona e
+busca lexical não ampliam o pacote. Falta de skill gera SKILL_GAP; treino ainda
+não publicado pode gerar SKILL_NOT_PUBLISHED. Instruções de correção preservam a
+origem da falha: [erros](error-mapping.md).
+
+Na entrada v2, `listar_fontes`/`verificar_fonte` e consultas exigem descoberta
+e prova nativa na conexão executora pelo hub/agente. `sourceIdentity:1` e
+`expectedSource` são obrigatórios no v2; não são treinamento nem autorização.
+Veja [identidade de fontes](../persona-v2/source-identity.md).
 
 ## Cofre
 
@@ -25,7 +37,12 @@ Consulta ao ERP: skill **publicada** define o escopo. Sem `sql`/`consultaSemanti
 
 ### Várias personas
 
-**Várias personas = vários acessos = vários tokens MCP.** Um Bearer autentica **exatamente um** acesso (um chapéu, um catálogo). O trio usuário+`agentId`+`client_token` tem **uma** persona (`atualizar_persona`) e **só** as skills treinadas nesse token. O mesmo e-mail/`agentId` com outro `client_token` não vê esse catálogo e recebe outro Bearer (`registrar_acesso` / `adicionar_acesso`). O mesmo `agentId` compartilhado entre usuários MCP diferentes pode ter textos e skills diferentes. Persona oriente tom/uso; **não** recorta skills **neste acesso** (outro token = outro catálogo) nem licencia SQL. Senha autentica o usuário; **não** é chave de partição. Hub SQL continua `agentId` + `client_token` daquele acesso. Resource: `persona://{acessoId}` (Bearer; URI só se for desta sessão). Omita `acessoId` nas tools; se enviar, só vale o acesso ligado ao Bearer (`VALIDATION_ERROR` se for outro). Não há inferência N>1 nem sufixo `skill_*_acesso8` neste modelo. `adicionar_acesso` devolve `setupUrl` da persona **nova** e **não** troca o chapéu desta sessão.
+No legado, um Bearer autentica um acesso: usuário + agentId + client_token define
+o catálogo e a persona. Outro client_token começa vazio e recebe Bearer próprio;
+senha autentica, mas não particiona. Omita acessoId nas tools: outro acesso é
+recusado. Resources também devem pertencer à sessão. `adicionar_acesso` entrega
+setupUrl do novo acesso sem trocar esta sessão. Persona orienta tom/uso e não
+licencia SQL. Esse modelo não define a identidade persona-v2.
 
 ## Resources
 
@@ -66,14 +83,16 @@ Dois níveis de descoberta: `explorar_tabelas` / `mapear_tabela` no **treino** (
 
 `inspecionar_consulta`: omita `acessoId` (Bearer = um acesso) + `skillId`/`skillIds[]` opcional + `tabela?` + `finalidade` obrigatória + `sql?` + `params?` + `options.timeout_ms?` (teto 15 s). Sem `sql` nem `tabela`, usa o `sqlModelo` (exige `skillId`). `tabela` monta `SELECT TOP/LIMIT n *`. Teto rígido **100** linhas (`maxRowsApplied`). Allowlist: qualquer tabela de skill validada/publicada/`rascunho_revalidacao` deste acesso. Sem cache, `consulta_aprendida` ou paginação gerenciada. Firebird: só a consulta exemplo (`inspecionar_consulta` sem `sql`); SQL livre → `DIALECT_UNSUPPORTED`. Amostra **crua** (com projeção segura e omissão de colunas pessoais/secretas/inferidas de texto; pessoal/segredo/inferido são omitidos antes de amostrar). Célula binária não vai nas rows: stub `{ kind: "anexo", truncated: true }` **sem handle** + aviso `ANEXO` (inspeção não emite handle; handle legado não é exportável). Resposta: `columns`, `rows`, `columnsMetadata`, `colunasMascaradas` (se houver campos sensíveis mascarados), `colunasOmitidas` (pessoais/secretas/inferidas), `colunasNovasNoGrafo`, `truncated`, `sqlExecutado`, aviso `INSPECAO`. Auditoria grava `skill` + `finalidade` + número de colunas — não a amostra.
 
-Mascaramento por linhagem em **`consultar_dados`** (alias e expressão resolvem à coluna de origem; a mais restritiva vence). Inspeção devolve amostra de colunas classificadas livres.
+Privacidade por linhagem em **`consultar_dados`**: alias e expressão resolvem à
+coluna de origem; a classificação mais restritiva vence. Na inspeção, colunas
+pessoais, secretas e inferidas são omitidas; sensíveis permitidas são mascaradas.
 
-| `sensibilidade` | Valor na resposta                                  |
-| --------------- | -------------------------------------------------- |
-| `livre`         | intacto                                            |
-| `pessoal`       | `p_<hmac>` determinístico por sessão (`usuarioId`) |
-| `sensivel`      | `[texto oculto]`                                   |
-| `segredo`       | `[redacted]`                                       |
+| `sensibilidade` | Valor na resposta                                       |
+| --------------- | ------------------------------------------------------- |
+| `livre`         | intacto                                                 |
+| `pessoal`       | Projeção recusada antes do hub; somente COUNT permitido |
+| `sensivel`      | `[texto oculto]`                                        |
+| `segredo`       | Consulta recusada antes do hub, inclusive agregações    |
 
 Não há opção para revelar segredo ou PII. Amostras não são persistidas.
 
@@ -140,46 +159,28 @@ Resposta tabular: `columns`, `rows`, `rowCount`, `truncated` (teto `max_rows`, s
 
 `exportar_anexo` (Bearer; **não** no bootstrap): `acessoId?` + `handle` + `mimeDestino?` (`image/jpeg` default, ou `image/png` / `application/pdf`). Omita `acessoId` (usa o acesso do Bearer). Handle de persona irmã ou `acessoId` que não bate com o Bearer → `VALIDATION_ERROR` / `MIDIA_ORIGEM_INVALIDA`. Mesmos portões de `consultar_dados` (JWT, policy, skill publicada). 1 anexo por chamada. `file-type` após decode; allowlist jpeg/png/gif/webp/bmp/tiff/pdf; recusa ole/zip/exe/svg. O mime pedido pela IA **não** autoriza o tipo de origem. jpeg/png: conteúdo MCP `type: image` + texto curto (mime, bytes, aviso de resize lado ≤1280). PDF: `type: resource` (não force image; PDF→jpeg recusado). `structuredContent` só metadados (sem blob). Handle HMAC+TTL (~15 min) + `usuarioId` (cap **64 por usuário**, FIFO; inspeção não faz `put`), Buffer só em memória (1 instância — restart perde). Handle expirado/de outro usuário/`acessoId`/de `inspecionar_consulta` (legado) → `MIDIA_ORIGEM_INVALIDA` (chame `consultar_dados` de novo; **não** reexecuta SQL). Pessoal/segredo → `PRIVACIDADE_NEGADA` (`nextAction` não é `inspecionar_consulta`). Foto `livre` de `consultar_dados` ok. Não é conversor universal nem OCR.
 
-## Contratos evoluídos
+## Limites do validador
 
-Os detalhes desta seção complementam as tabelas: publicação sem o hash vigente é sempre apenas preview.
+`consultaSemantica` aceita v1 e v2. Em v2, `modo: "agregacao"` exige `metricas[]` e `modo: "listagem"` exige `dimensoes[]`, sem métricas nem `having`. O limite é aplicado no banco. `validar_consulta` recebe exatamente uma fonte entre `sql` e `consultaSemantica`. Antes do hub, a execução monta `planoConsulta` com origem, skills, tabelas, métricas, filtros, paginação, política e `publicacoes` (`skillId`, id e hash). Estouro de orçamento devolve `CONSULTA_ORCAMENTO` com `details.recomendacoes[]` (`AGREGAR`, `RECORTAR_PERIODO`, `REDUZIR_JOINS`, `PAGINAR`), sem reescrever o SQL.
 
-`consultaSemantica` aceita v1 e v2. Em v2, `modo: "agregacao"` exige `metricas[]` não vazio (múltiplas métricas são permitidas) e `modo: "listagem"` exige `dimensoes[]` não vazio, sem métricas ou `having`. Ambas as formas aceitam filtros, período, ordenação e limite; o limite é aplicado no banco. `buscar_contexto` emite v2 e `validar_consulta` recebe exatamente uma fonte entre `sql` e `consultaSemantica`, com as mesmas opções de limite, paginação e timeout de `consultar_dados`.
+Identidade, rascunho e publicação ativa são separados. `status` permanece publicada enquanto houver snapshot utilizável; `statusRascunho` descreve a edição. Despublicação, deriva incompatível, restrição de segurança e mudança de cardinalidade suspendem as publicações afetadas. Ampliação exige nova publicação. SQL, IR, modelo e consulta aprendida compartilham preparação, parâmetros obrigatórios, recortes, sensibilidade, grão e paginação.
 
-Antes do hub, ambas as tools montam `planoConsulta` (origem, skills, tabelas, métricas/dimensões, modo, filtros, paginação e política) e aplicam o mesmo fail-closed. Estouro de orçamento retorna `CONSULTA_ORCAMENTO` com `details.recomendacoes[]` (`AGREGAR`, `RECORTAR_PERIODO`, `REDUZIR_JOINS`, `PAGINAR`); nenhuma consulta é ampliada ou reescrita silenciosamente.
+Empresa e filial precisam estar ligados à coluna física em todos os caminhos de OR, UNION, CTE e subconsulta. `atualizar_escopo_padrao` aceita `bindings[{tabela,coluna,param}]` (`param` `empresa` ou `filial`). Valor presente em `params` não substitui o vínculo. Sem vínculo demonstrável, `ESCOPO_FILTRO_AUSENTE`. `SUM(DISTINCT valor)` não corrige fanout. Função de janela não dispensa recorte.
 
-`buscar_contexto.diagnosticoCobertura` é um diagnóstico factual: diferencia execução, composição, treino pendente e lacuna, lista necessidades/termos/skills e ordena as próximas ações. Conhecimentos e anotações são evidência lexical; nunca concedem escopo.
+A AST inteira é somente leitura: `SELECT INTO`, escrita, DDL, espera, sequência, UDF, função desconhecida e fonte externa são recusados. Referências físicas em `HAVING`, `GROUP BY` e `ORDER BY` também são verificadas. Limites: SQL até 100 KB, 10 mil tokens, profundidade léxica 64 e árvore até 20 mil nós. A lista permitida por dialeto está em `shared/sql-ast.ts`.
 
-Anotações aceitam governança opcional (`fonteTipo`, referência, responsável, `validadoEm`, `vigenteDe`, `vigenteAte`, `revisarEm`, `periodoRevisaoDias`, `status`). `atualizar_anotacao` exige confirmação. Notas futuras, expiradas ou obsoletas não entram no contexto; `listar_anotacoes` mostra o histórico, `ativaAgora` e a agenda `revisao` no fuso do acesso. `somenteRevisaoPendente` só prioriza notas ativas para manutenção; não muda vigência, cobertura ou autorização SQL.
+Exportação revalida token, policy, publicação e classe atuais. Quotas de bytes por acesso e processo somam-se ao TTL e ao limite de quantidade. Cadastro e protocolos: [cofre](../auth/vault-and-mcp-token.md) e [clientes](../clients/connecting-clients.md).
 
-`publicar_skill` é um fluxo preview/confirm: a primeira chamada retorna `diffPublicacao`, `confirmacaoHash` e `confirmacaoPendente`; somente a confirmação com o mesmo hash publica atomicamente e grava snapshot. Hash ausente devolve preview; hash obsoleto é recusado com `CONFIRMACAO_DESATUALIZADA` e exige novo preview. `despublicar_skill` preserva o histórico. `detectar_deriva_esquema` expõe `mudou`, `drifted`, deltas e skills/consultas afetadas sem SQL sensível.
+## Curadoria, casos e datasets
 
-Auditoria (`audit_log.metadata`) e métricas registram apenas IDs, origem, modo, contagens, paginação, truncamento, cache, estágio e durações. `listar_metricas_agente.painel` traduz esses metadados em estado, taxas e tendência sem identificar perguntas, SQL ou dados. O pedido de `serverTimings` é amostrado por `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (padrão 10); a resposta informa se o hub devolveu timings e seus modos de tratamento de SQL/linhas.
+Contrato, preview e exemplos: [treinamento](../product/training.md).
 
-## Revisões e bloqueios coordenados
+`obter_treinamento_base` é público, com `modulo` e `dialeto` opcionais. Sem dialeto, não assume engine. Resources: `guia://treinamento-base`, `guia://sql`, `guia://plug-server`.
 
-Identidade da skill, rascunho editável e publicação ativa são separados. status permanece publicada se há publicação utilizável; statusRascunho descreve edição. obter_skill lê publicação por padrão (se ainda não há publicação, retorna rascunho para treino); revisao=rascunho seleciona treino, revisao=publicada exige snapshot ativo. skill://, descoberta estrutural e consulta usam exclusivamente publicação. Ampliações exigem nova publicação. Despublicação, deriva incompatível, restrição de segurança e mudança de cardinalidade suspendem as publicações afetadas.
+Tools autenticadas: `listar_consultas_aprendidas`, `obter_consulta_aprendida`, `inativar_consulta_aprendida`, `confirmar_grao`, `confirmar_constante_negocio`, `registrar_feedback_consulta`, `revisar_feedback_consulta`, `diagnosticar_treinamento`, CRUD `*_caso_teste`, `listar_relatorios_avaliacao`, `exportar_template_skill`, `importar_template_skill`, `exportar_dataset_treinamento`.
 
-publicar_skill produz preview/diff/confirmacaoHash ligado ao acesso, versão do rascunho e publicação-base. A confirmação explícita troca o ponteiro em transação com CAS; hash obsoleto retorna CONFIRMACAO_DESATUALIZADA. SQL/IR/modelo/consulta aprendida compartilham preparação, params obrigatórios, recortes, sensibilidade, grão e paginação. planoConsulta.publicacoes identifica skillId/id/hash efetivos. validar_consulta executa somente envelope vazio.
-
-Empresa/filial devem estar ligados à coluna física em todos os caminhos de OR/UNION/CTE/subconsulta. atualizar_escopo_padrao aceita bindings[{tabela,coluna,param}] (param empresa|filial); a presença dos valores em params não basta. Sem vínculo demonstrável, ESCOPO_FILTRO_AUSENTE. Valores do acesso são imutáveis na chamada. JOIN composto exige todas as igualdades simultâneas; medidas de pai em 1:N precisam de prova de grão, pré-agregação ou EXISTS certificado. SUM(DISTINCT valor) não é correção automática.
-
-AST inteira somente leitura: SELECT INTO, escrita/DDL, espera, sequências, UDFs, funções desconhecidas e fontes externas são recusadas. Referências físicas em HAVING/GROUP BY/ORDER BY também são verificadas. Limites: SQL até 100 KB, 10 mil tokens, profundidade léxica 64, árvore até 20 mil nós. Funções de janela não dispensam recorte. A lista permitida por dialeto está em shared/sql-ast.ts; ampliação requer código/teste/documentação deliberados.
-
-Inspeção descobre metadados primeiro; STAR vira projeção explícita classificada, sem pessoal/segredo/inferido. Campos sensíveis permitidos são mascarados. colunasOmitidas informa exclusões; novos campos ficam inferidos sem valores até confirmação. Perfis/dicionários/min-max não expõem valores não classificados. Binário na inspeção nunca tem handle. Anexo consultado vincula origem física e publicações exatas; exportação revalida token, policy, publicação e classe atuais. Quotas de bytes por acesso/processo somam-se ao TTL e limite de quantidade.
-
-Cadastro e protocolos: [cofre](../auth/vault-and-mcp-token.md) e [clientes](../clients/connecting-clients.md).
-
-## Evolução do treinamento
-
-`obter_treinamento_base` é público/readonly, com `modulo` e `dialeto` opcionais; sem dialeto não assume engine. Recursos comuns: `guia://treinamento-base`, `guia://sql`, `guia://plug-server`.
-
-Tools autenticadas: `listar_consultas_aprendidas` (skill/estado/página), `obter_consulta_aprendida`, `inativar_consulta_aprendida`, `confirmar_grao`, `confirmar_constante_negocio`, `registrar_feedback_consulta`, `revisar_feedback_consulta`, `diagnosticar_treinamento`, CRUD versionado `*_caso_teste`, `listar_relatorios_avaliacao`, `exportar_template_skill`, `importar_template_skill`, `exportar_dataset_treinamento`.
-
-`inativar_consulta_aprendida` sem confirmação/hash devolve também `preview`: acesso, consulta (`id`, versão, SQL, pergunta, contrato de parâmetros, publicações e status) e motivo, exatamente como usados no hash. Exiba esse conteúdo antes de confirmar. Alterações ou confirmação obsoleta exigem revisão nova; o CAS e os campos existentes são preservados. Candidata existente é somente leitura para aprovação; um exemplo editado deve ser preparado sem o ID anterior, preservando seus vínculos explícitos.
-
-Mudança compatível de campos, incompatível de fluxo: `salvar_consulta` aceita ID ou preparação legada e múltiplas skills. Sem `confirmacaoHash` retorna preview, mesmo com booleano true; confirmação humana exige segunda chamada. Aprovação não conta execução. Templates/datasets, grão/constantes, casos e inativação seguem preview/hash. Para criação de caso reenviar casoId/versão 0 do preview. Nenhuma tool grava relatório aprovado. [Contrato e exemplos completos](../product/training.md).
+`inativar_consulta_aprendida` e `salvar_consulta` sem hash devolvem o preview do conteúdo usado no hash. Confirmação humana é uma segunda chamada com o hash vigente. Candidata existente não é editada no mesmo ID. Nenhuma tool grava relatório aprovado.
 
 ## Conexão ChatGPT
 
-[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+Contrato de delegação e isolamento: [OAuth do runtime legado](../auth/chatgpt-oauth.md).

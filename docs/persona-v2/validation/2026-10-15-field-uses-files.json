@@ -1,0 +1,254 @@
+{
+  "scope": "Permissões por campo/finalidade; inventário parcial pós-rodada, não candidato integral de produção",
+  "capturedAt": "2026-10-15T13:04:18.1579041Z",
+  "baseCommits": {
+    "mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "agent": "fdb44d86b2a36df85c0133cf72167217fc1bd16e",
+    "hub": "bfb40becd42c5452b19b0df13698d212a0238ddc"
+  },
+  "fixture": "se7e_persona_c3de77455666_test",
+  "files": [
+    {
+      "path": "src/domain/persona-v2/field-use.ts",
+      "sha256": "5ecc2922f6e14811d6e2a149a697b70f62dcce2a85e9c7082a812281a82ec0b8",
+      "beforeFinalSha256": "5ecc2922f6e14811d6e2a149a697b70f62dcce2a85e9c7082a812281a82ec0b8",
+      "currentSha256": "5ecc2922f6e14811d6e2a149a697b70f62dcce2a85e9c7082a812281a82ec0b8",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/query-field-uses.ts",
+      "sha256": "2767367abf680ced4b1c380ba176fbd79647c79617df2592d369ef4d7ff05c33",
+      "beforeFinalSha256": "e7fdc60282030cd49ffde1708aca858b57c137f5f1f1f82abb465e61582e54e5",
+      "currentSha256": "e7fdc60282030cd49ffde1708aca858b57c137f5f1f1f82abb465e61582e54e5",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/federation-field-uses.ts",
+      "sha256": "6464a44a17f976d88a110b674e3ea5a0cb172c216cac1f3b49d9c92a35f27cbb",
+      "beforeFinalSha256": "6464a44a17f976d88a110b674e3ea5a0cb172c216cac1f3b49d9c92a35f27cbb",
+      "currentSha256": "6464a44a17f976d88a110b674e3ea5a0cb172c216cac1f3b49d9c92a35f27cbb",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/query-training.ts",
+      "sha256": "d73ae1cc01cd8927a4c5c5baef3e6a8b118275e90ed3afa1ea00b584b99682d3",
+      "beforeFinalSha256": "d73ae1cc01cd8927a4c5c5baef3e6a8b118275e90ed3afa1ea00b584b99682d3",
+      "currentSha256": "d73ae1cc01cd8927a4c5c5baef3e6a8b118275e90ed3afa1ea00b584b99682d3",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/source-query.ts",
+      "sha256": "6c8def750c336c843185d148448d89a6365cf15cb531d9d5e90ddd5b8db8d350",
+      "beforeFinalSha256": "6c8def750c336c843185d148448d89a6365cf15cb531d9d5e90ddd5b8db8d350",
+      "currentSha256": "6c8def750c336c843185d148448d89a6365cf15cb531d9d5e90ddd5b8db8d350",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/published-federation.ts",
+      "sha256": "522d328b3fd07b98187cfbe1debd7abd7bf01750c31320c78a4e77059a710ce4",
+      "beforeFinalSha256": "522d328b3fd07b98187cfbe1debd7abd7bf01750c31320c78a4e77059a710ce4",
+      "currentSha256": "522d328b3fd07b98187cfbe1debd7abd7bf01750c31320c78a4e77059a710ce4",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/shared-query-adoption.ts",
+      "sha256": "782fa269b1df11b6ad7eb8814a94e35f3820ba874b72a3489e216cbdd57a1556",
+      "beforeFinalSha256": "782fa269b1df11b6ad7eb8814a94e35f3820ba874b72a3489e216cbdd57a1556",
+      "currentSha256": "782fa269b1df11b6ad7eb8814a94e35f3820ba874b72a3489e216cbdd57a1556",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/consumer-catalog.ts",
+      "sha256": "892b576f621756913468f8a41e4dff6e8d1d449e513b4f6e432f0c092c2feecd",
+      "beforeFinalSha256": "892b576f621756913468f8a41e4dff6e8d1d449e513b4f6e432f0c092c2feecd",
+      "currentSha256": "892b576f621756913468f8a41e4dff6e8d1d449e513b4f6e432f0c092c2feecd",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/knowledge-documents.ts",
+      "sha256": "d0cfec135073b691d7579ec4b4d35f7745e490f34b08736a8ad3bbe457fd84e6",
+      "beforeFinalSha256": "d0cfec135073b691d7579ec4b4d35f7745e490f34b08736a8ad3bbe457fd84e6",
+      "currentSha256": "d0cfec135073b691d7579ec4b4d35f7745e490f34b08736a8ad3bbe457fd84e6",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/knowledge-graph.ts",
+      "sha256": "11ba844c69a47052c18b567e14636a74670b69a7246f336e7ac956b4b299955e",
+      "beforeFinalSha256": "11ba844c69a47052c18b567e14636a74670b69a7246f336e7ac956b4b299955e",
+      "currentSha256": "11ba844c69a47052c18b567e14636a74670b69a7246f336e7ac956b4b299955e",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/training-base.ts",
+      "sha256": "af1985eaa366bd3f4481f001d59fe5ab732a4a509e1d46872037280ddb1c1e61",
+      "beforeFinalSha256": "af1985eaa366bd3f4481f001d59fe5ab732a4a509e1d46872037280ddb1c1e61",
+      "currentSha256": "af1985eaa366bd3f4481f001d59fe5ab732a4a509e1d46872037280ddb1c1e61",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "0469d23c12a3032f4deaa099e0b72007b0a9b10ab9f8f2cce640f833e5c08c5f",
+      "beforeFinalSha256": "0469d23c12a3032f4deaa099e0b72007b0a9b10ab9f8f2cce640f833e5c08c5f",
+      "currentSha256": "0469d23c12a3032f4deaa099e0b72007b0a9b10ab9f8f2cce640f833e5c08c5f",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "src/application/use-cases/shared/sql-ast.ts",
+      "sha256": "e6a994bcfc61ec5254e66ef83df115eb0b53e4d8b14c37cb9664abc5f67e873e",
+      "beforeFinalSha256": "2bcbcae39e61c2d8386f257d44577554263c25c60c37d919ea4191c4656c1f0d",
+      "currentSha256": "2bcbcae39e61c2d8386f257d44577554263c25c60c37d919ea4191c4656c1f0d",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "tests/homologation/persona-chain.test.ts",
+      "sha256": "79d492c7de5e8a52785bb731291657485a3b1deb2385ba56e96eb99bbabd8b9e",
+      "beforeFinalSha256": "2e6b830d0981fb700c99097a893bb31710ed883aa12e515be5a58ea13cf41545",
+      "currentSha256": "2e6b830d0981fb700c99097a893bb31710ed883aa12e515be5a58ea13cf41545",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "tests/unit/persona-v2/field-uses.test.ts",
+      "sha256": "708c51def255a0f6453fc9123a4bc084c5c3e726f1ac9c238865879dcb164af7",
+      "beforeFinalSha256": "f5f885e2c67ed72c2663ac9665198113bb7ad624150ecd1945704978df0be9a7",
+      "currentSha256": "f5f885e2c67ed72c2663ac9665198113bb7ad624150ecd1945704978df0be9a7",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "tests/unit/persona-v2/authorization.test.ts",
+      "sha256": "cd0090ad6c6fb3a7e0260d2890b7dcaa29c8b98b1cefd65595a08d98661712c0",
+      "beforeFinalSha256": "cd0090ad6c6fb3a7e0260d2890b7dcaa29c8b98b1cefd65595a08d98661712c0",
+      "currentSha256": "cd0090ad6c6fb3a7e0260d2890b7dcaa29c8b98b1cefd65595a08d98661712c0",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "tests/unit/persona-v2/structure-inspection.test.ts",
+      "sha256": "2c2d3aa9b0a7c6183af70216ec1c4cf505747fbfa0dc34f3ac4944362b519fba",
+      "beforeFinalSha256": "2c2d3aa9b0a7c6183af70216ec1c4cf505747fbfa0dc34f3ac4944362b519fba",
+      "currentSha256": "2c2d3aa9b0a7c6183af70216ec1c4cf505747fbfa0dc34f3ac4944362b519fba",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "web/src/persona-v2/FieldUseEditor.vue",
+      "sha256": "71b7d88c299e5b8d7395ad8ed5438558e9b099d0dbbf5776bb23e6fefef79579",
+      "beforeFinalSha256": "71b7d88c299e5b8d7395ad8ed5438558e9b099d0dbbf5776bb23e6fefef79579",
+      "currentSha256": "71b7d88c299e5b8d7395ad8ed5438558e9b099d0dbbf5776bb23e6fefef79579",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "4a9eb0869e95c2377a49ea89137e36ea391302328cd720dd77fe3745d0b190fa",
+      "beforeFinalSha256": "4a9eb0869e95c2377a49ea89137e36ea391302328cd720dd77fe3745d0b190fa",
+      "currentSha256": "4a9eb0869e95c2377a49ea89137e36ea391302328cd720dd77fe3745d0b190fa",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "web/src/persona-v2/TokenManager.vue",
+      "sha256": "2534322f265916a187f8d666f26646602a12ef8378a7fc5010161f92c8a8cc42",
+      "beforeFinalSha256": "2534322f265916a187f8d666f26646602a12ef8378a7fc5010161f92c8a8cc42",
+      "currentSha256": "2534322f265916a187f8d666f26646602a12ef8378a7fc5010161f92c8a8cc42",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "web/src/persona-v2/model.ts",
+      "sha256": "024bdc54b2ba16f44bbd1d0083b5c40be25694121043bf50d14915fa82409496",
+      "beforeFinalSha256": "024bdc54b2ba16f44bbd1d0083b5c40be25694121043bf50d14915fa82409496",
+      "currentSha256": "024bdc54b2ba16f44bbd1d0083b5c40be25694121043bf50d14915fa82409496",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "web/src/persona-v2/field-capabilities.ts",
+      "sha256": "ca3326645fa5607b633b97f6b93977ab91e7409f27ccdc4e7144303e7e36a03b",
+      "beforeFinalSha256": "ca3326645fa5607b633b97f6b93977ab91e7409f27ccdc4e7144303e7e36a03b",
+      "currentSha256": "ca3326645fa5607b633b97f6b93977ab91e7409f27ccdc4e7144303e7e36a03b",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "web/src/persona-v2/knowledge-model.ts",
+      "sha256": "e31de669b0c8e0987b3bf93dacd0c7c51575aca8a9deb94230a477e08a345d5a",
+      "beforeFinalSha256": "e31de669b0c8e0987b3bf93dacd0c7c51575aca8a9deb94230a477e08a345d5a",
+      "currentSha256": "e31de669b0c8e0987b3bf93dacd0c7c51575aca8a9deb94230a477e08a345d5a",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2",
+      "beforeFinalSha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2",
+      "currentSha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "sha256": "9a75748ffa7d5921cdc5ac92d7e5ddc8c05ff8d713ab1e7e786552f3c3e64427",
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "beforeFinalSha256": "9a75748ffa7d5921cdc5ac92d7e5ddc8c05ff8d713ab1e7e786552f3c3e64427",
+      "currentSha256": "9a75748ffa7d5921cdc5ac92d7e5ddc8c05ff8d713ab1e7e786552f3c3e64427",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "sha256": "0099d5afa476c332fae304522dc471bf6136104e1b6e8c704e2684207f1b37c7",
+      "path": "tests/persona-v2/postgres.test.ts",
+      "beforeFinalSha256": "0099d5afa476c332fae304522dc471bf6136104e1b6e8c704e2684207f1b37c7",
+      "currentSha256": "0099d5afa476c332fae304522dc471bf6136104e1b6e8c704e2684207f1b37c7",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "sha256": "689be196c2ca3073f45881576680d27e9365bff8c20dc1834ffd1fe1569c80fc",
+      "path": "web/src/persona-v2/knowledge-model.test.ts",
+      "beforeFinalSha256": "689be196c2ca3073f45881576680d27e9365bff8c20dc1834ffd1fe1569c80fc",
+      "currentSha256": "689be196c2ca3073f45881576680d27e9365bff8c20dc1834ffd1fe1569c80fc",
+      "unchangedSinceRoundCapture": true
+    },
+    {
+      "sha256": "d1a87db7c676b9b3e034c0c915baea2aacd14e1807dfe53e274b025777a7a003",
+      "path": "web/src/persona-v2/SourceKnowledgeWorkspace.vue",
+      "stage": "Web testada após rodada nativa"
+    }
+  ],
+  "driverFiles": [
+    {
+      "file": "podbc35w.dll",
+      "version": "18.00.0000",
+      "sha256": "452afccffb9b7ffbdb736b8ba1cba9d7b1e11b09ffaee9cf85d6d3788cace991"
+    },
+    {
+      "file": "dbodbc16.dll",
+      "version": "16.0.0.2043 (64-bit)",
+      "sha256": "571e105fb3e14e754b16863739d402022d0e1f64a10d0b224c4e6dd429d5e8be"
+    },
+    {
+      "file": "msodbcsql18.dll",
+      "version": "2018.0186.0001.01 ((DS_Main).170626-2112)",
+      "sha256": "b510668814e68df5018f6f3de0d203fd9b8628b1901d46ed3762ee263b87bbbb"
+    }
+  ],
+  "observations": "Hashes do fluxo e drivers observados; versões nativas exportadas somente por sql.describeSchema na cadeia real. Inventário parcial, sem certificar checkout/release integral.",
+  "checks": {
+    "personaUnitTests": 410,
+    "typescript": "7.0.2",
+    "productionReleased": false,
+    "chromiumTests": 2,
+    "firstChainPassed": 35,
+    "node": "24.21.0",
+    "webUnitTests": 32,
+    "postgresIntegrationTests": 194,
+    "legacySqlTests": 71,
+    "persistentChainPassed": 38,
+    "consumerAiEvaluated": false,
+    "firstChainFailed": 3
+  },
+  "finalRoundFixture": "se7e_persona_0870561961b8_test",
+  "beforeFinalCapturedAt": "2026-10-15T13:16:05.8840575Z",
+  "engines": [
+    {
+      "dialect": "postgres",
+      "version": "17.0.11"
+    },
+    {
+      "dialect": "mssql",
+      "version": "16.00.4236"
+    },
+    {
+      "dialect": "sybase",
+      "version": "16.00.0000"
+    }
+  ]
+}

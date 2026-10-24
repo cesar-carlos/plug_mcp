@@ -1,5 +1,37 @@
 # Mapeamento de erros
 
+## Persona-v2
+
+| Código / situação                                 | Tratamento                                                                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| AUTHORIZATION_DENIED                              | Administração: 403; Bearer inválido: 401. Corrigir autenticação/concessão.                                                                       |
+| AUTHORITY_UNAVAILABLE                             | Autoridade indisponível: 503; bloquear execução/entrega.                                                                                         |
+| CAPABILITY_UNAVAILABLE                            | Recurso sem suporte negociado, tipo ainda inerte ou fonte sem prova nativa; não usar fallback.                                                   |
+| STALE_AUTHORIZATION                               | Fonte/publicação/credencial/concessão incompatível. Suspender vínculos/dependências quando a prova física mudar; não reassociar automaticamente. |
+| OPERATION_CONFLICT                                | CAS/preview/conteúdo divergente ou reenvio recusado.                                                                                             |
+| INCOMPLETE_INPUT                                  | Casos sem relatório atual ou entrada/resposta sem completude suficiente.                                                                         |
+| SOURCE_AMBIGUOUS / INVALID_PLAN / BUDGET_EXCEEDED | Corrigir fonte/plano/limites dentro do contrato publicado.                                                                                       |
+| APPROVAL_REQUIRED / OPERATION_EXPIRED             | Operação sem aprovação exigida ou com validade encerrada.                                                                                        |
+| Resultado desconhecido                            | Consultar estado/conciliar conforme contrato; nunca reenviar a operação.                                                                         |
+
+Entrada inválida na administração retorna 400. Tools sinalizam isError e resources
+recusam acesso sem devolver pacote. Falhas locais de SQL preservam code/message/hint
+com source=sql; falhas upstream preservam origem/estágio e sanitizam a mensagem.
+Transporte indisponível não prova substituição de base nem autoriza retry.
+`SOURCE_IDENTITY_MISMATCH` do agente é preservado pelo adapter como
+`CREDENTIAL_STALE`, origem `client_token_rpc`, sem retry. Na consulta v2,
+invalida vínculos/dependências e retorna `STALE_AUTHORIZATION`; não reescrever
+o SQL nem reassociar a base automaticamente. Em DML, divergência antes da
+transação fica no comprovante durável sem lançamento; consultar o estado.
+
+Detalhes: [catálogo](../persona-v2/catalog.md),
+[identidade](../persona-v2/source-identity.md),
+[consulta](../persona-v2/source-queries.md),
+[cruzamentos](../persona-v2/federation.md) e
+[operações](../persona-v2/sql-operations.md).
+
+## Runtime legado
+
 Envelope das tools:
 
 ```json
@@ -47,7 +79,10 @@ Validador MCP vs hub: `INVALID_SQL` com `source: sql_engine` (e `details.engineM
 
 `documentationUrl` aponta para `GET {PUBLIC_BASE_URL}/docs/mcp/error-mapping.md` (esta matriz, mesma origem do `/health`) mais a âncora do código. Sem HTML extra.
 
-Falhas de preflight (escopo, privacidade, fanout, parâmetros, paginação ou orçamento) acontecem antes do hub, mantêm `source: mcp`/`stage: preflight` e não devem disparar retry. `CONSULTA_ORCAMENTO` pode incluir `details.recomendacoes[]` estruturadas; elas orientam a IA sem alterar o SQL recebido.
+Falhas de preflight (escopo, privacidade, fanout, parâmetros, paginação ou orçamento)
+acontecem antes do hub e preservam source/stage do erro de origem. Erros do pacote
+usam source=sql; preflight na auditoria não reclassifica o envelope para source=mcp.
+Essas recusas não devem disparar retry. `CONSULTA_ORCAMENTO` pode incluir `details.recomendacoes[]` estruturadas; elas orientam a IA sem alterar o SQL recebido.
 
 `validar_consulta` usa o mesmo preflight de `consultar_dados` e executa apenas um envelope vazio no hub. Um plano retornado em `planoConsulta` é diagnóstico e não autoriza tabelas fora do pacote publicado. Auditoria de cache hit, retorno antecipado e erro anterior ao hub contém somente metadados permitidos, nunca SQL, pergunta ou parâmetros.
 
@@ -173,7 +208,7 @@ A próxima chamada de `enriquecer=completo` pula o que já tem tipo+formato ou c
 Essas pendências orientam um novo treinamento, confirmação de cardinalidade ou
 ajuste do SQL; não autorize publicação com base apenas nesse aviso.
 
-## Novos bloqueios
+## Bloqueios do validador
 
 | Código                     | Ação corretiva                                                                                      |
 | -------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -199,4 +234,4 @@ Esses erros bloqueiam a nova publicação e preservam a autoridade anterior. Os 
 
 ## Conexão ChatGPT
 
-[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+Contrato de delegação e isolamento: [OAuth do runtime legado](../auth/chatgpt-oauth.md).

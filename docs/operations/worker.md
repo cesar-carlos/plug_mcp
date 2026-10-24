@@ -1,5 +1,11 @@
 # Worker operacional
 
+> Operação da composição legada. Consultas persona-v2 não usam esse cache/worker;
+> consulte o [estado v2](../persona-v2/README.md).
+
+O [worker de revisão persona-v2](../persona-v2/review-worker.md) tem comando,
+armazenamento e guard próprios; não é iniciado por este worker legado.
+
 `npm run worker:operacoes` é um processo separado do HTTP MCP e exige `DATABASE_URL`. A cada `OPERATIONS_WORKER_INTERVAL_MS` ele calcula SLO por acesso sobre a janela configurada, cria/resolve alertas e procura anotações a revisar na timezone do acesso.
 
 O mesmo ciclo elimina candidatas a aprendizado não promovidas há 90 dias, sem afetar consultas confirmadas. `npm run runtime:check`, somente em banco CI isolado, valida inicialização do servidor e do worker; `--migrate` verifica também as migrações empacotadas.

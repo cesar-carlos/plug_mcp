@@ -1,0 +1,220 @@
+{
+  "scope": "persona-v2-console-external-editor",
+  "partial": true,
+  "productionReady": false,
+  "generatedAt": "2026-10-17T14:39:49.5365223Z",
+  "revisions": {
+    "plug_mcp": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+    "plug_server": "76950497dc386130e13b7d6afc0678e50208e985",
+    "plug_agente": "7d00ae8a8f822605d76e775fb5659f27e29df539"
+  },
+  "environment": {
+    "node": "24.21.0",
+    "typescript": "7.0.2",
+    "postgres": "17.11",
+    "chromium": "153.0.8010.12",
+    "hub": "synthetic",
+    "externalBrowserProvider": "synthetic",
+    "fixture": "se7e-external-editor-92fcd1f22d24",
+    "https": "manual",
+    "chatgpt": "manual"
+  },
+  "runs": [
+    {
+      "suite": "browser-complete-after-panel-initialization-fix",
+      "passed": 38,
+      "skipped": 0,
+      "duration": "3.7m",
+      "note": "Before final copied-action approval reset; targeted final bundle verified separately"
+    },
+    {
+      "suite": "browser-final-external-workflows",
+      "passed": 6,
+      "skipped": 0,
+      "duration": "17.3s"
+    },
+    {
+      "suite": "postgres-administration-delegation-external",
+      "passed": 56,
+      "skipped": 0,
+      "duration": "44.32s"
+    },
+    {
+      "suite": "frontend-native",
+      "passed": 63,
+      "skipped": 0,
+      "duration": "1.32s"
+    },
+    {
+      "suite": "general-native",
+      "passed": 1471,
+      "skipped": 91,
+      "duration": "87.11s"
+    }
+  ],
+  "cleanupConfirmed": true,
+  "cleanup": {
+    "databasesInOwnedFixture": 22,
+    "anonymousVolumesRemoved": 1,
+    "temporarySecretsRemoved": true,
+    "consoleListeners": 0
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "63d14d84b169a2807106dad3e05f565ca4c3e45c05e74d1cd1350892a753bd6a"
+    },
+    {
+      "path": ".cursor/rules/persona_v2.mdc",
+      "sha256": "a02e5846eb6f705a70911a373ba1d2ae6c8702bccea01570d7fa8593e8c93a8f"
+    },
+    {
+      "path": ".cursor/rules/catalog.mdc",
+      "sha256": "8c412dcffc5637726d02239f111064e7c7eca1136e62512a0685b41c6e03b52e"
+    },
+    {
+      "path": ".cursor/rules/testing.mdc",
+      "sha256": "7cab8c7efbe8c68ce780c0c48c394cd504ae60db3e359e192b470853d8c49135"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "dd500977d55cb6c34d3336a069a5f565aea61af354cc9df02e3a2d42e568ab7b"
+    },
+    {
+      "path": "contracts/persona-v2-release.json",
+      "sha256": "f01218d325838afdca6cdd4738b2675b1b839b9d74360a8789dcb98b95439df2"
+    },
+    {
+      "path": "src/domain/ports/persona-external.port.ts",
+      "sha256": "61838359466072236514c46122235c436a422aed54eab12e0902942fa2af3898"
+    },
+    {
+      "path": "src/domain/persona-v2/external-run.ts",
+      "sha256": "96800e9840b02b21a9d5da173e5dfc9794154fe83bfb059262ea15b8afb739c7"
+    },
+    {
+      "path": "src/infrastructure/persistence/persona-v2/external.ts",
+      "sha256": "085c5d67764aff15adea4c35f9c14804d08b9baa0c5dc4b418e02b573dadf1b2"
+    },
+    {
+      "path": "src/application/persona-v2/external-integrations.ts",
+      "sha256": "8a36a5ffed208ea83c09d5d1d87aeb6e96b68a34130d2858b6278f6ec7521ee2"
+    },
+    {
+      "path": "src/application/persona-v2/publication-review.ts",
+      "sha256": "b90ae8122412afc26fefeaab18236dd6b9c5c107b3af4ce2216db4763ff72e20"
+    },
+    {
+      "path": "src/application/persona-v2/runtime-instructions.ts",
+      "sha256": "594c39d1c3f7014e8611ff018dd434bf8ccc75f4445743b83ff4fee71002e31d"
+    },
+    {
+      "path": "src/infrastructure/http/persona-v2-admin.ts",
+      "sha256": "de6cf3e83b9c6a86d0fc186805a1079f1a3a67f7c58b9ef506388ab8c698fb90"
+    },
+    {
+      "path": "web/src/persona-v2/external-editor.ts",
+      "sha256": "d9b9d515a26e0026782a2ce601cc080c187ddc772fa416ec669df939565af6fd"
+    },
+    {
+      "path": "web/src/persona-v2/external-editor.test.ts",
+      "sha256": "8247b881ce7464b00ee4dfffb5e2adcd65423c0ab417217c508ee5b2ae1a9212"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalContractFields.vue",
+      "sha256": "55645688440dfe7524956476a87d90723a4859192b7064797d92c698264c35f9"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalFieldDefinitions.vue",
+      "sha256": "f6b09e2127000490a7dbfde87073a68a98209c80a8421f504eac25e6e4b43a3d"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalLiteralField.vue",
+      "sha256": "6697b38cc32f448d13bf44ab8dc483f18e727cf20166cd48335e227a72de521c"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalReconciliationFields.vue",
+      "sha256": "33bfbb45241adfabf60db5a43c04343a1b8d13eaaa79152ef64fcede2c29933d"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalSkillEditor.vue",
+      "sha256": "16fab59e888df5dc5025e808b7ba9f36df507908abdea4b921069678a76f5922"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalTransportFields.vue",
+      "sha256": "fad5baf8886a2a67c5f183b3629f0489c96a85d41e4d6bfdc21655601398389e"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalTestsPanel.vue",
+      "sha256": "d186bf38c20769bea0c644a515e0514aa3edf2e365d2c4758545174faaf408b0"
+    },
+    {
+      "path": "web/src/persona-v2/ExternalActionsPanel.vue",
+      "sha256": "f61ddc868b38d09e2866da24f4932b58b035b3c359039cfcd5c0527b94cdb83c"
+    },
+    {
+      "path": "web/src/persona-v2/PersonaConsole.vue",
+      "sha256": "c59e5f8b54e20b81630200cf9e9bcdd29c2e0c69d1c12805d0dc3d0471935b5a"
+    },
+    {
+      "path": "tests/helpers/persona-external-action.ts",
+      "sha256": "bdf04942d257e980d805ace153c1fbaff3ae4af4740206740d54541e4ffe50f0"
+    },
+    {
+      "path": "tests/persona-v2/setup-delegation.postgres.test.ts",
+      "sha256": "82c9b0f3b457ea6f888872c8f89e2c193e31f0fd0027109678b70a473e065c71"
+    },
+    {
+      "path": "tests/persona-v2-browser/persona.spec.ts",
+      "sha256": "132653c007497830cd48d494cecc508369ff93ecb05cf9362ee182861b14da73"
+    },
+    {
+      "path": "docs/persona-v2/README.md",
+      "sha256": "9799ad4882d22bdb0405bda6c50d0dec513763f1a6e23a09e56cf3fa12180f65"
+    },
+    {
+      "path": "docs/persona-v2/acceptance.md",
+      "sha256": "52621efacd0faedb6428d860e59e79d6103920f12d7ad27e35d32b86730461dd"
+    },
+    {
+      "path": "docs/persona-v2/remaining-plan.md",
+      "sha256": "d75ac15d081fc96a0937bc8f05f214fdf11adc195a3577d04292111994703279"
+    },
+    {
+      "path": "docs/persona-v2/console.md",
+      "sha256": "6177c9c356d7da6f5f212c43c024c3cf231896546d7f5ff3455bccd3b4466565"
+    },
+    {
+      "path": "docs/persona-v2/external-integrations.md",
+      "sha256": "4a9764d2c9ceeaf8ab709f737a93c8621ebf78e72d9f57a03ada476290f2ae3b"
+    },
+    {
+      "path": "docs/persona-v2/validation/2026-10-17-console-external-editor.md",
+      "sha256": "3c62109cd3951c9f8d15b6ad6c85228ba4c5ef519f67cd638de45e28309c61de"
+    },
+    {
+      "path": "web/dist/persona-v2.html",
+      "sha256": "695cf9f6a04cb3801c6b84fa21720007c8b0589cf4c2e51b51489fcff869ee6e"
+    },
+    {
+      "path": "web/dist/assets/ExternalSkillEditor-DDT1W0xq.js",
+      "sha256": "0197c1179dd1e858adacb203f9937f68a55117c6e37f465a74b5cd35ea4f3509"
+    },
+    {
+      "path": "web/dist/assets/FederationSkillEditor-BxLX7ypK.js",
+      "sha256": "096fd03270fb27a63eda2f8f5b03109e3af10aac116e62a2cd66d769e3e2f27f"
+    },
+    {
+      "path": "web/dist/assets/persona-BlK0PRLn.css",
+      "sha256": "7ffd218762c2073237c97ee04a1443acc1dad4d8e007e254dfb1500802e07cda"
+    },
+    {
+      "path": "web/dist/assets/persona-Bog6kO0S.js",
+      "sha256": "5ceef7da6d058a4840f3fa36b57220279b57db91c7ec4721443be99eaf133ec1"
+    },
+    {
+      "path": "web/dist/assets/preload-helper-DSyqeqVq.js",
+      "sha256": "34bb4f8813937e2450c2ca62dc02eb06d0f3b4b99a7f401b2c483e53648b1554"
+    }
+  ]
+}

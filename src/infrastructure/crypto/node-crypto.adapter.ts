@@ -2,6 +2,7 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
   randomBytes,
   randomUUID,
   scryptSync,
@@ -94,5 +95,15 @@ export class NodeCryptoAdapter implements CryptoPort {
 
   sha256Hex(value: string): string {
     return createHash("sha256").update(value).digest("hex");
+  }
+
+  /** Domain-separated confirmation tags bind key IDs without persisting key material. */
+  keyFingerprints(): Readonly<Record<string, string>> {
+    return Object.fromEntries(
+      [...this.keys].map(([id, key]) => [
+        id,
+        createHmac("sha256", key).update("se7e-persona-v2/vault-key-binding").digest("hex"),
+      ]),
+    );
   }
 }

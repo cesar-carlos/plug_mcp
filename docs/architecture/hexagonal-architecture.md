@@ -1,5 +1,8 @@
 # Arquitetura hexagonal
 
+> Referência do runtime legado por acesso. Modelo aprovado e estado da refatoração:
+> [persona-v2](../persona-v2/README.md). Não aplicar esta identidade à entrada nova.
+
 ```text
 Cliente MCP
    │  Streamable HTTP
@@ -27,14 +30,12 @@ Bearer MCP → hash SHA-256 → `acesso.token_hash` (não `usuario_mcp`). ALS na
 
 ## Grafo e skills
 
-Escrita do grafo com `withAcessoLock(acessoId)`. Grafo, skills e aprendizado por `acesso_id`. Leitura filtrada por `getClientTokenPolicy` (policy recorta SQL/leitura **dentro** do grafo daquele acesso). Consulta só com **pacote publicado** — o grafo apoia o treino, não licencia JOIN. Contrato: [objective.md](../product/objective.md) e [tools.md](../mcp/tools.md).
-
-_Porquê_ das três camadas (histórico): [proposta-arquitetura-mcp-se7e.md](../proposta-arquitetura-mcp-se7e.md).
+Escrita do grafo com `withAcessoLock(acessoId)`. Grafo, skills e aprendizado por `acesso_id`. Leitura filtrada por `getClientTokenPolicy` (policy recorta SQL/leitura **dentro** do grafo daquele acesso). Consulta só com **pacote publicado**. O grafo apoia o treino e não licencia JOIN. Aprendizado (exemplos confirmados, regras e sinônimos) orienta a busca e não amplia o pacote. Contrato: [objective.md](../product/objective.md) e [tools.md](../mcp/tools.md).
 
 PreparedQuery tipado concentra preparação compartilhada de validar/consultar. SkillRepositoryPort distingue revisão editável e snapshot ativo; SkillPublicacaoRepositoryPort faz publicação transacional com CAS. SetupOperationRepositoryPort armazena hashes e reclama POST atomically; segredos entram somente pelo formulário. CryptoPort continua abstraindo envelope versionado/rotação.
 
 ## Conexão ChatGPT
 
-[OAuth opcional](../auth/chatgpt-oauth.md) delega um acesso existente; não altera a autoridade das publicações, a policy ou confirmações. /mcp permanece manual. Perfil/contexto/revogação são tools exclusivas de /mcp/chatgpt. Falha de autenticação OAuth tem stage=oauth e desafio MCP; erros de hub/SQL não provocam reconexão OAuth.
+Contrato de delegação e isolamento: [OAuth do runtime legado](../auth/chatgpt-oauth.md).
 
 AuthorizedUnitOfWorkPort entrega ports transacionais, sem tipos de Drizzle/PostgreSQL no domínio. O adapter PostgreSQL bloqueia acessos em ordem de ID, depois a concessão e os registros de negócio; revalida prazos antes do commit. Repositórios têm efeitos classificados explicitamente, sem interceptação de SQL. Operações de remoção usam uma transação multirrepositório. Nenhuma chamada ao hub é permitida com essa transação aberta; etapas persistidas em torno de chamadas externas são autorizadas separadamente.

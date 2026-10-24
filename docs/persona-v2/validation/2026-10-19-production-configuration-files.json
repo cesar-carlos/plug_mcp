@@ -1,0 +1,34 @@
+{
+  "baseRevision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+  "files": [
+    {
+      "path": "src/config/persona-production.ts",
+      "sha256": "a38553676422d11a01582e86b2513328a7e9b06f25fe08c47ed8f6b845b96da4"
+    },
+    {
+      "path": "scripts/check-persona-production-config.ts",
+      "sha256": "2c7a8911dfe5086f9f6874ad256ed34a0cde04263af09ecc7556e2c7d48f49e3"
+    },
+    {
+      "path": "docker-compose.persona-v2.production.yml",
+      "sha256": "f410f54e219fa251e40c85154899c736f75bb9a0440ff22f9d93fc713ced5b77"
+    },
+    {
+      "path": "tests/unit/persona-v2/production-configuration.test.ts",
+      "sha256": "edb56da0a4bf33ed0f871c89f9e8ead6112c711c6c4463b3e32eed75fd8c32bb"
+    },
+    {
+      "path": "tests/unit/should-publish-production.test.ts",
+      "sha256": "64ad3435aa3fbf4abbf8c29e885ef85bd38bda2483e8dd16149a3d3b1182d543"
+    },
+    {
+      "path": "scripts/should-publish-production.sh",
+      "sha256": "f0e692bde285f929c3d91a116817dda8c5e25993a924e5c1dc205ffc25004324"
+    },
+    {
+      "path": "package.json",
+      "sha256": "df94384ad9f4d33a20e537826db95ca088e7a919b0dcad95f1a23d62f6008e90"
+    }
+  ],
+  "note": "Local snapshot; no commit or deploy."
+}

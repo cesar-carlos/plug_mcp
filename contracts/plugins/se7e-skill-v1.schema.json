@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "enum": ["legacy", "persona-v2"]
+        },
+        "tools": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        }
+      },
+      "required": ["runtime", "tools"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["name", "description", "metadata"],
+  "additionalProperties": false
+}
