@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Atualiza body-parser 2.4.0 e Zod 4.6.7 para corrigir avisos de negação de serviço, sem reduzir o gate npm audit.
+
 - Dispensas DV2-015/DV2-016 registradas sem aprovação fictícia; testes técnicos preservados.
 - Fixture OAuth fecha sem FORCE e conserva falha original quando a limpeza também falha, com regressão PostgreSQL real.
 
