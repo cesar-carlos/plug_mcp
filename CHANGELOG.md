@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Avaliador da IA consumidora persona-v2 separado do legado, com CLI de operador,
+  fontes/publicações verificadas, referência privada e aceite vedado ao harness.
+
 - Verificação da imagem reconhece o digest OCI do Docker com containerd somente quando o manifest do arquivo original comprova o digest de configuração registrado no CI; mantém revisão, plataforma, runtime e integridade obrigatórios.
 
 - Teste de revisão temporal aguarda o vencimento pelo relógio PostgreSQL antes do poll, sem aumentar timeouts ou alterar o worker.

@@ -348,6 +348,11 @@ Console: `web:check` e `test:console:browser`; OAuth:
 `test:chatgpt:https`, `test:chatgpt:browser` e concorrência PostgreSQL.
 TLS/DNS nativos, formulários reais, replay/revogação e rollback não são substituídos
 por mocks. `chatgpt:check` é somente leitura e não comprova instalação.
+
+Avaliação persona-v2 usa núcleo/CLI próprios; referências não chegam ao modelo,
+e harness nunca gera aceite de IA. Transporte/julgador são módulos confiáveis do
+operador, separados. Ver docs/persona-v2/consumer-evaluation.md. Prova nativa de
+privilégio SELECT e recuperação não substitui autoridade persistente da cadeia.
 `persona:https-check` prepara somente discovery/pacote/CIMD da homologação v2,
 sem credenciais ou banco; sucesso não certifica isolamento ou conexão no cliente.
 Não substituir esse check pelo `chatgpt:check` legado. Procedimento no contrato OAuth v2.

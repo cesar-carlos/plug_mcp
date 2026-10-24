@@ -1,5 +1,8 @@
 # Matriz de aceite persona-v2
 
+Avanço separado de aceite: [avaliador v2, SELECT mínimo e recuperação nativa](validation/2026-10-24-consumer-evaluation-recovery.md).
+Os testes do núcleo não medem uma IA real; o ensaio nativo não substitui a cadeia persistente completa.
+
 Esta matriz define os critérios dos 13 gates do
 [manifesto](../../contracts/persona-v2-release.json). Todos permanecem sem aceite
 formal; produção e publicação de imagens da persona-v2 continuam bloqueadas.

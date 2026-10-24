@@ -26,6 +26,8 @@ HTTPS público e instalação/conversa no ChatGPT permanecem para validação ma
 
 ## Modelo aprovado
 
+Avaliação separada da IA: [contrato e execução do avaliador v2](consumer-evaluation.md).
+
 - Responsável identificado por origem do hub e Client, com sessão administrativa.
 - Persona existe sem fontes e possui especialidade, instruções e skills.
 - Cada fonte tem credencial própria e identidade confirmada pelo hub/agente.

@@ -1,5 +1,10 @@
 # Trabalho restante da persona-v2
 
+Avaliação consumidora: [núcleo e CLI v2](consumer-evaluation.md) implementados,
+com referência isolada do modelo e recusa de aceite por harness. Continuam
+pendentes adaptadores reais, dataset revisado e rodada identificada; testes
+unitários não encerram o gate da IA nem a prova de privilégio mínimo nos motores.
+
 Este documento organiza as pendências em dezesseis etapas. O [estado](README.md)
 resume o que já existe; a [matriz de aceite](acceptance.md) define critérios e o
 [índice de validação](validation.md) reúne as rodadas, sem duplicar seus resultados.
