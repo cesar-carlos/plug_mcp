@@ -1,0 +1,14 @@
+{
+  ".gitattributes": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da",
+  "full-85-chain-timings.jsonl": "fd706457b68828d7d1874518fdf7f976274019c76971f19be5758a59b67e167e",
+  "oauth-budget-targeted-timings.jsonl": "d57d3344601305a7762b29781abba6906bde3531ed1785f4bc144c11cb4a2600",
+  "README.md": "5e7094f6d97b514edd78744348cdd19a1019739bc95dfdecfc57f56efe8f490c",
+  "report.md": "a248be6037ddbe1a7e5eaac419b9ed63a54889358d3db59ddf28cd5c59f81fa4",
+  "runs.json": "0f3eb51e78f6591ff54511db10dd7492dd4becaf2597cc5f9f9a219137911b76",
+  "source/tests/helpers/persona-chain-journey-timing.ts.txt": "8445e5eb5c26eb63777f4d99e2cbce890d0e1345688e702f414112948aeae6e7",
+  "source/tests/helpers/persona-chain-knowledge-history-oauth.ts.txt": "df46f57cdb284f262003165158289a939d8f17ed45b596ac339b72f6c6bdbc50",
+  "source/tests/helpers/persona-chain-knowledge-oauth-fixture.ts.txt": "01277df6d1ecf3a31589049bc7fe1ed295666bec5e18e8dd0925005d233c518d",
+  "source/tests/homologation/persona-chain.test.ts.txt": "a998259025fa23a519d81d310116a09710c0f526d2c1b710b1e25bd5cb6b4537",
+  "source/vitest.persona-chain.config.ts.txt": "2a3fab94c649538fa539ea4e459f5d6b966b66152b5cafb4342b791d5c1a39b8",
+  "sources.json": "b1527fc71e4163bcc00a1f20b4b8401833b39c023a32b34f4448484806f055c2"
+}

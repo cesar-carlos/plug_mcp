@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import {
   HUB_CONTRACT_HASH,
   HUB_CONTRACT_SNAPSHOT_HASH,
@@ -13,6 +17,70 @@ import { OPERATION_FAILURE_CODES } from "../../src/domain/persona-v2/operation.j
 describe("contrato coordenado do hub", () => {
   const bytes = readFileSync("contracts/plug-mcp-rest-v1.json");
   const contract = JSON.parse(bytes.toString("utf8"));
+  it("preserva os bytes do contrato no checkout Windows mesmo com autocrlf global", () => {
+    const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
+      jobs: {
+        windows: { steps: { with?: { repository?: string }; env?: Record<string, string> }[] };
+      };
+    };
+    const checkout = workflow.jobs.windows.steps.find(
+      (step) => step.with?.repository === "cesar-carlos/plug_server",
+    )!;
+    const root = mkdtempSync(join(tmpdir(), "se7e-hub-checkout-"));
+    const environment: NodeJS.ProcessEnv = { ...process.env, GIT_CONFIG_COUNT: "0" };
+    for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"])
+      delete environment[key];
+    const git = (args: string[], env = environment) =>
+      execFileSync("git", ["-C", root, ...args], { env, stdio: "pipe" });
+    try {
+      git(["init", "--quiet"]);
+      writeFileSync(join(root, "contract.json"), bytes);
+      git(["-c", "core.autocrlf=false", "add", "--force", "contract.json"]);
+      git(["config", "--local", "core.autocrlf", "true"]);
+      unlinkSync(join(root, "contract.json"));
+      git(["checkout-index", "--force", "--all"]);
+      expect(
+        createHash("sha256")
+          .update(readFileSync(join(root, "contract.json")))
+          .digest("hex"),
+      ).not.toBe(HUB_CONTRACT_HASH);
+      unlinkSync(join(root, "contract.json"));
+      git(["checkout-index", "--force", "--all"], { ...environment, ...checkout.env });
+      expect(readFileSync(join(root, "contract.json"))).toEqual(bytes);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  it.each(["verify", "windows"])(
+    "fornece o checkout upstream exato antes do gate no job %s",
+    (jobName) => {
+      const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
+        jobs: Record<
+          string,
+          {
+            env: Record<string, string>;
+            steps: { uses?: string; run?: string; with?: Record<string, unknown> }[];
+          }
+        >;
+      };
+      const job = workflow.jobs[jobName]!;
+      const gate = job.steps.findIndex((step) => step.run === "npm run release:check");
+      expect(gate).toBeGreaterThan(-1);
+      const upstream = job.steps.findIndex(
+        (step) =>
+          step.uses?.startsWith("actions/checkout@") &&
+          step.with?.repository === "cesar-carlos/plug_server",
+      );
+      expect(upstream).toBeGreaterThan(-1);
+      expect(upstream).toBeLessThan(gate);
+      expect(job.steps[upstream]!.with).toMatchObject({
+        ref: HUB_CONTRACT_REF,
+        path: "plug_server_contract",
+        "fetch-depth": 0,
+      });
+      expect(job.env.PLUG_SERVER_ROOT).toBe("${{ github.workspace }}/plug_server_contract");
+    },
+  );
   it("fixa os bytes do contrato e o snapshot reproduzível, sem inventar commit upstream", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(HUB_CONTRACT_HASH);
     expect(

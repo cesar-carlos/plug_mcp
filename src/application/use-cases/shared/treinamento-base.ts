@@ -3,7 +3,7 @@ import { guiaDialeto } from "./guia-dialeto.js";
 import { DIALETOS, type Dialeto } from "../../../domain/entities/dialeto.js";
 
 // Current candidate is reviewed independently; the immutable patch is proved at its reviewed ancestor.
-export const HUB_CONTRACT_REF = "0dc94d6990167f65e093b1fb68a8150630e2057c";
+export const HUB_CONTRACT_REF = "da457e05e3fd4ee407d7aefb2c58d82c7e6d92f5";
 export const HUB_CONTRACT_SNAPSHOT_INCORPORATED_REF = "e8f56db8e0205b94b99b5ac7dabd41655f4fd2c0";
 export const HUB_CONTRACT_SNAPSHOT_BASE_REF = "bfb40becd42c5452b19b0df13698d212a0238ddc";
 export const HUB_CONTRACT_HASH = "a8e8bc82a9b6d995c8637bf47bc35e17d44c5b21aba60889be25654ac60f4e60";

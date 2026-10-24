@@ -67,7 +67,7 @@ jobs:
         with:
           repository: cesar-carlos/plug_server
           path: plug_server_contract
-          ref: 0dc94d6990167f65e093b1fb68a8150630e2057c
+          ref: da457e05e3fd4ee407d7aefb2c58d82c7e6d92f5
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
@@ -116,6 +116,7 @@ jobs:
         run: npm run test:chatgpt:browser
         env:
           NODE_ENV: test
+          PERSONA_V2_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/se7e_persona_v2_test
       - run: npm run runtime:check
         env:
           CI: "true"
@@ -125,8 +126,20 @@ jobs:
     timeout-minutes: 20
     env:
       CI: "false"
+      PLUG_SERVER_ROOT: ${{ github.workspace }}/plug_server_contract
     steps:
       - uses: actions/checkout@v7
+      - name: Checkout plug_server contract
+        uses: actions/checkout@v7
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: "false"
+        with:
+          repository: cesar-carlos/plug_server
+          path: plug_server_contract
+          ref: da457e05e3fd4ee407d7aefb2c58d82c7e6d92f5
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"

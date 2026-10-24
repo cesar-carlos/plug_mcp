@@ -811,6 +811,13 @@ it("dois workers criam uma tarefa/notificação por calendário, leitura não co
     },
   );
   const dueAt = now.getTime() + 1000;
+  // The calendar deliberately starts in the future. Wait on the database clock
+  // before asserting expiry; the poll's default budget is itself only 1 second.
+  // Bound the wait so clock divergence still fails instead of extending the test.
+  await db.query(
+    "SELECT pg_sleep(GREATEST(0, LEAST(1, EXTRACT(EPOCH FROM ($1::timestamptz - clock_timestamp())))))",
+    [new Date(dueAt)],
+  );
   await expect
     .poll(
       async () =>

@@ -1,0 +1,6 @@
+{
+  "image": "sha256:be0e52fb4378b0d8db15bbb137a91ae125a1abf4b80b5b868a582cfd489e9562",
+  "runtime": "container",
+  "gatewayOverrides": false,
+  "hubLoopbackRelay": true
+}

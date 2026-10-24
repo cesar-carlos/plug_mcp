@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "imageId": "sha256:9fb4d4e34d0c47312ad5a6f569958e2d8a3447b54caf002eff1a11d63673bc3c",
+  "platform": "linux/amd64",
+  "runtime": "persona-v2-candidate",
+  "revision": "a6af43168223e74640fcf73e33b1df42e48fb58a",
+  "archiveSha256": "451f01d820a7a6b65cd954c32e282f2c54b5bf100e32d3888381c863d3d5c840",
+  "archiveBytes": 356647936
+}

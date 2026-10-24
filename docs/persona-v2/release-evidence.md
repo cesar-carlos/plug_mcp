@@ -19,6 +19,11 @@ preencher o manifesto para contornar pendências.
 retorna `mcpRevision`, `sourceSha256`, `fileCount` e `authorizesRelease: false`.
 Não modifica o index, cria commit ou autoriza distribuição.
 
+A raiz informada e a raiz retornada pelo Git são conferidas pela identidade
+nativa do sistema de arquivos. No Windows, diferenças de caixa ou nomes curtos
+8.3 do mesmo diretório não indicam outro checkout. Isso não normaliza conteúdo,
+aceita links ou dispensa a conferência exata da raiz e dos hashes.
+
 O inventário usa caminhos rastreados e não ignorados do Git, inclusive alterações
 locais e arquivos novos; exclui arquivos rastreados removidos. Cada entrada fixa
 caminho, SHA-256 dos bytes e tamanho. A lista é ordenada e seu JSON é resumido em

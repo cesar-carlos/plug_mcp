@@ -11,6 +11,10 @@ nem reutilizar evidência de uma revisão para certificar outra.
 
 ## Registrar uma nova rodada
 
+Rodada de 24/10: [avaliador v2 e recuperação nativa](validation/2026-10-24-consumer-evaluation-recovery.md).
+
+[Imagem exata do CI e cadeia persistente — 2026-10-24](validation/2026-10-24-exact-ci-image-chain.md).
+
 [Orientações MCP de treinamento e histórico — 2026-10-23](validation/2026-10-23-training-guidance-contract.md).
 
 [Fixture do plugin sob diretório build — 2026-10-23](validation/2026-10-23-plugin-fixture-build-ancestor.md).

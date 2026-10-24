@@ -1,0 +1,106 @@
+{
+  "passed": 85,
+  "failed": 0,
+  "skipped": 0,
+  "filtered": false,
+  "durationSeconds": 714.27,
+  "sourceEvidence": {
+    "schemaVersion": 1,
+    "authorizesRelease": false,
+    "startedAt": "2026-10-23T19:56:40.912Z",
+    "before": {
+      "mcp": {
+        "revision": "59c7ed68e133c2c0b1c2a7555bbfb8e0f1372c8c",
+        "sourceSha256": "2d50539a7edf736c38d600bcd75c402758d99c01ca1f6a3b963e779139089e36",
+        "fileCount": 1133
+      },
+      "hub": {
+        "revision": "8a4d9a559702cc742a839b0b6b3b70ec3b7aa4a2",
+        "sourceSha256": "9202f2f682705228cdb99d4990330a0dc600fcbf60ad4aa12d10dafdd90e0ee3",
+        "fileCount": 1024
+      },
+      "agent": {
+        "revision": "3bfad1ae01df8e5d72f62e66d5ec34ab1f1ec191",
+        "sourceSha256": "59bf63a9efb96d79ffc5c8aac17b80140e2f6e44ccde6d29832fe0eec9cbdf43",
+        "fileCount": 2706
+      }
+    },
+    "completedAt": "2026-10-23T20:08:38.777Z",
+    "after": {
+      "mcp": {
+        "revision": "59c7ed68e133c2c0b1c2a7555bbfb8e0f1372c8c",
+        "sourceSha256": "2d50539a7edf736c38d600bcd75c402758d99c01ca1f6a3b963e779139089e36",
+        "fileCount": 1133
+      },
+      "hub": {
+        "revision": "8a4d9a559702cc742a839b0b6b3b70ec3b7aa4a2",
+        "sourceSha256": "9202f2f682705228cdb99d4990330a0dc600fcbf60ad4aa12d10dafdd90e0ee3",
+        "fileCount": 1024
+      },
+      "agent": {
+        "revision": "3bfad1ae01df8e5d72f62e66d5ec34ab1f1ec191",
+        "sourceSha256": "59bf63a9efb96d79ffc5c8aac17b80140e2f6e44ccde6d29832fe0eec9cbdf43",
+        "fileCount": 2706
+      }
+    },
+    "testExitCode": 0,
+    "unchanged": true,
+    "result": "passed"
+  },
+  "run": {
+    "cleanupPassed": true,
+    "startedAt": "2026-10-23T19:56:03.476596Z",
+    "authorizesRelease": false,
+    "completedAt": "2026-10-23T20:08:46.4773595Z",
+    "imageId": "sha256:15277339aae0883524ba6a55da63cda9f2123623a23c665b095edbb88ac0f525",
+    "testExitCode": 0
+  },
+  "engineVersions": [
+    {
+      "dialect": "postgres",
+      "version": "17.0.11"
+    },
+    {
+      "dialect": "mssql",
+      "version": "16.00.4236"
+    },
+    {
+      "dialect": "sybase",
+      "version": "16.00.0000"
+    }
+  ],
+  "journeyCompletions": [
+    {
+      "engine": "postgres",
+      "journey": "adoption",
+      "elapsedMs": 40668
+    },
+    {
+      "engine": "mssql",
+      "journey": "adoption",
+      "elapsedMs": 38420
+    },
+    {
+      "engine": "sybase",
+      "journey": "adoption",
+      "elapsedMs": 35626
+    },
+    {
+      "engine": "postgres",
+      "journey": "oauth",
+      "elapsedMs": 3800
+    },
+    {
+      "engine": "mssql",
+      "journey": "oauth",
+      "elapsedMs": 4127
+    },
+    {
+      "engine": "sybase",
+      "journey": "oauth",
+      "elapsedMs": 3094
+    }
+  ],
+  "logSha256": "e55fa3eb491a82f720694e44ed5c39e0dbf60cee0e7cbbd17a30ff1448bfa30f",
+  "authorizesRelease": false
+}

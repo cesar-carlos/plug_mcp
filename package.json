@@ -47,6 +47,7 @@
     "runtime:check": "node scripts/smoke-runtime.mjs",
     "test:evaluation": "vitest run tests/evaluation",
     "evaluate:consumer": "tsx scripts/evaluate-consumer.ts",
+    "evaluate:persona-consumer": "tsx scripts/evaluate-persona-consumer.ts",
     "vault:rotate": "tsx --env-file-if-exists=.env scripts/rotate-encryption.ts",
     "vault:rotate:persona-v2": "tsx --env-file-if-exists=.env scripts/rotate-persona-vault.ts",
     "evaluate:skills": "tsx scripts/evaluate-skills.ts",

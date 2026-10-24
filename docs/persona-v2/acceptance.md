@@ -1,8 +1,11 @@
 # Matriz de aceite persona-v2
 
+Avanço separado de aceite: [avaliador v2, SELECT mínimo e recuperação nativa](validation/2026-10-24-consumer-evaluation-recovery.md).
+Os testes do núcleo não medem uma IA real; o ensaio nativo não substitui a cadeia persistente completa.
+
 Esta matriz define os critérios dos 13 gates do
 [manifesto](../../contracts/persona-v2-release.json). Todos permanecem sem aceite
-formal; produção e publicação de imagens continuam bloqueadas.
+formal; produção e publicação de imagens da persona-v2 continuam bloqueadas.
 
 - Implementação atual: [estado](README.md) e contratos de cada subsistema.
 - Lacunas, sequência e dependências: [plano restante](remaining-plan.md).
@@ -19,6 +22,11 @@ sem dispensar negociação de capabilities, segurança ou a cadeia nos três mot
 Uma evidência precisa identificar revisão/hash, ambiente, versões, casos,
 omissões e limpeza. Testes locais ou uma rodada aprovada não encerram
 automaticamente um gate. Critérios abaixo permanecem obrigatórios.
+
+A [rodada da imagem exata do CI](validation/2026-10-24-exact-ci-image-chain.md)
+registra a cadeia atual e distingue lacunas de implementação, evidência e escopo
+do corte restrito do hub. Referências históricas a validações manuais abaixo são
+subordinadas a DV2-015/DV2-016; não reapresentam exigências já dispensadas.
 
 A [consolidação atual de treinamento](validation/2026-10-23-training-candidate-consolidated.md)
 registra gates gerais com serviços, suítes PostgreSQL/Redis v2, console completo

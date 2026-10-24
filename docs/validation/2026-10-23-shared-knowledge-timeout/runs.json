@@ -1,0 +1,132 @@
+{
+  "oauth-budget-targeted": {
+    "sourceInventory": {
+      "schemaVersion": 1,
+      "authorizesRelease": false,
+      "startedAt": "2026-10-23T17:26:46.197Z",
+      "before": {
+        "mcp": {
+          "revision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+          "sourceSha256": "32bb8eceade0af11d13b8e4796687ff45fa644ed7733e91f22c176658d0c8934",
+          "fileCount": 1117
+        },
+        "hub": {
+          "revision": "0dc94d6990167f65e093b1fb68a8150630e2057c",
+          "sourceSha256": "ee23b4a2597040d669f7e3c71ca47d9cdbeb5ad8447663ec3692ed329e74e2b7",
+          "fileCount": 1024
+        },
+        "agent": {
+          "revision": "e992cbaa35fef6c764dfea4a1dab9550bff66f59",
+          "sourceSha256": "354ba458b99a71231598651ddc844f355b79f3bed60e586682092cd38112a43c",
+          "fileCount": 2718
+        }
+      },
+      "completedAt": "2026-10-23T17:29:27.346Z",
+      "after": {
+        "mcp": {
+          "revision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+          "sourceSha256": "32bb8eceade0af11d13b8e4796687ff45fa644ed7733e91f22c176658d0c8934",
+          "fileCount": 1117
+        },
+        "hub": {
+          "revision": "0dc94d6990167f65e093b1fb68a8150630e2057c",
+          "sourceSha256": "ee23b4a2597040d669f7e3c71ca47d9cdbeb5ad8447663ec3692ed329e74e2b7",
+          "fileCount": 1024
+        },
+        "agent": {
+          "revision": "e992cbaa35fef6c764dfea4a1dab9550bff66f59",
+          "sourceSha256": "354ba458b99a71231598651ddc844f355b79f3bed60e586682092cd38112a43c",
+          "fileCount": 2718
+        }
+      },
+      "testExitCode": 0,
+      "unchanged": true,
+      "result": "passed"
+    },
+    "engineVersions": [
+      {
+        "dialect": "postgres",
+        "version": "17.0.11"
+      },
+      {
+        "dialect": "mssql",
+        "version": "16.00.4236"
+      },
+      {
+        "dialect": "sybase",
+        "version": "16.00.0000"
+      }
+    ],
+    "runnerSummary": [
+      "Test Files  1 passed (1)",
+      "Tests  9 passed | 76 skipped (85)",
+      "Start at  13:26:46",
+      "Duration  159.95s (tests 97%, import 2%, transform 1%)"
+    ]
+  },
+  "full-85-chain": {
+    "sourceInventory": {
+      "schemaVersion": 1,
+      "authorizesRelease": false,
+      "startedAt": "2026-10-23T17:30:19.914Z",
+      "before": {
+        "mcp": {
+          "revision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+          "sourceSha256": "32bb8eceade0af11d13b8e4796687ff45fa644ed7733e91f22c176658d0c8934",
+          "fileCount": 1117
+        },
+        "hub": {
+          "revision": "0dc94d6990167f65e093b1fb68a8150630e2057c",
+          "sourceSha256": "ee23b4a2597040d669f7e3c71ca47d9cdbeb5ad8447663ec3692ed329e74e2b7",
+          "fileCount": 1024
+        },
+        "agent": {
+          "revision": "e992cbaa35fef6c764dfea4a1dab9550bff66f59",
+          "sourceSha256": "354ba458b99a71231598651ddc844f355b79f3bed60e586682092cd38112a43c",
+          "fileCount": 2718
+        }
+      },
+      "completedAt": "2026-10-23T17:41:04.665Z",
+      "after": {
+        "mcp": {
+          "revision": "136b5bfc8f7104b753bbd3703c9ffda196fdd51f",
+          "sourceSha256": "32bb8eceade0af11d13b8e4796687ff45fa644ed7733e91f22c176658d0c8934",
+          "fileCount": 1117
+        },
+        "hub": {
+          "revision": "0dc94d6990167f65e093b1fb68a8150630e2057c",
+          "sourceSha256": "ee23b4a2597040d669f7e3c71ca47d9cdbeb5ad8447663ec3692ed329e74e2b7",
+          "fileCount": 1024
+        },
+        "agent": {
+          "revision": "e992cbaa35fef6c764dfea4a1dab9550bff66f59",
+          "sourceSha256": "354ba458b99a71231598651ddc844f355b79f3bed60e586682092cd38112a43c",
+          "fileCount": 2718
+        }
+      },
+      "testExitCode": 0,
+      "unchanged": true,
+      "result": "passed"
+    },
+    "engineVersions": [
+      {
+        "dialect": "postgres",
+        "version": "17.0.11"
+      },
+      {
+        "dialect": "mssql",
+        "version": "16.00.4236"
+      },
+      {
+        "dialect": "sybase",
+        "version": "16.00.0000"
+      }
+    ],
+    "runnerSummary": [
+      "Test Files  1 passed (1)",
+      "Tests  85 passed (85)",
+      "Start at  13:30:20",
+      "Duration  643.56s (tests 99%)"
+    ]
+  }
+}

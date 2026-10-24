@@ -82,6 +82,16 @@ afterEach(() => {
 });
 
 describe("chain source inventory", () => {
+  it("resolves an existing repository alias to its native filesystem identity", () => {
+    const f = fixture();
+    const alias = process.platform === "win32" ? f.paths.hub.toLowerCase() : `${f.paths.hub}/.`;
+    if (process.platform === "win32") expect(alias).not.toBe(f.paths.hub);
+    f.invoke("before", "--hub", alias, "--agent", f.paths.agent, "--record", f.recordPath);
+    f.run("after", "--test-exit", "0");
+    expect(f.record()).toMatchObject({ unchanged: true, result: "passed" });
+    expect(f.record().after).toEqual(f.record().before);
+  });
+
   it("captures three local snapshots without changing the Git indexes or reading ignored secrets", () => {
     const f = fixture();
     const indexes = () =>

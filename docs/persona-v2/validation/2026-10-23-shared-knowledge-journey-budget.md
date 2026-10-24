@@ -92,3 +92,134 @@ Esta evidência complementa o [roteiro manual](../onboarding.md#roteiro-de-teste
 e as [views nativas](2026-10-23-native-view-chain.md). Não certifica instalação
 de produção, avaliação da IA, HTTPS ou ChatGPT. A [matriz de aceite](../acceptance.md)
 continua pendente e o manifesto permanece `ready:false`, sem gates concluídos.
+
+## Integração do baseline na main
+
+O baseline persona-v2 foi integrado como código executável de desenvolvimento,
+incluindo a correção do orçamento das jornadas, suas dependências, migrations,
+console, testes e guardas de distribuição. O arquivo histórico de fontes do
+commit `54e3a4e` continua preservado; esta integração incorpora os arquivos em
+seus caminhos reais, sem promover a entrada v2 a runtime padrão ou produção.
+
+O pin do hub foi revisado para `8a4d9a559702cc742a839b0b6b3b70ec3b7aa4a2`.
+A única dependência funcional adicionada ao hub é o prazo explícito e limitado
+das sessões manuais do companion de fixture, com parada cooperativa. O contrato
+bundled e o snapshot histórico continuam com seus hashes anteriores; a verificação
+de commit exato e ancestralidade não foi relaxada. O lockfile local do hub e as
+alterações de instalador/updater do agente não fazem parte desta integração.
+
+### Verificações da integração
+
+- `release:check` no checkout isolado: Node 24.21.0, TypeScript 7.0.2,
+  documentação, contrato do hub, lint, formatação, tipos, build e console aprovados.
+- Suíte geral: **1601 aprovados, 91 opcionais sem ambiente**; frontend:
+  **86/86 aprovados**. Não somar esses totais às suítes dirigidas sobrepostas.
+- Migrations legadas novas/upgrade e concorrência OAuth PostgreSQL aprovadas.
+- Integração persona-v2 PostgreSQL: **328/328**; cache Redis: **8/8**.
+- Pin, bloqueio de publicação e empacotamento: **35/35**, incluindo **26/26**
+  do pacote. A fixture agora filtra `build` somente dentro da origem copiada;
+  a regressão reproduziu a exclusão indevida quando um ancestral se chamava build.
+- Hub: lint, tipos, compilação do companion, contrato e **60/60 testes de
+  contrato** aprovados. CI e CodeQL do commit do hub também aprovados.
+- Candidata local: recusas de produção/segredo/comando, banco legado/checksum,
+  ausência de DDL automático, 43 migrations, assets, quatro jobs, backup/restore
+  e restart aprovados, com limpeza confirmada. A imagem não foi publicada.
+- Console e percursos manuais coordenados têm evidência separada em
+  [troca de fonte](2026-10-23-query-source-knowledge-reset.md): 61/61 Chromium,
+  treinamento e publicação manual com casos/CLI nos três motores. Esses testes
+  identificam a própria imagem e não certificam retrospectivamente outra revisão.
+
+A primeira matriz do checkout integrado passou **85/85**, sem filtro,
+com inventários estáveis: `2026-10-23T18:02:28.390Z` a `2026-10-23T18:16:20.144Z` UTC;
+`Duration  799.94s (tests 99%)`. Essa rodada conservava o pin anterior e a imagem manual.
+
+A rodada final repetiu **85/85 sem filtro**, usando o hub publicado no pin novo
+e uma candidata local reconstruída do checkout integrado. Intervalo:
+`2026-10-23T18:21:58.889Z` a `2026-10-23T18:33:23.463Z` UTC; `Duration  682.64s (tests 99%, import 1%)`.
+`testExitCode:0`, `unchanged:true`, `authorizesRelease:false`.
+
+Imagem local final: `se7e-persona-v2:integration-baseline-20261023`, ID
+`sha256:255b5504e2fc20c91f191416496beb370e1079f30fbfb8fc5e93bb3e9fddfbcc`.
+Foi construída sobre o commit-base MCP `54e3a4e` com o baseline ainda pendente
+no checkout; esse label não é o commit final da integração. Os inventários abaixo
+identificam exatamente as fontes locais exercitadas, inclusive alterações locais.
+Não equivalem a uma atestação de imagem construída por CI no commit final.
+
+| Projeto | Commit-base do checkout                    | Snapshot SHA-256                                                   | Arquivos |
+| ------- | ------------------------------------------ | ------------------------------------------------------------------ | -------- |
+| mcp     | `54e3a4e14b6b7dd395d86c74e7614ba61c50b22f` | `00c035aa66b2be144db6ef35db390a75b7f4d681a1ae0b99e864798aab76f6c7` | 1130     |
+| hub     | `8a4d9a559702cc742a839b0b6b3b70ec3b7aa4a2` | `9202f2f682705228cdb99d4990330a0dc600fcbf60ad4aa12d10dafdd90e0ee3` | 1024     |
+| agent   | `e992cbaa35fef6c764dfea4a1dab9550bff66f59` | `354ba458b99a71231598651ddc844f355b79f3bed60e586682092cd38112a43c` | 2718     |
+
+As fontes ficaram congeladas durante cada rodada e os inventários finais foram
+iguais aos iniciais. Após a rodada, somente o registro desta evidência, o changelog
+e a referência documental da rule de testes foram atualizados; a contagem ficou
+no índice de evidências. Uma linha vazia extra no fim do script privado de smoke
+também foi removida, sem alterar execução, runtime ou hashes históricos. Cada matriz usou fixture
+nova; a limpeza verificou propriedade e não tocou bancos operacionais. Logs brutos
+permanecem locais, sem incluir manifestos/segredos na distribuição.
+
+Nenhum timeout, cota SQL, aprovação, assertion ou gate foi relaxado. As cotas de
+tráfego específicas da fixture continuam distintas dos defaults de produção.
+Os três manifestos conservam `ready:false` e gates incompletos; o guard de release
+continua recusando publicação. Integrar código na main não encerra aceite humano,
+HTTPS/ChatGPT, corte coordenado ou homologação instalada. **Deploy bloqueado.**
+
+## Repetição nos commits publicados após as correções do CI
+
+A rodada integral de 23/10/2026 passou **85/85 cenários, sem filtro, falhas ou
+skips**, em **714,27 segundos**. Executou a cadeia persistente `prisma` com
+REST, Socket.IO/RPC, ODBC e DPAPI reais em fixtures novas dos três motores.
+Os checkouts isolados estavam limpos e corresponderam aos commits abaixo;
+alterações locais de outras tarefas não foram incorporadas.
+
+| Projeto | Commit                                     | Snapshot SHA-256                                                   | Arquivos |
+| ------- | ------------------------------------------ | ------------------------------------------------------------------ | -------- |
+| MCP     | `59c7ed68e133c2c0b1c2a7555bbfb8e0f1372c8c` | `2d50539a7edf736c38d600bcd75c402758d99c01ca1f6a3b963e779139089e36` | 1133     |
+| Hub     | `8a4d9a559702cc742a839b0b6b3b70ec3b7aa4a2` | `9202f2f682705228cdb99d4990330a0dc600fcbf60ad4aa12d10dafdd90e0ee3` | 1024     |
+| Agente  | `3bfad1ae01df8e5d72f62e66d5ec34ab1f1ec191` | `59bf63a9efb96d79ffc5c8aac17b80140e2f6e44ccde6d29832fe0eec9cbdf43` | 2706     |
+
+Inventários capturados de `2026-10-23T19:56:40.912Z` a
+`2026-10-23T20:08:38.777Z` (15:56:40 a 16:08:38 em Cuiabá, UTC−04:00):
+`before == after`, `unchanged:true`, `testExitCode:0`, `result:passed` e
+`authorizesRelease:false`. As inclusões documentais desta publicação são
+posteriores ao ensaio e não alteram retrospectivamente seus hashes.
+
+O MCP executou a candidata local Linux/amd64
+`sha256:15277339aae0883524ba6a55da63cda9f2123623a23c665b095edbb88ac0f525`,
+construída com `GIT_SHA=59c7ed68e133c2c0b1c2a7555bbfb8e0f1372c8c`.
+Esse valor é o ID Docker local, não um digest de publicação em registry nem
+uma atestação de artefato produzido pelo CI. A imagem não foi publicada.
+Versões observadas por RPC: PostgreSQL `17.0.11`, SQL Server `16.00.4236`
+e SQL Anywhere `16.00.0000`.
+
+| Jornada              | PostgreSQL | MSSQL    | SQL Anywhere |
+| -------------------- | ---------- | -------- | ------------ |
+| Adoção compartilhada | 40,668 s   | 38,420 s | 35,626 s     |
+| OAuth compartilhado  | 3,800 s    | 4,127 s  | 3,094 s      |
+
+São tempos observados das jornadas nesta rodada; não constituem benchmark
+comparativo nem homologação dos limites padrão de produção. Os limites de
+SQL/RPC, aprovação, timeout, assertions e cotas da fixture foram preservados.
+
+A sessão manual conhecida já havia encerrado: o outro chat confirmou sua
+ausência e não iniciou outra sessão; a verificação local não encontrou seus
+companions, diretório ou listener antes de iniciar o runner com a DLL. A
+instalação operacional foi preservada. Essa coordenação não substitui um
+bloqueio global para todas as tarefas da máquina.
+
+A limpeza guardada concluiu às `2026-10-23T20:08:46.4773595Z`. A inspeção
+posterior confirmou ausência do diretório, DSN privado, processos e containers
+da fixture. Os três checkouts continuaram limpos. Nenhuma base operacional
+ou credencial cadastrada foi usada nos testes.
+
+O [registro sanitizado desta rodada](2026-10-23-current-main-85-evidence.json)
+conserva os inventários, versões, tempos, ID da imagem e resultado da limpeza.
+O log bruto ficou local em `plug_agente/build/current-85-results.log`, SHA-256
+`e55fa3eb491a82f720694e44ed5c39e0dbf60cee0e7cbbd17a30ff1448bfa30f`.
+Manifestos privados, credenciais e logs dos processos não fazem parte desta
+publicação.
+
+Os três manifestos continuam `ready:false`, sem gates concluídos. Esta rodada
+não encerra aceite humano, HTTPS/ChatGPT público, corte coordenado ou
+homologação do instalador e não autoriza produção. **Deploy bloqueado.**
