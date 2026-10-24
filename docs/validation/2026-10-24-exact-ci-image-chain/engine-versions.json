@@ -1,0 +1,5 @@
+[
+  { "dialect": "postgres", "version": "17.0.11" },
+  { "dialect": "mssql", "version": "16.00.4236" },
+  { "dialect": "sybase", "version": "16.00.0000" }
+]

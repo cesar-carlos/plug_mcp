@@ -8,12 +8,18 @@ resume o que já existe; a [matriz de aceite](acceptance.md) define critérios e
 capacidade existente sem prova integral aceita. **Dependência externa** exige
 ambiente, acesso ou material revisado e não permite skip de aceite.
 
-Escopo vigente: PostgreSQL, SQL Server e SQL Anywhere. HTTPS/ChatGPT ficam para
-validação manual. O [manifesto](../../contracts/persona-v2-release.json) permanece
+Escopo vigente: PostgreSQL, SQL Server e SQL Anywhere. DV2-015 dispensa validação
+manual de HTTPS/ChatGPT e aceite funcional humano; DV2-016 dispensa o teste
+específico do agente 1.8.6, inclusive instalado/VM. Não registrar as dispensas
+como testes aprovados nem remover verificações técnicas. Ver [decisões](decisions.md).
+O [manifesto](../../contracts/persona-v2-release.json) permanece
 com ready:false e sem gates concluídos; nenhuma etapa intermediária libera deploy.
 
 **Prioridade imediata:** encerrar lacunas identificadas por caminho de código e
-concluir homologação instalada e evidências do candidato. A
+concluir evidências do candidato. Homologação instalada da distribuição do agente
+é distinta do corte restrito do hub; não declarar essa distribuição aprovada pela
+atualização do servidor. A [rodada da imagem exata do CI](validation/2026-10-24-exact-ci-image-chain.md)
+registra os resultados atuais, falhas preservadas e lacunas por gate. A
 [correção da troca de base no treinamento compartilhado](validation/2026-10-23-query-source-knowledge-reset.md)
 remove o vínculo antigo somente da edição local, com confirmação, sem mudar
 o snapshot publicado. Sua imagem e verificações são posteriores à rodada de 85. A

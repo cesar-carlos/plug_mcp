@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "authorizesRelease": false,
+  "startedAt": "2026-10-24T12:52:11.963Z",
+  "before": {
+    "mcp": {
+      "revision": "a6af43168223e74640fcf73e33b1df42e48fb58a",
+      "sourceSha256": "785622665729a12d4db700919af6570793d3821d03d6209a838f553cd7ba565a",
+      "fileCount": 1138
+    },
+    "hub": {
+      "revision": "da457e05e3fd4ee407d7aefb2c58d82c7e6d92f5",
+      "sourceSha256": "6f89086d4482d1c664c166bc502d812f5d5ca694a6a1331e7209082547eca72c",
+      "fileCount": 1026
+    },
+    "agent": {
+      "revision": "e992cbaa35fef6c764dfea4a1dab9550bff66f59",
+      "sourceSha256": "beaec4e782e5aeee780f505745aa9166b21c1d582fdceb53887ff604568e1f54",
+      "fileCount": 2699
+    }
+  },
+  "completedAt": "2026-10-24T13:04:07.623Z",
+  "after": {
+    "mcp": {
+      "revision": "a6af43168223e74640fcf73e33b1df42e48fb58a",
+      "sourceSha256": "785622665729a12d4db700919af6570793d3821d03d6209a838f553cd7ba565a",
+      "fileCount": 1138
+    },
+    "hub": {
+      "revision": "da457e05e3fd4ee407d7aefb2c58d82c7e6d92f5",
+      "sourceSha256": "6f89086d4482d1c664c166bc502d812f5d5ca694a6a1331e7209082547eca72c",
+      "fileCount": 1026
+    },
+    "agent": {
+      "revision": "e992cbaa35fef6c764dfea4a1dab9550bff66f59",
+      "sourceSha256": "beaec4e782e5aeee780f505745aa9166b21c1d582fdceb53887ff604568e1f54",
+      "fileCount": 2699
+    }
+  },
+  "testExitCode": 0,
+  "unchanged": true,
+  "result": "passed"
+}
