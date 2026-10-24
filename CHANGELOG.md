@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Verificação da imagem reconhece o digest OCI do Docker com containerd somente quando o manifest do arquivo original comprova o digest de configuração registrado no CI; mantém revisão, plataforma, runtime e integridade obrigatórios.
+
 - Teste de revisão temporal aguarda o vencimento pelo relógio PostgreSQL antes do poll, sem aumentar timeouts ou alterar o worker.
 
 - Referência revisada do hub em da457e0, incorporando correções de dependências e auditoria de produção no CI, com contrato e snapshot histórico inalterados.

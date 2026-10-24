@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { createReadStream, lstatSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { verifyLoadedIdentity } from "./tested-image-identity.mjs";
 
 function requireThat(condition) {
   if (!condition) throw new Error("Invalid tested image artifact.");
@@ -33,6 +34,7 @@ function inspect(reference) {
     platform: `${image.Os}/${image.Architecture}`,
     runtime: entry === "./docker-entrypoint.sh" ? "legacy" : "persona-v2-candidate",
     revision: image.Config.Env.find((value) => value.startsWith("GIT_SHA="))?.slice(8),
+    descriptor: image.Descriptor,
   };
 }
 try {
@@ -77,9 +79,14 @@ try {
     requireThat(data.archiveSha256 === archiveSha256 && data.archiveBytes === size);
     if (mode === "verify-loaded") {
       const image = inspect(reference);
-      requireThat(
-        ["revision", "platform", "imageId", "runtime"].every((key) => image[key] === data[key]),
+      verifyLoadedIdentity(data.imageId, image, (id) =>
+        execFileSync("tar", ["-xOf", archive, `blobs/sha256/${id.slice(7)}`], {
+          stdio: "pipe",
+          maxBuffer: 65536,
+          timeout: 30000,
+        }),
       );
+      requireThat(["revision", "platform", "runtime"].every((key) => image[key] === data[key]));
     }
   }
   console.log("Tested image artifact verified; no release authorization granted.");

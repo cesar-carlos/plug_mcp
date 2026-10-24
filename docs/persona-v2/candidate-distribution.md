@@ -5,6 +5,13 @@ o legado, publica imagem ou libera produção. HTTPS e ChatGPT permanecem manuai
 
 ## Imagem e serviços
 
+`tested-image.mjs verify-loaded` confere o arquivo original e a identidade carregada.
+Docker clássico identifica pela configuração; o armazenamento containerd pode
+identificar pelo manifest OCI. Essa diferença só é aceita quando os bytes do
+manifest no tar verificado têm o digest anunciado pelo daemon e referenciam o
+digest de configuração exato da prova do CI. Tag ou revisão iguais, sozinhas,
+não comprovam equivalência. Plataforma e runtime também permanecem obrigatórios.
+
 Construir explicitamente o alvo candidato:
 
 ```sh
