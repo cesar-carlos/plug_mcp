@@ -5,7 +5,7 @@ import {
   type PersonaHttpsDependencies,
 } from "../../scripts/homologation/persona-https.js";
 
-const origin = "https://homolog-mcp.se7esistemassinop.com.br";
+const origin = "https://mcp.se7esistemassinop.com.br";
 const args = [`--public-base-url=${origin}`, "--stage=discovery"];
 const fixture = () => ({
   resource: {
@@ -47,14 +47,23 @@ const endpoint =
   };
 
 describe("homologação HTTPS persona-v2 sem autoridade legada", () => {
-  it("exige origem explícita isolada, sem env, segredos ou argumentos duplicados", () => {
+  it("exige destino autorizado explícito, sem env, segredos ou argumentos duplicados", () => {
     expect(parsePersonaHttpsArgs(args).origin).toBe(origin);
+    expect(
+      parsePersonaHttpsArgs([
+        "--stage=discovery",
+        "--public-base-url=https://homolog-mcp.se7esistemassinop.com.br",
+      ]).origin,
+    ).toBe("https://homolog-mcp.se7esistemassinop.com.br");
     for (const invalid of [
       [],
       ["--stage=discovery"],
       [...args, "--token=secret"],
       [...args, "--stage=pilot"],
-      ["--stage=discovery", "--public-base-url=https://mcp.se7esistemassinop.com.br"],
+      ["--stage=discovery", "--public-base-url=https://other.example.test"],
+      ["--stage=discovery", `--public-base-url=${origin}.attacker.test`],
+      ["--stage=discovery", `--public-base-url=${origin}?token=secret`],
+      ["--stage=discovery", "--public-base-url=https://user:password@mcp.se7esistemassinop.com.br"],
       ["--stage=discovery", `--public-base-url=${origin}/`],
       ["--stage=discovery", "--public-base-url=https://localhost"],
     ]) {
@@ -113,7 +122,7 @@ describe("homologação HTTPS persona-v2 sem autoridade legada", () => {
       args[0]!,
       "--stage=pilot",
       "--package=fixture/se7e",
-      "--connection-id=plugin_asdk_app_fixture123",
+      "--connection-id=asdk_app_fixture123",
       "--client-id=https://client.example/metadata",
       "--redirect-uri=https://client.example/callback",
     ]);

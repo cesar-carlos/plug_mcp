@@ -2,8 +2,10 @@
 
 Fonte separada do legado. Usa contexto da persona, múltiplas fontes concedidas,
 diagnóstico, skills publicadas, consultas, cruzamentos e operações autorizadas.
-Treinamento/publicação permanecem no console enquanto não houver tools v2
-administrativas. Nenhuma consulta é capturada automaticamente como treinamento.
+Treinamento/publicação possuem tools v2 condicionais, com permissão, consentimento
+OAuth e delegação vigente. Prazo humano de revisão fica no console; runners de
+testes são separados e publicação não aprova lançamentos. Nenhuma consulta é
+capturada automaticamente como treinamento.
 
 Cadastro de fonte e rotação de credenciais podem iniciar pelas tools condicionais
 `iniciar_cadastro_fonte` e `iniciar_rotacao_credenciais_fonte`, com gerenciar_fontes,
@@ -22,7 +24,11 @@ O artefato é autocontido e não depende da pasta externa de identidade visual.
 ChatGPT v2 usa OAuth próprio em `/mcp/chatgpt`, scope `se7e:persona` e
 consentimento explícito por fonte/skill/operação. Para montar essa variante,
 omita `--portable` e informe `--connection-id=ID_REAL` da conexão privada
-de homologação. Habilite o runtime v2 conforme o [contrato OAuth](../../docs/persona-v2/oauth.md).
+do ambiente escolhido. O ID deve ser do aplicativo (`asdk_app_`, `connector_`
+ou `templated_apps_`), obtido da conexão real; não use ID de plugin nem converta
+prefixos. Habilite OAuth e configure CIMD/redirect exatos conforme o
+[contrato OAuth](../../docs/persona-v2/oauth.md).
 Nenhum token entra no pacote. A montagem não instala nem distribui o pacote;
-instalação real e aceite integral continuam pendentes. Deploy/imagens bloqueados.
+instalação real e aceite integral continuam pendentes. O deploy de teste v2 está
+autorizado por DV2-017, separado do aceite integral. Montagem não habilita OAuth.
 [Contrato e aceite pendente](../../docs/persona-v2/plugin.md).

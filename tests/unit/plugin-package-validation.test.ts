@@ -21,6 +21,7 @@ import {
 import {
   validateChatGptPackage,
   validateSe7ePackage,
+  validateConnectionId,
 } from "../../src/infrastructure/plugins/package-validation.js";
 import {
   pluginManifestSchema,
@@ -35,7 +36,7 @@ import {
 
 const publicBaseUrl = "https://synthetic.example.test";
 // Synthetic connection ID is used only in disposable package fixtures.
-const connectionId = "plugin_asdk_app_0123456789abcdef";
+const connectionId = "asdk_app_0123456789abcdef";
 const skillPath = "skills/se7e-consulta/SKILL.md";
 async function removeFixture(root: string): Promise<void> {
   if (
@@ -74,6 +75,42 @@ async function copyPluginFixture(source: string, destination: string): Promise<v
 }
 
 describe("validação completa do plugin", () => {
+  it.each(["asdk_app_a-B_12", "connector_a-B_12", "templated_apps_a-B_12"])(
+    "aceita ID de aplicativo e preserva seu valor: %s",
+    async (id) =>
+      fixture(async ({ root }) => {
+        expect(validateConnectionId(id)).toBe(id);
+        const output = await packageSe7ePlugin({
+          root: resolve("plugins/se7e-persona-v2"),
+          runtime: "persona-v2",
+          outputRoot: resolve(root, "app-id"),
+          publicBaseUrl,
+          connectionId: id,
+        });
+        expect(JSON.parse(await readFile(resolve(output, ".app.json"), "utf8"))).toEqual({
+          apps: { se7e: { id, required: true } },
+        });
+        await validateSe7ePackage(output, {
+          runtime: "persona-v2",
+          variant: "chatgpt",
+          publicBaseUrl,
+          connectionId: id,
+        });
+      }),
+  );
+  it.each([
+    undefined,
+    "",
+    "plugin_asdk_app_0123456789abcdef",
+    "asdk_app_",
+    "connector_-abc",
+    "templated_apps_/abc",
+    "asdk_app_abc def",
+    "asdk_app_placeholder",
+    "https://example.test/app",
+  ])("recusa ID de plugin, vazio, fictício ou malformado: %s", (id) => {
+    expect(() => validateConnectionId(id)).toThrow("identificador real");
+  });
   it("ancestral build não elimina a origem da fixture nem inclui artefatos gerados", async () =>
     fixture(async ({ root, source }) => {
       const nested = resolve(root, "build", "plugin-source");

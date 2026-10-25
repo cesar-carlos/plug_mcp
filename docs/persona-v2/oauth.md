@@ -1,6 +1,6 @@
 # OAuth persona-v2 e conexão privada ChatGPT
 
-Implementado na composição de desenvolvimento, separado do OAuth legado.
+Implementado na composição v2, separado do OAuth legado e habilitado explicitamente.
 Deploy/imagens permanecem bloqueados; esta entrega não comprova instalação
 privada nem conversa no cliente real. [Aceite](acceptance.md#oauth-and-console).
 
@@ -180,11 +180,14 @@ o portátil continua manual. [Empacotamento](plugin.md).
 O comando `chatgpt:check` permanece **legado**. Para a v2 usar
 `persona:https-check`, que não carrega `.env`, não abre banco, não recebe Bearer
 e não inicia autorização ou consulta. Ele faz apenas GETs públicos e validação
-local do pacote. A origem é explícita e restrita ao hostname de homologação
-aprovado; não aceita domínio de produção, localhost ou origem alternativa.
+local do pacote. A origem é explícita e restrita à homologação
+`https://homolog-mcp.se7esistemassinop.com.br` ou ao deploy de teste autorizado por
+DV2-017, `https://mcp.se7esistemassinop.com.br`. Não aceita localhost, outras
+origens, credenciais, query, fragmento ou barra final. O check não habilita OAuth.
 
 ```powershell
 npm run persona:https-check -- --stage=discovery --public-base-url=https://homolog-mcp.se7esistemassinop.com.br
+npm run persona:https-check -- --stage=discovery --public-base-url=https://mcp.se7esistemassinop.com.br
 ```
 
 Discovery exige resource/audience e issuer exatos, scope `se7e:persona`, endpoints
@@ -208,12 +211,12 @@ quando todos os checks passam. Não consulta ou altera o manifesto de release.
 
 **Procedimento do operador, antes de conectar:**
 
-1. Preparar subdomínio e certificado público no servidor existente. Preservar
-   domínio, proxy e porta 3333 da produção. Usar serviço/porta loopback próprios,
-   bancos MCP e hub dedicados, volumes/cofres separados e segredos novos. Não
-   copiar `.env`, credenciais ou bancos operacionais. Registrar configurações
-   redigidas e hashes do candidato, sem segredos.
-2. Manter a entrada de desenvolvimento v2 e seu bloqueio de `NODE_ENV=production`.
+1. Selecionar homologação isolada ou o [deploy de teste autorizado](first-test-deploy.md),
+   com certificado público e serviço/porta loopback próprios, banco MCP dedicado,
+   volumes/cofres separados e segredos novos. Não copiar `.env`, credenciais ou
+   bancos legados. Registrar configurações redigidas e hashes, sem segredos.
+2. Usar o runtime v2. No deploy de teste, selecionar `test-server` com
+   `NODE_ENV=production` e configuração dedicada conforme o runbook.
    Aplicar migrations somente no banco v2 dedicado pelo procedimento explícito;
    startup verifica a geração e não converte o legado. O hub/agente de fixture
    precisam das versões/capabilities revisadas. Não apontar fontes ao ERP real.
@@ -221,17 +224,19 @@ quando todos os checks passam. Não consulta ou altera o manifesto de release.
    Não registrar query strings, bodies, Authorization ou cookies; códigos OAuth
    podem aparecer no retorno. Não aplicar cache a `/oauth/`, `/api/`, `/app/setup/`
    ou `/mcp`. Conferir CSRF, limites, timeout e resposta de descoberta externamente.
-4. Habilitar `PERSONA_V2_OAUTH_ENABLED` somente na homologação e configurar
+4. Habilitar `PERSONA_V2_OAUTH_ENABLED` no ambiente escolhido e configurar
    `PERSONA_V2_OAUTH_CLIENTS` com CIMD/redirect reais e exatos. Criar persona,
    bases de fixture, treinamento/publicação e token restrito pelo navegador.
+   Na composição de teste, usar `PERSONA_V2_TEST_OAUTH_ENABLED` e
+   `PERSONA_V2_TEST_OAUTH_CLIENTS`, que alimentam essas opções do runtime.
    Executar discovery antes de cadastrar/conectar o cliente.
-5. Criar ou selecionar conexão privada **comprovadamente de homologação** no
+5. Criar ou selecionar conexão privada **comprovadamente do ambiente de teste escolhido** no
    cliente. Não redirecionar a conexão operacional existente. Confirmar URL
    `/mcp/chatgpt`, ID e allowlist; montar pacote separado com `plugin:package`
    e geração explícita conforme [contrato](plugin.md). Executar pilot com os
    valores reais, sem colocar tokens no comando ou no pacote.
 
-**Aceite manual no cliente real:**
+**Validação opcional no cliente real (dispensada como pré-requisito por DV2-015):**
 
 - Consentir pelo navegador com token restrito; conferir persona e permissões.
   Em conversa nova, descobrir contexto/fontes/publicações e consultar cada fonte
@@ -246,7 +251,8 @@ quando todos os checks passam. Não consulta ou altera o manifesto de release.
   Replay, concorrência e avaliação da IA exigem evidências próprias; conversa
   manual não substitui a matriz automatizada nem encerra o gate.
 - Encerrar e remover apenas recursos de homologação identificados, preservando
-  evidência sem segredos. Não publicar imagem de produção nem liberar `ready`.
+  evidência sem segredos. Não marcar aceite integral ou instalação real sem evidência;
+  o deploy de teste segue seu contrato técnico separado.
 
 Em 2026-10-15 o operador escolheu deixar DNS/servidor e conexão ChatGPT para
 validação manual. [Estado e checks locais](validation/2026-10-15-https-manual.md).

@@ -21,10 +21,12 @@ import { pluginTools, pluginResource, pluginToolCatalogHash } from "./tool-catal
 export const validateConnectionId = (connection: string | undefined): string => {
   if (
     !connection ||
-    !/^plugin_asdk_app_[a-zA-Z0-9]+$/.test(connection) ||
+    !/^(?:asdk_app_|connector_|templated_apps_)[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connection) ||
     /placeholder|example|replace|teste/i.test(connection)
   ) {
-    throw new Error("Informe o identificador real --connection-id=plugin_asdk_app_... do ChatGPT.");
+    throw new Error(
+      "Informe o identificador real do aplicativo --connection-id=asdk_app_..., connector_... ou templated_apps_... do ChatGPT.",
+    );
   }
   return connection;
 };

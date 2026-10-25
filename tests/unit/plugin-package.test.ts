@@ -17,7 +17,7 @@ describe("pacote Se7e", () => {
     };
     try {
       await expect(
-        packageSe7ePlugin({ ...input, connectionId: "plugin_asdk_app_placeholder" }),
+        packageSe7ePlugin({ ...input, connectionId: "asdk_app_placeholder" }),
       ).rejects.toThrow("identificador real");
       await expect(
         packageSe7ePlugin({
@@ -34,7 +34,7 @@ describe("pacote Se7e", () => {
       });
       expect(await readdir(portable)).not.toContain(".app.json");
       // Identificador sintético restrito a este teste; não é utilizado em instalação.
-      const connectionId = "plugin_asdk_app_0123456789abcdef";
+      const connectionId = "asdk_app_0123456789abcdef";
       const chatgpt = await packageSe7ePlugin({ ...input, connectionId });
       expect(JSON.parse(await readFile(resolve(chatgpt, ".app.json"), "utf8"))).toEqual({
         apps: { se7e: { id: connectionId, required: true } },
@@ -49,7 +49,7 @@ describe("pacote Se7e", () => {
         validateChatGptPackage(portable, connectionId, input.publicBaseUrl),
       ).rejects.toThrow();
       await expect(
-        validateChatGptPackage(chatgpt, "plugin_asdk_app_otherconnection", input.publicBaseUrl),
+        validateChatGptPackage(chatgpt, "asdk_app_otherconnection", input.publicBaseUrl),
       ).rejects.toThrow();
       await expect(
         validateChatGptPackage(chatgpt, connectionId, "https://other-environment.test"),

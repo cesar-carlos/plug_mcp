@@ -391,6 +391,10 @@ ChatGPT/autoridade remota. Histórico sem data permanece não registrado.
   publicamente nem liberar imagens/deploy por aprovação do validador local.
 
 Contrato: `docs/persona-v2/plugin.md`.
+Pacote ChatGPT referencia ID real de aplicativo (`asdk_app_`, `connector_` ou
+`templated_apps_`), nunca ID de plugin; não converter prefixos automaticamente.
+O verificador HTTPS admite somente homologação e o destino test-server autorizado
+por DV2-017. Checks locais não habilitam OAuth nem comprovam instalação no cliente.
 
 ## Orçamentos redutíveis
 

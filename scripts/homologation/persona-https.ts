@@ -26,8 +26,13 @@ export const parsePersonaHttpsArgs = (args: readonly string[]): PersonaHttpsInpu
     values.set(match[1]!, match[2]!);
   }
   const origin = values.get("public-base-url") ?? "";
-  // This tool is deliberately restricted to the approved isolated hostname.
-  if (origin !== "https://homolog-mcp.se7esistemassinop.com.br") {
+  // Explicit destinations only; DV2-017 authorizes the current test-server origin.
+  if (
+    ![
+      "https://homolog-mcp.se7esistemassinop.com.br",
+      "https://mcp.se7esistemassinop.com.br",
+    ].includes(origin)
+  ) {
     throw new Error("homologation.origin.invalid");
   }
   const stage = values.get("stage");

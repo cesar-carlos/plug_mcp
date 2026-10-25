@@ -2,7 +2,8 @@
 
 Contrato do perfil local **se7e-package-v1**. O pacote orienta o consumidor;
 somente o servidor autoriza ferramentas e dados. Não instala, publica ou altera
-conexões existentes. Deploy e publicação de imagens continuam bloqueados.
+conexões existentes. O [deploy de teste v2](first-test-deploy.md) está autorizado
+por DV2-017; isso não comprova conexão ChatGPT nem libera o aceite integral.
 
 ## Gerações e variantes
 
@@ -35,7 +36,12 @@ pelo endpoint autorizado. O Bearer não é argumento nem arquivo do pacote.
 Configurar autenticação somente na interface segura do cliente.
 
 Legado ChatGPT exige `--runtime=legacy --connection-id=ID_REAL`, sem `--portable`.
-O ID deve vir da conexão privada existente, nunca ser inventado. `PUBLIC_BASE_URL`
+O ID deve ser o identificador do aplicativo da conexão privada existente,
+com prefixo `asdk_app_`, `connector_` ou `templated_apps_`, seguido por letra ou
+dígito e depois somente letras, dígitos, `_` ou `-`. IDs de plugin
+(`plugin_asdk_app_`), URLs e nomes de exibição são recusados. Não converter
+prefixos automaticamente; copiar o ID real da descoberta. Essa regra vale para
+as duas gerações. A validação sintática não comprova existência remota. `PUBLIC_BASE_URL`
 pode substituir o argumento de URL. `plugin:check` não carrega `.env`, não faz
 rede e não escreve no pacote. O código de saída é 0 para aprovação local e 1
 para recusa; erros não imprimem arquivos, credenciais ou entradas recebidas.
@@ -100,7 +106,7 @@ S256, códigos de uso único e refresh rotativo com detecção de replay.
 Transação de 15 minutos, código de 60 segundos, access de 15 minutos e concessão
 de até 30 dias, limitada pelo token originador. Alterações desse token invalidam
 conservadoramente derivados; ampliações não são herdadas. Não persistir senha ou
-JWT do responsável. Implementado na composição de desenvolvimento com
+JWT do responsável. Implementado na composição v2, habilitado explicitamente com
 allowlist própria, consentimento explícito, stores cifrados e locks v2.
 [Configuração, endpoints e limites](oauth.md). Setups de cadastro e rotação da
 credencial de fonte exigem gerenciar_fontes, delegação vigente do hub e

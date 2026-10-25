@@ -71,7 +71,7 @@ const fixture = async () => {
   const input = {
     stage: "pilot" as const,
     package: "synthetic-package",
-    connectionId: "plugin_asdk_app_realid",
+    connectionId: "asdk_app_realid",
   };
   return { config, dependencies, input };
 };

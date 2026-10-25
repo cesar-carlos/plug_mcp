@@ -11,6 +11,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: pacote ChatGPT aceita IDs reais de aplicativos (`asdk_app_`, `connector_`
+  e `templated_apps_`) e recusa IDs de plugin; fixtures verificam o vínculo
+  preservado em `.app.json`. Verificador HTTPS v2 admite também o destino
+  autorizado de teste atual, mantendo recusa de outras origens e de aceite fictício.
+
 - Avaliador da IA consumidora persona-v2 separado do legado, com CLI de operador,
   fontes/publicações verificadas, referência privada e aceite vedado ao harness.
 

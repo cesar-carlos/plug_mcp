@@ -2,5 +2,5 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "se7e",
   "version": "0.1.0",
-  "description": "Consultas e operações treinadas da persona Se7e, com fontes e concessões explícitas. Candidato de desenvolvimento."
+  "description": "Consultas e operações treinadas da persona Se7e, com fontes e concessões explícitas. Pacote privado v2 para ambiente de teste."
 }
