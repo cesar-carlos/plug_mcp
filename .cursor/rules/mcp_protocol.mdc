@@ -52,7 +52,7 @@ Não misturar os contratos de mesmo nome entre as duas entradas.
 - Base e instruções v2 em `src/application/persona-v2/training-base.ts` e
   `dialect-guide.ts`. Contratos em `docs/persona-v2/`.
 
-## Entrada principal legada
+## Entrada legada explícita
 
 - Bootstrap oferece guias/prompts e `registrar_acesso({})`; pacote/persona exigem
   Bearer de um acesso. Tools de credenciais retornam setupUrl/expiresAt.

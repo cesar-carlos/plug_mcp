@@ -1,12 +1,14 @@
 # Persona-v2 — estado da refatoração
 
+Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementação](first-test-deploy.md). DV2-017 permite validar e ajustar no destino, sem aceite manual prévio. O caminho separado de liberação de teste está implementado com contrato e imagem próprios; o manifesto integral continua bloqueado e não representa aceite fictício.
+
 Contrato ativo: persona central, várias fontes, conhecimento publicado e tokens
 com concessões explícitas. O percurso prioritário é **criar persona → cadastrar
 bases → treinar → publicar → conceder permissões → conectar → consultar**.
 
-A entrada principal continua legada. A v2 tem runtime e distribuição candidata
-separados, exclusivos de desenvolvimento/homologação. **Produção permanece
-bloqueada** pelo [manifesto](../../contracts/persona-v2-release.json).
+A entrada principal e a distribuição padrão agora usam v2. O servidor de teste
+tem liberação técnica própria; **aceite integral para clientes permanece
+bloqueado** pelo [manifesto](../../contracts/persona-v2-release.json).
 Motores vigentes: PostgreSQL, SQL Server e SQL Anywhere. Firebird é histórico.
 
 ## Como consultar a documentação
@@ -22,7 +24,8 @@ Motores vigentes: PostgreSQL, SQL Server e SQL Anywhere. Firebird é histórico.
 
 Relatórios históricos não certificam alterações posteriores. Não somar contagens
 de rodadas nem interpretar implementação local como aceite de produção.
-HTTPS público e instalação/conversa no ChatGPT permanecem para validação manual.
+HTTPS público e instalação/conversa no ChatGPT podem ser exercitados no destino;
+validação manual prévia e aceite funcional humano estão dispensados, não aprovados.
 
 ## Modelo aprovado
 
@@ -69,10 +72,10 @@ npm run web:build
 npm run dev:persona-v2
 ```
 
-Aplicação principal, worker operacional principal, entrypoint Docker e `db:migrate` permanecem legados.
-O worker de revisão v2 tem entrada de desenvolvimento própria, sem corte automático.
-Não iniciar a aplicação principal no banco novo. Ambos os conjuntos de migrations
-são empacotados; somente o runner escolhido executa seu conjunto.
+Aplicação principal, `worker`, Docker padrão e `db:migrate` agora usam v2.
+Legado tem entradas explícitas para regressões. Ambos os conjuntos de migrations
+são preservados; somente o runner escolhido executa seu conjunto. Não reutilizar
+um banco legado na nova entrada.
 
 Os contratos administrativos, campos de cadastro e regras de sessão ficam no
 [onboarding](onboarding.md). Para operar pela interface, consulte o

@@ -20,98 +20,28 @@ como testes aprovados nem remover verificações técnicas. Ver [decisões](deci
 O [manifesto](../../contracts/persona-v2-release.json) permanece
 com ready:false e sem gates concluídos; nenhuma etapa intermediária libera deploy.
 
-**Prioridade imediata:** encerrar lacunas identificadas por caminho de código e
-concluir evidências do candidato. Homologação instalada da distribuição do agente
-é distinta do corte restrito do hub; não declarar essa distribuição aprovada pela
-atualização do servidor. A [rodada da imagem exata do CI](validation/2026-10-24-exact-ci-image-chain.md)
-registra os resultados atuais, falhas preservadas e lacunas por gate. A
-[correção da troca de base no treinamento compartilhado](validation/2026-10-23-query-source-knowledge-reset.md)
-remove o vínculo antigo somente da edição local, com confirmação, sem mudar
-o snapshot publicado. Sua imagem e verificações são posteriores à rodada de 85. A
-[repetição integral com jornadas OAuth independentes](validation/2026-10-23-shared-knowledge-journey-budget.md)
-passou nos 85 casos, sem filtro, após preservar a falha de timeout da rodada
-anterior de 82. A separação conserva as verificações e o prazo de 60 segundos;
-não prova a causa da variabilidade anterior nem encerra os gates. A
-[seleção de tabela/view](validation/2026-10-23-query-view-editor.md) foi ligada ao
-editor privado e à publicação. O [recorte nativo de views](validation/2026-10-23-native-view-chain.md)
-complementa o Chromium com inspeção, paginação e policy reais nos três motores,
-sem encerrar a matriz ampliada ou certificar a suíte inteira de 82 casos. A
-[correção dos modos e ensaio parametrizado](validation/2026-10-23-query-parameter-reset.md)
-limpa escolhas antigas na navegação e valida treinamento/consulta com parâmetro
-inteiro nos três motores. Não encerra a matriz ampliada de tipos/parâmetros. A
-[edição do caminho N:N das consultas](validation/2026-10-23-query-relationship-paths.md)
-completa intermediárias/elos antes disponíveis apenas nos dados e no editor SQL.
-Não altera validação, concessões ou snapshots publicados. A
-[releitura protegida de consultas](validation/2026-10-23-query-training-reload.md)
-foi entregue, incluindo recuperação de conflito e descarte de casos locais.
-O ensaio nos três motores confirmou que alterar nome/SQL do rascunho não muda
-o snapshot executado. O
-[ensaio de treinamento atualizado](validation/2026-10-23-manual-training-guidance.md)
-passou no navegador e na cadeia dos três motores, em nova imagem local e janela
-estável. Corrigiu orientações antigas sobre runners, setups e busca/grafo; não
-encerra o roteiro humano, a avaliação da IA ou os gates de produção. A
-[montagem isolada do aplicativo](validation/2026-10-23-agent-source-build.md)
-inicial foi recusada por redistribuível C++ inferior ao compilador. A
-[rodada com runtime privado](validation/2026-10-23-agent-private-runtime-package.md)
-resolveu isso sem instalar componentes no host: aplicativo novo e pacote privado
-foram produzidos e reconferidos. O
-[bootstrap compilado e reinício](validation/2026-10-23-native-desktop-persistent.md)
-passou com hub Prisma, DPAPI e descoberta RPC reais, em inventário estável.
-Homologação integral de atualização/recuperação continua pendente. A
-[preparação das fases instaladas](validation/2026-10-23-installed-fixture-handoff.md)
-agora recusa resultados antigos e fixa handoff/claim por tentativa antes do
-dispatch. O teste com UAC foi autorizado nesta máquina: a primeira instalação
-isolada revelou incompatibilidade do bootstrap com a checagem real de assets.
-A tentativa foi registrada como falha e desinstalada. Após correção e nova
-compilação, passaram nove etapas administrativas e nove grupos sem elevação,
-incluindo reparo, supervisor histórico, reinstalação, retenção privada e
-desinstalação final. Resíduos exclusivos foram limpos e evidências preservadas.
-Esse recorte não certifica apply/probation/rollback automático, o aplicativo
-operacional ou todas as alterações atuais do agente. A
-[ligação explícita da prova ao empacotamento](validation/2026-10-23-agent-package-source-binding.md)
-foi exercitada no novo pacote; não qualifica retrospectivamente o pacote
-`bytes_only` anterior nem toda a origem do instalador. A
-[sessão contínua de treinamento manual](homologation-chain.md#sessão-contínua-para-treinamento-manual)
-está disponível como fixture local com controle vazio, servidor/worker, prazo e
-parada explícitos. A [validação da sessão](validation/2026-10-22-manual-training-session.md)
-não encerra instalação, aceite humano, IA ou gates de produção. A
-[proteção da chamada direta e suíte reproduzível](validation/2026-10-22-manual-session-access.md)
-foi acrescentada sem ampliar limites ou permissões. A
-[rodada consolidada do treinamento](validation/2026-10-22-training-full-gates.md)
-executou release:check, resolveu as omissões condicionais em serviços separados
-e repetiu os 79 cenários da cadeia sem filtro, com inventários estáveis. Essa
-evidência vale para os snapshots/imagem registrados; não encerra instalação,
-IA, jornadas restantes ou aceite dos gates. A
-[cadeia completa com o cofre corrigido](validation/2026-10-20-candidate-vault-full-chain.md)
-já passou nos 79 cenários, sem filtro, incluindo navegador e recuperação nos
-três motores. A [regressão completa do console](validation/2026-10-20-console-full-corrected.md)
-também está registrada. Não recolocar essas rodadas como não executadas nem
-tratá-las como aceite instalado, avaliação da IA ou autorização de produção.
-Rodadas anteriores, falhas e correções estão no [índice de evidências](validation.md).
+## Prioridade atual: primeiro deploy de teste
 
-A [revisão do runner e das pendências](validation/2026-10-22-chain-source-inventory.md)
-acrescenta captura automática antes/depois dos três checkouts: commit-base,
-hash dos arquivos locais e contagem. Divergência recusa a rodada, sem repetir
-ou alterar SQL. Não certifica retrospectivamente as rodadas anteriores.
+O [roteiro do primeiro deploy](first-test-deploy.md) separa implementação,
+infraestrutura e verificação no servidor. DV2-017 permite testes e ajustes no
+destino sem aguardar aceite manual. As dezesseis etapas abaixo descrevem a
+evolução e o aceite integral; não são dezesseis funcionalidades ausentes nem
+pré-requisitos indivisíveis para iniciar o servidor de teste.
 
-O [onboarding](onboarding.md#roteiro-de-teste-manual-do-treinamento) contém o
-roteiro manual com resultados esperados, prazo humano e concessões explícitas.
-O ensaio não substitui os gates de produção. Uma nova rodada completa revelou
-perda/intercalação de metadados concorrentes no observador de fixture do agente.
-A gravação foi serializada e a regressão reproduziu/corrigiu a perda. A
-[repetição integral na imagem candidata](validation/2026-10-22-manual-training-candidate.md)
-passou, com inventário estável e versões dos motores preservadas; não descarta
-a rodada que falhou nem substitui aceite instalado, IA ou HTTPS/ChatGPT manuais.
-
-As tabelas abaixo conservam as dezesseis frentes e seus critérios de aceite.
-Menções genéricas a “jornadas restantes” não são um inventário confirmado de
-funcionalidades ausentes: antes de implementar, localizar serviço/rota/tool e
-suas evidências. Revisão/incorporação humana de catálogos e aprovação humana de
-efeitos são restrições deliberadas; não converter essas ações em tools delegadas.
+Históricos e resultados ficam no [índice de evidências](validation.md), sem
+repetir a cronologia neste plano. O [recorte da imagem CI](validation/2026-10-24-exact-ci-image-chain.md)
+e a [continuação de avaliação/recuperação](validation/2026-10-24-consumer-evaluation-recovery.md)
+distinguem capacidades entregues de lacunas verificadas. Rodadas antigas não
+certificam o checkout atual. O caminho técnico separado de deploy de teste está implementado; configuração
+e execução no destino permanecem como tarefas operacionais.
 
 ## Prontidão para treinamento manual local
 
 ### Conferência de código para deploy — 2026-10-24
+
+Registro histórico anterior à implementação do [deploy de teste](first-test-deploy.md).
+As recusas gerais e o envio legado descritos nesta tabela foram substituídos
+para test-server em 2026-10-25; o aceite integral continua separado.
 
 Procedimento produtivo separado agora disponível em `scripts/persona-production.ts`
 e `src/infrastructure/persona-v2/production-procedure.ts`, com fases check/migrate/start,
@@ -165,7 +95,7 @@ Isso libera a preparação do ensaio humano local, sem aceitar os gates de produ
 | Consumidores restritos e consulta com dados    | Implementado; treino pela cadeia verifica tokens distintos, parâmetros, dados, vazio e recusas, sem hospedar IA.                                                                                                                                                            |
 | Publicação com casos obrigatórios e CLI real   | Implementada e [repetida na imagem atual](validation/2026-10-23-query-source-knowledge-reset.md#publicação-com-casos-na-imagem-atual) nos três motores, em fixture nova separada. Relatório obsoleto recusa publicação; CLI não é substituído por aprovação HTTP/MCP.       |
 | Roteiro e acesso humano                        | [Roteiro](onboarding.md#roteiro-de-teste-manual-do-treinamento) e [lançador/parada](homologation-chain.md#sessão-contínua-para-treinamento-manual) disponíveis. Iniciar sessão nova; testes automáticos não deixam acesso aberto. Segredos só no arquivo privado/navegador. |
-| HTTPS público, ChatGPT e resposta da IA        | Validação manual externa, ainda sem aceite. Não inferir sua aprovação a partir do Chromium ou da cadeia técnica.                                                                                                                                                            |
+| HTTPS público, ChatGPT e resposta da IA        | Validação manual dispensada por DV2-015; pode ser exercitada no servidor de teste por DV2-017, sem aprovação presumida.                                                                                                                                                     |
 
 O catálogo Data7 pode começar vazio. O responsável precisa fornecer/revisar o
 material de negócio; não inventar tabelas, relações ou resultados para completar
@@ -199,7 +129,7 @@ etapa intermediária libera deploy.
 | 7     | Semântica e homologação operacional dos cruzamentos                      | 5–6                                                     | MCP e cadeia dos motores   |
 | 8     | Recuperação distribuída e janelas de queda restantes                     | 2–3, 5–6                                                | MCP, hub, agente           |
 | 9     | Manutenção e homologação operacional das integrações                     | 3–4, 8                                                  | MCP                        |
-| 10    | Manutenção OAuth e homologação manual ChatGPT v2                         | 2–4                                                     | MCP, hub e cliente privado |
+| 10    | Manutenção OAuth e homologação técnica v2                                | 2–4                                                     | MCP, hub e cliente privado |
 | 11    | Homologação operacional do cache e anexos já implementados               | 3, 5, 7–8, 10                                           | MCP                        |
 | 12    | Manutenção restante e homologação instalada de worker/cofre/outbox       | 8–11                                                    | MCP, hub, agente           |
 | 13    | Diagnóstico, acessibilidade e gestão editorial restantes                 | 2–12                                                    | MCP/web                    |
@@ -226,7 +156,7 @@ conclusão é a descrita na seção de cada etapa e na matriz de gates abaixo.
 | 7     | Semântica de correspondência restante                                                | Incompletude, falha e revogação na cadeia persistente                               | [Cruzamentos](federation.md)                |
 | 8     | Fluxos restantes de recuperação; retenção de operações já entregue                   | Quedas reais, outputs, contagens, cancelamento e reinício                           | [Operações](sql-operations.md)              |
 | 9     | Manutenção restante; cadastro direto, descoberta e importação já entregues           | Serviços externos isolados, SSRF e conciliação                                      | [Integrações](external-integrations.md)     |
-| 10    | Manutenção restante; OAuth, setups e revogação de conexões já entregues              | HTTPS público e ChatGPT manual; demais regressões do candidato                      | [OAuth](oauth.md)                           |
+| 10    | Manutenção restante; OAuth, setups e revogação de conexões já entregues              | Regressões técnicas OAuth/HTTPS do candidato; manual dispensado                     | [OAuth](oauth.md)                           |
 | 11    | Eventual reuso estrutural; cache/singleflight/anexos já entregues                    | Redis/proxy instalados, carga/OOM e candidato operacional; fixtures já validadas    | [Consultas](source-queries.md)              |
 | 12    | Correções reveladas pela homologação; quatro jobs/cofre e retenção da fila entregues | Frota/receptor/supervisor, backups e infraestrutura; concorrência local já validada | [Operações](sql-operations.md)              |
 | 13    | Editores/gestão restantes; ações do consumidor em preparações já disponíveis         | Chromium, teclado, leitor de tela, móvel e zoom real                                | [Console](console.md)                       |

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "generation": "persona-v2",
+  "audience": "test-only",
+  "enabled": true,
+  "decision": "DV2-017",
+  "runtime": "persona-v2-test-server",
+  "artifactName": "persona-v2-test-server-amd64",
+  "requiredJobs": [
+    "Documentation (ubuntu-latest)",
+    "Documentation (windows-latest)",
+    "verify",
+    "windows",
+    "native-musl (amd64)",
+    "native-musl (arm64)",
+    "persona-v2-candidate",
+    "persona-v2-test-server"
+  ]
+}

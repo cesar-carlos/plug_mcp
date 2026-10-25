@@ -1,11 +1,14 @@
 # Matriz de aceite persona-v2
 
+Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementação](first-test-deploy.md). DV2-017 permite validar e ajustar no destino, sem aceite manual prévio. O caminho separado de liberação de teste está implementado com contrato e imagem próprios; o manifesto integral continua bloqueado e não representa aceite fictício.
+
 Avanço separado de aceite: [avaliador v2, SELECT mínimo e recuperação nativa](validation/2026-10-24-consumer-evaluation-recovery.md).
 Os testes do núcleo não medem uma IA real; o ensaio nativo não substitui a cadeia persistente completa.
 
 Esta matriz define os critérios dos 13 gates do
 [manifesto](../../contracts/persona-v2-release.json). Todos permanecem sem aceite
-formal; produção e publicação de imagens da persona-v2 continuam bloqueadas.
+formal; liberação integral para clientes e sua publicação continuam bloqueadas.
+O servidor de teste usa o contrato separado descrito no roteiro acima.
 
 - Implementação atual: [estado](README.md) e contratos de cada subsistema.
 - Lacunas, sequência e dependências: [plano restante](remaining-plan.md).
@@ -239,14 +242,14 @@ dos journals e aceite público continuam pendentes.
 
 [Rodada de conciliação](validation/2026-10-15-external-reconciliation.md): fixtures
 REST/MCP em TLS nativo e journal PostgreSQL; perda de confirmação, reabertura e
-evidência append-only sem retry. DNS/HTTPS público e ChatGPT continuam manuais.
+evidência append-only sem retry. Testes manuais de DNS/HTTPS público e ChatGPT estão dispensados, não aprovados.
 
 **Implementado em desenvolvimento:** consultas REST/MCP e ações com preparação
 cifrada, aprovação Client no console, claim único durável e recuperação conservadora.
 Conciliação treinada registra evidência independente, sem alterar receipt ou permitir retry.
 [Contrato e limites](external-integrations.md). Nenhum gate encerrado.
 
-**Para aceite:** homologar o runner CLI e concluir importação/descoberta, editores de contratos,
+**Para aceite:** homologar o runner CLI, importação/descoberta e editores já implementados,
 homologação pública de provedores e manutenção do journal. Ampliar provas de segurança,
 falhas/reinício e evidência operacional em serviços externos isolados reais.
 
@@ -259,15 +262,15 @@ gate nem substitui HTTPS/ChatGPT ou a matriz completa.
 
 [Emissão limitada por setup](validation/2026-10-15-token-issuance-setup.md)
 implementada com proposta imutável e confirmação humana. Evidência local não
-encerra o gate; integrações, manutenção e validação manual pública continuam pendentes.
+encerra o gate; homologação técnica de integrações e manutenção continua pendente.
 
 [Setup de rotação do token originador](validation/2026-10-15-token-rotation-setup.md)
 implementado e testado com PostgreSQL/Chromium locais. Integrações e
-aceite manual público continuam pendentes; essa evidência não encerra o gate.
+homologação técnica continuam pendentes; essa evidência não encerra o gate.
 
 **Preparação HTTPS:** [verificador e roteiro manual](validation/2026-10-15-https-manual.md).
 Checks públicos/pacote não comprovam isolamento, instalação ou conversa real;
-DNS/servidor e conexão ChatGPT aguardam validação manual, sem encerramento de gate.
+DNS/servidor exigem configuração e checks técnicos; conexão manual ChatGPT é opcional, sem encerramento de gate.
 
 **Implementado em desenvolvimento:** navegação por áreas, identidade oficial,
 edição protegida, nomes de snapshots publicados, consulta paginada, gestão CAS de
@@ -291,7 +294,8 @@ gerenciar_fontes, consentimento, POST/CSRF, uso único e reautenticação humana
 **Para aceite:** concluir outros setups, administração/delegação, autorização
 transacional completa, gestão OAuth/setup e demais jornadas. O núcleo OAuth v2
 está implementado em desenvolvimento ([contrato](oauth.md)). Registrar navegador/TLS/DNS,
-consentimento, replay/revogação/concorrência e compatibilidade manual real.
+consentimento e replay/revogação/concorrência. Compatibilidade manual real está
+dispensada por DV2-015, sem declaração de aprovação.
 OAuth legado não comprova OAuth v2.
 
 [Rodada OAuth v2](validation/2026-10-12-oauth-plugin-v2.md): PostgreSQL, replay,
@@ -302,8 +306,9 @@ no ChatGPT, delegação administrativa ou encerra o gate.
 **Pacote em desenvolvimento:** [perfil Se7e versionado](plugin.md), validação
 offline de manifesto/frontmatter/referências/inventário/assets e separação de
 gerações. Candidato v2 portátil usa Bearer; variante ChatGPT v2 exige ID real da
-conexão OAuth de homologação. Exigir instalação privada e conversa nova no cliente real,
-ID/ambiente correspondentes, discovery autorizado e OAuth completo. Aprovação
+conexão OAuth de homologação. Instalação privada e conversa nova no cliente real são verificações opcionais
+no destino. Preservar ID/ambiente correspondentes, discovery autorizado e testes
+técnicos de OAuth completo. Aprovação
 local do pacote não encerra este gate nem `coordinated-cutover`.
 
 [Rodada de pacote e ciclo de vida](validation/2026-10-12-plugin-lifecycle.md):
@@ -353,12 +358,14 @@ O [contrato de evidências](release-evidence.md) define a verificação automati
 de hashes, associação ao candidato e registro de aceite por gate. Não substitui
 revisão humana, imagem homologada ou ensaio instalado; o gate permanece aberto.
 
-**Estado:** entrada principal, worker e distribuição ainda legados.
+**Estado:** entrada principal, worker e distribuição padrão são v2 test-server;
+o aceite integral para clientes continua separado.
 [Desenvolvimento](README.md#uso-de-desenvolvimento).
 
 Há [alvo candidato isolado](candidate-distribution.md) para servidor, worker e
 migration v2 explícita. Sua construção local não substitui aceite da imagem de
-produção ou a cadeia instalada, nem altera a distribuição padrão legada.
+produção para clientes ou a cadeia instalada. A distribuição padrão agora é
+v2 test-server, com contrato separado de liberação.
 
 **Para aceite:** substituir fluxos restantes, validar pacote/imagem/inicialização,
 limpeza/retenção e plano de corte para banco MCP vazio. Demonstrar preservação de

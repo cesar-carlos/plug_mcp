@@ -1,4 +1,4 @@
-param([string] $Image = 'se7e-persona-v2-candidate:local')
+param([string] $Image = 'se7e-persona-v2-candidate:local', [switch] $TestServer)
 $ErrorActionPreference = 'Stop'
 if ($Image -notmatch '^[a-zA-Z0-9][a-zA-Z0-9:._/@-]*$') { throw 'Invalid candidate image reference.' }
 $inspected = & docker image inspect $Image 2>$null
@@ -27,6 +27,29 @@ $password = [guid]::NewGuid().ToString('N')
     "PERSONA_V2_PUBLIC_BASE_URL=http://127.0.0.1:$port"
 ) | Set-Content -LiteralPath $envFile -Encoding ascii
 $compose = @('compose', '--env-file', $envFile, '-f', $composeFile, '-p', $project)
+if ($TestServer) {
+    if ($candidate.Config.Labels.'io.se7e.runtime' -ne 'persona-v2-test-server') { throw 'Expected test-server image.' }
+    $override = Join-Path $fixture 'test-server.yml'
+    @'
+services:
+  server:
+    environment:
+      NODE_ENV: production
+      PERSONA_V2_DEPLOYMENT: test-server
+      PUBLIC_BASE_URL: https://persona-fixture.invalid
+  worker:
+    environment:
+      NODE_ENV: production
+      PERSONA_V2_DEPLOYMENT: test-server
+      PUBLIC_BASE_URL: https://persona-fixture.invalid
+  migrate:
+    environment:
+      NODE_ENV: production
+      PERSONA_V2_DEPLOYMENT: test-server
+      PUBLIC_BASE_URL: https://persona-fixture.invalid
+'@ | Set-Content -LiteralPath $override -Encoding ascii
+    $compose += @('-f', $override)
+}
 $previous = @{}
 # A caller's candidate secrets/settings must not override this isolated fixture.
 $keys = @('PERSONA_V2_CANDIDATE_IMAGE', 'PERSONA_V2_POSTGRES_PASSWORD', 'PERSONA_V2_ENCRYPTION_KEY', 'PERSONA_V2_HUB_URL', 'PERSONA_V2_LOCAL_PORT', 'PERSONA_V2_PUBLIC_BASE_URL', 'PERSONA_V2_CANDIDATE_TAG', 'PERSONA_V2_CANDIDATE_REVISION', 'PERSONA_V2_ENCRYPTION_KEY_ID', 'PERSONA_V2_QUERY_CACHE_TTL_MS', 'PERSONA_V2_OAUTH_ENABLED', 'PERSONA_V2_OAUTH_CLIENTS')
@@ -77,20 +100,20 @@ try {
     $null = Invoke-Compose -Arguments @('config', '--quiet')
     $null = Invoke-Compose -Arguments @('up', '-d', '--wait', 'database', 'redis')
     foreach ($mode in @('server', 'worker', 'migrate')) {
-        Refuse-Compose -Arguments @('run', '--rm', '--no-deps', '-e', 'NODE_ENV=production', 'server', $mode) -Expected 'bloqueado fora'
+        Refuse-Compose -Arguments @('run', '--rm', '--no-deps', '-e', 'NODE_ENV=production', '-e', 'PERSONA_V2_DEPLOYMENT=local', 'server', $mode) -Expected 'bloqueado fora'
     }
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', '-e', 'MCP_ENCRYPTION_KEY=', 'server', 'server') -Expected 'banco dedicado e chave externa'
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', 'server', 'legacy') -Expected 'Comando de candidato recusado'
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', 'server', 'server') -Expected 'Aplique as migrações persona-v2'
-    $empty = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'se7e_persona_v2_candidate', '-Atc', "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")
+    $empty = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'persona_v2_candidate', '-Atc', "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")
     if ($empty.Trim() -ne '0') { throw 'Startup changed the empty database.' }
-    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'se7e_persona_v2_candidate', '-c', 'CREATE TABLE acesso(id integer); INSERT INTO acesso VALUES (7)')
+    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'persona_v2_candidate', '-c', 'CREATE TABLE acesso(id integer); INSERT INTO acesso VALUES (7)')
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', 'migrate', 'migrate') -Expected 'Banco legado ou desconhecido recusado sem alteração'
-    $preserved = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'se7e_persona_v2_candidate', '-Atc', "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'; SELECT id FROM acesso")
+    $preserved = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'persona_v2_candidate', '-Atc', "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'; SELECT id FROM acesso")
     if (($preserved.Trim() -split '\r?\n') -join ',' -ne '1,7') { throw 'Legacy fixture was modified by migration refusal.' }
-    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'se7e_persona_v2_candidate', '-c', 'DROP TABLE acesso')
+    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'persona_v2_candidate', '-c', 'DROP TABLE acesso')
     $null = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', 'migrate', 'migrate')
-    $before = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'se7e_persona_v2_candidate', '-Atc', 'SELECT count(*) FROM _persona_v2_migrations')
+    $before = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'persona_v2_candidate', '-Atc', 'SELECT count(*) FROM _persona_v2_migrations')
     if ([int]$before.Trim() -lt 1) { throw 'Packaged migrations missing.' }
     $null = Invoke-Compose -Arguments @('run', '--rm', '--no-deps', 'migrate', 'migrate')
     $backupDigest = Invoke-BackupFixture -Mode 'seed'
@@ -104,16 +127,16 @@ try {
     $null = Invoke-Compose -Arguments @('stop', 'server', 'worker')
     Assert-WorkerStopped
     # Offline snapshot into a NEW fixture database; retain the original until cleanup.
-    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'pg_dump', '-U', 'persona_v2', '-Fc', '-f', '/tmp/persona-fixture.dump', 'se7e_persona_v2_candidate')
+    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'pg_dump', '-U', 'persona_v2', '-Fc', '-f', '/tmp/persona-fixture.dump', 'persona_v2_candidate')
     $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'createdb', '-U', 'persona_v2', 'se7e_persona_v2_restored')
     $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'pg_restore', '-U', 'persona_v2', '--exit-on-error', '--single-transaction', '-d', 'se7e_persona_v2_restored', '/tmp/persona-fixture.dump')
-    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'postgres', '-c', 'ALTER DATABASE se7e_persona_v2_candidate RENAME TO se7e_persona_v2_original')
-    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'postgres', '-c', 'ALTER DATABASE se7e_persona_v2_restored RENAME TO se7e_persona_v2_candidate')
+    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'postgres', '-c', 'ALTER DATABASE persona_v2_candidate RENAME TO se7e_persona_v2_original')
+    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'postgres', '-c', 'ALTER DATABASE se7e_persona_v2_restored RENAME TO persona_v2_candidate')
     if ((Invoke-BackupFixture -Mode 'verify') -ne $backupDigest) { throw 'Restored fixture differs from backup.' }
     $null = Invoke-Compose -Arguments @('up', '-d', '--no-build', '--wait', 'server', 'worker')
     Assert-Ready
     Assert-WorkerHealth
-    $after = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'se7e_persona_v2_candidate', '-Atc', 'SELECT count(*) FROM _persona_v2_migrations')
+    $after = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-U', 'persona_v2', '-d', 'persona_v2_candidate', '-Atc', 'SELECT count(*) FROM _persona_v2_migrations')
     if ($after.Trim() -ne $before.Trim()) { throw 'Migration count changed on restart.' }
     $logs = Invoke-Compose -Arguments @('logs', '--no-color', 'worker')
     foreach ($job in @('review', 'ephemeral', 'retention', 'outbox')) {
@@ -122,7 +145,7 @@ try {
     $null = Invoke-Compose -Arguments @('stop', 'server', 'worker')
     Assert-WorkerStopped
     if ((Invoke-BackupFixture -Mode 'verify') -ne $backupDigest) { throw 'Worker changed protected restored fixture state.' }
-    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'se7e_persona_v2_candidate', '-c', "UPDATE _persona_v2_migrations SET checksum=repeat('0',64) WHERE filename=(SELECT min(filename) FROM _persona_v2_migrations)")
+    $null = Invoke-Compose -Arguments @('exec', '-T', 'database', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'persona_v2', '-d', 'persona_v2_candidate', '-c', "UPDATE _persona_v2_migrations SET checksum=repeat('0',64) WHERE filename=(SELECT min(filename) FROM _persona_v2_migrations)")
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', 'server', 'server') -Expected 'Checksum de migração persona-v2 incompatível'
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', 'worker', 'worker') -Expected 'Banco ou keyring persona-v2 incompatível'
     Write-Output "Candidate fixture passed: production/secret/command refusal, legacy/checksum refusal, no automatic DDL, migrations, assets, four jobs, backup/restore and restart ($($before.Trim()) migrations)."

@@ -27,6 +27,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ### Added
 
+- Deploy inicial v2 de teste: comandos/Docker padrão v2, configuração explícita,
+  contrato separado de liberação, imagem CI exata e envio SSH com parada/migração/
+  arranque verificados, sem retry ou rollback automático. Preserva aceite integral
+  bloqueado e entradas legadas explícitas para regressões.
+
 - Procedimento de operador persona-v2 com verificação de evidências/origem/imagem,
   migração e inicialização separadas, lock por host e recusa de serviços ativos.
   Não altera o deploy legado nem remove bloqueios de produção.

@@ -1,3 +1,4 @@
+import { assertPersonaDeployment } from "./config/persona-deployment.js";
 import { createPersonaWorker } from "./infrastructure/persona-v2/worker.js";
 import { startPersonaWorkerHealth } from "./infrastructure/persona-v2/worker-health.js";
 import pg from "pg";
@@ -7,9 +8,7 @@ import { assertPersonaVaultKeyring } from "./infrastructure/persistence/persona-
 import { NodeCryptoAdapter } from "./infrastructure/crypto/node-crypto.adapter.js";
 import { createPino, PinoLoggerAdapter } from "./infrastructure/logging/pino-logger.adapter.js";
 const config = loadConfig();
-if (config.NODE_ENV === "production") {
-  throw new Error("Worker persona-v2 bloqueado para produção até aceite integral.");
-}
+assertPersonaDeployment(config);
 if (!config.DATABASE_URL) {
   throw new Error("Worker persona-v2 exige banco dedicado.");
 }

@@ -1,8 +1,10 @@
 # Preparação da distribuição de produção v2
 
+Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementação](first-test-deploy.md). DV2-017 permite validar e ajustar no destino, sem aceite manual prévio. O caminho separado de liberação de teste está implementado com contrato e imagem próprios; o manifesto integral continua bloqueado e não representa aceite fictício.
+
 `docker-compose.persona-v2.production.yml` é uma composição separada para preparar
 o corte no servidor existente. Não substitui o compose legado nem libera deploy.
-O entrypoint, servidor e worker v2 continuam recusando produção. A configuração
+O entrypoint, servidor e worker v2 recusam produção sem seleção test-server. A configuração
 só poderá ser utilizada após concluir os gates e preparar o runtime aprovado.
 
 ## Valores obrigatórios
@@ -107,7 +109,7 @@ supervisor ou o deploy legado. Não é seguro reutilizar o rollback automático 
 `scripts/deploy-production.sh` para a v2.
 
 **O manifesto atual bloqueia todas as fases antes do Docker.** Mesmo com evidência
-completa, o runtime candidato atual ainda recusa produção; este comando não remove
+completa, a composição integral não seleciona test-server e recusa produção; este comando não remove
 essa guarda. Os testes de sequência simulam comandos e não certificam instalação,
 Docker, banco ou sinais reais no servidor de destino.
 

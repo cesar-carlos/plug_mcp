@@ -8,8 +8,11 @@ const { NodeCryptoAdapter } =
   await import("/app/dist/infrastructure/crypto/node-crypto.adapter.js");
 const url = new URL(process.env.DATABASE_URL);
 assert.equal(url.hostname, "database");
-assert.equal(url.pathname, "/se7e_persona_v2_candidate");
-assert.equal(process.env.NODE_ENV, "development");
+assert.equal(url.pathname, "/persona_v2_candidate");
+assert.ok(
+  process.env.NODE_ENV === "development" ||
+    (process.env.NODE_ENV === "production" && process.env.PERSONA_V2_DEPLOYMENT === "test-server"),
+);
 assert.equal(process.env.PLUG_SERVER_BASE_URL, "https://hub-fixture.invalid");
 const mode = process.argv[2];
 assert.ok(["seed", "verify"].includes(mode));

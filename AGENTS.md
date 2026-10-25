@@ -1,5 +1,14 @@
 # Orientação para agentes
 
+DV2-017 (2026-10-25): primeiro destino é servidor de teste, sem clientes.
+Testes e ajustes no destino estão autorizados; aceite manual prévio dispensado.
+Separar esse deploy do aceite integral para clientes. O caminho técnico separado
+está implementado com contrato/CI/imagem próprios; não marcar gates integrais
+como aprovados. Test-server exige modo production e configuração dedicada. Preservar segurança, testes técnicos e aprovação
+Client de efeitos. Remoção de legado exige substituir consumidores ativos.
+Plano: docs/persona-v2/first-test-deploy.md; decisão: docs/persona-v2/decisions.md.
+Esta decisão prevalece sobre proibições genéricas de qualquer deploy abaixo.
+
 DV2-015 (2026-10-24): o responsável dispensou validação manual real de
 HTTPS/ChatGPT e aceite funcional humano. Não declarar essas atividades aprovadas.
 Preservar testes técnicos e demais gates, incluindo aprovação Client de operações.
@@ -11,16 +20,16 @@ O projeto está em refatoração para **persona-v2**: um responsável administra
 personas com várias fontes, skills publicadas e tokens com concessões explícitas.
 Essas decisões substituem os invariantes de produto legados incompatíveis.
 
-A entrada principal (`src/main.ts`) ainda é legada. A entrada
-`src/main-persona-v2.ts` é exclusiva de desenvolvimento. Não transferir
-automaticamente contratos, credenciais, dados, caches ou migrations entre elas.
-Não anunciar conclusão nem remover o bloqueio de deploy:
-`contracts/persona-v2-release.json` exige evidência de todos os gates.
+A entrada principal (`src/main.ts`) encaminha para `src/main-persona-v2.ts`.
+`src/main-legacy.ts` fica explícita para regressões. Não transferir contratos,
+credenciais, dados, caches ou migrations entre gerações. O deploy de teste usa
+`contracts/persona-v2-test-deploy.json`; `contracts/persona-v2-release.json`
+preserva o bloqueio de aceite integral para clientes.
 
 O alvo Docker `persona-v2-candidate` e sua composição são exclusivos de
-homologação isolada; não substituem o alvo padrão legado. Servidor/worker não
-aplicam migrations no startup; migração v2 é explícita e produção continua
-recusada. Ver [distribuição candidata](docs/persona-v2/candidate-distribution.md).
+homologação isolada. O alvo padrão é v2 test-server, com configuração explícita.
+Servidor/worker não aplicam migrations no startup; migração v2 é explícita.
+Produção sem seleção test-server continua recusada. Ver [distribuição candidata](docs/persona-v2/candidate-distribution.md).
 
 ## Ordem de leitura e precedência
 

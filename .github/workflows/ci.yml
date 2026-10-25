@@ -89,7 +89,7 @@ jobs:
         env:
           CI: "true"
           NODE_ENV: test
-      - run: npm run db:migrate
+      - run: npm run db:migrate:legacy
       - name: Persona-v2 baseline and administrative isolation
         run: npm run test:persona-v2:postgres
         env:
@@ -180,7 +180,7 @@ jobs:
           node-version-file: ".nvmrc"
       - name: Load candidate ancestry for release evidence
         run: git fetch --unshallow origin
-      - run: docker build --platform linux/${{ matrix.arch }} --build-arg GIT_SHA=${{ github.sha }} -t se7e-native .
+      - run: docker build --target legacy-runtime --platform linux/${{ matrix.arch }} --build-arg GIT_SHA=${{ github.sha }} -t se7e-native .
       - run: docker run --rm --platform linux/${{ matrix.arch }} --entrypoint node se7e-native --input-type=module -e "import sharp from 'sharp'; import { fileTypeFromBuffer } from 'file-type'; const png=await sharp({create:{width:2,height:2,channels:3,background:'red'}}).png().toBuffer(); if((await fileTypeFromBuffer(png))?.mime!=='image/png') process.exit(1);"
       - name: Packaged migrations, server and worker
         run: >-
@@ -238,8 +238,41 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+  persona-v2-test-server:
+    needs: documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ".nvmrc"
+      - name: Build default v2 test server
+        run: docker build --platform linux/amd64 --build-arg GIT_SHA=${{ github.sha }} -t se7e-test-server .
+      - name: Verify production-mode runtime in disposable infrastructure
+        shell: pwsh
+        run: ./scripts/homologation/test-persona-candidate.ps1 -Image se7e-test-server -TestServer
+      - name: Preserve exact test-server image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/test-server-image"
+          docker save --output "$RUNNER_TEMP/test-server-image/image.tar" se7e-test-server
+          node scripts/tested-image.mjs record "$RUNNER_TEMP/test-server-image" se7e-test-server
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: persona-v2-test-server-amd64
+          path: ${{ runner.temp }}/test-server-image/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
   publish-image:
-    needs: [documentation, verify, windows, native-musl, persona-v2-candidate]
+    needs:
+      [documentation, verify, windows, native-musl, persona-v2-candidate, persona-v2-test-server]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20

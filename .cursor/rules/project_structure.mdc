@@ -6,9 +6,9 @@ alwaysApply: false
 
 # Estrutura
 
-| Área         | Persona-v2                                   | Principal legada                        |
+| Área         | Persona-v2                                   | Legada explícita                        |
 | ------------ | -------------------------------------------- | --------------------------------------- |
-| Entrada      | `src/main-persona-v2.ts`                     | `src/main.ts`                           |
+| Entrada      | `src/main-persona-v2.ts`                     | `src/main-legacy.ts`                    |
 | Composição   | `src/composition/compose-persona-v2.ts`      | `src/composition/compose.ts`            |
 | Domínio      | `src/domain/persona-v2/`                     | `src/domain/entities/`                  |
 | Aplicação    | `src/application/persona-v2/`                | `src/application/use-cases/`            |

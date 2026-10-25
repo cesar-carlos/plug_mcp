@@ -1,5 +1,7 @@
 # Evidências verificáveis de liberação
 
+Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementação](first-test-deploy.md). DV2-017 permite validar e ajustar no destino, sem aceite manual prévio. O caminho separado de liberação de teste está implementado com contrato e imagem próprios; o manifesto integral continua bloqueado e não representa aceite fictício.
+
 Desde DV2-015 (2026-10-24), validação manual real de HTTPS/ChatGPT e aceite
 funcional humano estão dispensados, não aprovados. Essa decisão prevalece sobre
 menções anteriores a esses requisitos. Nenhum teste técnico ou gate é dispensado.
@@ -65,17 +67,17 @@ confere os bytes completos. Cada gate utiliza um relatório próprio.
 
 Cada relatório JSON exige:
 
-| Campo                       | Conteúdo                                                                                |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| `schemaVersion`             | `2`                                                                                     |
-| `gate`                      | Identificador canônico correspondente                                                   |
-| `candidate`                 | Os mesmos onze identificadores do manifesto                                             |
-| `coverage` / `result`       | `complete` / `passed`                                                                   |
-| `startedAt` / `completedAt` | Datas UTC válidas, ordenadas e não futuras                                              |
-| `environment`               | `description` e mapa `versions` não vazios                                              |
-| `checks`                    | De uma a dez mil verificações com `id` único, `result: passed` e referência `artifact`  |
-| `omissions`                 | Lista vazia                                                                             |
-| `approval`                  | `status: accepted`, `reviewer`, `reviewedAt` posterior à execução e referência `record` |
+| Campo                       | Conteúdo                                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `schemaVersion`             | `2`                                                                                                               |
+| `gate`                      | Identificador canônico correspondente                                                                             |
+| `candidate`                 | Os mesmos onze identificadores do manifesto                                                                       |
+| `coverage` / `result`       | `complete` / `passed`                                                                                             |
+| `startedAt` / `completedAt` | Datas UTC válidas, ordenadas e não futuras                                                                        |
+| `environment`               | `description` e mapa `versions` não vazios                                                                        |
+| `checks`                    | De uma a dez mil verificações com `id` único, `result: passed` e referência `artifact`                            |
+| `omissions`                 | Lista vazia                                                                                                       |
+| `approval`                  | `status: accepted` ou `technically_verified`, `reviewer`, `reviewedAt` posterior à execução e referência `record` |
 
 Artefatos e registro de aceite são conferidos por hash; não conter SQL operacional,
 credenciais, perguntas, parâmetros ou resultados privados. O relatório e o registro
@@ -102,21 +104,21 @@ O artefato tem retenção de sete dias; ausência ou expiração bloqueia o envi
 sem fallback para reconstrução ou outra rodada. Erro ao descobrir alterações
 também bloqueia, sem ser convertido em ausência de mudanças. O manifesto de
 liberação continua obrigatório antes da publicação e do envio ao servidor.
-O runtime padrão permanece legado até o corte aprovado.
+O runtime padrão agora é v2 test-server, com artefato e verificação próprios.
+Este fluxo de aceite integral não promove automaticamente o artefato de teste.
 
 ## Limites e trabalho restante
 
 O verificador confere integridade, associação e presença de aceite. Não autentica
 uma pessoa pelo texto de `reviewer`, avalia a suficiência semântica dos casos nem
-executa novamente os três projetos. A revisão humana autorizada e a proteção do
-fluxo de publicação continuam obrigatórias. Commits do hub/agente nos relatórios
+executa novamente os três projetos. A verificação técnica identificada e a proteção do
+fluxo de publicação continuam obrigatórias; aceite funcional humano foi dispensado. Commits do hub/agente nos relatórios
 são referências, não comprovação automática dos checkouts remotos ou da instalação.
 
 A associação do ID imutável da imagem aos gates está implementada localmente. A execução
 efetiva destes workflows no GitHub, a homologação instalada e o ensaio de corte
 ainda precisam ser concluídos. Integridade do artefato não comprova aceite da
-imagem. Esta entrega não encerra `coordinated-cutover`. HTTPS/ChatGPT continuam
-para validação manual. Ver [aceite](acceptance.md) e [plano restante](remaining-plan.md).
+imagem. Esta entrega não encerra `coordinated-cutover`. Validação manual prévia de HTTPS/ChatGPT está dispensada, sem aprovação presumida. Ver [aceite](acceptance.md) e [plano restante](remaining-plan.md).
 
 ## Conferência da imagem aceita
 

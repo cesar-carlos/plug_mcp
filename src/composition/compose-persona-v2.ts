@@ -1,3 +1,4 @@
+import { assertPersonaDeployment } from "../config/persona-deployment.js";
 import pg from "pg";
 import { PersonaAttachments } from "../application/persona-v2/attachments.js";
 import { PostgresPersonaAttachments } from "../infrastructure/persistence/persona-v2/attachments.js";
@@ -90,9 +91,7 @@ export const composePersonaV2 = async (
     notificationTransport?: PersonaNotificationTransport;
   } = {},
 ): Promise<{ app: Express; close: () => Promise<void> }> => {
-  if (config.NODE_ENV === "production") {
-    throw new Error("persona-v2 ainda não tem aceite completo para produção.");
-  }
+  assertPersonaDeployment(config);
   if (!config.DATABASE_URL) {
     throw new Error("persona-v2 exige PostgreSQL dedicado.");
   }

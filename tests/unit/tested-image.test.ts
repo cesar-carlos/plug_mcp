@@ -117,16 +117,15 @@ describe("publication ordering", () => {
     expect(download.with?.["artifact-ids"]).toBe("${{ steps.accepted-image.outputs.artifact_id }}");
     expect(download.with?.["digest-mismatch"]).toBe("error");
     const commands = job.steps.map((step) => step.run ?? "").join("\n");
-    expect(commands.indexOf("accepted-image-origin.mjs")).toBeLessThan(
+    expect(commands.indexOf("check-persona-test-deploy.mjs origin")).toBeLessThan(
       commands.indexOf("verify-loaded"),
     );
-    expect(commands).not.toMatch(/docker (pull|build)/);
-    expect(commands.indexOf("verify-loaded")).toBeLessThan(commands.indexOf("docker save"));
-    expect(commands.indexOf("--image-proof")).toBeGreaterThan(commands.indexOf("verify-loaded"));
-    expect(commands.indexOf("--image-proof")).toBeLessThan(commands.indexOf("docker save"));
-    expect(commands.indexOf("check-persona-release.mjs")).toBeLessThan(
-      commands.indexOf("docker save"),
+    expect(commands).not.toMatch(/docker (pull|build|save)/);
+    expect(commands.indexOf("verify-loaded")).toBeLessThan(commands.indexOf("deploy-test"));
+    expect(commands.indexOf("check-persona-test-deploy.mjs verify")).toBeLessThan(
+      commands.indexOf("deploy-test"),
     );
+    expect(commands).toContain('< "$RUNNER_TEMP/tested-image/image.tar"');
     expect(commands).toContain('[ "$PUBLISH" = "false" ]');
   });
 });

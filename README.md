@@ -1,151 +1,112 @@
 # Se7e MCP Server
 
-Servidor de treinamento, cofre e execução de skills publicadas pelo plug_server.
-O projeto está em refatoração para persona-v2: persona central, múltiplas fontes
-e tokens com concessões explícitas.
+Servidor persona-v2: personas com várias fontes, skills publicadas e concessões
+explícitas. `npm run dev`, `npm start`, `npm run db:migrate` e a imagem Docker
+padrão usam v2. O projeto ainda não atende clientes; a distribuição inicial é
+exclusiva do servidor de teste, conforme DV2-017.
 
-| Entrada                                     | Estado                                                                     | Referência                                       |
-| ------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------ |
-| `src/main-persona-v2.ts` / `dev:persona-v2` | Desenvolvimento separado; baseline própria, console inicial e contratos v2 | [Estado e pendências](docs/persona-v2/README.md) |
-| `src/main.ts` / `dev` / imagem atual        | Runtime legado por acesso, ainda em manutenção                             | [Tools legadas](docs/mcp/tools.md)               |
-
-**Publicação de imagem e deploy bloqueados até aceite integral.** Os procedimentos
-abaixo documentam a entrada legada; não autorizam o corte da refatoração.
-
-[Documentação](docs/README.md) · [Orientações e rules](AGENTS.md) ·
-[Fluxo inicial v2](docs/persona-v2/onboarding.md) ·
-[Conhecimento compartilhado v2](docs/persona-v2/shared-knowledge.md) ·
-[Plugin privado e candidato v2](docs/persona-v2/plugin.md) ·
-[OAuth legado](docs/auth/chatgpt-oauth.md)
-
-Persona-v2 possui [OAuth próprio de desenvolvimento](docs/persona-v2/oauth.md),
-com consentimento limitado e pacote candidato ChatGPT. Instalação privada e
-aceite integral continuam pendentes; deploy/imagens bloqueados.
-
-[Cache e singleflight v2](docs/persona-v2/query-cache.md) são opt-in por
-`PERSONA_V2_QUERY_CACHE_TTL_MS`, com Redis próprio opcional, cifras e revalidação
-por consumidor. Não usam o cache legado nem substituem prova estrutural.
-
-[Anexos JSON v2](docs/persona-v2/attachments.md) exigem contrato publicado e
-exportação explicitamente concedida. Handles cifrados/opacos são temporários e
-isolados por consumidor; downloads HTTP/MCP revalidam permissões. Binários exigem
-contrato separado, metadados positivos e um único registro completo. Reinício
-invalida os handles, sem consulta automática; não há conversão de arquivos.
-
-Casos externos têm editor/relatórios no console v2 e runner de operador
-`persona:test-external`, somente em fixtures explícitas e isoladas.
-[Contrato do CLI e controles da fixture](docs/persona-v2/external-integrations.md#runner-cli-e-casos-no-console).
-
-Rotação de chaves do cofre v2: `vault:rotate:persona-v2`, com simulação,
-operador de banco separado, lock e retomada. [Procedimento](docs/persona-v2/vault-rotation.md).
+Comece pelo [primeiro deploy de teste](docs/persona-v2/first-test-deploy.md).
+O [aceite integral para clientes](contracts/persona-v2-release.json) permanece
+bloqueado e separado do [contrato de deploy de teste](contracts/persona-v2-test-deploy.json).
 
 ## Requisitos
 
-- Node.js 24.21.0 ou patch posterior da linha 24 LTS (Krypton; `.nvmrc`; Node 25/26 fora do runtime suportado).
-- PostgreSQL (produção). Testes unitários usam repositórios in-memory. `npm run db:migrate` exige privilégio `CREATE EXTENSION` para `unaccent`, `btree_gin` e `pg_trgm` (FTS).
-- Servidor Redis 7 opcional (`redis:7-alpine` no Docker e na CI): rate limit, cache e coordenação de consultas. O pacote npm `redis` 6.3.0 é o cliente Node e tem versionamento independente. [Configuração e diagnóstico](docs/operations/redis.md).
+Node 24.21.0 ou posterior da linha 24 LTS, TypeScript 7 real e PostgreSQL dedicado
+à geração v2. Docker/Compose no destino. Redis é opcional para cache v2; não há
+fallback para configuração legada. Hub/agente precisam do contrato compatível.
 
 ## Setup
 
 ### Produção neste servidor (container)
 
-O processo MCP é o serviço `mcp` do Compose, perfil `container`, publicado só em `127.0.0.1:3333`. Postgres e Redis seguem nos serviços já existentes; o container usa `postgres:5432` e `redis:6379` na rede interna. A chave do cofre e a URL do hub vêm do `.env`. O entrypoint aplica as migrações pendentes antes de escutar. Sessões MCP continuam na memória do processo.
+O destino inicial é de teste, com `NODE_ENV=production` e
+`PERSONA_V2_DEPLOYMENT=test-server`. O compose padrão inclui
+`docker-compose.persona-v2.test.yml`: servidor, worker, migração explícita e
+verificação de configuração. Não cria banco nem usa credenciais de exemplo.
 
-```bash
-GIT_SHA=$(git rev-parse HEAD) docker compose --profile container up --build -d --no-deps mcp
-```
-
-`--no-deps` não recria Postgres nem Redis. O Nginx em `mcp.se7esistemassinop.com.br` faz proxy para `127.0.0.1:3333`. Não suba `se7e-mcp` no PM2: o mesmo daemon segue com `plug_server`, Chatwoot e `evogo-qrcode`, e outro processo na 3333 toma a porta do proxy. Para Redis no host, o guia continua em [operations/redis.md](docs/operations/redis.md).
-
-Push na `main` do GitHub, depois que o workflow `ci` termina com sucesso, dispara `deploy` só se o commit altera o runtime (`src/`, `web/`, `drizzle/`, `Dockerfile`, `docker-entrypoint.sh`, `package.json`, `package-lock.json`, `docker-compose.yml`, `docs/mcp/error-mapping.md` ou os workflows de CI/deploy). O CI publica a imagem `linux/amd64` já testada em `ghcr.io/cesar-carlos/plug_mcp:<sha>`. O deploy baixa essa imagem e envia por SSH o SHA exato que passou no CI. A chave só executa `/usr/local/sbin/plug-mcp-deploy`, cópia de `scripts/deploy-production.sh` instalada fora do Git: um commit não troca o que a chave pode fazer. Atualizar esse script exige copiá-lo de novo para `/usr/local/sbin`. O servidor confere `/health` e `/ready`; se falhar, volta a imagem anterior. O resultado aparece no commit como status `production/mcp` e em `/var/log/plug-mcp-deploy.log`. Secrets: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_HOST_KEY`. O `.env` não vai no repositório. Cada publicação recria só o container `mcp` e derruba as sessões que estavam na memória dele.
+Preparação do host, segredos privados, proxy e protocolo SSH:
+[procedimento do primeiro deploy](docs/persona-v2/first-test-deploy.md#preparar-o-servidor).
+O CI preserva a imagem testada; o deploy transfere os mesmos bytes, verifica
+hash/identidade e só então para, migra e inicia. Não há rollback ou retry automático.
 
 ### Local (Node + Postgres no Docker)
 
-```bash
-cp .env.example .env
-nvm use
-docker compose up -d postgres
+Provisionar banco MCP vazio dedicado. Preencher `.env` a partir de `.env.example`
+com credenciais próprias e `PERSONA_V2_DEPLOYMENT=local`. Não reutilizar o banco
+legado, hub ou ERP. A distribuição local com banco/Redis próprios está no
+[compose candidato](docs/persona-v2/candidate-distribution.md).
+
+```sh
 npm ci
 npm run db:migrate
+npm run web:build
 npm run dev
 ```
 
-O Compose publica o Postgres na porta `5433` do host (para não colidir com um Postgres local na `5432`). Ajuste `DATABASE_URL` no `.env` para essa porta.
-
-O `.env.example` mantém `REDIS_URL` vazio; assim rate limit, cache e singleflight são locais ao processo. Iniciar um container Redis por si só não ativa seu uso pelo MCP. Para Node/PM2 no host, use o [overlay de porta local](docs/operations/redis.md). No Windows com nvm-windows, execute `nvm use 24.21.0` explicitamente.
-
-Não há script de seed. O grafo nasce vazio; o treino com SQL modelo deve fechar numa skill publicada — é ela que a IA usa na consulta.
-
-- Health: `GET http://127.0.0.1:3333/health` (`version`, `sha` via `GIT_SHA`/`SOURCE_COMMIT`/`GITHUB_SHA`, `buildTime`, `uptimeSec`). Após deploy, reconecte o cliente MCP para atualizar `tools/list`.
-- Matriz de erros: `GET http://127.0.0.1:3333/docs/mcp/error-mapping.md` (mesmo path de `error.documentationUrl`).
-- Ready: `GET http://127.0.0.1:3333/ready` (`database: ok|skipped|error`; 503 se o banco falhar)
-- MCP: `POST http://127.0.0.1:3333/mcp`
-- Formulário público: `GET http://127.0.0.1:3333/setup/{code}`
-- Console do usuário (após `npm run web:build`): `GET http://127.0.0.1:3333/app/conectar`
+Em outro processo, `npm run worker`. Migrations não são aplicadas no startup.
+Console: `/app/`; MCP: `/mcp`; saúde: `/health` e `/ready`. O campo
+`complete: false` preserva a distinção entre serviço pronto e aceite integral.
 
 ## Bootstrap
 
-Consulta ao ERP: `consultar_dados` com skill publicada. Sem `sql`, executa a consulta exemplo; com `sql` ou `consultaSemantica`, o SELECT precisa ficar no escopo. Stub `kind: anexo` em `consultar_dados`: use `exportar_anexo`. `buscar_contexto` não devolve SQL — use `obter_skill`. Sem publicação ativa utilizável, skill em treino que cobre a pergunta retorna `blockingReason SKILL_NOT_PUBLISHED`; editar um rascunho mantém a publicação anterior. Sem skill capaz: `SKILL_GAP` (a busca por termos não prova ausência — `listar_skills`). Token MCP pode expirar (`MCP_TOKEN_TTL_DAYS`). Origin ausente é aceito para clientes nativos; Origin `null` ou desconhecido é recusado. `MCP_ALLOWED_ORIGINS` vazio usa `PUBLIC_BASE_URL`; Host e proxy também exigem configuração explícita. Rate limit por tool além do HTTP em `/mcp`. Flags novas (default ligado): `MCP_INSPECTION_ENABLED`, `MCP_DISCOVERY_QUERY_ENABLED`, `MCP_SEMANTIC_QUERY_ENABLED`, `MCP_SCHEMA_DRIFT_ENABLED`. `MCP_SKILL_TOOLS_ENABLED=true` liga tools `skill_*` (default desligado).
-
-1. Cliente MCP chama `initialize` / `tools/list` **sem** Bearer. Só `registrar_acesso` está disponível.
-2. `registrar_acesso({})` retorna uma URL. E-mail/senha do Client, `agentId`, dialeto e `client_token` são preenchidos somente no navegador.
-3. A tool devolve `setupUrl` + `expiresAt`. GET mostra formulário; POST confirmado/CSRF reautentica no hub e mostra o Bearer uma vez. Validade do código: 15 minutos.
-4. Demais tools exigem Bearer. Novos acessos: `adicionar_acesso({})` (formulário reautenticado; outro Bearer via `setupUrl`; não troca esta sessão).
+Criar persona → cadastrar bases → treinar → publicar → conceder permissões →
+conectar → consultar. Credenciais entram somente no navegador. Publicar e
+conceder acesso são ações diferentes; aprovação Client de operações permanece
+separada. Ver [onboarding](docs/persona-v2/onboarding.md) e
+[console](docs/persona-v2/console.md).
 
 ## Scripts
 
-| Script                         | Função                                                                                 |
-| ------------------------------ | -------------------------------------------------------------------------------------- |
-| `npm run dev`                  | `tsx watch`                                                                            |
-| `npm test`                     | Unitários, contratos e integrações; PostgreSQL/Redis quando configurados               |
-| `npm run test:live`            | plug-server real (`E2E_*`)                                                             |
-| `npm run docs:check`           | Links locais/âncoras, rules no AGENTS, JSON/schemas e matriz de aceite, sem rede/banco |
-| `npm run lint` / `format`      | ESLint + Prettier                                                                      |
-| `npm run release:check`        | Compilador 7, lint, formatação, tipos, testes, build e `web:check`                     |
-| `npm run web:check`            | Lint Vue/TypeScript, tipos, Vitest e build do console                                  |
-| `npm run test:console:browser` | Chromium do console, separado do OAuth, com `FakePlugServer`                           |
-| `npm run db:migrate`           | Aplica `drizzle/*.sql`                                                                 |
-| `npm run test:migrations`      | Banco novo, upgrades `0023`/`0027` e reaplicação em DB efêmero de CI                   |
-| `npm run runtime:check`        | Servidor, worker e componentes nativos em banco CI isolado                             |
-| `npm run test:evaluation`      | Avaliação determinística dos 100 cenários sintéticos                                   |
-| `npm run evaluate:consumer`    | Avaliação explícita com adaptador/modelo de IA configurados                            |
-| `npm run worker:operacoes`     | Processa SLO, revisões e outbox de webhook (requer banco)                              |
-| `npm run db:backfill-escopo`   | Preenche `skill.escopo` vazio a partir do `sql_modelo`                                 |
+| Script                                             | Finalidade                                      |
+| -------------------------------------------------- | ----------------------------------------------- |
+| `npm run dev` / `npm start`                        | Servidor v2 por fonte / build                   |
+| `npm run worker`                                   | Worker v2                                       |
+| `npm run db:migrate`                               | Migrações explícitas `migrations/persona-v2`    |
+| `npm run release:check`                            | Checks gerais, contrato do hub, testes e builds |
+| `npm run test:persona-v2:postgres`                 | Persistência v2 em bases descartáveis           |
+| `npm run test:persona-v2:cache`                    | Redis v2 isolado                                |
+| `npm run test:persona-v2:browser`                  | Jornadas v2 no navegador                        |
+| `npm run docs:check`                               | Links, schemas e cobertura documental           |
+| `npm run persona:release-check`                    | Aceite integral para clientes; ainda bloqueado  |
+| `npm run dev:legacy` / `npm run db:migrate:legacy` | Somente regressões legadas, com banco separado  |
 
-Docker: `Dockerfile` multi-stage (Alpine 3.24 + Node 24.21.0 musl, sem npm no runtime) + `docker-compose.yml` (Postgres, Redis, MCP opcional). CI: `.github/workflows/ci.yml` lê `.nvmrc`.
-
-Para rodar todas as integrações, configure bancos exclusivos de teste em `DATABASE_URL` e `REDIS_URL`. `CI=true` exige PostgreSQL e impede omissão silenciosa do FTS; migrações e avaliação exigem banco efêmero de CI. Sem as URLs, as integrações correspondentes são ignoradas; isso não certifica bancos reais.
+`runtime:check`, `worker:operacoes`, avaliador legado e alvo Docker `legacy-runtime`
+continuam explícitos para regressões. Não fazem parte do deploy padrão.
+O [avaliador v2](docs/persona-v2/consumer-evaluation.md) tem comando próprio.
 
 ### Contratos e consulta inteligente
 
-`consultaSemantica` v2 separa agregação (múltiplas métricas) de listagem (dimensões) e mantém v1 compatível. `validar_consulta` aplica o mesmo preflight de `consultar_dados` e só executa envelope vazio. `publicar_skill` funciona em preview/diff + `confirmacaoHash` antes da confirmação efetiva. Anotações podem ter data/cadência de revisão; a fila de `listar_anotacoes` apenas prioriza manutenção do conhecimento e nunca licencia SQL. `listar_metricas_agente.painel` resume tendência, erro, cache e truncamento sem conteúdo sensível. Timings do hub são solicitados por amostragem com `PLUG_SERVER_TIMINGS_SAMPLE_PERCENT` (0..100, padrão 10). O contrato REST versionado é gerado no repositório irmão pelo script `contract:generate`, protegido por baseline que rastreia todos os campos públicos e verificado na CI.
-
-Operação proativa é separada do servidor HTTP: `npm run worker:operacoes` calcula SLO e revisões por `acessoId`, grava somente IDs/contagens/taxas e entrega alertas a uma caixa MCP. Webhook é opcional por acesso, exige confirmação, HTTPS público sem query/credenciais e segredo cifrado; eventos são assinados e entregues pelo menos uma vez. Nenhuma dessas funções é conhecimento, RAG ou licença de SQL.
+[Consultas](docs/persona-v2/source-queries.md),
+[cruzamentos](docs/persona-v2/federation.md),
+[operações](docs/persona-v2/sql-operations.md) e
+[contrato do hub](docs/plug-server/README.md). Consultas não permitem SQL fora do
+contrato publicado. Anexos persistidos conservam prazo e vínculo após reinício,
+com revalidação de autoridade, sem repetir consultas.
 
 ## Testes live contra o plug-server real
 
-`npm run test:live` roda `tests/live/`, que autentica com uma conta de teste dedicada no plug-server (nunca uma conta de produção) e chama a API real. Requer as variáveis `E2E_AGENT_ID`, `E2E_CLIENT_TOKEN`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD` e `E2E_DIALETO` no `.env` (ver `.env.example`). Sem essas variáveis, a suíte se pula sozinha — nunca falha por falta de credenciais, e nunca roda como parte de `npm test`.
+`test:live` é uma suíte legada explícita; nunca usar conta ou base operacional
+como fixture. Testes v2 pela cadeia têm [procedimento próprio](docs/persona-v2/homologation-chain.md).
 
 ## Conectar um cliente
 
-Ver [docs/clients/connecting-clients.md](docs/clients/connecting-clients.md).
+[OAuth v2](docs/persona-v2/oauth.md) e [plugin v2](docs/persona-v2/plugin.md).
+Validação manual prévia está dispensada; configuração HTTPS, consentimento e
+testes técnicos continuam necessários. Testes no destino não concedem autoridade.
 
 ## Documentação
 
-1. Norte — [docs/product/objective.md](docs/product/objective.md)
-2. Tools e erros — [docs/mcp/tools.md](docs/mcp/tools.md), [docs/mcp/error-mapping.md](docs/mcp/error-mapping.md)
-3. Hub REST — [docs/plug-server/communication.md](docs/plug-server/communication.md) (adapter: [rest-integration.md](docs/plug-server/rest-integration.md))
-4. Modelo e FTS — [docs/data/data-model.md](docs/data/data-model.md)
-5. Índice — [docs/README.md](docs/README.md). Changelog — [CHANGELOG.md](CHANGELOG.md). Arquitetura legada — [docs/architecture/hexagonal-architecture.md](docs/architecture/hexagonal-architecture.md)
-
-TypeScript 7 compila e checa tipos; a API TypeScript 6 é usada apenas pelas ferramentas de lint. `npm run compiler:check` confirma o compilador real. Dependências são fixadas pelo lockfile e instaladas por `npm ci`, sem force/legacy-peer-deps. CI inclui Windows, Linux, Redis/PostgreSQL e musl x64/arm64. Cadastro e rotação: [cofre](docs/auth/vault-and-mcp-token.md).
+[Índice](docs/README.md), [estado v2](docs/persona-v2/README.md),
+[decisões](docs/persona-v2/decisions.md), [evidências](docs/persona-v2/validation.md)
+e [changelog](CHANGELOG.md). Históricos e contratos legados não definem a v2.
 
 ## Plugin privado do ChatGPT
 
-OAuth integrado opcional para um acesso existente, token somente no navegador. Flag CHATGPT_OAUTH_ENABLED desligada por padrão. Configuração, instalação, segurança, testes e rollback: [contrato ChatGPT](docs/auth/chatgpt-oauth.md). Fonte do pacote: [plugins/se7e-chatgpt](plugins/se7e-chatgpt/README.md).
+Usar o pacote da geração v2 com conexão e concessões próprias. Não reutilizar
+identidade OAuth, Bearer ou pacote legado. Ver [plugin](docs/persona-v2/plugin.md).
 
 ### Verificação antes do piloto ChatGPT
 
-Execute `npm run chatgpt:check -- --stage=prepare --json` após preparar PostgreSQL/HTTPS. Depois da configuração real da conexão, execute `npm run chatgpt:check -- --stage=pilot --package=<diretorio> --connection-id=<ID_REAL> --json`. O comando é somente leitura e separa prontidão automática de homologação no ChatGPT. Veja [OAuth](docs/auth/chatgpt-oauth.md) e [validação](docs/operations/chatgpt-validation.md).
-
-`test:chatgpt:https` usa TLS real; `test:chatgpt:browser` usa Chromium e um banco efêmero próprio, exigindo NODE_ENV=test e DATABASE_URL de CI. Instale Chromium com `npx playwright install chromium`. O gate `node:check` exige a faixa de engines antes de release:check.
+`persona:https-check` verifica o alcance técnico descrito no
+[contrato OAuth](docs/persona-v2/oauth.md). Não comprova instalação ou conversa
+real, que podem ser exercitadas no servidor de teste sem bloquear seu primeiro arranque.

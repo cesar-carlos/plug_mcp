@@ -1,7 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 
-export function validateOrigin(candidate, repository, run, artifact) {
+export function validateOrigin(
+  candidate,
+  repository,
+  run,
+  artifact,
+  artifactName = "persona-v2-tested-image-amd64",
+) {
   const positive = (value) => Number.isSafeInteger(value) && value > 0;
   const valid =
     candidate &&
@@ -20,7 +26,7 @@ export function validateOrigin(candidate, repository, run, artifact) {
     run.status === "completed" &&
     run.conclusion === "success" &&
     artifact.id === candidate.imageArtifactId &&
-    artifact.name === "persona-v2-tested-image-amd64" &&
+    artifact.name === artifactName &&
     artifact.expired === false &&
     artifact.workflow_run?.id === run.id &&
     artifact.workflow_run?.head_sha === candidate.imageRevision &&

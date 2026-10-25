@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 
-it("refatoração parcial não pode publicar imagem nem executar deploy", () => {
+it("aceite de clientes permanece bloqueado; deploy de teste tem verificador próprio", () => {
   const probe = spawnSync(process.execPath, ["scripts/check-persona-release.mjs"], {
     encoding: "utf8",
   });
@@ -12,6 +12,6 @@ it("refatoração parcial não pode publicar imagem nem executar deploy", () => 
     "node scripts/check-persona-release.mjs",
   );
   expect(readFileSync(".github/workflows/deploy.yml", "utf8")).toContain(
-    "node scripts/check-persona-release.mjs",
+    "node scripts/check-persona-test-deploy.mjs",
   );
 });

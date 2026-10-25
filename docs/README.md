@@ -1,8 +1,10 @@
 # Documentação Se7e MCP
 
-O contrato ativo da refatoração é **persona-v2**. A entrada principal ainda usa o
-runtime legado; a v2 funciona em uma entrada separada de desenvolvimento.
-Deploy permanece bloqueado pelo [manifesto de aceite](../contracts/persona-v2-release.json).
+Para preparar o servidor inicial, comece pelo [primeiro deploy de teste](persona-v2/first-test-deploy.md). A matriz de aceite integral e o histórico de rodadas têm finalidades distintas.
+
+O contrato e a entrada padrão são **persona-v2**. O deploy inicial de teste usa
+contrato próprio. Aceite integral para clientes permanece bloqueado pelo
+[manifesto de aceite](../contracts/persona-v2-release.json).
 
 Comece pelo [objetivo](product/objective.md) e pelo [estado da v2](persona-v2/README.md).
 Precedência e índice das rules: [AGENTS.md](../AGENTS.md).

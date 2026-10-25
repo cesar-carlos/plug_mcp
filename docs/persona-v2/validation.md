@@ -11,6 +11,8 @@ nem reutilizar evidência de uma revisão para certificar outra.
 
 ## Registrar uma nova rodada
 
+[Primeiro deploy de teste v2 — 2026-10-25](validation/2026-10-25-test-deployment.md).
+
 Rodada de 24/10: [avaliador v2 e recuperação nativa](validation/2026-10-24-consumer-evaluation-recovery.md).
 
 [Imagem exata do CI e cadeia persistente — 2026-10-24](validation/2026-10-24-exact-ci-image-chain.md).

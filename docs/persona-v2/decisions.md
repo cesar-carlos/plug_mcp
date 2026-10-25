@@ -209,6 +209,39 @@ Contratos/runtime, testes gerais de negociação e recusa segura, três motores,
 segurança, Node 24 e evidência do candidato exato permanecem exigidos.
 Regressões úteis existentes e registros históricos não são apagados.
 
+## DV2-017 — Primeiro servidor de teste — 2026-10-25
+
+O responsável informou que o projeto está no início, sem clientes, e autorizou
+validar e ajustar no próprio servidor de destino, inclusive quando chamado de
+produção. Não exigir teste manual prévio nem aceite funcional humano para iniciar
+esse ambiente. DV2-015/DV2-016 permanecem como dispensas, nunca testes aprovados.
+
+O primeiro deploy de teste é separado do aceite integral para clientes. A matriz
+dos treze gates conserva seus critérios técnicos e evidências; sua conclusão
+integral não deve ser tratada como requisito de produto para iniciar o servidor
+de teste. Implementar caminho explícito e verificável para esse deploy, com
+imagem/revisão identificadas, configuração própria e checks técnicos aplicáveis.
+Na revisão documental inicial, manifesto/runtime/envio ainda não a implementavam.
+A continuação implementou contrato separado, distribuição test-server e envio
+v2; preparação e execução remotas continuam exigindo configuração no destino.
+Não preencher gates nem remover guardas isoladamente para simular prontidão.
+
+Testes operacionais podem ocorrer depois do arranque no destino. Preservar
+isolamento de bancos/fontes, autorização, segredos, aprovação Client de operações,
+checks técnicos, migração explícita e ausência de repetição de efeitos incertos.
+Não existe autorização implícita para reset de bases do hub/agente/ERP.
+
+Código/documentação legados ou duplicados podem ser removidos quando substituídos
+e conferidos os consumidores ativos. Não exigir plano de migração de clientes
+inexistentes. Entradas, scripts e Docker ainda ativos precisam ser trocados antes
+da remoção; preservar componentes compartilhados, migrations aplicadas e provas
+históricas. Esta revisão documental não realiza deploy nem declara aceite.
+
+**Substitui:** exigência genérica de concluir todo o aceite antes de qualquer
+deploy, exclusivamente para o servidor de teste sem clientes. Mantém controles
+de segurança e aceite integral para futura liberação a clientes. Plano canônico:
+[primeiro deploy de teste](first-test-deploy.md).
+
 ## Manutenção do registro de decisões
 
 Nota de implementação de DV2-009 — 2026-10-12: núcleo OAuth e montagem candidata

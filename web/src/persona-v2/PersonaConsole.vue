@@ -1559,7 +1559,7 @@ onBeforeUnmount(() => {
       <button v-if="logged" :disabled="busy" @click="logout">Sair</button>
     </header>
     <p class="notice">
-      Ambiente de desenvolvimento. Publicação e deploy continuam bloqueados até o aceite completo.
+      Ambiente de teste persona-v2. O aceite integral para clientes continua pendente.
     </p>
     <p v-if="error && !logged" role="alert" class="error area-error" tabindex="-1">{{ error }}</p>
     <p v-if="message" role="status" class="success">{{ message }}</p>

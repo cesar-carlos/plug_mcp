@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: production-mcp
+  group: persona-v2-test-mcp
   cancel-in-progress: false
 
 jobs:
@@ -44,18 +44,14 @@ jobs:
             echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Verificar aceite da refatoração persona-v2
-        if: steps.gate.outputs.publish == 'true'
-        env:
-          PERSONA_V2_RELEASE_REVISION: ${{ github.event.workflow_run.head_sha }}
-        run: node scripts/check-persona-release.mjs
-
       - id: accepted-image
-        name: Validate accepted artifact origin
+        name: Verify test-only contract, exact CI run and all required checks
         if: steps.gate.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/accepted-image-origin.mjs
+          TEST_RUN_ID: ${{ github.event.workflow_run.id }}
+          TEST_REVISION: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/check-persona-test-deploy.mjs origin "$TEST_RUN_ID" "$TEST_REVISION"
       - uses: actions/download-artifact@v8
         if: steps.gate.outputs.publish == 'true'
         with:
@@ -78,24 +74,24 @@ jobs:
           PERSONA_V2_RELEASE_REVISION: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]'):${SHA}"
           export PERSONA_V2_IMAGE_REVISION="${{ steps.accepted-image.outputs.image_revision }}"
           node scripts/tested-image.mjs verify "$RUNNER_TEMP/tested-image"
           docker load --input "$RUNNER_TEMP/tested-image/image.tar"
-          node scripts/tested-image.mjs verify-loaded "$RUNNER_TEMP/tested-image" se7e-native
-          node scripts/check-persona-release.mjs --image-proof "$RUNNER_TEMP/tested-image/image-proof.json"
-          docker tag se7e-native "$image"
+          node scripts/tested-image.mjs verify-loaded "$RUNNER_TEMP/tested-image" se7e-test-server
+          node scripts/check-persona-test-deploy.mjs verify "$RUNNER_TEMP/tested-image" "$SHA"
+          image_id=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).imageId" "$RUNNER_TEMP/tested-image/image-proof.json")
+          archive_hash=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).archiveSha256" "$RUNNER_TEMP/tested-image/image-proof.json")
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
-          docker save "$image" | ssh -i ~/.ssh/deploy_key \
+          ssh -i ~/.ssh/deploy_key \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "deploy ${SHA}"
+            "deploy-test ${SHA} ${image_id} ${archive_hash}" < "$RUNNER_TEMP/tested-image/image.tar"
 
-      - name: Report production status
+      - name: Report test-server status
         if: always()
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
@@ -109,13 +105,13 @@ jobs:
             desc="Sem alteração de runtime"
           elif [ "$OUTCOME" = "success" ]; then
             state=success
-            desc="Container MCP publicado"
+            desc="Servidor e worker v2 de teste publicados"
           else
             state=failure
             desc="Publicação do MCP falhou"
           fi
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
             -f state="$state" \
-            -f context="production/mcp" \
+            -f context="test-server/mcp" \
             -f description="$desc" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

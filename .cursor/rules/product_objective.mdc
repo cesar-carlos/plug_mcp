@@ -27,5 +27,5 @@ a identidade legada por acesso como objetivo da evolução.
   Mudança semântica exige curadoria e nova publicação.
 - Ampliação exige publicação e concessões; suspensão/revogação atua imediatamente.
 
-Manutenção da entrada principal usa referências identificadas como legadas em
+Regressões da entrada explícita main-legacy usam referências identificadas como legadas em
 `docs/mcp/tools.md` e `docs/product/training.md`; elas não definem o destino v2.

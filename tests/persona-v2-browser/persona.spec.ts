@@ -4365,6 +4365,9 @@ test("conflito de edição da fonte preserva os campos até recarregamento expl�
   await expect(form.getByLabel("Finalidade", { exact: true })).toHaveValue("Minha edição pendente");
   await page.getByRole("button", { name: "Recarregar base", exact: true }).click();
   await page.getByRole("button", { name: "Descartar alterações", exact: true }).click();
+  // Reload replaces the form only after the server response. Do not toggle the
+  // old details while that request is still pending.
+  await expect(form).toBeHidden();
   await page.getByText("Gerenciar Base a", { exact: true }).click();
   await expect(form.getByLabel("Finalidade", { exact: true })).toHaveValue(
     "Alteração concorrente no servidor",

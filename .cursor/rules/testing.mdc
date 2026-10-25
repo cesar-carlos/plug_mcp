@@ -413,4 +413,9 @@ vigente no commit, duplicata concorrente, UUID reaproveitado com outro conteúdo
 auditoria atômica e ausência de ativação/publicação. Chromium perde a confirmação
 após commit real, confere a lista sem reenviar e verifica descarte dos segredos.
 Não copiar totais de testes para AGENTS/rules nem marcar gates por contagem.
-`contracts/persona-v2-release.json` continua bloqueando deploy até aceite integral.
+`contracts/persona-v2-release.json` bloqueia aceite integral para clientes;
+o deploy de teste usa contrato próprio.
+
+Após confirmar descarte e recarregar uma fonte, o teste Chromium aguarda o
+formulário antigo fechar antes de reabrir Gerenciar. Não clicar no details antigo
+enquanto a resposta de releitura está pendente nem aumentar timeouts para isso.

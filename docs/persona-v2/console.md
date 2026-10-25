@@ -1,4 +1,8 @@
-# Console persona-v2 — desenvolvimento
+# Console persona-v2 — desenvolvimento e servidor de teste
+
+O aviso do console identifica ambiente de teste e aceite integral pendente.
+Disponibilidade do servidor não aprova gates nem dispensa revisão/publicação,
+concessões ou aprovação Client dos efeitos. Ver [deploy inicial](first-test-deploy.md).
 
 ## ERP no cadastro de bases
 

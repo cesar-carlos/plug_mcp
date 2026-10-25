@@ -6,6 +6,15 @@ alwaysApply: false
 
 # Governança
 
+DV2-017 (2026-10-25): primeiro destino é servidor de teste, sem clientes.
+Testes e ajustes no destino estão autorizados; aceite manual prévio dispensado.
+Separar esse deploy do aceite integral para clientes. O caminho técnico separado
+está implementado com contrato/CI/imagem próprios; não marcar gates integrais
+como aprovados. Test-server exige modo production e configuração dedicada. Preservar segurança, testes técnicos e aprovação
+Client de efeitos. Remoção de legado exige substituir consumidores ativos.
+Plano: docs/persona-v2/first-test-deploy.md; decisão: docs/persona-v2/decisions.md.
+Esta decisão prevalece sobre proibições genéricas de qualquer deploy abaixo.
+
 DV2-016 (2026-10-24) dispensa teste específico de compatibilidade do agente 1.8.6,
 inclusive instalado/VM. Não muda contratos ou comprova extensões; preservar
 testes gerais de negociação/segurança e dos três motores.
@@ -32,14 +41,15 @@ de produto legados incompatíveis. Não criar outra ordem neste arquivo.
 - Executar `npm run docs:check`; exemplos obrigatórios e contratos ficam em
   scripts/docs/examples.ts. Manter decisões substituídas em docs/persona-v2/decisions.md
   e pendências/evidências por gate em docs/persona-v2/acceptance.md.
-- Manifesto persona-v2 bloqueia deploy até aceite integral. Não marcar gates sem
+- Manifesto integral bloqueia liberação para clientes. Deploy de teste usa contrato
+  próprio; não marcar gates integrais sem
   evidência nem usar backfill legado na v2.
 - Verificador de liberação exige relatórios por gate, hashes, candidato e registro
   de aceite conforme docs/persona-v2/release-evidence.md. Capturar candidato é
   somente leitura; integridade não comprova revisão humana nem homologação da imagem.
 - Alvo Docker persona-v2-candidate e compose próprio são de homologação, sem
   liberar produção. Startup só verifica migrations; migrate é explícito. O alvo
-  padrão continua legado até corte aprovado. Ver candidate-distribution.md.
+  padrão é v2 test-server. Ver first-test-deploy.md e candidate-distribution.md.
 
 Git: `git_workflow.mdc`. Documentação: `changelog_and_docs.mdc`.
 

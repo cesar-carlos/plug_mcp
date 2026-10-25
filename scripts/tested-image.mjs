@@ -32,7 +32,12 @@ function inspect(reference) {
   return {
     imageId: image.Id,
     platform: `${image.Os}/${image.Architecture}`,
-    runtime: entry === "./docker-entrypoint.sh" ? "legacy" : "persona-v2-candidate",
+    runtime:
+      entry === "./docker-entrypoint.sh"
+        ? "legacy"
+        : image.Config.Labels?.["io.se7e.runtime"] === "persona-v2-test-server"
+          ? "persona-v2-test-server"
+          : "persona-v2-candidate",
     revision: image.Config.Env.find((value) => value.startsWith("GIT_SHA="))?.slice(8),
     descriptor: image.Descriptor,
   };
@@ -73,7 +78,7 @@ try {
       data.schemaVersion === 1 && data.revision === revision && data.platform === "linux/amd64",
     );
     requireThat(
-      ["legacy", "persona-v2-candidate"].includes(data.runtime) &&
+      ["legacy", "persona-v2-candidate", "persona-v2-test-server"].includes(data.runtime) &&
         /^sha256:[a-f0-9]{64}$/.test(data.imageId),
     );
     requireThat(data.archiveSha256 === archiveSha256 && data.archiveBytes === size);

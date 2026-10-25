@@ -135,6 +135,7 @@ inclui `persona:https-check`: discovery e pacote/CIMD são verificações separa
 da conexão efetiva. Não usar `chatgpt:check` legado para certificar a v2 nem
 reapontar uma conexão operacional apenas porque seu ID foi localizado.
 Essas evidências integram `oauth-and-console` e `coordinated-cutover` na
-[matriz](acceptance.md). Exigem ambiente isolado, conexão real, descoberta
-autorizada, consulta publicada e cenários de OAuth/revogação; nenhum identificador
+[matriz](acceptance.md). Os testes técnicos exigem ambiente isolado, descoberta
+autorizada, consulta publicada e cenários de OAuth/revogação. Instalação/conversa
+manual no cliente está dispensada por DV2-015; nenhum identificador
 sintético de teste poderá ser distribuído como conexão real.

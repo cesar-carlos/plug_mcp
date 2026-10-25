@@ -68,7 +68,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3333/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["./docker-entrypoint.sh"]
 
-# Explicit local candidate target; the default final stage remains legacy.
+# Explicit local candidate target; the default final stage is the v2 test server.
 FROM runtime-base AS persona-v2-candidate
 ENV NODE_ENV=development
 COPY --chown=mcp:mcp --chmod=755 docker-entrypoint-persona-v2.sh ./
@@ -77,4 +77,9 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=6 \
 ENTRYPOINT ["./docker-entrypoint-persona-v2.sh"]
 CMD ["server"]
 
-FROM runtime-base AS runtime
+FROM runtime-base AS legacy-runtime
+
+# Default distribution: explicit test server, never client release acceptance.
+FROM persona-v2-candidate AS runtime
+ENV NODE_ENV=production
+LABEL io.se7e.runtime="persona-v2-test-server"

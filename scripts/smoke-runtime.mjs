@@ -42,7 +42,7 @@ try {
     });
     assert.equal(code, 0, "packaged migrations failed");
   }
-  const server = start("dist/main.js");
+  const server = start("dist/main-legacy.js");
   const worker = start("dist/worker-operacoes.js");
   let healthy = false;
   for (let attempt = 0; attempt < 120; attempt++) {

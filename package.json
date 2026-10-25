@@ -39,7 +39,7 @@
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts",
+    "db:migrate": "tsx --env-file-if-exists=.env src/infrastructure/persistence/persona-v2/migrate.ts",
     "test:migrations": "tsx scripts/verify-migrations.ts && tsx scripts/verify-oauth-postgres.ts --ci && tsx scripts/verify-postgres-cleanup.ts",
     "db:backfill-escopo": "tsx --env-file-if-exists=.env src/infrastructure/persistence/backfill-escopo.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -61,7 +61,11 @@
     "chatgpt:check": "tsx --env-file-if-exists=.env scripts/check-chatgpt-readiness.ts",
     "persona:https-check": "tsx scripts/check-persona-https.ts",
     "web:check": "npm run lint --prefix web && npm run typecheck --prefix web && npm run test --prefix web && npm run build --prefix web",
-    "test:console:browser": "npm run build --prefix web && playwright test --config playwright.console.config.ts"
+    "test:console:browser": "npm run build --prefix web && playwright test --config playwright.console.config.ts",
+    "dev:legacy": "tsx watch --env-file-if-exists=.env src/main-legacy.ts",
+    "db:migrate:legacy": "tsx --env-file-if-exists=.env src/infrastructure/persistence/migrate.ts",
+    "worker": "tsx --env-file-if-exists=.env src/worker-persona-v2.ts",
+    "persona:test-deploy:check": "node scripts/check-persona-test-deploy.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/core": "^2.3.0",

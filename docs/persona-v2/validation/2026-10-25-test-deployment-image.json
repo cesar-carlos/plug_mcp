@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "imageId": "sha256:c9ff125b87c26a6d6999688a11e582dc05eb42daebf7f7cbbf3daba31bc63a80",
+  "platform": "linux/amd64",
+  "runtime": "persona-v2-test-server",
+  "revision": "5fee6753f394bbe677511c7d3bbaac252478d9c3",
+  "descriptor": {
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "digest": "sha256:c9ff125b87c26a6d6999688a11e582dc05eb42daebf7f7cbbf3daba31bc63a80",
+    "size": 856
+  },
+  "archiveSha256": "800d6fec974fc41cb4f144dd08c492257ca55f26fd86c036ada36eee83d9ea98",
+  "archiveBytes": 97236992
+}

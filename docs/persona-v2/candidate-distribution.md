@@ -1,7 +1,8 @@
 # Distribuição candidata local persona-v2
 
 Configuração exclusiva de desenvolvimento e homologação isolada. Não substitui
-o legado, publica imagem ou libera produção. HTTPS e ChatGPT permanecem manuais.
+o legado, publica imagem ou libera produção. Validação manual prévia de HTTPS e
+ChatGPT está dispensada. Para o destino remoto, ver o [primeiro deploy de teste](first-test-deploy.md).
 
 ## Imagem e serviços
 
@@ -18,11 +19,14 @@ Construir explicitamente o alvo candidato:
 docker build --target persona-v2-candidate -t se7e-persona-v2-candidate:local .
 ```
 
-O último alvo/default do Dockerfile continua `runtime`, com entrypoint legado.
+O último alvo/default do Dockerfile é `runtime`, v2 test-server. O alvo
+`legacy-runtime` permanece explícito para regressões; o candidato local continua
+selecionado por `--target persona-v2-candidate`.
 O candidato reutiliza dependências, assets e migrations empacotados, mas aceita
 somente `server`, `worker` ou `migrate`, executando os módulos v2 correspondentes.
-Não aceita comandos arbitrários. `NODE_ENV=production`, banco ausente ou chave
-ausente são recusados. Servidor/worker apenas verificam migrations; startup não
+Não aceita comandos arbitrários. Produção sem seleção explícita test-server,
+banco ausente ou chave ausente são recusados. O comando `check` verifica a
+configuração sem abrir banco. Servidor/worker apenas verificam migrations; startup não
 aplica DDL.
 
 `docker-compose.persona-v2.yml` define projeto separado, PostgreSQL 16 sem extensão

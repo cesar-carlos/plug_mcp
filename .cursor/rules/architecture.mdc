@@ -12,7 +12,7 @@ Express, MCP SDK, Drizzle, pg, application, infrastructure ou fetch.
 | Entrada          | Aplicação/domínio                             | Composição                          |
 | ---------------- | --------------------------------------------- | ----------------------------------- |
 | Persona-v2       | `application/persona-v2`, `domain/persona-v2` | `composition/compose-persona-v2.ts` |
-| Principal legada | `application/use-cases`, `domain/entities`    | `composition/compose.ts`            |
+| Legada explícita | `application/use-cases`, `domain/entities`    | `composition/compose.ts`            |
 
 - Ports explícitos em `src/domain/ports`; adapters em `src/infrastructure`.
 - Configuração em `src/config`; casos de uso não leem env arbitrariamente.

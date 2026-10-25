@@ -5,6 +5,15 @@ alwaysApply: true
 
 # Persona-v2
 
+DV2-017 (2026-10-25): primeiro destino é servidor de teste, sem clientes.
+Testes e ajustes no destino estão autorizados; aceite manual prévio dispensado.
+Separar esse deploy do aceite integral para clientes. O caminho técnico separado
+está implementado com contrato/CI/imagem próprios; não marcar gates integrais
+como aprovados. Test-server exige modo production e configuração dedicada. Preservar segurança, testes técnicos e aprovação
+Client de efeitos. Remoção de legado exige substituir consumidores ativos.
+Plano: docs/persona-v2/first-test-deploy.md; decisão: docs/persona-v2/decisions.md.
+Esta decisão prevalece sobre proibições genéricas de qualquer deploy abaixo.
+
 A área Bases reutiliza o workspace de conhecimento para escolher ERP/versão após
 identificar a fonte. Seleção é local e protegida contra descarte; inspeção e
 compatibilidade usam hub/agente. Não persistir seleção como adoção implícita,
@@ -202,8 +211,9 @@ sem catálogo, SQL ou resultados. Suspender desativa assinatura; recuperar não
 rearma. Contrato: [outbox](../../docs/persona-v2/outbox.md).
 
 Precedência em `AGENTS.md`. Estado e pendências em `docs/persona-v2/README.md`.
-Entrada principal ainda legada; `main-persona-v2.ts` é de desenvolvimento.
-`contracts/persona-v2-release.json` bloqueia deploy até o aceite integral.
+Entrada principal é v2; `main-legacy.ts` é explícita para regressões.
+`contracts/persona-v2-release.json` bloqueia aceite integral; deploy de teste
+usa contrato próprio, sem completar gates.
 O procedimento de cada tema fica no documento ligado. Esta regra guarda a decisão.
 
 Inspeção estrutural e adoção inicial em consultas estão no

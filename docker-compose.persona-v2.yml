@@ -17,7 +17,7 @@ x-candidate: &candidate
     NODE_ENV: development
     HOST: 0.0.0.0
     PORT: "3333"
-    DATABASE_URL: postgresql://persona_v2:${PERSONA_V2_POSTGRES_PASSWORD:?Dedicated hexadecimal password required}@database:5432/se7e_persona_v2_candidate
+    DATABASE_URL: postgresql://persona_v2:${PERSONA_V2_POSTGRES_PASSWORD:?Dedicated hexadecimal password required}@database:5432/persona_v2_candidate
     MCP_ENCRYPTION_KEY: ${PERSONA_V2_ENCRYPTION_KEY:?Dedicated 64-character hexadecimal key required}
     MCP_ENCRYPTION_KEY_ID: ${PERSONA_V2_ENCRYPTION_KEY_ID:-candidate-1}
     PUBLIC_BASE_URL: ${PERSONA_V2_PUBLIC_BASE_URL:-http://127.0.0.1:3334}
@@ -38,11 +38,11 @@ services:
     environment:
       POSTGRES_USER: persona_v2
       POSTGRES_PASSWORD: ${PERSONA_V2_POSTGRES_PASSWORD:?Dedicated hexadecimal password required}
-      POSTGRES_DB: se7e_persona_v2_candidate
+      POSTGRES_DB: persona_v2_candidate
     volumes:
       - database:/var/lib/postgresql/data
     healthcheck:
-      test: [CMD-SHELL, "pg_isready -U persona_v2 -d se7e_persona_v2_candidate"]
+      test: [CMD-SHELL, "pg_isready -U persona_v2 -d persona_v2_candidate"]
       interval: 5s
       timeout: 3s
       retries: 20

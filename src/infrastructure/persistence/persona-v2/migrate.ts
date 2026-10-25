@@ -1,3 +1,4 @@
+import { assertPersonaDeployment } from "../../../config/persona-deployment.js";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -120,6 +121,7 @@ export const verifyPersonaMigrations = async (client: Pick<pg.Client, "query">):
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const config = loadConfig();
+  assertPersonaDeployment(config);
   if (!config.DATABASE_URL) {
     throw new Error("DATABASE_URL obrigatório para migração persona-v2.");
   }
