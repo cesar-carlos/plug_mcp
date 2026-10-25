@@ -3,7 +3,9 @@
 O fluxo está implementado em 2026-10-25 para um servidor sem clientes, conforme
 [DV2-017](decisions.md#dv2-017--primeiro-servidor-de-teste--2026-10-25).
 Teste manual prévio e aceite funcional humano estão dispensados, não aprovados.
-O deploy remoto não foi executado nesta tarefa; preparar o destino antes do push.
+O primeiro deploy remoto foi executado em 2026-10-25; veja a
+[evidência do servidor](validation/2026-10-25-first-remote-test-deployment.md).
+As instruções abaixo também servem para preparar um novo destino.
 
 ## Implementado
 
@@ -90,8 +92,9 @@ como tratamento automático de erro. Restauração não desfaz efeitos remotos.
 ## Limites e evolução
 
 A [rodada local](validation/2026-10-25-test-deployment.md) registra testes e limites.
-Configuração de DNS/proxy, instalação da chave/receptor, credenciais, publicação
-no GitHub e execução remota não são comprovadas pelo ensaio local.
+Ela não comprova infraestrutura remota. A [rodada no servidor](validation/2026-10-25-first-remote-test-deployment.md)
+registra separadamente CI, receptor, configuração, migrations, HTTPS e verificações
+automatizadas do primeiro deploy, sem declarar aceite funcional humano.
 
 A avaliação consumidora real, integração editorial de datasets em operações e
 cruzamentos e homologações ampliadas continuam no [plano](remaining-plan.md).
