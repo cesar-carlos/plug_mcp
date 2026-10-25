@@ -727,8 +727,15 @@ manifesto. `persona-v2.html` referencia favicon, Apple Touch Icon e o manifesto
 próprio `persona-v2.webmanifest`, com início/escopo `/app/`. O manifesto legado
 permanece intacto. Android/iOS e SVGs alternativos não são incorporados.
 
-A API publica somente as sete rotas estáticas explícitas dos ícones/manifesto,
-além dos bundles em `/app/assets`. Não expõe o diretório inteiro de distribuição.
+A API publica as sete rotas estáticas explícitas dos ícones/manifesto,
+os bundles em `/app/assets` e os PNGs normais em `/brand/icon-192.png` e
+`/brand/icon-512.png`. Essas duas rotas aceitam leitura de outro site para
+registro de plugin ou conector; o console em `/app` permanece same-origin.
+`/brand/personas/{personaId}/icon` publica o PNG escolhido para a persona ativa.
+A visão geral e o treinamento enviam a imagem com revisão própria. Ausência,
+limpeza ou persona suspensa responde 404 e o cliente usa o ícone Se7e. A troca
+não muda a versão de autorização.
+Não expõe o diretório inteiro de distribuição.
 Vite copia os arquivos para `web/dist`, que o Dockerfile já empacota. Build e
 runtime não dependem da pasta externa. Não há service worker nem cache offline.
 Os assets foram verificados na [imagem candidata local](validation/2026-10-19-candidate-distribution.md).

@@ -159,14 +159,16 @@ própria, descritas abaixo; não estão implícitas na edição.
 Rotas adicionais sob `/api/admin/personas/:personaId`, somente pelo navegador
 com sessão, Host/Origin e CSRF:
 
-| Método | Sufixo                         | Entrada                                                                |
-| ------ | ------------------------------ | ---------------------------------------------------------------------- |
-| POST   | `/editar`                      | `expectedVersion`, `name`, `specialty`, `instructions`                 |
-| POST   | `/fontes/:sourceId/editar`     | `expectedVersion`, `name`, `purpose`, `environment`, `rowRestrictions` |
-| POST   | `/fontes/:sourceId/credencial` | `expectedVersion`, `email`, `password`, `clientToken`                  |
-| POST   | `/fontes/:sourceId/suspender`  | `expectedVersion`                                                      |
-| POST   | `/fontes/:sourceId/recuperar`  | `expectedVersion`, `credentials` opcional                              |
-| POST   | `/fontes/:sourceId/substituir` | `expectedVersion`, `source` com o cadastro completo da nova base       |
+| Método | Sufixo                         | Entrada                                                                 |
+| ------ | ------------------------------ | ----------------------------------------------------------------------- |
+| POST   | `/editar`                      | `expectedVersion`, `name`, `specialty`, `instructions`                  |
+| GET    | `/icone`                       | revisão atual; zero quando vale o ícone Se7e                            |
+| POST   | `/icone`                       | `expectedRevision` e `image` em base64, ou `null` para voltar ao padrão |
+| POST   | `/fontes/:sourceId/editar`     | `expectedVersion`, `name`, `purpose`, `environment`, `rowRestrictions`  |
+| POST   | `/fontes/:sourceId/credencial` | `expectedVersion`, `email`, `password`, `clientToken`                   |
+| POST   | `/fontes/:sourceId/suspender`  | `expectedVersion`                                                       |
+| POST   | `/fontes/:sourceId/recuperar`  | `expectedVersion`, `credentials` opcional                               |
+| POST   | `/fontes/:sourceId/substituir` | `expectedVersion`, `source` com o cadastro completo da nova base        |
 
 Exemplo de edição de persona vazia; a resposta traz a persona e sua nova
 `authorizationVersion`, usada como `expectedVersion` na edição seguinte:

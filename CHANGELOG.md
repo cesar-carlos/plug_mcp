@@ -11,6 +11,17 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: o consentimento OAuth mostra o nome do rascunho da skill concedida
+  e mantém a indicação de publicação indisponível. O nome não autoriza uso.
+
+- Added: ícone opcional por persona no console, na criação e no treinamento.
+  A imagem vira PNG público em `/brand/personas/{id}/icon`; sem escolha vale o
+  ícone Se7e. A troca não altera autorização, publicação ou concessões.
+
+- Added: ícones oficiais em `/brand/icon-192.png` e `/brand/icon-512.png`,
+  anunciados no `initialize`, para registro de plugin e conectores que consomem
+  URL. O pacote continua com a cópia interna; a URL não concede acesso.
+
 - Changed: painéis maiores do console carregam sob demanda com feedback de erro;
   buscas locais filtram personas, bases, skills e tokens sem descartar edição.
   Ajuda de termos, exemplos e estados vazios orientam o próximo passo; atalho de

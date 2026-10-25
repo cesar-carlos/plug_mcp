@@ -1,3 +1,7 @@
+<script lang="ts">
+export default { name: "BinaryAttachmentEditor" };
+</script>
+
 <script setup lang="ts">
 import type { Training } from "./model";
 const model = defineModel<Training["binaryAttachments"]>();

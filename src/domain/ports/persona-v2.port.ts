@@ -12,6 +12,7 @@ import type {
   Source,
   SourcePublicationImpact,
 } from "../persona-v2/model.js";
+import type { StoredPersonaIcon } from "../persona-v2/persona-icon.js";
 import type { OperationReceipt, SqlOperationCommand } from "../persona-v2/operation.js";
 import type { PersonaCatalogTransaction } from "../persona-v2/catalog.js";
 import type { HistoryFilter, HistoryPage } from "../persona-v2/console.js";
@@ -113,6 +114,9 @@ export interface PersonaTransaction {
   authorization(identity: ConsumerIdentity): Promise<AuthorizationSnapshot | null>;
   owner(hubOrigin: string, hubClientId: string): Promise<Owner>;
   findPersona(id: string): Promise<Persona | null>;
+  readPersonaIcon(personaId: string): Promise<StoredPersonaIcon | null>;
+  savePersonaIcon(personaId: string, bytes: Uint8Array, expectedRevision: number): Promise<number>;
+  clearPersonaIcon(personaId: string, expectedRevision: number): Promise<void>;
   createPersona(persona: Persona): Promise<void>;
   updatePersona(persona: Persona, expectedVersion: number): Promise<void>;
   changePersonaState(persona: Persona, expectedVersion: number, now: Date): Promise<void>;
@@ -159,6 +163,7 @@ export interface PersonaRepositoryPort {
   ): Promise<T>;
   authentication(tokenHash: string): Promise<AuthorizationSnapshot | null>;
   authorization(identity: ConsumerIdentity): Promise<AuthorizationSnapshot | null>;
+  readPersonaIcon(personaId: string): Promise<StoredPersonaIcon | null>;
 }
 
 /** Write dispatch has no retry method. Status/reconciliation is a separate operation. */

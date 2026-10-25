@@ -43,6 +43,9 @@ import { registerPersonaAttachmentRoutes } from "./persona-v2-attachments.js";
 import type { PersonaKnowledgeTraining } from "../../application/persona-v2/knowledge-training.js";
 import { sqlExampleInputSchema } from "../../application/persona-v2/catalog.js";
 import { registerDelegatedAdministrationRoutes } from "./persona-v2-delegated-administration.js";
+import { registerPersonaBrandIcons, registerPersonaIconRoute } from "./persona-brand.js";
+import { normalizePersonaIcon } from "../images/persona-icon.js";
+import type { StoredPersonaIcon } from "../../domain/persona-v2/persona-icon.js";
 
 /** Development server for the implemented persona-v2 subset; full acceptance remains blocked. */
 export const createPersonaAdministrationApp = (input: {
@@ -72,6 +75,7 @@ export const createPersonaAdministrationApp = (input: {
   knowledgeTraining?: PersonaKnowledgeTraining;
   crypto: CryptoPort;
   publicBaseUrl: string;
+  readPersonaIcon?: (personaId: string) => Promise<StoredPersonaIcon | null>;
   ready: () => Promise<boolean>;
 }): Express => {
   const app = express();
@@ -109,6 +113,8 @@ export const createPersonaAdministrationApp = (input: {
   app.get(["/app", "/app/"], (_req, res) => {
     res.sendFile(`${consoleRoot}/persona-v2.html`);
   });
+  registerPersonaBrandIcons(app, consoleRoot);
+  if (input.readPersonaIcon) registerPersonaIconRoute(app, input.readPersonaIcon);
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", generation: "persona-v2", complete: false });
   });
@@ -150,7 +156,7 @@ export const createPersonaAdministrationApp = (input: {
       ),
     );
   if (input.oauth && input.consumerCatalog) {
-    registerPersonaOAuthRoutes(app, input.oauth, input.consumerCatalog);
+    registerPersonaOAuthRoutes(app, input.oauth, input.consumerCatalog, input.readPersonaIcon);
     app.all(
       "/mcp/chatgpt",
       createPersonaV2McpHandler(
@@ -781,6 +787,31 @@ export const createPersonaAdministrationApp = (input: {
           req.body,
         ),
       });
+    });
+    const iconBody = z.strictObject({
+      expectedRevision: z.number().int().min(0).max(1_000_000),
+      image: z.string().min(1).max(400_000).nullable(),
+    });
+    app.get(`${path}/icone`, async (req, res) => {
+      res.json(
+        await maintenance.personaIcon(
+          session(req.get("cookie")),
+          z.uuid().parse(req.params.personaId),
+        ),
+      );
+    });
+    app.post(`${path}/icone`, async (req, res) => {
+      const body = iconBody.parse(req.body);
+      res.json(
+        await maintenance.setPersonaIcon(
+          session(req.get("cookie")),
+          z.uuid().parse(req.params.personaId),
+          {
+            expectedRevision: body.expectedRevision,
+            bytes: body.image === null ? null : await normalizePersonaIcon(body.image),
+          },
+        ),
+      );
     });
     app.post(`${path}/fontes/:sourceId/editar`, async (req, res) => {
       res.json({

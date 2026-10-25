@@ -1,11 +1,24 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const script = "scripts/should-publish-production.sh";
 
+// System32 bash.exe only launches WSL and does not execute this script.
+const bashPath = (): string => {
+  if (process.platform !== "win32") return "bash";
+  const roots = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"]].filter(
+    (root): root is string => root !== undefined && root.length > 0,
+  );
+  const installed = roots
+    .flatMap((root) => [`${root}\\Git\\bin\\bash.exe`, `${root}\\Git\\usr\\bin\\bash.exe`])
+    .find((candidate) => existsSync(candidate));
+  return installed ?? "bash";
+};
+
 const publishes = (files: string): boolean => {
   try {
-    execFileSync("bash", [script], { input: files, stdio: ["pipe", "pipe", "pipe"] });
+    execFileSync(bashPath(), [script], { input: files, stdio: ["pipe", "pipe", "pipe"] });
     return true;
   } catch {
     return false;

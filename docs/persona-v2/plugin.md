@@ -95,6 +95,15 @@ do material oficial `D:\Developer\Data7\Expedicao\Icon Kitchen`. A montagem copi
 esses arquivos para `assets/se7e-192.png` e `assets/se7e-512.png`; valida seus hashes
 fixados no projeto. Não usa versões maskable, não recolore nem recorta o símbolo.
 Logo e ícone viajam dentro do artefato; não há dependência da pasta externa.
+O mesmo par fica público em `/brand/icon-192.png` e `/brand/icon-512.png`, com
+leitura anônima e cabeçalhos que permitem consumo por outro site. O `initialize`
+anuncia essas URLs em `serverInfo.icons`. Registro por pacote usa a cópia interna;
+um formulário que só aceita arquivo pode baixar essas URLs. A URL não concede
+acesso nem substitui o arquivo enviado pelo operador no cliente.
+Cada persona pode ter um PNG próprio em `/brand/personas/{personaId}/icon`.
+A escolha é feita no console, na visão geral ou no treinamento, e não altera
+`authorization_version`, publicação ou concessões. Sem imagem, vale o ícone Se7e.
+O `initialize` continua anunciando somente os ícones oficiais do servidor.
 O [console](console.md) documenta os demais assets da interface.
 
 ## OAuth v2 e aceite pendente

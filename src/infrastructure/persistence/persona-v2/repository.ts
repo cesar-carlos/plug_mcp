@@ -30,6 +30,7 @@ import {
   type Source,
   type SourcePublicationImpact,
 } from "../../../domain/persona-v2/model.js";
+import type { StoredPersonaIcon } from "../../../domain/persona-v2/persona-icon.js";
 import { parsePermissions } from "./permissions-schema.js";
 import { isDialeto } from "../../../domain/entities/dialeto.js";
 import { personaHistory } from "./history.js";
@@ -803,6 +804,57 @@ export class PostgresPersonaTransaction implements PersonaTransaction {
     );
   }
 
+  async readPersonaIcon(personaId: string): Promise<StoredPersonaIcon | null> {
+    const result = await this.client.query<{ bytes: Buffer; revision: number }>(
+      "SELECT bytes, revision FROM persona_icone WHERE persona_id=$1",
+      [personaId],
+    );
+    const row = result.rows[0];
+    return row ? { mediaType: "image/png", bytes: row.bytes, revision: row.revision } : null;
+  }
+
+  async savePersonaIcon(
+    personaId: string,
+    bytes: Uint8Array,
+    expectedRevision: number,
+  ): Promise<number> {
+    const saved =
+      expectedRevision === 0
+        ? await this.client.query<{ revision: number }>(
+            `INSERT INTO persona_icone(persona_id,media_type,bytes,revision)
+             VALUES($1,'image/png',$2,1) ON CONFLICT DO NOTHING RETURNING revision`,
+            [personaId, bytes],
+          )
+        : await this.client.query<{ revision: number }>(
+            `UPDATE persona_icone SET bytes=$3,revision=revision+1,updated_at=now()
+             WHERE persona_id=$1 AND revision=$2 RETURNING revision`,
+            [personaId, expectedRevision, bytes],
+          );
+    const revision = saved.rows[0]?.revision;
+    if (saved.rowCount !== 1 || revision === undefined) {
+      throw new PersonaV2Error("OPERATION_CONFLICT", "Ícone mudou; recarregue antes de salvar.");
+    }
+    await this.client.query(
+      "INSERT INTO audit_v2(id,persona_id,evento,origem,sucesso,previous_version,resource_version) VALUES($1,$2,'persona.icon_updated','admin',true,$3,$4)",
+      [randomUUID(), personaId, expectedRevision > 0 ? expectedRevision : null, revision],
+    );
+    return revision;
+  }
+
+  async clearPersonaIcon(personaId: string, expectedRevision: number): Promise<void> {
+    const removed = await this.client.query(
+      "DELETE FROM persona_icone WHERE persona_id=$1 AND revision=$2 RETURNING persona_id",
+      [personaId, expectedRevision],
+    );
+    if (removed.rowCount !== 1) {
+      throw new PersonaV2Error("OPERATION_CONFLICT", "Ícone mudou; recarregue antes de salvar.");
+    }
+    await this.client.query(
+      "INSERT INTO audit_v2(id,persona_id,evento,origem,sucesso,previous_version,resource_version) VALUES($1,$2,'persona.icon_cleared','admin',true,$3,$3)",
+      [randomUUID(), personaId, expectedRevision],
+    );
+  }
+
   async revokeToken(personaId: string, tokenId: string, now: Date): Promise<void> {
     const result = await this.client.query(
       `UPDATE persona_token SET revoked_at=coalesce(revoked_at,$3),
@@ -856,6 +908,17 @@ export class PostgresPersonaRepository implements PersonaRepositoryPort {
     } finally {
       client.release();
     }
+  }
+
+  async readPersonaIcon(personaId: string): Promise<StoredPersonaIcon | null> {
+    const result = await this.pool.query<{ bytes: Buffer; revision: number }>(
+      `SELECT i.bytes, i.revision FROM persona_icone i
+       JOIN persona p ON p.id=i.persona_id
+       WHERE i.persona_id=$1 AND p.ativa`,
+      [personaId],
+    );
+    const row = result.rows[0];
+    return row ? { mediaType: "image/png", bytes: row.bytes, revision: row.revision } : null;
   }
 
   async authentication(tokenHash: string): Promise<AuthorizationSnapshot | null> {

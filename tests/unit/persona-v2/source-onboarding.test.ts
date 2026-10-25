@@ -19,6 +19,7 @@ it.each(["mssql", "postgres", "sybase"] as const)("guia %s usa contrato MCP v2",
   expect(sourceQuerySchema.safeParse({ options: { page: 1, page_size: 10 } }).success).toBe(false);
 });
 it("instruções exigem fatos retornados e distinguem erro, ausência e incompletude", () => {
+  expect(PERSONA_V2_INSTRUCTIONS).toContain("prompt apresentacao");
   expect(PERSONA_V2_INSTRUCTIONS).toContain("Nunca invente valores");
   expect(PERSONA_V2_INSTRUCTIONS).toContain("erro ou falta de permissão não significa ausência");
   expect(PERSONA_V2_INSTRUCTIONS).toContain("filtros e fontes consultados");

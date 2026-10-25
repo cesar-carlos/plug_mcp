@@ -7,6 +7,7 @@ import type { Permissions } from "../../domain/persona-v2/model.js";
 import { browserPage, escapeHtml, hiddenField } from "./browser-page.js";
 import { createRateLimiter } from "./rate-limit.js";
 import type { PersonaConsumerCatalog } from "../../application/persona-v2/consumer-catalog.js";
+import type { StoredPersonaIcon } from "../../domain/persona-v2/persona-icon.js";
 import {
   QUERY_LIMITS,
   OPERATION_LIMITS,
@@ -29,6 +30,14 @@ const cookie = (req: Request): string => {
 };
 const page = (body: string) =>
   browserPage({ title: "Conectar persona ao ChatGPT", product: "Se7e — Personas", body });
+
+/** Published name wins. A draft name stays visibly unpublished and does not authorize use. */
+export const consentSkillTitle = (
+  publishedName: string | undefined,
+  draftName: string | undefined,
+): string =>
+  publishedName ??
+  (draftName ? `${draftName} · sem publicação utilizável` : "Skill sem publicação utilizável");
 const choices = (permissions: Permissions, labels: ReadonlyMap<string, string>) => {
   const group = (title: string, name: string, items: readonly string[]) =>
     `<fieldset><legend>${title}</legend>${items.length ? items.map((id) => `<label><input type="checkbox" name="${name}" value="${escapeHtml(id)}"> ${escapeHtml(labels.get(id) ?? id)}</label>`).join("") : "<p>Nenhuma concessão.</p>"}</fieldset>`;
@@ -84,6 +93,7 @@ export const registerPersonaOAuthRoutes = (
   app: Express,
   oauth: PersonaOAuth,
   catalog: PersonaConsumerCatalog,
+  readPersonaIcon?: (personaId: string) => Promise<StoredPersonaIcon | null>,
 ): void => {
   const { issuer, resource } = oauth.policy;
   const origin = new URL(issuer).origin;
@@ -201,23 +211,30 @@ export const registerPersonaOAuthRoutes = (
         "Content-Security-Policy",
         `default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self' ${new URL(result.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
       );
-      const [sources, skills] = await Promise.all([
+      const [sources, skills, draftNames] = await Promise.all([
         catalog.sources(result.identity),
         catalog.list(result.identity),
+        catalog.grantedSkillNames(result.identity),
       ]);
+      const icon = readPersonaIcon
+        ? await readPersonaIcon(result.identity.personaId).catch(() => null)
+        : null;
+      const iconSrc = icon
+        ? `/brand/personas/${result.identity.personaId}/icon`
+        : "/brand/icon-192.png";
       const labels = new Map(sources.map((s) => [s.id, `${s.name} · ${s.dialect}`]));
       for (const grant of result.permissions.skills) {
         const skill = skills.find((s) => s.id === grant.skillId);
         labels.set(
           grant.skillId,
-          `${skill?.name ?? "Skill sem publicação utilizável"} · comandos: ${grant.effects.join(", ")} · aprovação: ${grant.requireHumanApproval ? "humana adicional" : "conforme publicação"} (${grant.skillId})`,
+          `${consentSkillTitle(skill?.name, draftNames.get(grant.skillId))} · comandos: ${grant.effects.join(", ")} · aprovação: ${grant.requireHumanApproval ? "humana adicional" : "conforme publicação"} (${grant.skillId})`,
         );
       }
       res
         .type("html")
         .send(
           page(
-            `<p>Persona: <strong>${escapeHtml(result.persona)}</strong></p><p>Selecione explicitamente as concessões. Sem seleção, a conexão terá apenas o contexto da persona. Fontes e dependências da skill precisam estar selecionadas. Administração depende da delegação vigente e das opções selecionadas; aprovação humana não é delegada. Cada seleção preserva os limites do token e da publicação; o consentimento não os amplia.</p><form method="post" action="${root}/consent">${hiddenField("transaction", body.transaction)}${hiddenField("csrf", result.csrf)}${choices(result.permissions, labels)}<button name="confirmed" value="yes" type="submit">Confirmar conexão</button><button name="confirmed" value="no" type="submit">Cancelar</button></form>`,
+            `<p><img src="${escapeHtml(iconSrc)}" alt="" width="64" height="64"></p><p>Persona: <strong>${escapeHtml(result.persona)}</strong></p><p>Selecione explicitamente as concessões. Sem seleção, a conexão terá apenas o contexto da persona. Fontes e dependências da skill precisam estar selecionadas. Administração depende da delegação vigente e das opções selecionadas; aprovação humana não é delegada. Cada seleção preserva os limites do token e da publicação; o consentimento não os amplia.</p><form method="post" action="${root}/consent">${hiddenField("transaction", body.transaction)}${hiddenField("csrf", result.csrf)}${choices(result.permissions, labels)}<button name="confirmed" value="yes" type="submit">Confirmar conexão</button><button name="confirmed" value="no" type="submit">Cancelar</button></form>`,
           ),
         );
     }),

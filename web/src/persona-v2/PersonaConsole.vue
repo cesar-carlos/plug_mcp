@@ -35,6 +35,7 @@ import type { FederationBudget } from "../../../src/domain/persona-v2/federation
 import { fieldCapabilityLabel } from "./field-capabilities";
 import BrandLogo from "./BrandLogo.vue";
 import DiscardDialog from "./DiscardDialog.vue";
+import PersonaIcon from "./PersonaIcon.vue";
 import PersonaSettings from "./PersonaSettings.vue";
 import PersonaState from "./PersonaState.vue";
 import SourceSettings from "./SourceSettings.vue";
@@ -293,6 +294,9 @@ watch(reviewDate, () => {
   confirmed.value = false;
 });
 const settingsDirty = ref(false);
+const iconDirty = ref(false);
+const iconKey = ref(0);
+const personaIconFile = ref<File>();
 const queryCaseDirty = ref(false),
   queryTestsKey = ref(0);
 const externalSkillDirty = ref(false),
@@ -340,7 +344,13 @@ const sourceDirty = computed(
     ),
 );
 const newPersonaDirty = computed(
-  () => !!(personaForm.name || personaForm.specialty || personaForm.instructions),
+  () =>
+    !!(
+      personaForm.name ||
+      personaForm.specialty ||
+      personaForm.instructions ||
+      personaIconFile.value
+    ),
 );
 const tokenDirty = computed(
   () =>
@@ -374,6 +384,7 @@ const personaDirty = computed(
     knowledgeMaintenanceDirty.value ||
     trainingKnowledgeDirty.value ||
     settingsDirty.value ||
+    iconDirty.value ||
     notificationsDirty.value ||
     sourceDirty.value ||
     federationDirty.value ||
@@ -450,7 +461,8 @@ function areaDirty(current: ConsoleArea) {
         !!reviewDate.value ||
         operationSkillDirty.value ||
         federationSkillDirty.value ||
-        externalSkillDirty.value
+        externalSkillDirty.value ||
+        iconDirty.value
     : current === "knowledge"
       ? sourceKnowledgeDirty.value || explorerDirty.value || knowledgeMaintenanceDirty.value
       : current === "sources"
@@ -459,7 +471,7 @@ function areaDirty(current: ConsoleArea) {
           Object.values(sourcesDirty).some(Boolean) ||
           Object.values(sourceLifecycleDirty).some(Boolean)
         : current === "overview"
-          ? settingsDirty.value
+          ? settingsDirty.value || iconDirty.value
           : current === "personas"
             ? newPersonaDirty.value
             : current === "tokens"
@@ -499,7 +511,11 @@ function discardArea(current: ConsoleArea) {
     federationDirty.value = false;
     federationKey.value++;
   }
-  if (current === "training") resetTraining();
+  if (current === "training") {
+    resetTraining();
+    iconDirty.value = false;
+    iconKey.value++;
+  }
   if (current === "sources") {
     sourceKnowledgeDirty.value = false;
     sourceKnowledgeKey.value++;
@@ -514,9 +530,13 @@ function discardArea(current: ConsoleArea) {
   if (current === "overview") {
     settingsDirty.value = false;
     settingsKey.value++;
+    iconDirty.value = false;
+    iconKey.value++;
   }
-  if (current === "personas")
+  if (current === "personas") {
     Object.assign(personaForm, { name: "", specialty: "", instructions: "" });
+    personaIconFile.value = undefined;
+  }
   if (current === "tokens") {
     oauthConnectionsDirty.value = false;
     oauthConnectionsKey.value++;
@@ -648,6 +668,7 @@ function clearPersona() {
   tokenManagerDirty.value = false;
   tokenManagerKey.value++;
   settingsDirty.value = false;
+  iconDirty.value = false;
   Object.keys(sourcesDirty).forEach((id) => {
     delete sourcesDirty[id];
   });
@@ -890,10 +911,27 @@ async function createPersona() {
       return;
     }
     const response = await api<{ persona: Persona }>("/api/admin/personas", personaForm);
+    const icon = personaIconFile.value;
+    if (icon) {
+      if (icon.size > 512 * 1024) throw new Error("Escolha uma imagem de até 512 KiB.");
+      const encoded = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+        reader.onerror = () => reject(new Error("Não foi possível ler o ícone."));
+        reader.readAsDataURL(icon);
+      });
+      const image = encoded.split(",")[1];
+      if (!image) throw new Error("Não foi possível ler o ícone.");
+      await api(`/api/admin/personas/${response.persona.id}/icone`, {
+        expectedRevision: 0,
+        image,
+      });
+    }
     personas.value.push(response.persona);
     clearPersona();
     personaId.value = response.persona.id;
     Object.assign(personaForm, { name: "", specialty: "", instructions: "" });
+    personaIconFile.value = undefined;
     await load();
     personaOpen.value = false;
     message.value = "Persona criada. A base comum de SQL e plug_server já está disponível.";
@@ -1779,11 +1817,31 @@ onBeforeUnmount(() => {
             <p v-if="invalidField('instructions')" id="personas-instructions-error" class="error">
               Revise este campo.
             </p>
+            <label
+              >Ícone opcional
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                @change="personaIconFile = ($event.target as HTMLInputElement).files?.[0]"
+              />
+            </label>
+            <p class="field-help">
+              PNG, JPEG ou WebP. Sem arquivo, a persona usa o ícone Se7e. Isso não concede acesso.
+            </p>
             <button>Criar persona</button>
           </fieldset>
         </form>
       </details>
       <template v-if="persona">
+        <PersonaIcon
+          v-if="persona.active"
+          v-show="area === 'overview' || area === 'training'"
+          :key="`${persona.id}:${iconKey}`"
+          :base="path()"
+          :api="api"
+          :busy="busy"
+          @dirty="iconDirty = $event"
+        />
         <section v-show="area === 'overview'">
           <h2>{{ persona.name }}</h2>
           <p>{{ persona.specialty }}</p>
@@ -2715,13 +2773,13 @@ onBeforeUnmount(() => {
                   <p>{{ tokenPublications[id]?.package.name }}</p>
                   <LimitsEditor
                     v-if="tokenSkillLimits[id]"
-                    v-model="tokenSkillLimits[id]!.queryLimits"
+                    v-model="tokenSkillLimits[id].queryLimits"
                     kind="query"
                     label="Concessão desta consulta"
                   />
                   <LimitsEditor
                     v-if="tokenSkillLimits[id]"
-                    v-model="tokenSkillLimits[id]!.federationLimits"
+                    v-model="tokenSkillLimits[id].federationLimits"
                     kind="federation"
                     label="Concessão deste cruzamento"
                   />

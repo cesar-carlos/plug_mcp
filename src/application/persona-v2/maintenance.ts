@@ -47,6 +47,10 @@ export const personaUpdateSchema = z.strictObject({
   specialty: z.string().trim().min(1).max(5000),
   instructions: z.string().max(20000),
 });
+export const personaIconSchema = z.strictObject({
+  expectedRevision: z.number().int().min(0).max(1_000_000),
+  bytes: z.instanceof(Uint8Array).nullable(),
+});
 export const personaStateSchema = z.strictObject({ expectedVersion: version });
 export const sourceUpdateSchema = z.strictObject({
   expectedVersion: version,
@@ -284,6 +288,32 @@ export class PersonaMaintenance {
         return Promise.resolve();
       },
     );
+  }
+
+  async personaIcon(sessionId: string, personaId: string): Promise<{ revision: number }> {
+    z.uuid().parse(personaId);
+    return this.owned(sessionId, personaId, async (tx) => ({
+      revision: (await tx.readPersonaIcon(personaId))?.revision ?? 0,
+    }));
+  }
+
+  async setPersonaIcon(
+    sessionId: string,
+    personaId: string,
+    raw: unknown,
+  ): Promise<{ revision: number }> {
+    z.uuid().parse(personaId);
+    const input = personaIconSchema.parse(raw);
+    return this.owned(sessionId, personaId, async (tx) => {
+      const current = (await tx.readPersonaIcon(personaId))?.revision ?? 0;
+      this.assertVersion(current, input.expectedRevision);
+      if (input.bytes === null) {
+        if (current === 0) return { revision: 0 };
+        await tx.clearPersonaIcon(personaId, current);
+        return { revision: 0 };
+      }
+      return { revision: await tx.savePersonaIcon(personaId, input.bytes, current) };
+    });
   }
 
   async updatePersona(sessionId: string, personaId: string, raw: unknown): Promise<Persona> {

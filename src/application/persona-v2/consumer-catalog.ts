@@ -676,6 +676,20 @@ export class PersonaConsumerCatalog {
     });
   }
 
+  /** Draft names for skills already on the token. A name does not make the publication usable. */
+  async grantedSkillNames(identity: ConsumerIdentity): Promise<ReadonlyMap<string, string>> {
+    return this.authorized(identity, async (tx, state) => {
+      const allowed = new Set(state.token.permissions.skills.map((grant) => grant.skillId));
+      const names = new Map<string, string>();
+      for (const skill of await tx.catalog.list(identity.personaId)) {
+        if (!allowed.has(skill.id)) continue;
+        const name = skill.name.trim();
+        if (name) names.set(skill.id, name);
+      }
+      return names;
+    });
+  }
+
   private async sharedSnapshot(
     tx: PersonaTransaction,
     identity: ConsumerIdentity,

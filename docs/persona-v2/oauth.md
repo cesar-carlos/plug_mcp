@@ -225,7 +225,11 @@ quando todos os checks passam. Não consulta ou altera o manifesto de release.
    podem aparecer no retorno. Não aplicar cache a `/oauth/`, `/api/`, `/app/setup/`
    ou `/mcp`. Conferir CSRF, limites, timeout e resposta de descoberta externamente.
 4. Habilitar `PERSONA_V2_OAUTH_ENABLED` no ambiente escolhido e configurar
-   `PERSONA_V2_OAUTH_CLIENTS` com CIMD/redirect reais e exatos. Criar persona,
+   `PERSONA_V2_OAUTH_CLIENTS` com CIMD/redirect reais e exatos. O cadastro manual
+   de conector no ChatGPT descobre o cliente
+   `https://chatgpt.com/oauth/client.json` e o redirect
+   `https://chatgpt.com/connector_platform_oauth_redirect`. Esse par substitui o
+   callback mostrado antes da descoberta. Criar persona,
    bases de fixture, treinamento/publicação e token restrito pelo navegador.
    Na composição de teste, usar `PERSONA_V2_TEST_OAUTH_ENABLED` e
    `PERSONA_V2_TEST_OAUTH_CLIENTS`, que alimentam essas opções do runtime.

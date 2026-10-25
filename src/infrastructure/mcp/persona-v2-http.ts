@@ -40,6 +40,7 @@ import type { PersonaCatalog } from "../../application/persona-v2/catalog.js";
 import type { PersonaAdministrativeAuthorization } from "../../application/persona-v2/administrative-authorization.js";
 import type { PersonaDelegatedTokens } from "../../application/persona-v2/delegated-tokens.js";
 import { registerPersonaAdministrativeTools } from "./persona-v2-administration-tools.js";
+import { personaBrandIcons } from "../http/persona-brand.js";
 import type { PersonaIntegrationManagement } from "../../application/persona-v2/integration-management.js";
 import type { PersonaSchemaInspection } from "../../application/persona-v2/schema-inspection.js";
 import type { PersonaKnowledgeTraining } from "../../application/persona-v2/knowledge-training.js";
@@ -132,7 +133,11 @@ export const createPersonaV2McpHandler = (
     const handler = createMcpHandler(
       () => {
         const baseServer = new McpServer(
-          { name: "Se7e persona-v2", version: "0.2.0" },
+          {
+            name: "Se7e persona-v2",
+            version: "0.2.0",
+            icons: personaBrandIcons(origin),
+          },
           { instructions: PERSONA_V2_INSTRUCTIONS },
         );
         const server = oauth ? personaOAuthTools(baseServer) : baseServer;
@@ -815,6 +820,27 @@ export const createPersonaV2McpHandler = (
               annotations,
             },
             async () => run(() => catalog.persona(requireIdentity())),
+          );
+          server.registerPrompt(
+            "apresentacao",
+            {
+              description:
+                "Primeira fala da persona autenticada. Leia antes de responder ao cliente e antes de consultar.",
+            },
+            async () => {
+              const persona = await catalog.persona(requireIdentity());
+              return {
+                messages: [
+                  {
+                    role: "user" as const,
+                    content: {
+                      type: "text" as const,
+                      text: `${persona.name}\n${persona.specialty}\n${persona.instructions}`,
+                    },
+                  },
+                ],
+              };
+            },
           );
           server.registerTool(
             "listar_fontes",

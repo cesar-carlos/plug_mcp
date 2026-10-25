@@ -328,6 +328,7 @@ export const composePersonaV2 = async (
           sourceQueries,
         ),
         crypto,
+        readPersonaIcon: (personaId) => services.repository.readPersonaIcon(personaId),
         publicBaseUrl: config.PUBLIC_BASE_URL,
         ready: async () => {
           await verifyPersonaMigrations(pool);
