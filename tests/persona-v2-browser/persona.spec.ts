@@ -4033,7 +4033,7 @@ test("cria persona, conecta duas bases, publica treinamento e consulta dados rea
   await page
     .getByRole("button", { name: "Ver consultas permitidas por este token", exact: true })
     .click();
-  await expect(page.getByRole("status")).toContainText("Consultas filtradas");
+  await expect(page.getByRole("status").filter({ hasText: "Consultas filtradas" })).toBeVisible();
   for (const [account, amount] of [
     ["a", "10.25"],
     ["b", "100.75"],
@@ -4078,6 +4078,8 @@ test("cria persona, conecta duas bases, publica treinamento e consulta dados rea
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
   await go(page, "Visão geral");
   const progress = page.getByRole("region", { name: "Roteiro da persona", exact: true });
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Descartar alterações", exact: true }).click();
   await expect(progress.getByText("Conexão · Concluído", { exact: true })).toBeVisible();
   await expect(progress.getByText("Primeira consulta · Concluído", { exact: true })).toBeVisible();
   await go(page, "Histórico");
@@ -4602,10 +4604,24 @@ test("sair das consultas descarta modos antigos de parâmetros sem alterar a pub
     .selectOption({ label: "Pedidos a · revisão 2" });
   const mode = page.getByRole("combobox", { name: "Como enviar nota", exact: true });
   const value = page.getByRole("textbox", { name: "Nota opcional (nota) · Opcional", exact: true });
+  const sql = page.getByLabel("SQL adaptado (opcional; vazio usa o exemplo publicado)", {
+    exact: true,
+  });
+  await sql.fill("SELECT id FROM orders");
+  await go(page, "Tokens e conexões");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Continuar editando", exact: true }).click();
+  await expect(sql).toHaveValue("SELECT id FROM orders");
+  await sql.fill("");
   for (const selected of ["null", "empty", "omit"]) {
     await mode.selectOption(selected);
     await expect(value).toBeDisabled();
     await go(page, "Tokens e conexões");
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("button", { name: "Continuar editando", exact: true }).click();
+    await expect(mode).toHaveValue(selected);
+    await go(page, "Tokens e conexões");
+    await page.getByRole("button", { name: "Descartar alterações", exact: true }).click();
     await go(page, "Consultas");
     await expect(mode).toHaveValue("value");
     await expect(value).toBeEnabled();
@@ -4616,6 +4632,7 @@ test("sair das consultas descarta modos antigos de parâmetros sem alterar a pub
   }
   await value.fill("Valor sintético da sessão");
   await go(page, "Tokens e conexões");
+  await page.getByRole("button", { name: "Descartar alterações", exact: true }).click();
   await go(page, "Consultas");
   await expect(value).toHaveValue("");
   await expect(mode).toHaveValue("value");
@@ -5850,7 +5867,9 @@ test("cruza duas bases por publicação real, pagina depois de combinar e recusa
     await combination.getByLabel(`Nome de saída ${index + 1}`, { exact: true }).fill(column.as);
   }
   await editor.getByRole("button", { name: "Salvar cruzamento", exact: true }).click();
-  await expect(editor.getByRole("status")).toContainText("Rascunho de cruzamento salvo");
+  await expect(
+    editor.getByRole("status").filter({ hasText: "Rascunho de cruzamento salvo" }),
+  ).toBeVisible();
   const cross = {
     id: await editor.getByRole("combobox", { name: "Editar cruzamento", exact: true }).inputValue(),
   };
@@ -5887,7 +5906,9 @@ test("cruza duas bases por publicação real, pagina depois de combinar e recusa
   await expectedRow.getByLabel("amount_b · valor", { exact: true }).fill("100.75");
   await cases.getByLabel("Total esperado antes da paginação", { exact: true }).fill("1");
   await cases.getByRole("button", { name: "Salvar caso de cruzamento", exact: true }).click();
-  await expect(editor.getByRole("status")).toContainText("Caso de cruzamento salvo");
+  await expect(
+    editor.getByRole("status").filter({ hasText: "Caso de cruzamento salvo" }),
+  ).toBeVisible();
   expect((await page.request.post(`${path}/preview`, { headers, data: {} })).status()).toBe(409);
   // Separate trusted runner against the owned fixture, never a browser approval endpoint.
   const state = JSON.parse(
@@ -5928,11 +5949,15 @@ test("cruza duas bases por publicação real, pagina depois de combinar e recusa
   await editor
     .getByRole("button", { name: "Confirmar publicação do cruzamento", exact: true })
     .click();
-  await expect(editor.getByRole("status")).toContainText("Cruzamento publicado");
+  await expect(
+    editor.getByRole("status").filter({ hasText: "Cruzamento publicado" }),
+  ).toBeVisible();
   await editor.getByLabel("Nome do cruzamento", { exact: true }).fill("Rascunho posterior");
   await checkEditorErrors(page, editor, "Nome do cruzamento", "Salvar cruzamento");
   await editor.getByRole("button", { name: "Salvar cruzamento", exact: true }).click();
-  await expect(editor.getByRole("status")).toContainText("Rascunho de cruzamento salvo");
+  await expect(
+    editor.getByRole("status").filter({ hasText: "Rascunho de cruzamento salvo" }),
+  ).toBeVisible();
   await expect(editor.getByText(/Publicação ativa: Comparar bases · revisão/)).toBeVisible();
   await expect(
     editor.getByRole("button", { name: "Revisar publicação do cruzamento", exact: true }),
@@ -5972,7 +5997,9 @@ test("cruza duas bases por publicação real, pagina depois de combinar e recusa
       .selectOption(column.type);
   }
   await cases.getByRole("button", { name: "Salvar caso de cruzamento", exact: true }).click();
-  await expect(editor.getByRole("status")).toContainText("Caso de cruzamento salvo");
+  await expect(
+    editor.getByRole("status").filter({ hasText: "Caso de cruzamento salvo" }),
+  ).toBeVisible();
   const details = (await (
     await page.request.get(`${path}/testes-cruzamento`, { headers })
   ).json()) as {

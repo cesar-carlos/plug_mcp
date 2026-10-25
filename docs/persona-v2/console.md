@@ -4,6 +4,76 @@ O aviso do console identifica ambiente de teste e aceite integral pendente.
 Disponibilidade do servidor não aprova gates nem dispensa revisão/publicação,
 concessões ou aprovação Client dos efeitos. Ver [deploy inicial](first-test-deploy.md).
 
+## Clareza, acessibilidade e recuperação da interface
+
+Formulários sinalizam campos obrigatórios sem alterar seu nome acessível.
+Validação nativa mantém foco no campo inválido e acrescenta orientação local
+associada por `aria-describedby`; corrigir remove o erro local. Erros não copiam
+valores para mensagens. Falhas preservam edição não secreta; credenciais continuam
+sendo descartadas após tentativa e a expiração da sessão limpa o contexto.
+
+Solicitações bloqueantes exibem aviso de processamento. Revisar impacto de fonte
+tem guarda local síncrona para impedir cliques repetidos antes da atualização do
+componente pai. Nenhuma dessas proteções autoriza retry de efeitos incertos.
+Revogação de token explica perda das skills/conexões OAuth derivadas, preservação
+dos outros tokens e impossibilidade de desfazer efeitos anteriores. Integrações
+mantêm revisão de dependências, fingerprint e confirmação explícita.
+
+O roteiro destaca, na ordem do servidor, o primeiro passo que não esteja concluído
+nem marcado como não aplicável, incluindo bloqueios e sua razão. É orientação, sem concessão de
+autoridade ou verificação remota implícita. Respostas de persona descartada não
+atualizam o roteiro vigente. Sessão expirada retorna ao login com aviso explícito.
+
+Botões, resumos expansíveis e links do menu têm altura mínima de 44 px. Tabelas e conteúdo técnico podem
+rolar horizontalmente em tela pequena; diálogos têm altura limitada à tela e
+mantêm cancelamento por Escape, foco inicial e retorno ao elemento anterior.
+Testes de navegador cobrem validação, espera sem duplicação, expiração, resposta
+atrasada após troca de persona e navegação móvel por diálogo. APIs sintéticas
+nesses testes comprovam comportamento da UI, não autoridade remota nem efeitos.
+
+## Busca local e carregamento por área
+
+O console permite buscar personas por nome/especialidade, bases por nome/motor,
+skills por nome nos quatro editores e tokens por nome/situação. Busca ignora
+acentos e caixa, combina todas as palavras e informa a contagem encontrada.
+“Não revogados” inclui tokens que podem estar expirados; o filtro não certifica
+validade nem autoridade. Seletores conservam o item atual mesmo fora da busca;
+filtrar bases só oculta linhas, sem desmontar suas edições. Editar um token e
+filtrar sua linha não descarta o formulário. Filtros não são persistidos nem
+geram concessões, consultas remotas ou alterações no cadastro.
+
+Painéis de catálogo, conhecimento, integração e operação SQL são carregados sob
+demanda, com aviso de espera e erro de download. Catálogo e formulário de consulta
+só são montados na área correspondente; guardas de navegação continuam exigindo
+confirmação antes de descartar edição. Falha de download não repete efeitos nem
+recarrega automaticamente a página. O build não eleva o limite de aviso de tamanho.
+Ao abrir treinamento importado, o foco aguarda a montagem dos painéis e o fim
+das leituras bloqueantes, para não ser perdido por um editor carregado depois.
+
+Ajuda expansível explica persona, fonte, skill, rascunho/publicação e token/concessão.
+Cadastro de persona oferece exemplos de preenchimento. Estados sem seleção,
+fonte, treinamento ou token orientam a próxima ação; zero resultados da busca
+não é apresentado como ausência de cadastro. O atalho “Pular para o conteúdo”
+move o foco por teclado, sem mudar a rota; o título da página acompanha a área.
+
+As verificações automatizadas cobrem nomes/descrições acessíveis, foco, teclado
+e reflow equivalente a 200% (640 px CSS para viewport original de 1280 px,
+também com texto ampliado). Não equivalem a uma sessão humana com leitor de tela.
+
+### Testes rápidos e integrados
+
+`npm run test:persona-v2:ui` gera o build e executa `ui-*.spec.ts` em dois workers,
+com contextos e respostas sintéticas independentes. A fixture estática escuta
+somente em localhost:5189 e recusa APIs não simuladas; não abre banco, hub ou ERP.
+Usar para feedback rápido de formulários, filtros, navegação e carregamento.
+
+`npm run test:persona-v2:browser` continua sendo o comando completo usado pela CI:
+gera um único build, executa a suíte rápida e depois a integrada. A integrada
+mantém um worker, porta 5188 e bancos PostgreSQL aleatórios próprios, com limpeza
+ao terminar. Seus casos compartilham a fixture e não foram paralelizados sem
+isolamento adicional. Rodar somente a suíte rápida não aprova os gates integrados.
+Não reconstruir o build enquanto qualquer uma das rodadas estiver em andamento.
+
 ## ERP no cadastro de bases
 
 A área Bases oferece uma segunda etapa opcional, **ERP / padrão de estrutura da
@@ -41,12 +111,22 @@ abrir. A escolha é salva e aparece na publicação; não detecta o tipo no banc
 amplia a policy técnica. Corrigir um tipo exige revisão/republicação e concessão
 compatível. [Regressão com view de fixture](validation/2026-10-23-query-view-editor.md).
 
-Sair da área Consultas descarta SQL adaptado, valores e modos de envio dos
-parâmetros. Ao voltar, nulo explícito, texto vazio ou omissão precisam ser
+Sair da área Consultas com SQL adaptado, valores ou modos de envio alterados
+exige confirmação. Continuar editando preserva esses campos; confirmar descarte
+limpa SQL, valores e modos. Trocar persona, sair da sessão ou fechar a página
+também protege essas edições; expiração da sessão continua descartando dados.
+Ao voltar, nulo explícito, texto vazio ou omissão precisam ser
 escolhidos novamente. A limpeza não altera a seleção/publicação da consulta,
 o treinamento ou as concessões. [Regressão](validation/2026-10-23-query-parameter-reset.md).
 O editor agrupa cada parâmetro com nome/tipo/significado específicos, evitando
 confundi-los com o nome da skill ou campos da estrutura. Isso não muda o contrato.
+
+Em Tokens e conexões, revogar um token preserva a edição não salva de outro;
+a proteção de navegação dessa edição permanece ativa. A lista distingue
+carregamento, falha e ausência confirmada: erro não significa que não há tokens.
+Se houver dados anteriores, eles são identificados como última leitura confirmada.
+Atualização é explícita. A disponibilidade OAuth encerra o carregamento em caso
+de erro e oferece nova tentativa, sem iniciar consentimento ou alterar conexão.
 
 Consultas e operações reutilizam os campos de caminho N:N. O editor de consultas
 permite identificar os relacionamentos, selecionar intermediárias e ordenar os

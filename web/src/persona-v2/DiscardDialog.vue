@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from "vue";
+import { onMounted, onBeforeUnmount, onUnmounted, ref } from "vue";
 const emit = defineEmits<{ answer: [discard: boolean] }>();
 const dialog = ref<HTMLDialogElement>();
 let previous: HTMLElement | null = null;
@@ -7,7 +7,10 @@ onMounted(() => {
   previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   dialog.value?.showModal();
 });
-onBeforeUnmount(() => previous?.focus());
+onBeforeUnmount(() => dialog.value?.close());
+onUnmounted(() => {
+  if (previous?.isConnected) previous.focus();
+});
 </script>
 <template>
   <dialog ref="dialog" aria-labelledby="discard-title" @cancel.prevent="emit('answer', false)">

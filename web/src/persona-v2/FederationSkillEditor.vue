@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListSearch from "./ListSearch.vue";
+import { matchesSearch } from "./list-search";
 import { computed, ref, watch, onBeforeUnmount } from "vue";
 import type {
   SkillDraft,
@@ -28,6 +30,10 @@ const props = defineProps<{
   confirmDiscard: () => Promise<boolean>;
 }>();
 const emit = defineEmits<{ dirty: [boolean]; lock: [boolean]; changed: [] }>();
+const search = ref("");
+const matchingDrafts = computed(() =>
+  drafts.value.filter((d) => matchesSearch(search.value, d.name)),
+);
 const drafts = ref<SkillDraft[]>([]),
   publications = ref<QueryDependency[]>([]),
   selected = ref(""),
@@ -356,6 +362,13 @@ watch(
 <template>
   <section ref="editorRoot" aria-label="Treinamento de cruzamento">
     <h2>Treinar cruzamentos</h2>
+    <ListSearch
+      v-if="drafts.length"
+      v-model="search"
+      label="Buscar cruzamentos"
+      :matches="matchingDrafts.length"
+      :total="drafts.length"
+    />
     <p>
       Combine consultas publicadas de bases diferentes. Publicar exige casos obrigatórios com
       relatório atual e revisão humana; não concede acesso nem executa consultas.
@@ -368,7 +381,11 @@ watch(
       <label
         >Editar cruzamento<select :value="selected" @change="select">
           <option value="">Novo cruzamento</option>
-          <option v-for="d in drafts" :key="d.id" :value="d.id">
+          <option
+            v-for="d in drafts.filter((d) => d.id === selected || matchingDrafts.includes(d))"
+            :key="d.id"
+            :value="d.id"
+          >
             {{ d.name }} · revisão {{ d.revision }}
           </option>
         </select></label

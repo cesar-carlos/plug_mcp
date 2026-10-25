@@ -3,19 +3,28 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 const props = defineProps<{ api: <T>(url: string, body?: unknown) => Promise<T> }>();
 const status = ref<{ enabled: boolean; endpoint?: string; scope?: string }>();
 const message = ref("");
+const loading = ref(false);
+const error = ref("");
 let active = true;
 onBeforeUnmount(() => {
   active = false;
   status.value = undefined;
 });
-onMounted(async () => {
+async function load() {
+  if (loading.value || !active) return;
+  loading.value = true;
+  error.value = "";
+  message.value = "";
   try {
     const result = await props.api<NonNullable<typeof status.value>>("/api/admin/oauth");
     if (active) status.value = result;
   } catch {
-    if (active) message.value = "Não foi possível confirmar a disponibilidade do OAuth.";
+    if (active) error.value = "Não foi possível confirmar a disponibilidade do OAuth.";
+  } finally {
+    if (active) loading.value = false;
   }
-});
+}
+onMounted(load);
 async function copy() {
   if (!status.value?.enabled) return;
   try {
@@ -38,7 +47,7 @@ async function copy() {
 }
 </script>
 <template>
-  <section aria-label="Conexão ChatGPT">
+  <section aria-label="Conexão ChatGPT" :aria-busy="loading">
     <h3>Conectar no ChatGPT</h3>
     <template v-if="status?.enabled">
       <p>
@@ -61,7 +70,13 @@ async function copy() {
       OAuth indisponível neste ambiente. A conexão manual usa o endereço /mcp e as permissões do
       token.
     </p>
-    <p v-else>Conferindo disponibilidade do OAuth…</p>
+    <p v-else-if="loading" role="status">Conferindo disponibilidade do OAuth…</p>
+    <template v-if="error">
+      <p role="alert" class="error">{{ error }}</p>
+      <button type="button" class="secondary" :disabled="loading" @click="load">
+        Tentar novamente
+      </button>
+    </template>
     <p role="status">{{ message }}</p>
   </section>
 </template>

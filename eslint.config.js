@@ -28,6 +28,7 @@ export default tseslint.config(
             "vitest.live.config.ts",
             "vitest.persona-v2.config.ts",
             "playwright.persona-v2.config.ts",
+            "playwright.persona-ui.config.ts",
             "drizzle.config.ts",
           ],
         },

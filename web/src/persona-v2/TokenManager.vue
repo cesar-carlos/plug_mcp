@@ -10,6 +10,8 @@ import {
   publicationExternalOperations,
 } from "./publication-grant";
 import LimitsEditor from "./LimitsEditor.vue";
+import ListSearch from "./ListSearch.vue";
+import { matchesSearch } from "./list-search";
 import ManagedIntegrationsSelector from "./ManagedIntegrationsSelector.vue";
 import type { QueryLimits, OperationLimits } from "../../../src/domain/persona-v2/execution-limits";
 import type { FederationBudget } from "../../../src/domain/persona-v2/federation";
@@ -61,7 +63,18 @@ const busy = ref(false),
   error = ref(""),
   message = ref("");
 const unconfirmed = ref(false);
+const listState = ref<"idle" | "loading" | "loaded" | "error">("idle");
 const blocked = computed(() => busy.value || props.disabled);
+const search = ref("");
+const stateFilter = ref("todos");
+const matchingTokens = computed(() =>
+  tokens.value.filter(
+    (token) =>
+      matchesSearch(search.value, token.name) &&
+      (stateFilter.value === "todos" ||
+        (stateFilter.value === "revogados" ? !!token.revokedAt : !token.revokedAt)),
+  ),
+);
 const externalOptions = computed(() => {
   const labels = new Map<string, string>();
   for (const p of Object.values(props.publications)) {
@@ -88,10 +101,17 @@ onBeforeUnmount(() => {
 });
 async function load() {
   loadedRefresh = props.refresh;
-  const response = await props.api<{ tokens: Token[] }>(`${props.base}/tokens`);
-  if (live) {
-    tokens.value = response.tokens;
-    loadedRefresh = props.refresh;
+  listState.value = "loading";
+  try {
+    const response = await props.api<{ tokens: Token[] }>(`${props.base}/tokens`);
+    if (live) {
+      tokens.value = response.tokens;
+      loadedRefresh = props.refresh;
+      listState.value = "loaded";
+    }
+  } catch (cause) {
+    if (live) listState.value = "error";
+    throw cause;
   }
 }
 async function run(action: () => Promise<void>, mutation = false) {
@@ -193,12 +213,20 @@ async function save(rotate = false) {
 }
 async function revoke(token: Token) {
   if (unconfirmed.value) return;
-  if (!window.confirm(`Revogar ${token.name} e bloquear seus acessos derivados?`)) return;
+  if (blocked.value) return;
+  if (
+    !window.confirm(
+      `Revogar ${token.name}? Este token e suas conexões OAuth derivadas perderão acesso às ${token.permissions.skills.length} skills concedidas. Outros tokens permanecem válidos. Efeitos já executados não serão desfeitos.`,
+    )
+  )
+    return;
   await run(async () => {
     await props.api(`${props.base}/tokens/${token.id}/revogar`, {});
     emit("bearer", "");
-    editing.value = undefined;
-    edited.value = undefined;
+    if (editing.value?.id === token.id) {
+      editing.value = undefined;
+      edited.value = undefined;
+    }
     await load();
     message.value = "Token revogado.";
   }, true);
@@ -221,8 +249,26 @@ function status(token: Token) {
 }
 </script>
 <template>
-  <section aria-label="Gerenciar tokens">
+  <section aria-label="Gerenciar tokens" :aria-busy="busy">
     <h3>Consumidores cadastrados</h3>
+    <template v-if="tokens.length">
+      <ListSearch
+        v-model="search"
+        label="Buscar tokens"
+        :matches="matchingTokens.length"
+        :total="tokens.length"
+      />
+      <label
+        >Situação dos tokens<select v-model="stateFilter">
+          <option value="todos">Todos</option>
+          <option value="nao_revogados">Não revogados (podem estar expirados)</option>
+          <option value="revogados">Revogados</option>
+        </select></label
+      >
+      <p v-if="stateFilter !== 'todos' && !matchingTokens.length" class="notice">
+        Nenhum token corresponde aos filtros. Escolha “Todos” ou limpe a busca.
+      </p>
+    </template>
     <button class="secondary" :disabled="blocked" @click="run(load)">
       Atualizar lista de tokens
     </button>
@@ -237,9 +283,17 @@ function status(token: Token) {
         Conferir estado dos tokens
       </button>
     </div>
-    <p v-if="!tokens.length">Nenhum token emitido para esta persona.</p>
+    <p v-if="listState === 'loading'" role="status">Carregando tokens…</p>
+    <p v-else-if="listState === 'error'" class="notice">
+      Não foi possível atualizar a lista. Use Atualizar lista de tokens para tentar novamente.
+      <span v-if="tokens.length">Os registros exibidos são da última leitura confirmada.</span>
+    </p>
+    <p v-else-if="listState === 'loaded' && !tokens.length">
+      Nenhum token emitido para esta persona. Use o formulário “Emitir token” para escolher as
+      permissões do primeiro consumidor.
+    </p>
     <ul class="token-list">
-      <li v-for="token in tokens" :key="token.id">
+      <li v-for="token in matchingTokens" :key="token.id">
         <strong>{{ token.name }}</strong> · {{ status(token) }} · versão
         {{ token.authorizationVersion }}
         <p>

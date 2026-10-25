@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/persona-v2-browser",
+  testIgnore: "ui-*.spec.ts",
   workers: 1,
   retries: 0,
   timeout: 60000,

@@ -5,6 +5,19 @@ alwaysApply: true
 
 # Persona-v2
 
+Buscas do console filtram somente registros já carregados e preservam seleção e
+edições, sem persistir termos ou ampliar autoridade. Carregamento sob demanda
+mantém guardas de descarte; erros de download não repetem efeitos nem recarregam
+a página. A suíte rápida de UI usa APIs sintéticas por contexto e não certifica
+os testes integrados; o comando completo da CI mantém ambas as rodadas.
+
+Feedback de formulário usa validação nativa e mensagens sem valores sensíveis;
+preserva edição não secreta após erro, sem reter credenciais ou sessão expirada.
+Roteiro destaca próximo passo segundo estado do servidor, nunca concede acesso.
+Revisão de impacto de fonte bloqueia duplicação antes da primeira espera; feedback
+de processamento não autoriza retry. Avisos de revogação/integração explicam
+acessos afetados sem prometer cancelamento de efeitos já executados.
+
 DV2-017 (2026-10-25): primeiro destino é servidor de teste, sem clientes.
 Testes e ajustes no destino estão autorizados; aceite manual prévio dispensado.
 Separar esse deploy do aceite integral para clientes. O caminho técnico separado
@@ -30,8 +43,14 @@ antiga segue table, sem mutação ao abrir; seleção não detecta tipo físico 
 amplia policy. Correção exige nova revisão/publicação e concessão compatível.
 
 Navegação para fora de Consultas limpa valores e modos dos parâmetros juntos.
+SQL adaptado, valores e modos alterados exigem confirmação antes dessa limpeza;
+cancelar preserva a edição. A proteção também vale para troca de persona e logout.
 Não conservar nulo/vazio/omitido após descartar a consulta local nem alterar o
 snapshot publicado para limpar estado da interface.
+
+Revogar um token no console preserva a edição de outro. Listagem com falha não
+afirma ausência de tokens; disponibilidade OAuth com erro encerra carregamento
+e permite somente nova verificação explícita.
 
 Editor de consulta preserva IDs, intermediárias e elos ordenados N:N; reutiliza
 os campos das operações. Novo ID não renomeia relações existentes nem corrige

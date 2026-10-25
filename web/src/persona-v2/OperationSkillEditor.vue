@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
+import ListSearch from "./ListSearch.vue";
+import { matchesSearch } from "./list-search";
+import { computed, ref, watch, onBeforeUnmount } from "vue";
 import type {
   CatalogTestReport,
   SkillDraft,
@@ -34,6 +36,10 @@ const props = defineProps<{
   confirmDiscard: () => Promise<boolean>;
 }>();
 const emit = defineEmits<{ dirty: [boolean]; lock: [boolean]; changed: [] }>();
+const search = ref("");
+const matchingDrafts = computed(() =>
+  drafts.value.filter((d) => matchesSearch(search.value, d.name)),
+);
 const drafts = ref<SkillDraft[]>([]),
   selected = ref(""),
   revision = ref(0),
@@ -311,13 +317,29 @@ function applyAdvanced() {
     error.value = "JSON inválido. Preserve a estrutura do contrato de operação.";
   }
 }
-onMounted(() => {
-  void run(loadList);
-});
+let initialized = false;
+// A lazily mounted editor may arrive while another panel owns the parent lock.
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (!disabled && !initialized && live) {
+      initialized = true;
+      void run(loadList);
+    }
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <section ref="editorRoot" aria-label="Treinamento de operação SQL">
     <h2>Treinar operações SQL</h2>
+    <ListSearch
+      v-if="drafts.length"
+      v-model="search"
+      label="Buscar operações SQL"
+      :matches="matchingDrafts.length"
+      :total="drafts.length"
+    />
     <p>
       Uma base por operação. A publicação exige casos obrigatórios aprovados pelo runner isolado e
       revisão de significado pelo responsável.
@@ -330,7 +352,11 @@ onMounted(() => {
       <label
         >Editar operação SQL<select :value="selected" @change="selectChanged">
           <option value="">Nova operação SQL</option>
-          <option v-for="d in drafts" :key="d.id" :value="d.id">
+          <option
+            v-for="d in drafts.filter((d) => d.id === selected || matchingDrafts.includes(d))"
+            :key="d.id"
+            :value="d.id"
+          >
             {{ d.name }} · revisão {{ d.revision }}
           </option>
         </select></label

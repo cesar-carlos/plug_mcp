@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListSearch from "./ListSearch.vue";
+import { matchesSearch } from "./list-search";
 import { computed, reactive, ref, shallowRef, watch, onBeforeUnmount } from "vue";
 import {
   externalContractSchema,
@@ -34,6 +36,10 @@ const props = defineProps<{
   confirmDiscard: () => Promise<boolean>;
 }>();
 const emit = defineEmits<{ dirty: [boolean]; lock: [boolean]; changed: [] }>();
+const search = ref("");
+const matchingDrafts = computed(() =>
+  drafts.value.filter((d) => matchesSearch(search.value, d.name)),
+);
 const drafts = ref<readonly ExternalDraftSummary[]>([]),
   connections = ref<readonly (IntegrationReference & { active: boolean })[]>([]),
   selected = ref(""),
@@ -392,6 +398,13 @@ watch(
 <template>
   <section ref="editorRoot" aria-label="Treinamento de ação externa">
     <h2>Treinar ações e consultas externas</h2>
+    <ListSearch
+      v-if="drafts.length"
+      v-model="search"
+      label="Buscar skills externas"
+      :matches="matchingDrafts.length"
+      :total="drafts.length"
+    />
     <p>
       Use uma integração cadastrada pelo navegador. Contrato, casos, revisão e publicação são
       separados de concessões e da aprovação de cada ação.
@@ -415,7 +428,11 @@ watch(
       <label
         >Editar skill externa<select :value="selected" @change="select">
           <option value="">Nova skill externa</option>
-          <option v-for="d in drafts" :key="d.skillId" :value="d.skillId">
+          <option
+            v-for="d in drafts.filter((d) => d.skillId === selected || matchingDrafts.includes(d))"
+            :key="d.skillId"
+            :value="d.skillId"
+          >
             {{ d.name }} · revisão {{ d.revision }}{{ d.publicationId ? " · publicada" : "" }}
           </option>
         </select></label

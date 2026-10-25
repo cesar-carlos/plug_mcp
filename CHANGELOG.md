@@ -11,6 +11,28 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: painéis maiores do console carregam sob demanda com feedback de erro;
+  buscas locais filtram personas, bases, skills e tokens sem descartar edição.
+  Ajuda de termos, exemplos e estados vazios orientam o próximo passo; atalho de
+  conteúdo e título por área melhoram navegação acessível.
+- Changed: suíte rápida de UI usa servidor estático e dois contextos concorrentes,
+  sem PostgreSQL. O comando completo da CI preserva a suíte integrada isolada.
+- Fixed: editor de operações aguarda a liberação da leitura de outros painéis
+  para inicializar a lista; abertura de treinamento importado aguarda os painéis
+  sob demanda antes de posicionar o foco.
+
+- Changed: console indica campos obrigatórios e erros locais acessíveis, mostra
+  processamento, destaca próximo passo do roteiro e esclarece impacto de revogação
+  e integrações. Melhora alvos de toque, tabelas e diálogos em telas pequenas.
+- Fixed: revisão de impacto de fonte impede chamadas duplicadas antes de atualizar
+  o pai; roteiro ignora respostas descartadas e expiração informa retorno ao login.
+  Diálogo devolve foco após sair do modo modal, inclusive ao cancelar por Escape.
+  Regressões de UI cobrem lentidão, expiração, troca de persona e foco no celular.
+
+- Fixed: console preserva edição de outro token ao revogar, distingue falha de
+  lista vazia e permite repetir a verificação OAuth após erro. Navegação com SQL
+  adaptado ou parâmetros alterados exige confirmação antes do descarte.
+
 - Fixed: pacote ChatGPT aceita IDs reais de aplicativos (`asdk_app_`, `connector_`
   e `templated_apps_`) e recusa IDs de plugin; fixtures verificam o vínculo
   preservado em `.app.json`. Verificador HTTPS v2 admite também o destino

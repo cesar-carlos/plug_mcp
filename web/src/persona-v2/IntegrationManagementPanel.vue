@@ -330,6 +330,11 @@ onMounted(() => {
           restaura concessões. Rotacionar preserva nome, tipo, destino e eventual suspensão; não
           verifica a credencial no provedor.
         </p>
+        <p v-if="mode && mode !== 'criar'" class="notice">
+          Tokens existentes não receberão novos acessos. Consumidores das publicações acima perderão
+          a disponibilidade desta integração; efeitos já executados não serão desfeitos. Revise as
+          dependências e os comprovantes antes de confirmar.
+        </p>
         <template v-if="mode === 'rotacionar' || mode === 'criar'">
           <label
             >E-mail do responsável para reautenticação<input

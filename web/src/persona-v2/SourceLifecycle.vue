@@ -19,6 +19,7 @@ const emit = defineEmits<{
 type Action = "suspender" | "recuperar" | "substituir";
 const expectedVersion = props.source.authorizationVersion;
 const pending = ref<Action>();
+const reviewing = ref(false);
 const impact = ref<SourcePublicationImpact>();
 const confirmed = ref(false),
   error = ref("");
@@ -42,7 +43,8 @@ function clearCredentials() {
   updateCredential.value = false;
 }
 async function review(action: Action) {
-  if (props.busy) return;
+  if (props.busy || reviewing.value) return;
+  reviewing.value = true;
   pending.value = undefined;
   impact.value = undefined;
   confirmed.value = false;
@@ -67,7 +69,8 @@ async function review(action: Action) {
       summary.value?.focus();
     }
   } finally {
-    emit("lock", false);
+    reviewing.value = false;
+    if (live) emit("lock", false);
   }
 }
 function confirm() {
@@ -89,7 +92,8 @@ function confirm() {
 </script>
 
 <template>
-  <section :aria-label="`Ciclo da base ${source.name}`">
+  <section :aria-label="`Ciclo da base ${source.name}`" :aria-busy="reviewing || busy">
+    <p v-if="reviewing" role="status">Conferindo o impacto sobre os acessos…</p>
     <p v-if="source.replacedBySourceId" class="notice">
       Vínculo substituído e mantido no histórico. A base substituta tem cadastro, treinamento e
       permissões próprios.

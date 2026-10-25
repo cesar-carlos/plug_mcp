@@ -1,15 +1,11 @@
 <script setup lang="ts">
-import {
-  computed,
-  reactive,
-  ref,
-  watch,
-  nextTick,
-  onBeforeUnmount,
-  defineAsyncComponent,
-} from "vue";
+import { computed, reactive, ref, watch, nextTick, onBeforeUnmount } from "vue";
 import type { AttachmentDescriptor } from "../../../src/domain/persona-v2/attachments";
 import BinaryAttachmentEditor from "./BinaryAttachmentEditor.vue";
+import { vFormFeedback } from "./form-feedback";
+import ListSearch from "./ListSearch.vue";
+import { lazyPanel } from "./lazy-panel";
+import { matchesSearch } from "./list-search";
 import RelationshipPathFields from "./RelationshipPathFields.vue";
 import { useRoute, useRouter } from "vue-router";
 import { consoleAreas, type ConsoleArea } from "./navigation";
@@ -20,14 +16,14 @@ import {
   publicationExternalOperations,
 } from "./publication-grant";
 import OperationsPanel from "./OperationsPanel.vue";
-import OperationSkillEditor from "./OperationSkillEditor.vue";
-const QueryTestsPanel = defineAsyncComponent(() => import("./QueryTestsPanel.vue"));
-const FederationSkillEditor = defineAsyncComponent(() => import("./FederationSkillEditor.vue"));
+const OperationSkillEditor = lazyPanel(() => import("./OperationSkillEditor.vue"));
+const QueryTestsPanel = lazyPanel(() => import("./QueryTestsPanel.vue"));
+const FederationSkillEditor = lazyPanel(() => import("./FederationSkillEditor.vue"));
 import NotificationsPanel from "./NotificationsPanel.vue";
 import ExternalActionsPanel from "./ExternalActionsPanel.vue";
 import ExternalTestsPanel from "./ExternalTestsPanel.vue";
-import IntegrationManagementPanel from "./IntegrationManagementPanel.vue";
-const ExternalSkillEditor = defineAsyncComponent(() => import("./ExternalSkillEditor.vue"));
+const IntegrationManagementPanel = lazyPanel(() => import("./IntegrationManagementPanel.vue"));
+const ExternalSkillEditor = lazyPanel(() => import("./ExternalSkillEditor.vue"));
 import FederationPanel from "./FederationPanel.vue";
 import TokenManager from "./TokenManager.vue";
 import ManagedIntegrationsSelector from "./ManagedIntegrationsSelector.vue";
@@ -43,13 +39,13 @@ import PersonaSettings from "./PersonaSettings.vue";
 import PersonaState from "./PersonaState.vue";
 import SourceSettings from "./SourceSettings.vue";
 import SourceLifecycle from "./SourceLifecycle.vue";
-import SharedKnowledgePanel from "./SharedKnowledgePanel.vue";
-import SourceKnowledgeWorkspace from "./SourceKnowledgeWorkspace.vue";
+const SharedKnowledgePanel = lazyPanel(() => import("./SharedKnowledgePanel.vue"));
+const SourceKnowledgeWorkspace = lazyPanel(() => import("./SourceKnowledgeWorkspace.vue"));
 import ProgressPanel from "./ProgressPanel.vue";
 import ConnectionPanel from "./ConnectionPanel.vue";
-import KnowledgeExplorer from "./KnowledgeExplorer.vue";
+const KnowledgeExplorer = lazyPanel(() => import("./KnowledgeExplorer.vue"));
 import { publicationDeadline } from "./publication-deadline";
-import KnowledgeFeedbackPanel from "./KnowledgeFeedbackPanel.vue";
+const KnowledgeFeedbackPanel = lazyPanel(() => import("./KnowledgeFeedbackPanel.vue"));
 import OAuthConnectionInfo from "./OAuthConnectionInfo.vue";
 import OwnerDelegationPanel from "./OwnerDelegationPanel.vue";
 import { administrativeOptions } from "./administrative-options";
@@ -74,6 +70,12 @@ import {
 
 const requests = new ContextRequests();
 const importedDraftFocus = ref<Pick<ImportedDraftReference, "personaId" | "skillId">>();
+const mountedTrainingPanels = ref(new Set<string>());
+const importedPanelsReady = computed(() =>
+  ["operation", "external", "federation", "knowledge", "cases"].every((panel) =>
+    mountedTrainingPanels.value.has(panel),
+  ),
+);
 interface PermissionLimits {
   queryLimits?: Partial<QueryLimits>;
   operationLimits?: Partial<OperationLimits>;
@@ -96,6 +98,16 @@ const knowledgeRequests = new ContextRequests();
 const route = useRoute(),
   router = useRouter();
 const area = computed(() => (route.name ?? "personas") as ConsoleArea);
+function focusContent() {
+  document.getElementById("console-content")?.focus();
+}
+watch(
+  area,
+  (value) => {
+    document.title = `${consoleAreas.find((item) => item.id === value)?.label ?? "Console"} — Se7e`;
+  },
+  { immediate: true },
+);
 const menuOpen = ref(false),
   sourceOpen = ref(false),
   personaOpen = ref(false);
@@ -180,6 +192,26 @@ const personas = ref<Persona[]>([]),
 const personaForm = reactive({ name: "", specialty: "", instructions: "" });
 const sources = ref<Source[]>([]),
   drafts = ref<Draft[]>([]);
+watch(
+  [area, personaId],
+  () => {
+    mountedTrainingPanels.value = new Set();
+  },
+  { flush: "sync" },
+);
+const personaSearch = ref(""),
+  sourceSearch = ref(""),
+  skillSearch = ref("");
+const matchingPersonas = computed(() =>
+  personas.value.filter((p) => matchesSearch(personaSearch.value, p.name, p.specialty)),
+);
+const matchingSources = computed(() =>
+  sources.value.filter((s) => matchesSearch(sourceSearch.value, s.name, s.dialect)),
+);
+const queryDrafts = computed(() => drafts.value.filter((d) => d.kind === "consulta"));
+const matchingDrafts = computed(() =>
+  queryDrafts.value.filter((d) => matchesSearch(skillSearch.value, d.name)),
+);
 const sourceForm = reactive<{
   name: string;
   purpose: string;
@@ -229,6 +261,12 @@ const querySkill = ref(""),
   querySql = ref(""),
   queryValues = reactive<Record<string, string>>({});
 const queryModes = reactive<Record<string, ParameterMode>>({});
+const queryDirty = computed(
+  () =>
+    !!querySql.value ||
+    Object.values(queryValues).some((value) => value !== "") ||
+    Object.values(queryModes).some((mode) => mode !== "value"),
+);
 const grantedQueries = ref<{ id: string; name: string; publicationId: string; hash: string }[]>();
 const queryPublications = computed(() =>
   Object.fromEntries(
@@ -323,6 +361,7 @@ const tokenDirty = computed(
 );
 const personaDirty = computed(
   () =>
+    queryDirty.value ||
     integrationManagementDirty.value ||
     externalSkillDirty.value ||
     federationSkillDirty.value ||
@@ -381,8 +420,10 @@ async function sessionRequest<T>(request: Promise<T>): Promise<T> {
   try {
     return await request;
   } catch (cause) {
-    if (cause instanceof ConsoleRequestError && cause.code === "ADMIN_SESSION_EXPIRED")
+    if (cause instanceof ConsoleRequestError && cause.code === "ADMIN_SESSION_EXPIRED") {
       clearSession();
+      message.value = "Sua sessão expirou. Entre novamente.";
+    }
     throw cause;
   }
 }
@@ -426,7 +467,7 @@ function areaDirty(current: ConsoleArea) {
               : current === "catalog"
                 ? knowledgeDirty.value
                 : current === "queries"
-                  ? federationDirty.value
+                  ? federationDirty.value || queryDirty.value
                   : current === "integrations"
                     ? externalTestsDirty.value ||
                       externalActionsDirty.value ||
@@ -582,6 +623,8 @@ function resetTraining() {
   confirmed.value = false;
 }
 function clearPersona() {
+  sourceSearch.value = "";
+  skillSearch.value = "";
   importedDraftFocus.value = undefined;
   clearAttachment();
   operationActionsDirty.value = false;
@@ -643,6 +686,7 @@ function clearPersona() {
   showBearer.value = false;
 }
 function clearSession() {
+  personaSearch.value = "";
   uncertainIssuance.value = {};
   requests.reset();
   knowledgeRequests.reset();
@@ -759,7 +803,7 @@ async function openImportedDraft(reference: ImportedDraftReference) {
   if (area.value === "training") importedDraftFocus.value = reference;
 }
 watch(
-  [importedDraftFocus, busy, area, personaId, draftId],
+  [importedDraftFocus, busy, area, personaId, draftId, importedPanelsReady],
   async () => {
     const target = importedDraftFocus.value;
     if (!target) return;
@@ -773,9 +817,9 @@ watch(
       importedDraftFocus.value = undefined;
       return;
     }
-    if (busy.value) return;
+    if (busy.value || !importedPanelsReady.value) return;
     await nextTick();
-    if (!current() || busy.value) return;
+    if (!current() || busy.value || !importedPanelsReady.value) return;
     const input = document.querySelector<HTMLElement>('[data-error-field="training:name"]');
     if (input && !input.matches(":disabled") && input.getClientRects().length) {
       input.focus();
@@ -1547,7 +1591,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main>
+  <main v-form-feedback>
+    <a v-if="logged" class="skip-link" href="#console-content" @click.prevent="focusContent"
+      >Pular para o conteúdo</a
+    >
     <header>
       <div class="brand">
         <BrandLogo />
@@ -1563,6 +1610,9 @@ onBeforeUnmount(() => {
     </p>
     <p v-if="error && !logged" role="alert" class="error area-error" tabindex="-1">{{ error }}</p>
     <p v-if="message" role="status" class="success">{{ message }}</p>
+    <p v-if="busy" role="status" class="notice processing-status">
+      Processando solicitação… Aguarde a confirmação antes de repetir a ação.
+    </p>
     <DiscardDialog v-if="dialogOpen" @answer="answerDiscard" />
     <p v-if="logged && expiresSoon" class="notice" role="status">
       Sua sessão termina em menos de dois minutos. Salve as edições pendentes.
@@ -1609,7 +1659,7 @@ onBeforeUnmount(() => {
         </ul>
       </div>
       <SharedKnowledgePanel
-        v-show="area === 'catalog'"
+        v-if="area === 'catalog'"
         :key="knowledgeKey"
         :api="knowledgeApi"
         :confirm-discard="confirmDiscard"
@@ -1619,15 +1669,58 @@ onBeforeUnmount(() => {
         @open-draft="openImportedDraft"
       />
       <fieldset :disabled="busy">
+        <ListSearch
+          v-if="personas.length > 1"
+          v-model="personaSearch"
+          label="Buscar personas"
+          :matches="matchingPersonas.length"
+          :total="personas.length"
+        />
         <label
           >Persona<select :value="personaId" @change="choosePersona">
             <option value="">Selecione</option>
-            <option v-for="p in personas" :key="p.id" :value="p.id">
+            <option
+              v-for="p in personas.filter(
+                (p) => p.id === personaId || matchingPersonas.includes(p),
+              )"
+              :key="p.id"
+              :value="p.id"
+            >
               {{ p.name }}{{ p.active ? "" : " (suspensa)" }}
             </option>
           </select></label
         >
       </fieldset>
+      <h2 id="console-content" tabindex="-1" class="area-heading">
+        {{ consoleAreas.find((item) => item.id === area)?.label }}
+      </h2>
+      <details class="console-help">
+        <summary>Ajuda: entenda os termos</summary>
+        <dl>
+          <dt>Persona</dt>
+          <dd>Assistente com uma especialidade, fontes e conhecimentos próprios.</dd>
+          <dt>Base ou fonte</dt>
+          <dd>Conexão com os dados que a persona poderá usar.</dd>
+          <dt>Skill</dt>
+          <dd>Consulta ou operação ensinada à persona, com regras e limites definidos.</dd>
+          <dt>Rascunho e publicação</dt>
+          <dd>
+            Salvar guarda a edição. Publicar disponibiliza uma versão revisada, que ainda precisa de
+            permissão para ser usada.
+          </dd>
+          <dt>Token e concessão</dt>
+          <dd>
+            O token é uma chave de acesso. As concessões definem exatamente quais fontes e skills
+            essa chave pode usar.
+          </dd>
+        </dl>
+      </details>
+      <p v-if="!personaId && personas.length && area !== 'catalog'" class="notice">
+        Selecione uma persona acima para acessar suas bases, treinamentos e permissões.
+      </p>
+      <p v-if="personaSearch && personaId" class="field-help">
+        A persona selecionada permanece disponível mesmo quando não corresponde à busca.
+      </p>
       <p v-if="!personas.length && area === 'personas'" class="notice">
         Comece criando sua primeira persona. Você poderá conectar as bases depois.
       </p>
@@ -1645,6 +1738,7 @@ onBeforeUnmount(() => {
             <label
               >Nome<input
                 v-model="personaForm.name"
+                placeholder="Ex.: Assistente financeiro"
                 data-error-field="personas:name"
                 :aria-invalid="invalidField('name') || undefined"
                 :aria-describedby="invalidField('name') ? 'personas-name-error' : undefined"
@@ -1663,6 +1757,7 @@ onBeforeUnmount(() => {
                   invalidField('specialty') ? 'personas-specialty-error' : undefined
                 "
                 maxlength="5000"
+                placeholder="Ex.: Contas a receber e fluxo de caixa"
                 required
               />
             </label>
@@ -1678,6 +1773,7 @@ onBeforeUnmount(() => {
                   invalidField('instructions') ? 'personas-instructions-error' : undefined
                 "
                 maxlength="20000"
+                placeholder="Ex.: Explique os resultados em português e informe as fontes usadas."
               />
             </label>
             <p v-if="invalidField('instructions')" id="personas-instructions-error" class="error">
@@ -1717,11 +1813,23 @@ onBeforeUnmount(() => {
           />
         </section>
         <section v-show="area === 'sources'">
+          <ListSearch
+            v-if="sources.length"
+            v-model="sourceSearch"
+            label="Buscar bases"
+            :matches="matchingSources.length"
+            :total="sources.length"
+          />
+          <p v-if="!sources.length && !busy" class="notice">
+            Nenhuma base conectada. Abra “Adicionar uma base” para cadastrar a conexão e conferir
+            sua identidade.
+          </p>
           <h2>Bases conectadas</h2>
           <p v-if="!sources.length">Cadastre a primeira base desta persona.</p>
           <ul>
             <li
               v-for="s in sources"
+              v-show="matchingSources.includes(s)"
               :id="`source-${s.id}`"
               :key="s.id"
               :class="{ notice: highlightedSourceId === s.id }"
@@ -1945,7 +2053,7 @@ onBeforeUnmount(() => {
             @lock="busy = $event"
           />
         </section>
-        <section v-if="sources.length" v-show="area === 'training'">
+        <section v-if="sources.length && area === 'training'">
           <h2>Treinar consultas</h2>
           <p>
             Origem: treinamento desta persona e fonte, com versões compartilhadas quando adotadas. A
@@ -1956,11 +2064,24 @@ onBeforeUnmount(() => {
             testes. O SQL principal permanece o modelo desta skill.
           </p>
           <fieldset :disabled="busy">
+            <ListSearch
+              v-if="queryDrafts.length"
+              v-model="skillSearch"
+              label="Buscar skills de consulta"
+              :matches="matchingDrafts.length"
+              :total="queryDrafts.length"
+            />
+            <p v-if="!queryDrafts.length && !busy" class="notice">
+              Nenhuma consulta treinada. Preencha o novo treinamento abaixo; salvar cria um
+              rascunho, e publicar exige uma revisão separada.
+            </p>
             <label
               >Editar treinamento<select :value="draftId" @change="editDraft">
                 <option value="">Novo treinamento</option>
                 <option
-                  v-for="d in drafts.filter((item) => item.kind === 'consulta')"
+                  v-for="d in queryDrafts.filter(
+                    (d) => d.id === draftId || matchingDrafts.includes(d),
+                  )"
                   :key="d.id"
                   :value="d.id"
                 >
@@ -2361,6 +2482,7 @@ onBeforeUnmount(() => {
               :disabled="busy || queryCaseDirty"
               :confirm-discard="confirmDiscard"
               :training="training"
+              @vue:mounted="mountedTrainingPanels.add('knowledge')"
               @training="training = $event"
               @dirty="trainingKnowledgeDirty = $event"
               @lock="busy = $event"
@@ -2374,6 +2496,7 @@ onBeforeUnmount(() => {
               :confirm-discard="confirmDiscard"
               :api="api"
               :disabled="busy || dirty || trainingKnowledgeDirty"
+              @vue:mounted="mountedTrainingPanels.add('cases')"
               @dirty="queryCaseDirty = $event"
               @lock="busy = $event"
               @saved="
@@ -2421,6 +2544,11 @@ onBeforeUnmount(() => {
             </div>
           </fieldset>
         </section>
+        <p v-if="area === 'training' && !sources.length && !busy" class="notice">
+          Para treinar consultas SQL, conecte primeiro uma base.
+          <RouterLink :to="{ name: 'sources' }">Conectar primeira base</RouterLink>. Skills externas
+          usam uma integração e têm cadastro próprio abaixo.
+        </p>
         <FederationSkillEditor
           v-if="area === 'training' && sources.length"
           :key="`federation-skill:${persona.id}:${federationSkillKey}`"
@@ -2429,6 +2557,7 @@ onBeforeUnmount(() => {
           :api="api"
           :disabled="busy"
           :confirm-discard="confirmDiscard"
+          @vue:mounted="mountedTrainingPanels.add('federation')"
           @dirty="federationSkillDirty = $event"
           @lock="busy = $event"
           @changed="load"
@@ -2440,6 +2569,7 @@ onBeforeUnmount(() => {
           :api="api"
           :disabled="busy"
           :confirm-discard="confirmDiscard"
+          @vue:mounted="mountedTrainingPanels.add('external')"
           @dirty="externalSkillDirty = $event"
           @lock="busy = $event"
           @changed="load"
@@ -2452,6 +2582,7 @@ onBeforeUnmount(() => {
           :api="api"
           :disabled="busy"
           :confirm-discard="confirmDiscard"
+          @vue:mounted="mountedTrainingPanels.add('operation')"
           @dirty="operationSkillDirty = $event"
           @lock="busy = $event"
           @changed="load"
@@ -2667,6 +2798,10 @@ onBeforeUnmount(() => {
           <p>Copie o token antes de sair; ele não é salvo no navegador.</p>
         </section>
         <section v-show="area === 'queries'">
+          <p v-if="!bearer" class="notice">
+            Para consultar, informe um token com permissão para uma skill publicada.
+            <RouterLink :to="{ name: 'tokens' }">Configurar acesso às consultas</RouterLink>.
+          </p>
           <h2>Consultar dados publicados</h2>
           <label
             >Token para consultar<input
@@ -2906,11 +3041,6 @@ onBeforeUnmount(() => {
             @lock="busy = $event"
           />
           <RouterLink :to="{ name: 'catalog' }">Abrir catálogo compartilhado</RouterLink>
-        </section>
-        <section v-if="area === 'training' && !sources.length">
-          <h2>Treinamentos</h2>
-          <p>Cadastre uma base antes de treinar uma consulta.</p>
-          <RouterLink :to="{ name: 'sources' }">Cadastrar base</RouterLink>
         </section>
         <OperationsPanel
           v-if="area === 'operations'"
