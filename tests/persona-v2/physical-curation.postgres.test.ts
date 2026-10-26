@@ -385,8 +385,13 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.end();
-  await control.query(`DROP DATABASE "${name}" WITH (FORCE)`);
-  await control.end();
+  try {
+    // PostgreSQL waits for sockets closing after Pool.end(); FORCE can interrupt
+    // an idle client before its graceful termination reaches the server.
+    await control.query(`DROP DATABASE "${name}"`);
+  } finally {
+    await control.end();
+  }
 });
 it("colaborador vê somente sua autoria, não revisa e perde acesso após revogação do papel", async () => {
   const f = await fixture();

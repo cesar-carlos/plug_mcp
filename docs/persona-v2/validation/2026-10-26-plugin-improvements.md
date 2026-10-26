@@ -37,6 +37,13 @@ anteriores preservadas. Esta rodada não representa commit, push ou deploy.
 
 ## Limites
 
+Na preparação remota, o CI expôs formatação pendente em nove documentos e uma
+corrida na limpeza da fixture de curadoria física: os 332 testes PostgreSQL
+passaram, mas o DROP com FORCE interrompeu uma conexão ainda em fechamento.
+A limpeza agora encerra o pool e usa DROP sem FORCE, mantendo a recusa se houver
+conexões remanescentes. Essa correção de teste não altera o runtime nem aprova
+o deploy por si só; a publicação exige nova rodada CI bem-sucedida.
+
 A conexão sintética ChatGPT ainda não existe, conforme informado pelo responsável.
 [Roteiro preparado](../plugin-client-validation.md), sem aprovação real do modelo.
 Não foi executada nova cadeia de homologação PostgreSQL/SQL Server/SQL Anywhere
