@@ -169,7 +169,8 @@ form,
 }
 button,
 summary,
-.console-menu a {
+.console-menu a,
+.console-menu .navigation-logout {
   overflow-wrap: anywhere;
   min-width: 0;
   min-height: 44px;
@@ -326,6 +327,15 @@ p {
   color: #174f32;
   text-decoration: none;
 }
+.console-menu .navigation-logout {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
 .console-menu a[aria-current="page"] {
   color: white;
   background: #126348;
@@ -335,6 +345,132 @@ p {
 }
 .console-workspace {
   min-width: 0;
+}
+.access-page {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.access-shortcuts,
+.access-actions,
+.access-card-heading,
+.access-record-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.access-shortcuts {
+  margin: 20px 0;
+}
+.access-shortcuts button,
+.access-actions button,
+.access-card-heading button {
+  margin: 0;
+}
+.access-card-heading,
+.access-record-heading {
+  justify-content: space-between;
+}
+.access-card-heading > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.access-card h3 {
+  margin-top: 0;
+}
+.access-card,
+.access-editor h4 {
+  scroll-margin-top: 100px;
+}
+.access-card > section {
+  padding: 20px 0 0;
+  margin: 20px 0 0;
+  border: 0;
+  border-top: 1px solid #c7d5cc;
+  border-radius: 0;
+}
+.access-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.access-records {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.access-records > li {
+  padding: 16px;
+  border: 1px solid #c7d5cc;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.access-records > .access-record-editing {
+  border-color: #126348;
+  background: #f2f7f4;
+}
+.access-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #e0f1e7;
+  color: #174f32;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.access-status-muted {
+  color: #455c52;
+  background: #edf0ee;
+}
+.access-status-warning {
+  color: #704500;
+  background: #fff0d1;
+}
+.access-status-expired {
+  color: #8a2118;
+  background: #fde8e5;
+}
+.permission-summary {
+  padding: 16px;
+  margin: 20px 0;
+  border: 1px solid #c7d5cc;
+  border-radius: 8px;
+  background: #f2f7f4;
+}
+.permission-summary h4 {
+  margin-top: 0;
+}
+.permission-summary h5 {
+  font-size: 0.95rem;
+  margin: 16px 0 8px;
+}
+.access-editor {
+  border-top: 2px solid #126348;
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.access-endpoint {
+  padding: 12px 16px;
+  background: #f2f5f3;
+  border-radius: 8px;
+}
+.access-endpoint span,
+.access-endpoint code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.access-endpoint span {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.access-steps {
+  padding-left: 24px;
+}
+.access-steps li + li {
+  margin-top: 8px;
 }
 .navigation-group-title {
   overflow-wrap: anywhere;

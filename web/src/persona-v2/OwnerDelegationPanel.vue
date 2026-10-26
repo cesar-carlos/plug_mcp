@@ -2,6 +2,9 @@
 import { onBeforeUnmount, onMounted, ref, computed, watch } from "vue";
 import { administrativeOptions } from "./administrative-options";
 import { useErrorSummary } from "./useErrorSummary";
+import ConfirmationDialog from "./ConfirmationDialog.vue";
+import { useConfirmation } from "./useConfirmation";
+const { confirmation, ask, answer } = useConfirmation();
 const props = defineProps<{
   personaId: string;
   api: <T>(url: string, body?: unknown) => Promise<T>;
@@ -36,7 +39,12 @@ async function load() {
   if (busy.value) return;
   if (
     dirty.value &&
-    !window.confirm("Descartar as permissões em edição e conferir o estado atual da delegação?")
+    !(await ask({
+      title: "Descartar edição da delegação?",
+      description:
+        "As permissões ainda não salvas serão descartadas para conferir o cadastro atual. Nenhuma delegação será alterada.",
+      confirmLabel: "Descartar e conferir",
+    }))
   )
     return;
   busy.value = true;
@@ -66,11 +74,14 @@ onMounted(load);
 async function change(action: "create" | "revoke") {
   if (busy.value || !state.value || !verified.value) return;
   if (
-    !window.confirm(
-      action === "revoke"
-        ? "Revogar a delegação e bloquear os setups administrativos anteriores?"
-        : "Criar delegação por até 30 dias? A anterior será revogada e seus setups deixarão de valer.",
-    )
+    !(await ask({
+      title: action === "revoke" ? "Revogar delegação?" : "Confirmar delegação?",
+      description:
+        action === "revoke"
+          ? "Revogar a delegação e bloquear os setups administrativos anteriores?"
+          : "Criar delegação por até 30 dias? A anterior será revogada e seus setups deixarão de valer.",
+      confirmLabel: action === "revoke" ? "Confirmar revogação" : "Confirmar delegação",
+    }))
   )
     return;
   busy.value = true;
@@ -105,7 +116,8 @@ async function change(action: "create" | "revoke") {
 }
 </script>
 <template>
-  <section aria-label="Delegação administrativa" :aria-busy="busy">
+  <section aria-label="Delegação administrativa" :aria-busy="busy" class="access-card">
+    <ConfirmationDialog v-if="confirmation" v-bind="confirmation" @answer="answer" />
     <h3>Delegação do responsável</h3>
     <p>
       Permite confirmar sua identidade ativa no hub sem guardar senha ou JWT. Expira em até 30 dias.
@@ -121,7 +133,7 @@ async function change(action: "create" | "revoke") {
     <button type="button" :disabled="busy" @click="load">Conferir estado da delegação</button>
     <fieldset :disabled="busy || !state || !verified">
       <legend>Permissões que poderão ser delegadas</legend>
-      <label v-for="option in administrativeOptions" :key="option.id">
+      <label v-for="option in administrativeOptions" :key="option.id" class="check">
         <input v-model="selected" type="checkbox" :value="option.id" />{{ option.label }}
       </label>
     </fieldset>

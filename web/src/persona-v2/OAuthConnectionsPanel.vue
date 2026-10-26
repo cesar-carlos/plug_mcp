@@ -26,6 +26,15 @@ const labels = {
   expirada: "Expirada",
   bloqueada: "Bloqueada pelo token ou pela persona",
 };
+function clientLabel(clientId: string) {
+  try {
+    const url = new URL(clientId);
+    if (["https:", "http:"].includes(url.protocol)) return url.hostname;
+  } catch {
+    /* Opaque identifiers remain available in technical details. */
+  }
+  return "Cliente conectado";
+}
 let live = true;
 watch(selected, (value) => emit("dirty", !!value));
 watch(
@@ -94,7 +103,13 @@ async function revoke() {
 }
 </script>
 <template>
-  <section aria-labelledby="oauth-connections-heading">
+  <section
+    id="access-connections"
+    aria-labelledby="oauth-connections-heading"
+    :aria-busy="busy"
+    class="access-card"
+    tabindex="-1"
+  >
     <h3 id="oauth-connections-heading">Conexões OAuth da persona</h3>
     <p>
       Consulte os consentimentos e encerre uma conexão específica. Esta lista verifica somente o
@@ -102,17 +117,32 @@ async function revoke() {
     </p>
     <p v-if="error" ref="errorSummary" tabindex="-1" role="alert" class="error">{{ error }}</p>
     <p v-if="message" role="status">{{ message }}</p>
-    <button :disabled="busy || disabled || !!selected" @click="run(() => load())">
+    <button class="secondary" :disabled="busy || disabled || !!selected" @click="run(() => load())">
       Atualizar conexões OAuth
     </button>
-    <p v-if="!loaded">Carregue a lista para conferir as conexões registradas.</p>
+    <p v-if="busy" role="status">Conferindo conexões…</p>
+    <p v-else-if="!loaded">Carregue a lista para conferir as conexões registradas.</p>
     <p v-else-if="!rows.length">
       Nenhuma conexão neste recorte. Isso não comprova ausência de atividade anterior.
     </p>
-    <ul>
+    <ul class="access-records">
       <li v-for="row in rows" :key="row.id">
-        <strong>{{ row.tokenName }}</strong> · {{ labels[row.state] }}
-        <p>Cliente autorizado: {{ row.clientId }}</p>
+        <div class="access-record-heading">
+          <strong>{{ clientLabel(row.clientId) }}</strong
+          ><span
+            class="access-status"
+            :class="{ 'access-status-muted': row.state !== 'vigente_localmente' }"
+            >{{ labels[row.state] }}</span
+          >
+        </div>
+        <p>
+          Token associado: <strong>{{ row.tokenName }}</strong>
+        </p>
+        <details>
+          <summary>Identificação da conexão</summary>
+          <p>Cliente autorizado: {{ row.clientId }}</p>
+          <p>ID da conexão: {{ row.id }}</p>
+        </details>
         <p>
           Consentimento: {{ row.permissions.sourceIds.length }} base(s),
           {{ row.permissions.skills.length }} skill(s),
@@ -124,22 +154,34 @@ async function revoke() {
           Válida até {{ new Date(row.expiresAt).toLocaleString() }}
         </p>
         <button
+          class="secondary"
+          :aria-label="`Revisar revogação ${row.id}`"
           :disabled="busy || disabled || !!selected || !!row.revokedAt"
           @click="
             selected = row;
             confirmed = false;
           "
         >
-          Revisar revogação {{ row.id }}
+          Revisar revogação
         </button>
       </li>
     </ul>
     <button v-if="cursor" :disabled="busy || disabled || !!selected" @click="run(() => load(true))">
       Mais conexões OAuth
     </button>
-    <form v-if="selected" aria-label="Revogar conexão OAuth" @submit.prevent="revoke">
+    <form
+      v-if="selected"
+      aria-label="Revogar conexão OAuth"
+      class="access-editor"
+      @submit.prevent="revoke"
+    >
       <h4>Revogar somente esta conexão</h4>
-      <p>{{ selected.clientId }} · token {{ selected.tokenName }} · {{ selected.id }}</p>
+      <p>{{ clientLabel(selected.clientId) }} · token {{ selected.tokenName }}</p>
+      <details>
+        <summary>Identificação da conexão selecionada</summary>
+        <p>{{ selected.clientId }}</p>
+        <p>{{ selected.id }}</p>
+      </details>
       <p>
         Access e refresh desta conexão deixarão de funcionar. Esta ação não revoga o token
         originador, outras conexões nem desfaz operações já enviadas.
@@ -148,7 +190,7 @@ async function revoke() {
         <summary>Consentimento exato</summary>
         <pre>{{ JSON.stringify(selected.permissions, null, 2) }}</pre>
       </details>
-      <label
+      <label class="check"
         ><input v-model="confirmed" type="checkbox" :disabled="busy || disabled" />Revisei esta
         conexão e confirmo sua revogação.</label
       >

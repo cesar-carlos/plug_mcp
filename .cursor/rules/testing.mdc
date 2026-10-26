@@ -30,6 +30,11 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Persona-v2
 
+- Tokens: abertura/recolhimento da emissão não perde rascunho; resumo não concede
+  autoridade. Exercitar limite de sete dias/expiração, filtros e cancelamento dos
+  diálogos sem POST, com Escape e restauração de foco. Fixtures devem abrir Novo
+  token explicitamente e confirmar os diálogos visíveis, sem autoaceitar alertas.
+
 - Diagnóstico HTTPS usa GET para metadados e POST vazio sem credenciais para o
   challenge MCP v2. Fixture deve recusar GET no transporte com 405, como o runtime;
   não certificar conexão ChatGPT real a partir da descoberta pública.

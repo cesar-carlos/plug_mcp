@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import type { GrantPublication, Source } from "./model";
 import { ConsoleRequestError } from "./model";
 import { administrativeOptions } from "./administrative-options";
@@ -13,6 +13,10 @@ import LimitsEditor from "./LimitsEditor.vue";
 import ListSearch from "./ListSearch.vue";
 import { matchesSearch } from "./list-search";
 import ManagedIntegrationsSelector from "./ManagedIntegrationsSelector.vue";
+import PermissionSummary from "./PermissionSummary.vue";
+import ConfirmationDialog from "./ConfirmationDialog.vue";
+import { useConfirmation } from "./useConfirmation";
+import { tokenValidity, tokenValidityLabels } from "./token-validity";
 import type { QueryLimits, OperationLimits } from "../../../src/domain/persona-v2/execution-limits";
 import type { FederationBudget } from "../../../src/domain/persona-v2/federation";
 interface Permissions {
@@ -67,12 +71,29 @@ const listState = ref<"idle" | "loading" | "loaded" | "error">("idle");
 const blocked = computed(() => busy.value || props.disabled);
 const search = ref("");
 const stateFilter = ref("todos");
+const now = ref(Date.now());
+const { confirmation, ask, answer } = useConfirmation();
+let clock: number | undefined;
+function updateClock() {
+  now.value = Date.now();
+}
+onMounted(() => {
+  clock = window.setInterval(updateClock, 60000);
+  window.addEventListener("focus", updateClock);
+});
+onBeforeUnmount(() => {
+  window.clearInterval(clock);
+  window.removeEventListener("focus", updateClock);
+});
+const editorHeading = ref<HTMLElement>();
 const matchingTokens = computed(() =>
   tokens.value.filter(
     (token) =>
       matchesSearch(search.value, token.name) &&
       (stateFilter.value === "todos" ||
-        (stateFilter.value === "revogados" ? !!token.revokedAt : !token.revokedAt)),
+        (stateFilter.value === "nao_revogados" && !token.revokedAt) ||
+        (stateFilter.value === "revogados" && !!token.revokedAt) ||
+        stateFilter.value === tokenValidity(token, now.value)),
   ),
 );
 const externalOptions = computed(() => {
@@ -158,6 +179,8 @@ async function edit(token: Token) {
   if (dirty.value && !(await props.confirmDiscard())) return;
   editing.value = token;
   edited.value = JSON.parse(JSON.stringify(token)) as Token;
+  await nextTick();
+  editorHeading.value?.focus();
 }
 function grant(skillId: string, checked: boolean) {
   if (!edited.value || blocked.value) return;
@@ -185,9 +208,12 @@ async function save(rotate = false) {
   if (!edited.value || !editing.value || unconfirmed.value) return;
   if (
     rotate &&
-    !window.confirm(
-      "Gerar outro token e invalidar imediatamente o anterior e seus acessos derivados?",
-    )
+    !(await ask({
+      title: "Gerar novo token?",
+      description:
+        "O token anterior e seus acessos derivados serão invalidados imediatamente. As alterações deste formulário também serão salvas. Copie o novo valor após confirmar; ele não poderá ser recuperado depois.",
+      confirmLabel: "Gerar e invalidar o anterior",
+    }))
   )
     return;
   await run(async () => {
@@ -215,9 +241,11 @@ async function revoke(token: Token) {
   if (unconfirmed.value) return;
   if (blocked.value) return;
   if (
-    !window.confirm(
-      `Revogar ${token.name}? Este token e suas conexões OAuth derivadas perderão acesso às ${token.permissions.skills.length} skills concedidas. Outros tokens permanecem válidos. Efeitos já executados não serão desfeitos.`,
-    )
+    !(await ask({
+      title: `Revogar ${token.name}?`,
+      description: `Este token e suas conexões OAuth derivadas perderão acesso às ${token.permissions.skills.length} skills concedidas. Outros tokens permanecem válidos. Efeitos já executados não serão desfeitos.`,
+      confirmLabel: "Confirmar revogação",
+    }))
   )
     return;
   await run(async () => {
@@ -241,37 +269,54 @@ function setExpiry(event: Event) {
   if (edited.value) edited.value.expiresAt = value ? new Date(value).toISOString() : null;
 }
 function status(token: Token) {
-  return token.revokedAt
-    ? "Revogado"
-    : token.expiresAt && Date.parse(token.expiresAt) <= Date.now()
-      ? "Expirado"
-      : "Ativo";
+  return tokenValidityLabels[tokenValidity(token, now.value)];
 }
 </script>
 <template>
-  <section aria-label="Gerenciar tokens" :aria-busy="busy">
-    <h3>Consumidores cadastrados</h3>
-    <template v-if="tokens.length">
-      <ListSearch
-        v-model="search"
-        label="Buscar tokens"
-        :matches="matchingTokens.length"
-        :total="tokens.length"
-      />
-      <label
-        >Situação dos tokens<select v-model="stateFilter">
-          <option value="todos">Todos</option>
-          <option value="nao_revogados">Não revogados (podem estar expirados)</option>
-          <option value="revogados">Revogados</option>
-        </select></label
+  <section aria-label="Gerenciar tokens" :aria-busy="busy" class="access-card">
+    <ConfirmationDialog v-if="confirmation" v-bind="confirmation" @answer="answer" />
+    <div class="access-card-heading">
+      <div>
+        <h3>Tokens cadastrados</h3>
+        <p class="field-help">Revise quem pode acessar esta persona e quais permissões recebeu.</p>
+      </div>
+      <button class="secondary" :disabled="blocked" @click="run(load)">
+        Atualizar lista de tokens
+      </button>
+    </div>
+    <div class="access-filters">
+      <template v-if="tokens.length">
+        <ListSearch
+          v-model="search"
+          label="Buscar tokens"
+          :matches="matchingTokens.length"
+          :total="tokens.length"
+        />
+        <label
+          >Situação dos tokens<select v-model="stateFilter">
+            <option value="todos">Todos</option>
+            <option value="ativo">Ativos (mais de 7 dias ou sem expiração)</option>
+            <option value="vence_em_breve">Vencem em até 7 dias</option>
+            <option value="expirado">Expirados</option>
+            <option value="nao_revogados">Não revogados (podem estar expirados)</option>
+            <option value="revogados">Revogados</option>
+          </select></label
+        >
+      </template>
+    </div>
+    <div v-if="tokens.length && !matchingTokens.length" class="notice" role="status">
+      <p>Nenhum token corresponde aos filtros. Escolha “Todos” ou limpe a busca.</p>
+      <button
+        type="button"
+        class="secondary"
+        @click="
+          search = '';
+          stateFilter = 'todos';
+        "
       >
-      <p v-if="stateFilter !== 'todos' && !matchingTokens.length" class="notice">
-        Nenhum token corresponde aos filtros. Escolha “Todos” ou limpe a busca.
-      </p>
-    </template>
-    <button class="secondary" :disabled="blocked" @click="run(load)">
-      Atualizar lista de tokens
-    </button>
+        Limpar filtros
+      </button>
+    </div>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="message" role="status" class="success">{{ message }}</p>
     <div v-if="unconfirmed" role="status" class="notice">
@@ -292,11 +337,27 @@ function status(token: Token) {
       Nenhum token emitido para esta persona. Use o formulário “Emitir token” para escolher as
       permissões do primeiro consumidor.
     </p>
-    <ul class="token-list">
-      <li v-for="token in matchingTokens" :key="token.id">
-        <strong>{{ token.name }}</strong> · {{ status(token) }} · versão
-        {{ token.authorizationVersion }}
-        <p>
+    <ul class="token-list access-records">
+      <li
+        v-for="token in matchingTokens"
+        :key="token.id"
+        :class="{ 'access-record-editing': edited?.id === token.id }"
+      >
+        <div class="access-record-heading">
+          <strong>{{ token.name }}</strong>
+          <span
+            class="access-status"
+            :class="{
+              'access-status-muted': ['revogado', 'desconhecido'].includes(
+                tokenValidity(token, now),
+              ),
+              'access-status-warning': tokenValidity(token, now) === 'vence_em_breve',
+              'access-status-expired': tokenValidity(token, now) === 'expirado',
+            }"
+            >{{ status(token) }}</span
+          >
+        </div>
+        <p class="field-help">
           {{
             token.expiresAt
               ? `Validade: ${new Date(token.expiresAt).toLocaleString()}`
@@ -304,19 +365,29 @@ function status(token: Token) {
           }}
           · {{ token.permissions.skills.length }} skills concedidas
         </p>
-        <button class="secondary" :disabled="blocked || !!token.revokedAt" @click="edit(token)">
-          Editar {{ token.name }}
-        </button>
-        <button
-          class="danger"
-          :disabled="blocked || unconfirmed || !!token.revokedAt"
-          @click="revoke(token)"
-        >
-          Revogar {{ token.name }}
-        </button>
+        <p v-if="edited?.id === token.id" class="field-help">
+          Em edição{{ dirty ? " · alterações não salvas" : "" }}
+        </p>
+        <div class="access-actions">
+          <button class="secondary" :disabled="blocked || !!token.revokedAt" @click="edit(token)">
+            Editar {{ token.name }}
+          </button>
+          <button
+            class="danger"
+            :disabled="blocked || unconfirmed || !!token.revokedAt"
+            @click="revoke(token)"
+          >
+            Revogar {{ token.name }}
+          </button>
+        </div>
       </li>
     </ul>
-    <form v-if="edited" aria-label="Editar token" @submit.prevent="save()">
+    <form v-if="edited" aria-label="Editar token" class="access-editor" @submit.prevent="save()">
+      <h4 ref="editorHeading" tabindex="-1">Editar {{ editing?.name }}</h4>
+      <p class="field-help">
+        Revise as permissões antes de salvar. Versão do cadastro:
+        {{ editing?.authorizationVersion }}.
+      </p>
       <fieldset :disabled="blocked">
         <p
           v-if="
@@ -414,7 +485,7 @@ function status(token: Token) {
             {{ option.label }}
           </label>
         </fieldset>
-        <label v-for="option in administrativeOptions" :key="option.id">
+        <label v-for="option in administrativeOptions" :key="option.id" class="check">
           <input v-model="edited.permissions.administrative" type="checkbox" :value="option.id" />{{
             option.label
           }}
@@ -503,12 +574,18 @@ function status(token: Token) {
           >
         </details>
         <p class="notice">
-          Salvar ou rotacionar invalida concessões derivadas anteriores. Permissões administrativas,
-          integrações e limites existentes são preservados; sua gestão completa ainda está pendente.
+          Salvar ou gerar novo token invalida concessões derivadas anteriores. Permissões
+          administrativas, integrações e limites existentes são preservados; sua gestão completa
+          ainda está pendente.
         </p>
+        <PermissionSummary
+          :permissions="edited.permissions"
+          :publications="publications"
+          :sources="sources"
+        />
         <button :disabled="unconfirmed">Salvar token</button
         ><button type="button" class="secondary" :disabled="unconfirmed" @click="save(true)">
-          Rotacionar token
+          Gerar novo token
         </button>
         <button
           type="button"

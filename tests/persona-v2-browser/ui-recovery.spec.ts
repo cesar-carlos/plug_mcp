@@ -13,6 +13,7 @@ async function fixture(page: Page) {
     delegation: permissions,
   }));
   const state = {
+    tokens,
     oauthFails: true,
     tokensFail: false,
     expired: false,
@@ -89,9 +90,34 @@ async function fixture(page: Page) {
   await page.getByLabel("Senha", { exact: true }).fill("fixture");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.getByRole("combobox", { name: /^Persona/ }).selectOption("ui-persona");
-  await expect(page.getByRole("button", { name: "Sair", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Sair", exact: true, includeHidden: true }),
+  ).toBeEnabled();
   return state;
 }
+
+test("atalhos e filtros de acesso preservam a edição e levam o foco ao destino", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await page.getByRole("button", { name: "Editar A", exact: true }).click();
+  const form = page.getByRole("form", { name: "Editar token", exact: true });
+  await expect(form.getByRole("heading", { name: "Editar A", exact: true })).toBeFocused();
+  const name = form.getByLabel("Nome do consumidor", { exact: true });
+  await name.fill("Edição preservada");
+  const shortcuts = page.getByRole("navigation", { name: "Atalhos de tokens e conexões" });
+  await shortcuts.getByRole("button", { name: "Usar e testar", exact: true }).click();
+  await expect(page.locator("#access-connect")).toBeFocused();
+  await expect(name).toHaveValue("Edição preservada");
+  await shortcuts.getByRole("button", { name: "Gerenciar tokens", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Gerenciar tokens", exact: true })).toBeFocused();
+  await page.getByLabel("Buscar tokens", { exact: true }).fill("inexistente");
+  await expect(page.getByRole("button", { name: "Editar A", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Limpar filtros", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Editar A", exact: true })).toBeVisible();
+  await expect(name).toHaveValue("Edição preservada");
+});
 
 test("revogar B preserva a edição não salva de A e a proteção de navegação", async ({ page }) => {
   const state = await fixture(page);
@@ -101,8 +127,11 @@ test("revogar B preserva a edição não salva de A e a proteção de navegaçã
     .getByRole("form", { name: "Editar token", exact: true })
     .getByLabel("Nome do consumidor", { exact: true });
   await name.fill("Edição preservada");
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Revogar B", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Confirmar revogação", exact: true })
+    .click();
   await expect(page.getByText("Token revogado.", { exact: true })).toBeVisible();
   await expect(name).toHaveValue("Edição preservada");
   expect(state.revocations).toEqual(["/api/admin/personas/ui-persona/tokens/token-1/revogar"]);
@@ -139,12 +168,14 @@ test("resposta lenta mantém feedback e não permite segunda revogação", async
     release = resolve;
   });
   await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
-  page.once("dialog", (dialog) => {
-    expect(dialog.message()).toContain("conexões OAuth derivadas");
-    return dialog.accept();
-  });
+
   const revoke = page.getByRole("button", { name: "Revogar B", exact: true });
   await revoke.click();
+  await expect(page.getByRole("dialog")).toContainText("conexões OAuth derivadas");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Confirmar revogação", exact: true })
+    .click();
   try {
     await expect(revoke).toBeDisabled();
     await expect(page.getByText(/Processando solicitação/)).toBeVisible();
@@ -353,4 +384,100 @@ test("conteúdo tem acesso por teclado, semântica acessível e reflow a 200%", 
   await page.getByRole("link", { name: "Bases", exact: true }).click();
   await expect(page).toHaveTitle("Bases — Se7e");
   await expect(page.getByText(/Nenhuma base conectada/)).toBeVisible();
+});
+
+test("emissão sob demanda preserva rascunho e resume permissões", async ({ page }) => {
+  await fixture(page);
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  const form = page.getByRole("form", { name: "Emitir token", exact: true });
+  await expect(form).toBeHidden();
+  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await form.getByLabel("Nome do consumidor", { exact: true }).fill("Novo consumidor");
+  await form
+    .getByLabel("Administrar tokens dentro dos limites de delegação", { exact: true })
+    .check();
+  const summary = form.getByRole("region", { name: "Resumo das permissões" });
+  await expect(summary).toContainText("Administrar tokens dentro dos limites de delegação");
+  await expect(summary).toContainText("Nenhuma base selecionada");
+  await page.getByRole("button", { name: "Recolher formulário", exact: true }).click();
+  await expect(form).toBeHidden();
+  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await expect(form.getByLabel("Nome do consumidor", { exact: true })).toHaveValue(
+    "Novo consumidor",
+  );
+});
+
+test("validade tem filtros próprios e cancelar confirmação preserva o token", async ({ page }) => {
+  const state = await fixture(page);
+  Object.assign(state.tokens[0]!, { expiresAt: new Date(Date.now() + 86400000).toISOString() });
+  Object.assign(state.tokens[1]!, { expiresAt: new Date(Date.now() - 86400000).toISOString() });
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Situação dos tokens", exact: true })
+    .selectOption("vence_em_breve");
+  await expect(page.getByRole("button", { name: "Editar A", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Editar B", exact: true })).toHaveCount(0);
+  const revoke = page.getByRole("button", { name: "Revogar A", exact: true });
+  await revoke.click();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: "Cancelar", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(revoke).toBeFocused();
+  expect(state.revocations).toHaveLength(0);
+  await page
+    .getByRole("combobox", { name: "Situação dos tokens", exact: true })
+    .selectOption("expirado");
+  await expect(page.getByRole("button", { name: "Editar B", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Editar A", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Editar B", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar novo token", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("invalidados imediatamente");
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByRole("form", { name: "Editar token", exact: true })).toBeVisible();
+});
+
+test("conexão destaca cliente e token e mantém identificadores nos detalhes", async ({ page }) => {
+  await fixture(page);
+  await page.route("**/oauth-connections", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "connection-fixture",
+            tokenId: "token-0",
+            tokenName: "Token financeiro",
+            clientId: "https://chatgpt.com/connector/client.json",
+            createdAt: null,
+            expiresAt: new Date(Date.now() + 86400000).toISOString(),
+            revokedAt: null,
+            state: "vigente_localmente",
+            permissions: {
+              sourceIds: [],
+              skills: [],
+              externalOperationIds: [],
+              administrative: [],
+            },
+            fingerprint: "fixture",
+          },
+        ],
+        nextCursor: null,
+        remoteAuthority: "nao_verificado",
+      },
+    }),
+  );
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Conexões OAuth da persona", exact: true });
+  await panel.getByRole("button", { name: "Atualizar conexões OAuth", exact: true }).click();
+  await expect(panel.getByText("chatgpt.com", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Token financeiro", { exact: true })).toBeVisible();
+  await expect(panel.getByText("ID da conexão: connection-fixture", { exact: true })).toBeHidden();
+  await panel.getByText("Identificação da conexão", { exact: true }).click();
+  await expect(panel.getByText("ID da conexão: connection-fixture", { exact: true })).toBeVisible();
+  await panel
+    .getByRole("button", { name: "Revisar revogação connection-fixture", exact: true })
+    .click();
+  await expect(
+    panel.getByRole("button", { name: "Confirmar revogação da conexão", exact: true }),
+  ).toBeDisabled();
 });

@@ -11,6 +11,20 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: emissão de token sob demanda com rascunho preservado, resumo de
+  permissões, filtros de vencimento, ação “Gerar novo token”, identificação
+  legível de conexões e confirmações acessíveis sem alertas nativos nessa jornada.
+
+- Changed: Tokens e conexões organizado por tarefa, com atalhos acessíveis,
+  cartões de cadastro, limpeza de filtros, foco na edição e instruções ChatGPT
+  em passos; preservadas as confirmações e regras de autorização.
+
+- Changed: ação Sair movida do cabeçalho para a última posição do menu do console,
+  com o mesmo comportamento de confirmação de edições pendentes.
+
+- Changed: removido o aviso permanente de ambiente de teste e aceite pendente
+  do console; o estado de validação permanece na documentação de entrega.
+
 - Fixed: diagnóstico HTTPS v2 confere o desafio OAuth por POST sem credenciais,
   respeitando o transporte MCP; GET permanece reservado à descoberta de metadados.
 

@@ -26,6 +26,14 @@ const IntegrationManagementPanel = lazyPanel(() => import("./IntegrationManageme
 const ExternalSkillEditor = lazyPanel(() => import("./ExternalSkillEditor.vue"));
 import FederationPanel from "./FederationPanel.vue";
 import TokenManager from "./TokenManager.vue";
+import PermissionSummary from "./PermissionSummary.vue";
+import ConfirmationDialog from "./ConfirmationDialog.vue";
+import { useConfirmation } from "./useConfirmation";
+const {
+  confirmation: accessConfirmation,
+  ask: askAccessConfirmation,
+  answer: answerAccessConfirmation,
+} = useConfirmation();
 import ManagedIntegrationsSelector from "./ManagedIntegrationsSelector.vue";
 import OAuthConnectionsPanel from "./OAuthConnectionsPanel.vue";
 import FieldUseEditor from "./FieldUseEditor.vue";
@@ -182,6 +190,7 @@ const issuanceRecovery = computed(() => uncertainIssuance.value[personaId.value]
 const showBearer = ref(false),
   tokenDays = ref(30),
   tokenNoExpiry = ref(false);
+const tokenCreationOpen = ref(false);
 const queryPage = ref(1),
   queryPageSize = ref(100);
 const submittedFilters = ref<Record<string, unknown>>({});
@@ -548,6 +557,7 @@ function discardArea(current: ConsoleArea) {
     personaIconFile.value = undefined;
   }
   if (current === "tokens") {
+    tokenCreationOpen.value = false;
     oauthConnectionsDirty.value = false;
     oauthConnectionsKey.value++;
     resetTokenLimits();
@@ -654,6 +664,8 @@ function resetTraining() {
   confirmed.value = false;
 }
 function clearPersona() {
+  answerAccessConfirmation(false);
+  tokenCreationOpen.value = false;
   iconAppearance.value = undefined;
   sourceSearch.value = "";
   skillSearch.value = "";
@@ -888,6 +900,13 @@ async function login() {
       password.value = "";
     }
   });
+}
+async function focusAccessSection(id: string) {
+  if (id === "access-new-token") {
+    tokenCreationOpen.value = true;
+    await nextTick();
+  }
+  document.getElementById(id)?.focus();
 }
 async function logout() {
   if (anyDirty.value && !(await confirmDiscard())) return;
@@ -1244,6 +1263,46 @@ async function publishTraining() {
     message.value = "Treinamento publicado. Libere seu uso em um token.";
   });
 }
+function buildNewTokenPermissions() {
+  const chosen = selectedSkills.value
+    .map((id) => ({ id, publication: tokenPublications.value[id] }))
+    .filter((item) => item.publication);
+  const empty = { sourceIds: [], skills: [], externalOperationIds: [], administrative: [] };
+  const permissions = {
+    ...empty,
+    ...tokenLimits.value,
+    administrative: tokenAdministrative.value,
+    managedIntegrationIds: tokenAdministrative.value.includes("gerenciar_integracoes")
+      ? tokenManagedIntegrations.value
+      : [],
+    externalOperationIds: [
+      ...new Set(chosen.flatMap((p) => publicationExternalOperations(p.publication))),
+    ],
+    sourceIds: [
+      ...new Set([
+        ...tokenAdministrativeSources.value,
+        ...chosen.flatMap((p) =>
+          p.publication.package.sourceId
+            ? [p.publication.package.sourceId]
+            : (p.publication.package.dependencies ?? []).map((d) => d.sourceId),
+        ),
+      ]),
+    ],
+    skills: chosen.map((p) => ({
+      ...tokenSkillLimits.value[p.id],
+      ...publicationGrant(p.id, p.publication),
+    })),
+  };
+
+  return permissions;
+}
+const newTokenPermissions = computed(() => {
+  try {
+    return buildNewTokenPermissions();
+  } catch {
+    return undefined;
+  }
+});
 async function issueToken() {
   if (issuanceRecovery.value) return;
   await run(async () => {
@@ -1268,31 +1327,7 @@ async function issueToken() {
           );
       }
     const empty = { sourceIds: [], skills: [], externalOperationIds: [], administrative: [] };
-    const permissions = {
-      ...empty,
-      ...tokenLimits.value,
-      administrative: tokenAdministrative.value,
-      managedIntegrationIds: tokenAdministrative.value.includes("gerenciar_integracoes")
-        ? tokenManagedIntegrations.value
-        : [],
-      externalOperationIds: [
-        ...new Set(chosen.flatMap((p) => publicationExternalOperations(p.publication))),
-      ],
-      sourceIds: [
-        ...new Set([
-          ...tokenAdministrativeSources.value,
-          ...chosen.flatMap((p) =>
-            p.publication.package.sourceId
-              ? [p.publication.package.sourceId]
-              : (p.publication.package.dependencies ?? []).map((d) => d.sourceId),
-          ),
-        ]),
-      ],
-      skills: chosen.map((p) => ({
-        ...tokenSkillLimits.value[p.id],
-        ...publicationGrant(p.id, p.publication),
-      })),
-    };
+    const permissions = buildNewTokenPermissions();
     const ownerPersona = personaId.value;
     const issued = await api<{ bearer: string }>(`${path()}/tokens`, {
       name: tokenName.value,
@@ -1341,14 +1376,19 @@ async function inspectUncertainIssuance() {
     tokenRefresh.value++;
   });
 }
-function startNewIssuance() {
+async function startNewIssuance() {
   if (busy.value || !issuanceRecovery.value?.checked) return;
   if (
-    !window.confirm(
-      "A emissão anterior pode ter sido concluída. Confira e revogue o token sem segredo na lista, se necessário. Iniciar uma nova emissão explícita?",
-    )
+    !(await askAccessConfirmation({
+      title: "Iniciar nova emissão?",
+      description:
+        "A emissão anterior pode ter sido concluída. Confira e revogue o token sem segredo na lista, se necessário. Esta confirmação apenas libera o formulário; não emite outro token automaticamente.",
+      confirmLabel: "Iniciar nova emissão",
+    }))
   )
     return;
+  if (busy.value || !issuanceRecovery.value?.checked) return;
+  tokenCreationOpen.value = true;
   delete uncertainIssuance.value[personaId.value];
   tokenName.value = "";
   selectedSkills.value = [];
@@ -1653,17 +1693,18 @@ onBeforeUnmount(() => {
           <p>Conecte bases e ensine sua persona a consultar informações.</p>
         </div>
       </div>
-      <button v-if="logged" :disabled="busy" @click="logout">Sair</button>
     </header>
-    <p class="notice">
-      Ambiente de teste persona-v2. O aceite integral para clientes continua pendente.
-    </p>
     <p v-if="error && !logged" role="alert" class="error area-error" tabindex="-1">{{ error }}</p>
     <p v-if="message" role="status" class="success">{{ message }}</p>
     <p v-if="busy" role="status" class="notice processing-status">
       Processando solicitação… Aguarde a confirmação antes de repetir a ação.
     </p>
     <DiscardDialog v-if="dialogOpen" @answer="answerDiscard" />
+    <ConfirmationDialog
+      v-if="accessConfirmation"
+      v-bind="accessConfirmation"
+      @answer="answerAccessConfirmation"
+    />
     <p v-if="logged && expiresSoon" class="notice" role="status">
       Sua sessão termina em menos de dois minutos. Salve as edições pendentes.
     </p>
@@ -1703,6 +1744,9 @@ onBeforeUnmount(() => {
               >{{ consoleAreas.find((item) => item.id === id)?.label }}</RouterLink
             >
           </div>
+          <button type="button" class="navigation-logout" :disabled="busy" @click="logout">
+            Sair
+          </button>
         </div>
       </nav>
       <div class="console-workspace">
@@ -2707,28 +2751,46 @@ onBeforeUnmount(() => {
             @lock="busy = $event"
             @changed="load"
           />
-          <section v-show="area === 'tokens'">
-            <h2>Tokens e conexões</h2>
-            <OAuthConnectionInfo v-if="area === 'tokens'" :key="persona.id" :api="api" />
-            <OwnerDelegationPanel
-              v-if="area === 'tokens'"
-              :key="`delegation:${persona.id}:${delegationKey}`"
-              :persona-id="persona.id"
-              :api="api"
-              @dirty="delegationDirty = $event"
-              @lock="busy = $event"
-            />
-            <ConnectionPanel
-              v-if="area === 'tokens'"
-              :key="persona.id"
-              :persona-id="persona.id"
-              :bearer="bearer"
-              :call="mcp"
-              @lock="busy = $event"
-            />
+          <section v-show="area === 'tokens'" class="access-page">
+            <p>
+              Controle os acessos desta persona. Cada token tem suas próprias permissões; conexões
+              do ChatGPT usam o consentimento autorizado.
+            </p>
+            <nav class="access-shortcuts" aria-label="Atalhos de tokens e conexões">
+              <button
+                type="button"
+                class="secondary"
+                @click="focusAccessSection('access-token-list')"
+              >
+                Gerenciar tokens
+              </button>
+              <button
+                type="button"
+                class="secondary"
+                @click="focusAccessSection('access-new-token')"
+              >
+                Novo token
+              </button>
+              <button type="button" class="secondary" @click="focusAccessSection('access-connect')">
+                Usar e testar
+              </button>
+              <button type="button" class="secondary" @click="focusAccessSection('access-chatgpt')">
+                Conectar no ChatGPT
+              </button>
+              <button
+                type="button"
+                class="secondary"
+                @click="focusAccessSection('access-connections')"
+              >
+                Revisar conexões
+              </button>
+            </nav>
+
             <TokenManager
               v-if="area === 'tokens'"
+              id="access-token-list"
               :key="`${persona.id}:${tokenManagerKey}`"
+              tabindex="-1"
               :api="api"
               :confirm-discard="confirmDiscard"
               :base="path()"
@@ -2740,6 +2802,243 @@ onBeforeUnmount(() => {
               @lock="busy = $event"
               @bearer="bearer = $event"
             />
+
+            <section
+              v-show="tokenCreationOpen || issuanceRecovery"
+              id="access-new-token"
+              class="access-card"
+              tabindex="-1"
+            >
+              <h3>Emitir token da persona</h3>
+              <button
+                type="button"
+                class="secondary"
+                :disabled="!!issuanceRecovery"
+                @click="tokenCreationOpen = false"
+              >
+                Recolher formulário
+              </button>
+              <p class="field-help">
+                Recolher mantém suas escolhas nesta persona. Sair com alterações pendentes exige
+                confirmação.
+              </p>
+              <p class="field-help">
+                Crie um acesso individual, escolha as permissões e defina sua validade.
+              </p>
+              <section
+                v-if="issuanceRecovery"
+                aria-label="Conferir emissão sem confirmação"
+                class="notice"
+              >
+                <p>
+                  A emissão pode ter sido concluída. Não repita o envio. Confira os tokens
+                  cadastrados; o segredo perdido não pode ser recuperado.
+                </p>
+                <button :disabled="busy" class="secondary" @click="inspectUncertainIssuance">
+                  Conferir tokens antes de nova emissão
+                </button>
+                <ul v-if="issuanceRecovery.checked">
+                  <li v-for="item in issuanceRecovery.tokens" :key="item.id">
+                    {{ item.name }} · {{ item.id }} ·
+                    {{ item.revokedAt ? "Revogado" : "Não revogado" }}
+                  </li>
+                </ul>
+                <p v-if="issuanceRecovery.checked">
+                  A listagem não identifica automaticamente qual cadastro corresponde à tentativa.
+                  Revise o consumidor e as concessões em Gerenciar tokens.
+                </p>
+                <button
+                  :disabled="busy || !issuanceRecovery.checked"
+                  class="secondary"
+                  @click="startNewIssuance"
+                >
+                  Iniciar nova emissão
+                </button>
+              </section>
+              <form aria-label="Emitir token" @submit.prevent="issueToken">
+                <fieldset :disabled="busy || !!issuanceRecovery">
+                  <label>Nome do consumidor<input v-model="tokenName" required /></label>
+                  <h4>Escolha o que este token pode acessar</h4>
+                  <p v-if="!Object.keys(tokenPublications).length" class="notice">
+                    Nenhuma skill publicada disponível. Publique uma skill em Treinamentos para
+                    conceder acesso às consultas ou operações.
+                  </p>
+                  <p class="field-help" role="status">
+                    {{ selectedSkills.length }} skill(s) selecionada(s) ·
+                    {{ tokenAdministrative.length }} permissão(ões) administrativa(s).
+                  </p>
+                  <p>
+                    Selecione consultas, cruzamentos, operações SQL ou capacidades externas.
+                    Selecionar uma capacidade externa concede também sua operação específica. Novos
+                    lançamentos SQL e ações externas exigem aprovação adicional; a política da skill
+                    continua obrigatória. Cada cruzamento exige selecionar também suas consultas
+                    dependentes; nenhuma concessão será adicionada automaticamente.
+                  </p>
+                  <div v-for="(p, id) in tokenPublications" :key="id">
+                    <label class="check"
+                      ><input
+                        :checked="selectedSkills.includes(String(id))"
+                        :disabled="!!p.suspendedAt"
+                        type="checkbox"
+                        @change="
+                          selectTokenSkill(String(id), ($event.target as HTMLInputElement).checked)
+                        "
+                      />{{
+                        `${p.package.name} · revisão ${p.revision}${p.package.format === "persona-query-v2" ? "" : ` · ${publicationEffectsLabel(p)}`}`
+                      }}</label
+                    >
+                    <ul
+                      v-if="p.package.requiredCapabilities.some((c) => c.startsWith('field-use:'))"
+                    >
+                      <li
+                        v-for="capability in p.package.requiredCapabilities.filter((c) =>
+                          c.startsWith('field-use:'),
+                        )"
+                        :key="capability"
+                      >
+                        {{ fieldCapabilityLabel(capability) }}
+                      </li>
+                    </ul>
+                  </div>
+                  <details>
+                    <summary>Limites do novo token</summary>
+                    <LimitsEditor
+                      v-model="tokenLimits.queryLimits"
+                      kind="query"
+                      label="Consultas do novo token"
+                    />
+                    <LimitsEditor
+                      v-model="tokenLimits.operationLimits"
+                      kind="operation"
+                      label="Lançamentos do novo token"
+                    />
+                    <LimitsEditor
+                      v-model="tokenLimits.federationLimits"
+                      kind="federation"
+                      label="Cruzamentos do novo token"
+                    />
+                    <div v-for="id in selectedSkills" :key="id">
+                      <p>{{ tokenPublications[id]?.package.name }}</p>
+                      <LimitsEditor
+                        v-if="tokenSkillLimits[id]"
+                        v-model="tokenSkillLimits[id].queryLimits"
+                        kind="query"
+                        label="Concessão desta consulta"
+                      />
+                      <LimitsEditor
+                        v-if="tokenSkillLimits[id]"
+                        v-model="tokenSkillLimits[id].federationLimits"
+                        kind="federation"
+                        label="Concessão deste cruzamento"
+                      />
+                    </div>
+                  </details>
+                  <p>
+                    Selecione explicitamente as consultas. Novas fontes e treinamentos não ampliam
+                    este token.
+                  </p>
+                  <p>
+                    Selecionar uma publicação concede o conjunto de campos e finalidades exibido.
+                    Uma concessão incompleta bloqueia a publicação inteira.
+                  </p>
+                  <label class="check"
+                    ><input v-model="tokenNoExpiry" type="checkbox" />Sem expiração (escolha
+                    explícita)</label
+                  >
+                  <label v-if="!tokenNoExpiry"
+                    >Validade em dias<input
+                      v-model.number="tokenDays"
+                      type="number"
+                      min="1"
+                      max="3650"
+                      required
+                  /></label>
+                  <fieldset>
+                    <legend>Permissões administrativas</legend>
+                    <label v-for="option in administrativeOptions" :key="option.id" class="check"
+                      ><input v-model="tokenAdministrative" type="checkbox" :value="option.id" />{{
+                        option.label
+                      }}</label
+                    >
+                    <p>
+                      Administração exige também delegação vigente no hub. Não substitui autorização
+                      para consultar ou aprovação humana.
+                    </p>
+                    <label
+                      v-for="source in sources.filter((s) => s.active)"
+                      :key="source.id"
+                      class="check"
+                      ><input
+                        v-model="tokenAdministrativeSources"
+                        type="checkbox"
+                        :value="source.id"
+                      />Base para administração: {{ source.name }}</label
+                    >
+                    <label class="check"
+                      ><input v-model="tokenCanDelegate" type="checkbox" />Permitir delegar as
+                      concessões selecionadas a outros tokens</label
+                    >
+                    <ManagedIntegrationsSelector
+                      v-if="tokenAdministrative.includes('gerenciar_integracoes')"
+                      v-model="tokenManagedIntegrations"
+                      :api="api"
+                      :base="path()"
+                      :disabled="busy"
+                    />
+                  </fieldset>
+                  <PermissionSummary
+                    v-if="newTokenPermissions"
+                    :permissions="newTokenPermissions"
+                    :publications="tokenPublications"
+                    :sources="sources"
+                  />
+                  <p v-else role="alert" class="error">
+                    Não foi possível preparar o resumo. Revise as publicações selecionadas.
+                  </p>
+                  <p v-if="tokenCanDelegate" class="notice">
+                    Este token poderá delegar as permissões acima, dentro dos limites selecionados.
+                  </p>
+                  <button
+                    :disabled="
+                      !newTokenPermissions ||
+                      (!selectedSkills.length && !tokenAdministrative.length)
+                    "
+                  >
+                    Emitir token restrito
+                  </button>
+                </fieldset>
+              </form>
+            </section>
+            <section id="access-connect" class="access-card" tabindex="-1">
+              <h3>Usar e testar um token</h3>
+              <p class="field-help">
+                Cole um token existente ou copie o que acabou de emitir. O valor fica somente nesta
+                sessão.
+              </p>
+              <label
+                >Token para conectar o cliente ou testar<input
+                  v-model="bearer"
+                  :type="showBearer ? 'text' : 'password'"
+                  autocomplete="off"
+                  :disabled="busy" /></label
+              ><button :disabled="busy || !bearer" @click="copyBearer">Copiar token</button>
+              <button class="secondary" :disabled="busy || !bearer" @click="revealBearer">
+                {{ showBearer ? "Ocultar token" : "Revelar token" }}
+              </button>
+              <button class="secondary" :disabled="busy || !bearer" @click="bearer = ''">
+                Ocultar e descartar token
+              </button>
+              <p>Copie o token antes de sair; ele não é salvo no navegador.</p>
+              <ConnectionPanel
+                v-if="area === 'tokens'"
+                :key="persona.id"
+                :persona-id="persona.id"
+                :bearer="bearer"
+                :call="mcp"
+                @lock="busy = $event"
+              />
+            </section>
+            <OAuthConnectionInfo v-if="area === 'tokens'" :key="persona.id" :api="api" />
             <OAuthConnectionsPanel
               v-if="area === 'tokens'"
               :key="`${persona.id}:${oauthConnectionsKey}`"
@@ -2750,173 +3049,14 @@ onBeforeUnmount(() => {
               @dirty="oauthConnectionsDirty = $event"
               @lock="busy = $event"
             />
-            <h3>Emitir token da persona</h3>
-            <section
-              v-if="issuanceRecovery"
-              aria-label="Conferir emissão sem confirmação"
-              class="notice"
-            >
-              <p>
-                A emissão pode ter sido concluída. Não repita o envio. Confira os tokens
-                cadastrados; o segredo perdido não pode ser recuperado.
-              </p>
-              <button :disabled="busy" class="secondary" @click="inspectUncertainIssuance">
-                Conferir tokens antes de nova emissão
-              </button>
-              <ul v-if="issuanceRecovery.checked">
-                <li v-for="item in issuanceRecovery.tokens" :key="item.id">
-                  {{ item.name }} · {{ item.id }} ·
-                  {{ item.revokedAt ? "Revogado" : "Não revogado" }}
-                </li>
-              </ul>
-              <p v-if="issuanceRecovery.checked">
-                A listagem não identifica automaticamente qual cadastro corresponde à tentativa.
-                Revise o consumidor e as concessões em Gerenciar tokens.
-              </p>
-              <button
-                :disabled="busy || !issuanceRecovery.checked"
-                class="secondary"
-                @click="startNewIssuance"
-              >
-                Iniciar nova emissão
-              </button>
-            </section>
-            <form aria-label="Emitir token" @submit.prevent="issueToken">
-              <fieldset :disabled="busy || !!issuanceRecovery">
-                <label>Nome do consumidor<input v-model="tokenName" required /></label>
-                <p>
-                  Selecione consultas, cruzamentos, operações SQL ou capacidades externas.
-                  Selecionar uma capacidade externa concede também sua operação específica. Novos
-                  lançamentos SQL e ações externas exigem aprovação adicional; a política da skill
-                  continua obrigatória. Cada cruzamento exige selecionar também suas consultas
-                  dependentes; nenhuma concessão será adicionada automaticamente.
-                </p>
-                <div v-for="(p, id) in tokenPublications" :key="id">
-                  <label class="check"
-                    ><input
-                      :checked="selectedSkills.includes(String(id))"
-                      :disabled="!!p.suspendedAt"
-                      type="checkbox"
-                      @change="
-                        selectTokenSkill(String(id), ($event.target as HTMLInputElement).checked)
-                      "
-                    />{{
-                      `${p.package.name} · revisão ${p.revision}${p.package.format === "persona-query-v2" ? "" : ` · ${publicationEffectsLabel(p)}`}`
-                    }}</label
-                  >
-                  <ul v-if="p.package.requiredCapabilities.some((c) => c.startsWith('field-use:'))">
-                    <li
-                      v-for="capability in p.package.requiredCapabilities.filter((c) =>
-                        c.startsWith('field-use:'),
-                      )"
-                      :key="capability"
-                    >
-                      {{ fieldCapabilityLabel(capability) }}
-                    </li>
-                  </ul>
-                </div>
-                <details>
-                  <summary>Limites do novo token</summary>
-                  <LimitsEditor
-                    v-model="tokenLimits.queryLimits"
-                    kind="query"
-                    label="Consultas do novo token"
-                  />
-                  <LimitsEditor
-                    v-model="tokenLimits.operationLimits"
-                    kind="operation"
-                    label="Lançamentos do novo token"
-                  />
-                  <LimitsEditor
-                    v-model="tokenLimits.federationLimits"
-                    kind="federation"
-                    label="Cruzamentos do novo token"
-                  />
-                  <div v-for="id in selectedSkills" :key="id">
-                    <p>{{ tokenPublications[id]?.package.name }}</p>
-                    <LimitsEditor
-                      v-if="tokenSkillLimits[id]"
-                      v-model="tokenSkillLimits[id].queryLimits"
-                      kind="query"
-                      label="Concessão desta consulta"
-                    />
-                    <LimitsEditor
-                      v-if="tokenSkillLimits[id]"
-                      v-model="tokenSkillLimits[id].federationLimits"
-                      kind="federation"
-                      label="Concessão deste cruzamento"
-                    />
-                  </div>
-                </details>
-                <p>
-                  Selecione explicitamente as consultas. Novas fontes e treinamentos não ampliam
-                  este token.
-                </p>
-                <p>
-                  Selecionar uma publicação concede o conjunto de campos e finalidades exibido. Uma
-                  concessão incompleta bloqueia a publicação inteira.
-                </p>
-                <label class="check"
-                  ><input v-model="tokenNoExpiry" type="checkbox" />Sem expiração (escolha
-                  explícita)</label
-                >
-                <label v-if="!tokenNoExpiry"
-                  >Validade em dias<input
-                    v-model.number="tokenDays"
-                    type="number"
-                    min="1"
-                    max="3650"
-                    required
-                /></label>
-                <fieldset>
-                  <legend>Permissões administrativas</legend>
-                  <label v-for="option in administrativeOptions" :key="option.id"
-                    ><input v-model="tokenAdministrative" type="checkbox" :value="option.id" />{{
-                      option.label
-                    }}</label
-                  >
-                  <p>
-                    Administração exige também delegação vigente no hub. Não substitui autorização
-                    para consultar ou aprovação humana.
-                  </p>
-                  <label v-for="source in sources.filter((s) => s.active)" :key="source.id"
-                    ><input
-                      v-model="tokenAdministrativeSources"
-                      type="checkbox"
-                      :value="source.id"
-                    />Base para administração: {{ source.name }}</label
-                  >
-                  <label
-                    ><input v-model="tokenCanDelegate" type="checkbox" />Permitir delegar as
-                    concessões selecionadas a outros tokens</label
-                  >
-                  <ManagedIntegrationsSelector
-                    v-if="tokenAdministrative.includes('gerenciar_integracoes')"
-                    v-model="tokenManagedIntegrations"
-                    :api="api"
-                    :base="path()"
-                    :disabled="busy"
-                  />
-                </fieldset>
-                <button :disabled="!selectedSkills.length && !tokenAdministrative.length">
-                  Emitir token restrito
-                </button>
-              </fieldset>
-            </form>
-            <label
-              >Token para conectar o cliente ou testar<input
-                v-model="bearer"
-                :type="showBearer ? 'text' : 'password'"
-                autocomplete="off"
-                :disabled="busy" /></label
-            ><button :disabled="busy || !bearer" @click="copyBearer">Copiar token</button>
-            <button class="secondary" :disabled="busy || !bearer" @click="revealBearer">
-              {{ showBearer ? "Ocultar token" : "Revelar token" }}
-            </button>
-            <button class="secondary" :disabled="busy || !bearer" @click="bearer = ''">
-              Ocultar e descartar token
-            </button>
-            <p>Copie o token antes de sair; ele não é salvo no navegador.</p>
+            <OwnerDelegationPanel
+              v-if="area === 'tokens'"
+              :key="`delegation:${persona.id}:${delegationKey}`"
+              :persona-id="persona.id"
+              :api="api"
+              @dirty="delegationDirty = $event"
+              @lock="busy = $event"
+            />
           </section>
           <section v-show="area === 'queries'">
             <p v-if="!bearer" class="notice">

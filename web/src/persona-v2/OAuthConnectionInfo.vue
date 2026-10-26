@@ -50,24 +50,34 @@ async function copy() {
 }
 </script>
 <template>
-  <section aria-label="Conexão ChatGPT" :aria-busy="loading">
+  <section
+    id="access-chatgpt"
+    aria-label="Conexão ChatGPT"
+    :aria-busy="loading"
+    class="access-card"
+    tabindex="-1"
+  >
     <h3>Conectar no ChatGPT</h3>
     <template v-if="status?.enabled">
-      <p>
-        Endereço OAuth: <code>{{ status.endpoint }}</code>
-      </p>
-      <p>
-        Na conexão privada do ChatGPT, use este endereço e confirme a persona no navegador.
-        Selecione as bases e skills concedidas. Informe o token apenas no formulário protegido,
-        nunca na conversa.
-      </p>
+      <p class="field-help">Use uma conexão privada e autorize somente o acesso necessário.</p>
+      <div class="access-endpoint">
+        <span>Endereço da conexão</span><code>{{ status.endpoint }}</code>
+      </div>
+      <ol class="access-steps">
+        <li>Use este endereço na conexão privada do ChatGPT.</li>
+        <li>Confirme a persona no navegador e selecione as bases e skills concedidas.</li>
+        <li>Informe o token apenas no formulário protegido, nunca na conversa.</li>
+      </ol>
       <button type="button" class="secondary" @click="copy">Copiar endereço OAuth sem token</button>
-      <p>
-        O plugin usa o ID real dessa conexão. Este console não instala nem altera conexões
-        existentes. Cadastro e rotação de credenciais podem iniciar pelo plugin com delegação e
-        consentimento explícitos; os segredos e a autenticação do responsável ficam no navegador.
-        Aprovação humana de operações continua exclusiva do responsável.
-      </p>
+      <details>
+        <summary>Como a conexão e as permissões funcionam</summary>
+        <p>
+          O plugin usa o ID real dessa conexão. Este console não instala nem altera conexões
+          existentes. Cadastro e rotação de credenciais podem iniciar pelo plugin com delegação e
+          consentimento explícitos; os segredos e a autenticação do responsável ficam no navegador.
+          Aprovação humana de operações continua exclusiva do responsável.
+        </p>
+      </details>
     </template>
     <p v-else-if="status">
       OAuth indisponível neste ambiente. A conexão manual usa o endereço /mcp e as permissões do
@@ -80,7 +90,7 @@ async function copy() {
         Tentar novamente
       </button>
     </template>
-    <p role="status">{{ message }}</p>
+    <p v-if="message" role="status">{{ message }}</p>
     <details>
       <summary>Ícone, mascotes e Dots</summary>
       <p>

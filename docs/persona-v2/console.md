@@ -9,11 +9,17 @@ Conflitos preservam a edição; salvar revalida autoridade, referências e revis
 Ver [biblioteca editorial](knowledge-library.md) e
 [evidência da rodada](validation/2026-10-26-plugin-improvements.md).
 
-O aviso do console identifica ambiente de teste e aceite integral pendente.
+O console não exibe aviso permanente de ambiente de teste ou aceite pendente.
+Os testes ocorrem no servidor destinado à produção; o estado de validação fica
+na documentação e nos controles de entrega, sem ocupar a interface do usuário.
 Disponibilidade do servidor não aprova gates nem dispensa revisão/publicação,
 concessões ou aprovação Client dos efeitos. Ver [deploy inicial](first-test-deploy.md).
 
 ## Clareza, acessibilidade e recuperação da interface
+
+**Sair** é a última opção do menu, inclusive no menu expansível do celular,
+sem botão duplicado no cabeçalho. Preserva o bloqueio durante solicitações e a
+confirmação para descartar edições pendentes.
 
 Casos SQL oferecem também **Importar sementes diretamente da biblioteca**, sem
 consulta intermediária: seleção de catálogo, paginação e versão explícita,
@@ -492,6 +498,34 @@ tentativas por minuto/origem de rede; HTTP 429 informa `Retry-After` e uma
 mensagem segura. O console não reenvia credenciais automaticamente.
 
 ## Tokens
+
+**Novo token** abre a emissão sob demanda. Recolher preserva o rascunho; trocar
+persona ou sair continua sujeito ao descarte protegido. Emissão e edição mostram
+resumo das bases, skills, efeitos e permissões administrativas antes de salvar;
+a emissão usa o mesmo construtor de permissões do resumo, sem conceder nada por
+visualização. Regras de dependências e publicação continuam conferidas no envio.
+
+Filtros distinguem ativos, expirados, revogados e vencimento em até sete dias.
+O indicador de validade é local e atualiza por minuto e ao retornar à janela;
+não certifica autoridade remota nem substitui a validação de cada operação.
+**Gerar novo token** explica a invalidação imediata do anterior e dos derivados.
+Revogação, geração, delegação e retomada de emissão incerta usam diálogos com
+foco inicial em Cancelar, Escape e retorno ao acionador. Nenhuma ação ocorre ao
+abrir/cancelar o diálogo. Confirmação não substitui as aprovações Client de efeitos.
+
+Conexões destacam o domínio do identificador do cliente e o token associado.
+Identificadores opacos aparecem como “Cliente conectado”, sem inventar nome;
+URI e ID completos ficam nos detalhes. A revogação conserva fingerprint e
+consentimento exatos, sem atingir outras conexões.
+
+Tokens e conexões organiza a jornada em cadastros, emissão, uso/teste do token,
+conexão ChatGPT, revisão de consentimentos e delegação administrativa. Atalhos
+levam o foco ao bloco escolhido sem trocar a persona ou descartar edições.
+Tokens têm cartões com situação, validade, permissões e ações; filtros sem
+resultado oferecem limpeza explícita. Editar destaca o cadastro e leva o foco
+ao formulário. Instruções ChatGPT são apresentadas em passos, com detalhes
+adicionais expansíveis. Essas mudanças não ampliam concessões nem executam
+testes de conexão automaticamente.
 
 Falhas de rede ou respostas ilegíveis após POST/alteração são apresentadas como
 resultado não confirmado. O console orienta conferir listagem ou identificador,

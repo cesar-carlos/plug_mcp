@@ -7,6 +7,8 @@ const go = async (page: Page, area: string) => {
     .getByRole("navigation", { name: "Áreas do console" })
     .getByRole("link", { name: area, exact: true })
     .click();
+  if (area === "Tokens e conexões")
+    await page.getByRole("button", { name: "Novo token", exact: true }).click();
 };
 async function finishSession(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sair", exact: true }).click();
