@@ -7,7 +7,6 @@ Isso verifica contratos, não a versão instalada no ChatGPT. Procedimento e
 limites no [contrato do plugin](../../docs/persona-v2/plugin.md) e no
 [roteiro sintético](../../docs/persona-v2/plugin-client-validation.md).
 
-
 Fonte separada do legado. Usa contexto da persona, múltiplas fontes concedidas,
 diagnóstico, skills publicadas, consultas, cruzamentos e operações autorizadas.
 Treinamento/publicação possuem tools v2 condicionais, com permissão, consentimento

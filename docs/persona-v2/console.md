@@ -9,7 +9,6 @@ Conflitos preservam a edição; salvar revalida autoridade, referências e revis
 Ver [biblioteca editorial](knowledge-library.md) e
 [evidência da rodada](validation/2026-10-26-plugin-improvements.md).
 
-
 O aviso do console identifica ambiente de teste e aceite integral pendente.
 Disponibilidade do servidor não aprova gates nem dispensa revisão/publicação,
 concessões ou aprovação Client dos efeitos. Ver [deploy inicial](first-test-deploy.md).

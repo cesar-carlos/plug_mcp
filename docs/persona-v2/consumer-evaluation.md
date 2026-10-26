@@ -4,7 +4,6 @@ Para o plugin ChatGPT, há um [roteiro de cenários sintéticos](plugin-client-v
 A conexão dedicada ainda não existe (informação do responsável em 2026-10-26).
 O roteiro e os testes locais não comprovam uma rodada real no cliente.
 
-
 O núcleo `tests/evaluation/persona-v2-evaluator.ts` e o CLI
 `scripts/evaluate-persona-consumer.ts` são separados do avaliador legado.
 Não hospedam IA no produto nem concedem permissões.

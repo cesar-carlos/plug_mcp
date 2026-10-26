@@ -6,7 +6,6 @@ Ver [evidência e limites](validation/2026-10-26-plugin-improvements.md).
 A validação no ChatGPT aguarda conexão sintética dedicada; não há novo deploy
 ou aceite integral decorrente desta rodada.
 
-
 Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementação](first-test-deploy.md). DV2-017 permite validar e ajustar no destino, sem aceite manual prévio. O caminho separado de liberação de teste está implementado com contrato e imagem próprios; o manifesto integral continua bloqueado e não representa aceite fictício.
 
 Contrato ativo: persona central, várias fontes, conhecimento publicado e tokens

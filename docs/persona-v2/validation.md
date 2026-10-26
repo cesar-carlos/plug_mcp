@@ -13,7 +13,6 @@ nem reutilizar evidência de uma revisão para certificar outra.
 
 [Compatibilidade do plugin e composição editorial — 2026-10-26](validation/2026-10-26-plugin-improvements.md).
 
-
 [Instruções editoriais do plugin — 2026-10-26](validation/2026-10-26-plugin-editorial-guidance.md).
 
 [Importação direta de datasets para operação SQL — 2026-10-26](validation/2026-10-26-direct-operation-datasets.md).

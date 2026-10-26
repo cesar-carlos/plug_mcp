@@ -46,7 +46,6 @@ O [roteiro no ChatGPT](plugin-client-validation.md) está preparado, mas a conex
 sintética dedicada ainda não existe. A comparação de hashes foi implementada;
 a identificação do pacote efetivamente instalado depende de evidência do cliente.
 
-
 - Etapa 13: organização e aparência do console entregues localmente. Nesta
   continuação, a edição de nome/especialidade/orientações passa a associar recusas
   do servidor aos campos, preservando texto e foco. O link do resumo reabre a

@@ -18,7 +18,6 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
   direta em cruzamentos pelo console Client, com CAS, referências exatas,
   limites agregados e revalidação ao salvar. Não executa SQL nem aprova testes.
 
-
 - Fixed: instruções do plugin v2 distinguem edição delegada de casos de consulta
   e edição exclusiva no console de operações/cruzamentos com origem editorial,
   incluindo a importação direta de datasets SQL já implementada.

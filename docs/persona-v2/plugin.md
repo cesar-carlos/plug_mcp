@@ -29,7 +29,6 @@ divergem. `installedPackageVerified:false` permanece explícito: pacote local e
 snapshot da resposta não comprovam instalação no ChatGPT. O roteiro de
 [validação sintética no cliente](plugin-client-validation.md) registra a pendência.
 
-
 | Geração      | Fonte                     | Portátil                                   | ChatGPT                                   |
 | ------------ | ------------------------- | ------------------------------------------ | ----------------------------------------- |
 | `legacy`     | `plugins/se7e-chatgpt`    | `/mcp/chatgpt`, OAuth legado               | `.app.json` com ID real da conexão legada |
