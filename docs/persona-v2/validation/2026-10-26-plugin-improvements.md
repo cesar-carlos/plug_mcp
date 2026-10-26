@@ -37,6 +37,23 @@ anteriores preservadas. Esta rodada não representa commit, push ou deploy.
 
 ## Limites
 
+O servidor de teste recebeu a imagem do commit `7b147ea` após aprovação integral
+do [CI 40353764526](https://github.com/cesar-carlos/plug_mcp/actions/runs/40353764526).
+Servidor e worker saudáveis, sem reinícios, migração `0045_persona_icon_revision.sql`
+aplicada e configuração preservada; `/health`, `/ready` e `/app/` responderam 200.
+Backup foi verificado antes da ativação. As 62 jornadas integradas passaram em
+fixture isolada. Na suíte PostgreSQL remota, 325/332 passaram inicialmente;
+as duas suítes que exigem localhost foram repetidas na rede do banco descartável,
+com 18/18 aprovados. O CI posterior aprovou a suíte completa.
+
+O diagnóstico HTTPS revelou uma divergência do verificador: usava GET no
+transporte v2 que aceita somente POST. POST sem credenciais devolveu 401 com
+o challenge correto. O diagnóstico passa a usar POST vazio somente nessa etapa,
+sem autenticar, enviar tools ou alterar a descoberta GET e as guardas de rede.
+Após a correção, as três etapas HTTPS públicas passaram; nove testes do diagnóstico,
+lint, tipos e validação documental também passaram. Esse ajuste é do diagnóstico
+de operador; a imagem em execução permanece a revisão aprovada `7b147ea`.
+
 A mesma corrida de fechamento reapareceu em conhecimento compartilhado, após
 332 testes aprovados. O ajuste sem FORCE também cobre as limpezas restantes
 de conhecimento, upgrade, baseline e delegação: todas já encerravam seus pools

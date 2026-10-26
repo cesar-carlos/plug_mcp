@@ -30,6 +30,10 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Persona-v2
 
+- Diagnóstico HTTPS usa GET para metadados e POST vazio sem credenciais para o
+  challenge MCP v2. Fixture deve recusar GET no transporte com 405, como o runtime;
+  não certificar conexão ChatGPT real a partir da descoberta pública.
+
 - `test:persona-v2:ui` verifica somente UI com APIs simuladas por contexto, em
   servidor estático local sem banco. `test:persona-v2:browser` executa essa suíte
   e a integrada sobre um único build. A integrada mantém um worker porque

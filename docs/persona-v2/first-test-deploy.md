@@ -104,6 +104,11 @@ login, cadastro de fonte de teste, treinamento, publicação, token e consulta.
 Exercitar OAuth/ChatGPT quando configurados. Falhas podem ser corrigidas no próprio
 servidor; aprovação Client dos efeitos permanece obrigatória quando aplicável.
 
+`persona:https-check -- --public-base-url=https://mcp.se7esistemassinop.com.br --stage=discovery`
+confere metadados por GET e o desafio de `/mcp/chatgpt` por POST vazio sem Bearer.
+GET nesse transporte retorna 405 e não comprova falha OAuth. O diagnóstico não
+executa tools nem certifica uma conexão real no ChatGPT.
+
 Limpar diretórios antigos somente por decisão do operador após guardar evidências
 e confirmar ausência de uso. Nunca apagar volumes/bancos ou restaurar snapshots
 como tratamento automático de erro. Restauração não desfaz efeitos remotos.

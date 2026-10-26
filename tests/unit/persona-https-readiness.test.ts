@@ -30,13 +30,16 @@ const fixture = () => ({
 });
 const endpoint =
   (data = fixture()): PersonaHttpsDependencies["endpoint"] =>
-  async (url) => {
+  async (url, method = "GET") => {
     if (url.pathname.endsWith("oauth-authorization-server")) {
+      expect(method).toBe("GET");
       return { status: 200, headers: {}, body: data.authorization };
     }
     if (url.pathname.startsWith("/.well-known/")) {
+      expect(method).toBe("GET");
       return { status: 200, headers: {}, body: data.resource };
     }
+    if (method !== "POST") return { status: 405, headers: { allow: "POST" }, body: {} };
     return {
       status: 401,
       headers: {

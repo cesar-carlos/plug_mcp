@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: diagnóstico HTTPS v2 confere o desafio OAuth por POST sem credenciais,
+  respeitando o transporte MCP; GET permanece reservado à descoberta de metadados.
+
 - Fixed: cabeçalho e textos do console permitem quebra com zoom e fontes largas;
   regressão de ícone aguarda a confirmação e a liberação do seletor antes do
   próximo envio, sem ignorar o bloqueio durante salvamento.

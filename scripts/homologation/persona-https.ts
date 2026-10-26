@@ -147,7 +147,7 @@ export const checkPersonaHttps = async (
     }
   });
   await check("endpoint.challenge", async () => {
-    const response = await io.endpoint(new URL("/mcp/chatgpt", input.origin));
+    const response = await io.endpoint(new URL("/mcp/chatgpt", input.origin), "POST");
     z.literal(401).parse(response.status);
     const challenge = response.headers["www-authenticate"];
     if (

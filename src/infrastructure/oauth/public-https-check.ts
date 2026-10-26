@@ -2,9 +2,10 @@ import { lookup } from "node:dns/promises";
 import { request } from "node:https";
 import { isPublicOAuthAddress, pinnedOAuthLookup } from "./cimd-client.js";
 
-/** GET limitado para discovery. Não segue redirects nem aceita redes privadas. */
+/** Discovery limitado; POST vazio permite conferir o challenge MCP sem credenciais. */
 export const readPublicOAuthEndpoint = async (
   url: URL,
+  method: "GET" | "POST" = "GET",
 ): Promise<{
   status: number;
   headers: Record<string, string | string[] | undefined>;
@@ -29,7 +30,7 @@ export const readPublicOAuthEndpoint = async (
     const req = request(
       url,
       {
-        method: "GET",
+        method,
         agent: false,
         signal,
         rejectUnauthorized: true,
@@ -37,7 +38,11 @@ export const readPublicOAuthEndpoint = async (
         family: address.family,
         ...{ autoSelectFamily: false },
         lookup: pinnedOAuthLookup(address),
-        headers: { Accept: "application/json", "Accept-Encoding": "identity" },
+        headers: {
+          Accept: method === "POST" ? "application/json, text/event-stream" : "application/json",
+          "Accept-Encoding": "identity",
+          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+        },
       },
       (res) => {
         if (![200, 401].includes(res.statusCode ?? 0) || res.headers["content-encoding"]) {
@@ -68,6 +73,6 @@ export const readPublicOAuthEndpoint = async (
       },
     );
     req.on("error", reject);
-    req.end();
+    req.end(method === "POST" ? "{}" : undefined);
   });
 };
