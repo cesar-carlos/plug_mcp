@@ -11,6 +11,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: teste integrado OAuth confirma o diálogo acessível de delegação do
+  console, acompanhando a substituição do alerta nativo sem pular a confirmação.
+  Limpeza da fixture OAuth legada não força encerramento de conexões após fechar
+  os pools, evitando erro de término administrativo durante o teardown.
+
 - Changed: emissão de token sob demanda com rascunho preservado, resumo de
   permissões, filtros de vencimento, ação “Gerar novo token”, identificação
   legível de conexões e confirmações acessíveis sem alertas nativos nessa jornada.

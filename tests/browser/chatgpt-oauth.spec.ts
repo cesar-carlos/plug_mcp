@@ -190,7 +190,7 @@ test.afterAll(async () => {
     });
   await pool?.end();
   if (admin) {
-    if (databaseName) await admin.query(`DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE)`);
+    if (databaseName) await admin.query(`DROP DATABASE IF EXISTS ${databaseName}`);
     await admin.end();
   }
 });

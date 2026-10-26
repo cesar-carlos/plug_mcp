@@ -331,8 +331,11 @@ test("delegação no console, consentimento administrativo e setup de uso único
   await delegationPanel.getByLabel("Iniciar cadastro e rotação de bases no navegador").check();
   await delegationPanel.getByLabel("Treinar skills nas bases selecionadas").check();
   await delegationPanel.getByLabel("Revisar, publicar e suspender skills").check();
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Criar delegação por 30 dias", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Confirmar delegação?" })
+    .getByRole("button", { name: "Confirmar delegação", exact: true })
+    .click();
   await expect(page.getByRole("region", { name: "Delegação administrativa" })).toContainText(
     "Configurada localmente",
   );
