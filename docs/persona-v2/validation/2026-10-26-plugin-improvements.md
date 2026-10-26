@@ -50,9 +50,14 @@ O diagnóstico HTTPS revelou uma divergência do verificador: usava GET no
 transporte v2 que aceita somente POST. POST sem credenciais devolveu 401 com
 o challenge correto. O diagnóstico passa a usar POST vazio somente nessa etapa,
 sem autenticar, enviar tools ou alterar a descoberta GET e as guardas de rede.
-Após a correção, as três etapas HTTPS públicas passaram; nove testes do diagnóstico,
-lint, tipos e validação documental também passaram. Esse ajuste é do diagnóstico
-de operador; a imagem em execução permanece a revisão aprovada `7b147ea`.
+Após a correção, as três etapas HTTPS públicas passaram; 21 testes dos diagnósticos
+v2/legado, lint, tipos e validação documental também passaram. A revisão `6d5eee5`
+foi aprovada pelo [CI 40368444812](https://github.com/cesar-carlos/plug_mcp/actions/runs/40368444812)
+e publicada pelo [deploy 40372373749](https://github.com/cesar-carlos/plug_mcp/actions/runs/40372373749).
+Servidor e worker confirmaram essa revisão, ambos saudáveis e sem reinícios;
+configuração preservada, migração 0045 presente e os três endpoints HTTP responderam 200. Descoberta HTTPS repetida após essa publicação aprovou as três etapas.
+Registros privados do servidor: `/root/deploy-records/plug-mcp-20261026-6d5eee5`;
+backup anterior à ativação: `/root/deploy-records/plug-mcp-20261026-7b147ea`.
 
 A mesma corrida de fechamento reapareceu em conhecimento compartilhado, após
 332 testes aprovados. O ajuste sem FORCE também cobre as limpezas restantes
