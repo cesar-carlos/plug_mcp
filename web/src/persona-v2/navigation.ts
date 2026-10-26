@@ -14,6 +14,13 @@ export const consoleAreas = [
   { id: "catalog", label: "Catálogo compartilhado" },
 ] as const;
 export type ConsoleArea = (typeof consoleAreas)[number]["id"];
+export const consoleGroups: readonly { label: string; areas: readonly ConsoleArea[] }[] = [
+  { label: "Início", areas: ["personas", "overview"] },
+  { label: "Configuração", areas: ["sources", "integrations"] },
+  { label: "Treinamento", areas: ["knowledge", "training", "catalog"] },
+  { label: "Acesso", areas: ["tokens"] },
+  { label: "Uso", areas: ["queries", "operations", "history"] },
+];
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [

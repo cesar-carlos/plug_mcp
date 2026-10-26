@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
+import { lazyPanel } from "./lazy-panel";
+const MascotGallery = lazyPanel(() => import("./MascotGallery.vue"));
+const showMascots = ref(false);
 const props = defineProps<{ api: <T>(url: string, body?: unknown) => Promise<T> }>();
 const status = ref<{ enabled: boolean; endpoint?: string; scope?: string }>();
 const message = ref("");
@@ -78,5 +81,21 @@ async function copy() {
       </button>
     </template>
     <p role="status">{{ message }}</p>
+    <details>
+      <summary>Ícone, mascotes e Dots</summary>
+      <p>
+        Para trocar o ícone desta persona, abra Visão geral → Editar persona. Os mascotes abaixo têm
+        retrato estático e animação para download. Eles não alteram as permissões da conexão.
+      </p>
+      <button
+        type="button"
+        class="secondary"
+        :aria-expanded="showMascots"
+        @click="showMascots = !showMascots"
+      >
+        {{ showMascots ? "Fechar downloads de mascotes" : "Ver mascotes para download" }}
+      </button>
+      <MascotGallery v-if="showMascots" />
+    </details>
   </section>
 </template>

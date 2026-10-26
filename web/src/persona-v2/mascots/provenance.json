@@ -1,0 +1,46 @@
+{
+  "revision": "a6fbf8e516da23811fdd3371a212f565d250952c",
+  "assets": [
+    {
+      "path": "LICENSE.txt",
+      "sha256": "6b73e9b034a3614e18fa9adc8b01e90ba85300279fec9f71c52a8f9969a6c696"
+    },
+    {
+      "path": "marmalade.zip",
+      "sha256": "bd2f098d9868d3fc4ae7e37979231502d27f97ad89c8b3eb9a13e46cf056b412"
+    },
+    {
+      "path": "README.txt",
+      "sha256": "789526396d4a82fcca62427364048eb3e322b63666585eaa9a229d334a08cb50"
+    },
+    {
+      "path": "voltcoin.zip",
+      "sha256": "eb53a64fdd753ca67830b72dfedb9df8815f748a75dc3c5d1243262c76e4eff7"
+    },
+    {
+      "path": "marmalade/pet.json",
+      "sha256": "05e3b24a6377d4f903021482fd43b57c58fa3bc19022bf7acca3ce2cfe89da93"
+    },
+    {
+      "path": "marmalade/portrait.png",
+      "sha256": "04a8e75ff0bfbc8c40ae4e3c57af118731f4f24441414b9554bad2d9e9bc6519"
+    },
+    {
+      "path": "marmalade/spritesheet.webp",
+      "sha256": "069d141482a8033ecb460b53eb2778d4542e8fb4a337a5e87161466205512cb7"
+    },
+    {
+      "path": "voltcoin/pet.json",
+      "sha256": "4db4e621810cd82ed2e360b27b823de0743e35a680b2a8bcc0e7e989142d5b1f"
+    },
+    {
+      "path": "voltcoin/portrait.png",
+      "sha256": "b771f8547c92722a1fc4717c28a294b62c4ed66466a96c55e0edd24a34587ee1"
+    },
+    {
+      "path": "voltcoin/spritesheet.webp",
+      "sha256": "0778bb280713e35b4b247df42a0ff01493865c6e48b74343c916425d6ed24e90"
+    }
+  ],
+  "source": "https://github.com/aprocom/chatgpt-pets"
+}

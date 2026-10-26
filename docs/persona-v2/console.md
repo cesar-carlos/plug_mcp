@@ -1,10 +1,61 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+Os seletores editoriais de casos SQL e cruzamentos permitem adicionar até quatro
+versões explícitas à combinação por fonte, remover escolhas, preparar prévia e
+aplicar sementes antes de salvar o caso. Cruzamentos também selecionam diretamente
+da biblioteca, vinculados à consulta publicada. A composição preserva ordem e
+duplicatas, exige compatibilidade nas tabelas sobrepostas e não executa testes.
+Conflitos preservam a edição; salvar revalida autoridade, referências e revisão.
+Ver [biblioteca editorial](knowledge-library.md) e
+[evidência da rodada](validation/2026-10-26-plugin-improvements.md).
+
+
 O aviso do console identifica ambiente de teste e aceite integral pendente.
 Disponibilidade do servidor não aprova gates nem dispensa revisão/publicação,
 concessões ou aprovação Client dos efeitos. Ver [deploy inicial](first-test-deploy.md).
 
 ## Clareza, acessibilidade e recuperação da interface
+
+Casos SQL oferecem também **Importar sementes diretamente da biblioteca**, sem
+consulta intermediária: seleção de catálogo, paginação e versão explícita,
+prévia, aplicação e salvamento separados. Falha/troca de seleção descarta a prévia
+e preserva o caso. A origem direta tem validação própria e exige Client ao salvar.
+[Contrato](knowledge-library.md#importação-direta-de-sementes-para-operação-sql).
+
+No editor de casos de cruzamento pelo transporte, cada base oferece seleção de
+consulta publicada e dataset de origem, com prévia e aplicação independentes.
+Aplicar em uma base preserva SQL, resultado esperado e sementes das outras.
+Casos somente sintéticos não oferecem esse fluxo. Ver
+[vínculos e limites](knowledge-library.md#datasets-por-fonte-em-casos-de-cruzamento).
+
+Casos de operação SQL podem preparar sementes de um dataset vinculado a uma
+consulta importada da mesma fonte. O editor mostra a prévia e exige aplicar e
+salvar separadamente; não muda resultado esperado nem executa runner. Contrato,
+origem e pendências na [biblioteca editorial](knowledge-library.md#sementes-editoriais-para-casos-de-operação-sql).
+O seletor de datasets oferece o original ou outra versão do mesmo template,
+com carregamento de mais opções sob demanda. Falhas de lista/leitura preservam
+o caso; a prévia precisa ser preparada novamente antes de aplicar outra versão.
+Trocar contexto descarta respostas/erros antigos mesmo ao retornar à seleção
+original. Isso vale para operações e cruzamentos; prévia/erro são limpos, mas
+as sementes já aplicadas permanecem. Leituras não são repetidas automaticamente.
+
+Na edição dos dados da persona, recusas de campo enviadas pelo servidor são
+associadas a nome, especialidade e orientações por `aria-invalid` e
+`aria-describedby`, com orientação textual sem reproduzir o conteúdo informado.
+O foco chega ao campo após liberar o bloqueio de envio; o link do resumo de erro
+reabre a seção caso tenha sido recolhida. A edição é preservada e novo envio limpa
+as referências anteriores. Erros de outros formulários não marcam esses campos.
+
+A navegação agrupa as rotas existentes em Início (personas/visão geral),
+Configuração (bases/integrações), Treinamento (conhecimento/treinamentos/catálogo),
+Acesso (tokens/conexões) e Uso (consultas/operações/histórico). No desktop fica
+na lateral; em telas intermediárias usa grupos em grade e no celular um menu
+recolhível mostra a área atual. URLs, permissões e guardas de descarte não mudam.
+Na visão geral, nome, especialidade, estado e roteiro aparecem antes dos ajustes.
+“Editar persona” reúne os dados e o ícone com salvamentos independentes;
+“Gerenciar disponibilidade” separa suspensão/recuperação e mantém confirmação.
+Recolher uma seção não descarta edição; sair da área continua exigindo confirmação
+quando há alterações pendentes. O ícone deixa de ocupar a área de treinamento.
 
 Formulários sinalizam campos obrigatórios sem alterar seu nome acessível.
 Validação nativa mantém foco no campo inválido e acrescenta orientação local
@@ -735,10 +786,82 @@ registro de plugin ou conector; o console em `/app` permanece same-origin.
 A visão geral e o treinamento enviam a imagem com revisão própria. Ausência,
 limpeza ou persona suspensa responde 404 e o cliente usa o ícone Se7e. A troca
 não muda a versão de autorização.
+Remover conserva um marcador sem bytes e incrementa a revisão; recriar incrementa
+novamente, sem reutilizar revisões. A API administrativa retorna `revision` e
+`hasIcon` separadamente: ausência de imagem não significa revisão zero. Edições
+ou remoções com revisão antiga são recusadas, inclusive após remover/recriar em
+outra aba. URLs e ETags usam a nova revisão. A migração aditiva 0045 preserva os
+ícones existentes; a 0044 permanece imutável.
+Regressões em `tests/persona-v2/postgres.test.ts` cobrem remoção/recriação,
+recusa de revisão obsoleta, auditoria, autorização preservada e ETag diferente;
+`ui-icon-revision.spec.ts` cobre o ícone padrão e a revisão enviada pelo console.
+Essas verificações locais não representam aplicação da migração no servidor.
+O editor bloqueia mudanças enquanto lê ou salva, oferece nova leitura explícita
+após falha inicial e informa carregamento, alteração pendente e confirmação.
+O bloqueio de envio começa antes da leitura do arquivo, evitando POST duplicado.
+Tipo/tamanho são conferidos no navegador sem substituir a validação do servidor;
+arquivo recusado preserva a escolha válida anterior. O campo é limpo após salvar
+ou escolher o padrão, e a prévia conserva a proporção em telas pequenas.
+
+O resumo exibe a aparência salva junto ao nome, atualizada pela leitura ou pelo
+salvamento confirmado, sem mostrar a escolha ainda pendente. O contexto da persona
+é conferido antes de atualizar a imagem; falha da imagem apresenta a inicial do nome.
+“Descartar alterações do ícone” restaura a prévia conhecida sem requisição e devolve
+o foco ao campo de arquivo. Conflito de revisão ou resposta não confirmada preserva
+a escolha e bloqueia novo envio até “Conferir versão salva sem perder minha escolha”.
+Falha nessa leitura mantém o bloqueio; leitura bem-sucedida atualiza a revisão,
+preserva o arquivo e exige novo salvamento explícito.
+
+### Mascotes comunitários e ChatGPT
+
+“Escolher um mascote”, dentro de Editar persona, abre uma galeria sob demanda.
+Marmalade e Voltcoin têm retrato PNG e atlas animado v2. “Usar retrato” prepara
+o PNG no editor; somente “Salvar ícone” usa a API existente com sessão, CSRF e
+revisão. Não persiste um novo tipo de ícone nem muda permissões. Arquivo local
+ou ícone Se7e continuam disponíveis; falha ao carregar um retrato preserva a
+escolha anterior. Animação exige clique, pode ser pausada e respeita movimento
+reduzido; é demonstrativa, não representa tarefa ou estado da persona.
+
+A galeria marca a seleção pendente com texto e `aria-pressed`. Após salvar,
+identifica o retrato salvo nesta sessão; não tenta reconhecer imagens por semelhança
+nem persiste essa classificação. Cada cartão oferece download separado do PNG.
+Os pacotes ZIP e a orientação de instalação ficam em “Usar no ChatGPT ou Codex”,
+separados da escolha de aparência local.
+
+Tokens e conexões → Conectar no ChatGPT → Ícone, mascotes e Dots oferece a mesma
+galeria para download, sem permitir edição nesse local. ZIPs incluem `pet.json`,
+`spritesheet.webp`, retrato, instruções e licença; não contêm instaladores.
+Os assets são locais no build, com URLs de conteúdo geradas pelo Vite. Não há
+download em runtime de terceiros nem carregamento de atlas/ZIP antes da ação.
+
+Origem: [aprocom/chatgpt-pets](https://github.com/aprocom/chatgpt-pets/tree/a6fbf8e516da23811fdd3371a212f565d250952c),
+Alexey Yakovlev, MIT, revisão `a6fbf8e516da23811fdd3371a212f565d250952c`.
+[Proveniência e hashes](../../web/src/persona-v2/mascots/provenance.json) e
+[licença incorporada](../../web/src/persona-v2/mascots/LICENSE.txt) acompanham os
+arquivos originais, sem alteração dos PNGs, WebPs ou metadados do autor.
+
+Pacotes são v2, 1536 × 2288, com células 192 × 208 e prévia dos sete quadros
+iniciais. Clientes que exigem atlas 1536 × 1872 não devem receber este pacote.
+A [documentação de Pets](https://learn.chatgpt.com/docs/pets) e a versão instalada
+devem ser conferidas antes da instalação manual. Não há homologação em todas
+as versões do ChatGPT/Codex. [Dots](https://learn.chatgpt.com/docs/dots/getting-started)
+são agentes configurados no ChatGPT: a galeria não cria um Dot, instala plugin,
+altera avatar remoto ou conecta automaticamente o MCP. Mantém-se o PNG estático
+como imagem da persona e a identidade oficial Se7e no plugin/`initialize`.
+
+Testes de assets conferem hashes, licença, dimensões e aceitação dos retratos
+pelo normalizador do servidor. Testes de navegador verificam seleção sem efeito
+antes de salvar, recuperação, download de ZIP, movimento reduzido e layout móvel.
+Também cobrem descarte sem requisição, conflito entre sessões com releitura falha
+e recuperada, aparência salva no resumo, download de PNG, seleção por teclado,
+foco visível, contraste do botão selecionado e reflow com fonte ampliada a 200%.
+Esses cenários não equivalem a uma auditoria integral de acessibilidade.
 Não expõe o diretório inteiro de distribuição.
 Vite copia os arquivos para `web/dist`, que o Dockerfile já empacota. Build e
 runtime não dependem da pasta externa. Não há service worker nem cache offline.
-Os assets foram verificados na [imagem candidata local](validation/2026-10-19-candidate-distribution.md).
+O relatório da [imagem candidata local](validation/2026-10-19-candidate-distribution.md)
+é histórico e não certifica os mascotes adicionados posteriormente. A rodada de
+interface e assets atuais está no [registro local de 26/10](validation/2026-10-26-console-appearance.md).
 O aceite da distribuição final continua pendente.
 
 ## Editores de limites

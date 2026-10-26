@@ -1,5 +1,39 @@
 import { z } from "zod";
 import {
+  operationDatasetCompositionOriginSchema,
+  datasetCompositionSelectionSchema,
+  type DatasetCompositionOrigin,
+  type DatasetCompositionSeeds,
+} from "../../domain/persona-v2/dataset-composition.js";
+import { readDatasetComposition, confirmDatasetComposition } from "./dataset-composition.js";
+import {
+  directOperationDatasetOriginSchema,
+  directOperationDatasetSelectionSchema,
+  type DirectOperationDatasetOrigin,
+  type DirectOperationDatasetSeeds,
+} from "../../domain/persona-v2/direct-operation-dataset.js";
+import {
+  readDirectOperationDatasetSeeds,
+  confirmDirectOperationDatasetOrigin,
+} from "./direct-operation-dataset.js";
+import {
+  federationDatasetOriginSchema,
+  federationDatasetSelectionSchema,
+  type FederationDatasetOrigin,
+  type FederationDatasetSeeds,
+} from "../../domain/persona-v2/federation-dataset.js";
+import {
+  readFederationDatasetSeeds,
+  confirmFederationDatasetOrigin,
+} from "./federation-dataset.js";
+import {
+  operationDatasetOriginSchema,
+  operationDatasetSelectionSchema,
+  type OperationDatasetOrigin,
+  type OperationDatasetSeeds,
+} from "../../domain/persona-v2/operation-dataset.js";
+import { readOperationDatasetSeeds, confirmOperationDatasetOrigin } from "./operation-dataset.js";
+import {
   readDatasetCaseSeeds,
   readDatasetCaseOptions,
   confirmedDatasetCaseOrigin,
@@ -69,7 +103,15 @@ export const caseInputSchema = z.strictObject({
   required: z.boolean(),
   content: z.strictObject({
     name: z.string().min(1).max(200),
-    editorialOrigin: datasetCaseOriginSchema.optional(),
+    editorialOrigin: z
+      .union([
+        datasetCaseOriginSchema,
+        operationDatasetOriginSchema,
+        directOperationDatasetOriginSchema,
+        operationDatasetCompositionOriginSchema,
+        federationDatasetOriginSchema,
+      ])
+      .optional(),
     input: z.json(),
     expected: z.json(),
   }),
@@ -533,6 +575,99 @@ export class PersonaCatalog {
     });
   }
 
+  /** Explicit same-persona editorial donor; no SQL, case save or publication. */
+  async operationDatasetSeeds(
+    sessionId: string,
+    personaId: string,
+    skillId: string,
+    raw: unknown,
+  ): Promise<OperationDatasetSeeds> {
+    if (typeof sessionId !== "string") {
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Dataset editorial exige sessão Client.");
+    }
+    const input = operationDatasetSelectionSchema
+      .extend({
+        expectedRevision: z.number().int().positive(),
+      })
+      .parse(raw);
+    return this.owned(sessionId, personaId, async (tx, owner, context) => {
+      const draft = await this.requireDraft(tx, personaId, skillId, context);
+      if (draft.revision !== input.expectedRevision) {
+        throw new PersonaV2Error(
+          "OPERATION_CONFLICT",
+          "Operação mudou; confira a revisão antes de carregar o dataset.",
+        );
+      }
+      return readOperationDatasetSeeds(tx, owner, draft, this.services.crypto, input);
+    });
+  }
+
+  async datasetCompositionSeeds(
+    sessionId: string,
+    personaId: string,
+    skillId: string,
+    raw: unknown,
+  ): Promise<DatasetCompositionSeeds> {
+    if (typeof sessionId !== "string")
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Datasets exigem sessão Client.");
+    const input = datasetCompositionSelectionSchema
+      .extend({ expectedRevision: z.number().int().positive(), publicationId: z.uuid().optional() })
+      .parse(raw);
+    return this.owned(sessionId, personaId, async (tx, owner, context) => {
+      const draft = await this.requireDraft(tx, personaId, skillId, context);
+      if (draft.revision !== input.expectedRevision)
+        throw new PersonaV2Error("OPERATION_CONFLICT", "Rascunho mudou; confira a revisão.");
+      return readDatasetComposition(
+        tx,
+        owner,
+        draft,
+        this.services.crypto,
+        { materials: input.materials },
+        input.publicationId,
+      );
+    });
+  }
+
+  async directOperationDatasetSeeds(
+    sessionId: string,
+    personaId: string,
+    skillId: string,
+    raw: unknown,
+  ): Promise<DirectOperationDatasetSeeds> {
+    if (typeof sessionId !== "string")
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Dataset editorial exige sessão Client.");
+    const input = directOperationDatasetSelectionSchema
+      .extend({
+        expectedRevision: z.number().int().positive(),
+      })
+      .parse(raw);
+    return this.owned(sessionId, personaId, async (tx, owner, context) => {
+      const draft = await this.requireDraft(tx, personaId, skillId, context);
+      if (draft.revision !== input.expectedRevision)
+        throw new PersonaV2Error("OPERATION_CONFLICT", "Operação mudou; confira a revisão.");
+      return readDirectOperationDatasetSeeds(tx, owner, draft, this.services.crypto, input);
+    });
+  }
+
+  async federationDatasetSeeds(
+    sessionId: string,
+    personaId: string,
+    skillId: string,
+    raw: unknown,
+  ): Promise<FederationDatasetSeeds> {
+    if (typeof sessionId !== "string")
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Dataset editorial exige sessão Client.");
+    const input = federationDatasetSelectionSchema
+      .extend({ expectedRevision: z.number().int().positive() })
+      .parse(raw);
+    return this.owned(sessionId, personaId, async (tx, owner, context) => {
+      const draft = await this.requireDraft(tx, personaId, skillId, context);
+      if (draft.revision !== input.expectedRevision)
+        throw new PersonaV2Error("OPERATION_CONFLICT", "Cruzamento mudou; confira a revisão.");
+      return readFederationDatasetSeeds(tx, owner, draft, this.services.crypto, input);
+    });
+  }
+
   async datasetCaseSeeds(
     sessionId: string,
     personaId: string,
@@ -666,11 +801,11 @@ export class PersonaCatalog {
           "Rascunho ou casos mudaram; preserve sua edição e recarregue.",
         );
       const previous =
-        kind === "consulta" && input.id && !input.remove
+        input.id && !input.remove
           ? (await tx.catalog.cases(personaId, skillId)).find((test) => test.id === input.id)
           : undefined;
       const previousOrigin = previous
-        ? queryPublicationCaseSchema.safeParse(previous.content)
+        ? caseInputSchema.shape.content.safeParse(previous.content)
         : undefined;
       const candidate = {
         ...input.content,
@@ -680,6 +815,22 @@ export class PersonaCatalog {
           ? { editorialOrigin: previousOrigin.data.editorialOrigin }
           : {}),
       };
+      if (
+        previousOrigin?.success &&
+        previousOrigin.data.editorialOrigin?.format === "federation-dataset-case-origin-v1" &&
+        candidate.editorialOrigin?.format === "federation-dataset-case-origin-v1"
+      ) {
+        const incoming = candidate.editorialOrigin.sources;
+        candidate.editorialOrigin = {
+          ...candidate.editorialOrigin,
+          sources: [
+            ...previousOrigin.data.editorialOrigin.sources.filter(
+              (item) => !incoming.some((next) => next.sourceId === item.sourceId),
+            ),
+            ...incoming,
+          ],
+        };
+      }
       const content = input.remove
         ? input.content
         : await this.confirmCaseOrigin(
@@ -712,9 +863,102 @@ export class PersonaCatalog {
     owner: string,
     draft: SkillDraft,
     content: z.infer<typeof caseInputSchema>["content"],
-    previousOrigin?: DatasetCaseOrigin,
+    previousOrigin?:
+      | DatasetCaseOrigin
+      | OperationDatasetOrigin
+      | DirectOperationDatasetOrigin
+      | DatasetCompositionOrigin
+      | FederationDatasetOrigin,
   ): Promise<z.infer<typeof caseInputSchema>["content"]> {
     if (!content.editorialOrigin) return content;
+    if (content.editorialOrigin.format === "operation-dataset-composition-v1") {
+      if (typeof actor !== "string" || draft.kind !== "operacao_sql")
+        throw new PersonaV2Error("AUTHORIZATION_DENIED", "Composição editorial exige Client.");
+      const parsed = operationCaseSchema.parse(content);
+      const current = await readDatasetComposition(tx, owner, draft, this.services.crypto, {
+        materials: content.editorialOrigin.materials.map(({ catalogId, dataset }) => ({
+          catalogId,
+          dataset,
+        })),
+      });
+      const origin = confirmDatasetComposition(
+        content.editorialOrigin,
+        current,
+        parsed.input.fixtures,
+        this.services.crypto,
+      );
+      if (origin.format !== "operation-dataset-composition-v1")
+        throw new PersonaV2Error("INVALID_PLAN", "Origem SQL inválida.");
+      return { ...content, editorialOrigin: origin };
+    }
+    if (content.editorialOrigin.format === "operation-direct-dataset-case-origin-v1") {
+      if (typeof actor !== "string" || draft.kind !== "operacao_sql")
+        throw new PersonaV2Error(
+          "AUTHORIZATION_DENIED",
+          "Dataset direto exige sessão Client no console.",
+        );
+      const parsed = operationCaseSchema.parse(content);
+      const current = await readDirectOperationDatasetSeeds(
+        tx,
+        owner,
+        draft,
+        this.services.crypto,
+        content.editorialOrigin,
+      );
+      return {
+        ...content,
+        editorialOrigin: confirmDirectOperationDatasetOrigin(
+          content.editorialOrigin,
+          current,
+          parsed.input.fixtures,
+          this.services.crypto,
+        ),
+      };
+    }
+    if (content.editorialOrigin.format === "federation-dataset-case-origin-v1") {
+      if (typeof actor !== "string" || draft.kind !== "cruzamento") {
+        throw new PersonaV2Error(
+          "AUTHORIZATION_DENIED",
+          "Origem editorial de cruzamento exige sessão Client.",
+        );
+      }
+      return {
+        ...content,
+        editorialOrigin: await confirmFederationDatasetOrigin(
+          tx,
+          owner,
+          draft,
+          this.services.crypto,
+          content,
+        ),
+      };
+    }
+    if (content.editorialOrigin.format === "operation-dataset-case-origin-v1") {
+      // Dataset material is browser-only. Consumers cannot add, alter or re-read this origin.
+      if (typeof actor !== "string" || draft.kind !== "operacao_sql") {
+        throw new PersonaV2Error(
+          "AUTHORIZATION_DENIED",
+          "Origem editorial de operação exige sessão Client no console.",
+        );
+      }
+      const parsed = operationCaseSchema.parse(content);
+      const current = await readOperationDatasetSeeds(
+        tx,
+        owner,
+        draft,
+        this.services.crypto,
+        content.editorialOrigin,
+      );
+      return {
+        ...content,
+        editorialOrigin: confirmOperationDatasetOrigin(
+          content.editorialOrigin,
+          current,
+          parsed.input.fixtures,
+          this.services.crypto,
+        ),
+      };
+    }
     if ((typeof actor !== "string" && !previousOrigin) || draft.kind !== "consulta") {
       throw new PersonaV2Error(
         "AUTHORIZATION_DENIED",
@@ -723,7 +967,7 @@ export class PersonaCatalog {
     }
     if (
       typeof actor !== "string" &&
-      previousOrigin &&
+      previousOrigin?.format === "dataset-case-origin-v1" &&
       canonicalJson(datasetCaseBinding(previousOrigin)) !==
         canonicalJson(datasetCaseBinding(content.editorialOrigin))
     ) {

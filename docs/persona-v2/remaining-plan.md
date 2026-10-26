@@ -18,9 +18,10 @@ manual de HTTPS/ChatGPT e aceite funcional humano; DV2-016 dispensa o teste
 específico do agente 1.8.6, inclusive instalado/VM. Não registrar as dispensas
 como testes aprovados nem remover verificações técnicas. Ver [decisões](decisions.md).
 O [manifesto](../../contracts/persona-v2-release.json) permanece
-com ready:false e sem gates concluídos; nenhuma etapa intermediária libera deploy.
+com ready:false e sem gates concluídos para clientes; o deploy de teste usa
+contrato próprio conforme DV2-017.
 
-## Prioridade atual: primeiro deploy de teste
+## Prioridade atual: evolução do servidor de teste
 
 O [roteiro do primeiro deploy](first-test-deploy.md) separa implementação,
 infraestrutura e verificação no servidor. DV2-017 permite testes e ajustes no
@@ -32,8 +33,59 @@ Históricos e resultados ficam no [índice de evidências](validation.md), sem
 repetir a cronologia neste plano. O [recorte da imagem CI](validation/2026-10-24-exact-ci-image-chain.md)
 e a [continuação de avaliação/recuperação](validation/2026-10-24-consumer-evaluation-recovery.md)
 distinguem capacidades entregues de lacunas verificadas. Rodadas antigas não
-certificam o checkout atual. O caminho técnico separado de deploy de teste está implementado; configuração
-e execução no destino permanecem como tarefas operacionais.
+certificam o checkout atual. O primeiro deploy remoto foi realizado em 25/10,
+conforme o índice de evidências. Atualizações posteriores exigem verificar a
+revisão publicada, executar suas migrations explícitas e validar o destino;
+não recolocar o primeiro deploy como implementação ausente.
+
+### Continuação verificada — 2026-10-26
+
+As melhorias de compatibilidade, recuperação, exemplos sintéticos e composição
+editorial estão registradas na [rodada do plugin](validation/2026-10-26-plugin-improvements.md).
+O [roteiro no ChatGPT](plugin-client-validation.md) está preparado, mas a conexão
+sintética dedicada ainda não existe. A comparação de hashes foi implementada;
+a identificação do pacote efetivamente instalado depende de evidência do cliente.
+
+
+- Etapa 13: organização e aparência do console entregues localmente. Nesta
+  continuação, a edição de nome/especialidade/orientações passa a associar recusas
+  do servidor aos campos, preservando texto e foco. O link do resumo reabre a
+  seção recolhida para alcançar o campo. Não encerra acessibilidade dos demais
+  formulários, leitor de tela ou homologação operacional.
+  Seletores de datasets SQL/cruzamento agora descartam também sucesso/erro
+  atrasado após sair e voltar ao mesmo contexto, sem apagar sementes aplicadas
+  ou repetir leituras. A composição explícita foi entregue na continuação abaixo;
+  homologação ampliada nos motores permanece separada.
+- Etapa 6: sementes editoriais de operações SQL entregues no console a partir
+  de consulta importada da mesma persona/fonte, com origem própria, conferência
+  de tipos, CAS e hashes recalculados. Não converte treinamento de consulta.
+  Seleção paginada de outras versões do mesmo template também está entregue no
+  editor SQL, com preparo e aplicação explícitos e recuperação sem perder o caso.
+  Importação direta de sementes no editor de operações também está entregue,
+  com seleção de catálogo/versão e origem própria, sem consulta intermediária.
+  Combinação explícita de até quatro datasets por fonte também está entregue,
+  com referências independentes e limites agregados. Falta ampliar homologação.
+  Etapa 7 agora prepara datasets por fonte em casos
+  de transporte de cruzamentos, fixando consulta/publicação e origem independente;
+  a alternativa direta da biblioteca e a composição por fonte também estão
+  implementadas. Prova ampliada nos três motores permanece aberta. Contrato e limites na
+  [biblioteca editorial](knowledge-library.md#sementes-editoriais-para-casos-de-operação-sql).
+- Avaliação consumidora: adaptadores concretos, material revisado e execução real
+  continuam abertos; o núcleo e CLI existentes não são uma avaliação concluída.
+- Pacote privado v2: instruções revisadas com `plugin-creator:update-plugin` e
+  alinhadas à origem editorial de casos SQL/cruzamentos, incluindo importação
+  direta SQL. Montagem/validação local não atualizam a conexão instalada nem
+  encerram homologação do cliente. Guia de erros/exemplos agora é compartilhado
+  com o runtime e verificado no pacote; comparação de hashes identifica divergência
+  sem atestar versão instalada. Conexão ChatGPT sintética não existe, conforme
+  informado pelo responsável; roteiro pronto, execução real pendente.
+  [Evidência anterior](validation/2026-10-26-plugin-editorial-guidance.md).
+- Publicação das mudanças locais continua separada da implementação. Conferir
+  commit/CI/imagem/migração 0045 no próximo deploy, sem inferir o estado remoto.
+
+Menções genéricas a “serviços/editores restantes” abaixo não são tarefas prontas
+para implementação: identificar cenário, contrato e código antes de abrir cada
+recorte. Etapas entregues parcialmente conservam sua homologação pendente.
 
 ## Prontidão para treinamento manual local
 
@@ -116,7 +168,8 @@ Contrato e limites: [plugin](plugin.md); continuação nas etapas 10 e 15.
 Cada etapa entrega código, contrato, schema, documentação e testes do
 comportamento novo. As jornadas do console acompanham o serviço correspondente.
 Migrations novas são aditivas; as já aplicadas permanecem intactas. Nenhuma
-etapa intermediária libera deploy.
+etapa intermediária encerra o aceite integral para clientes. O servidor de teste
+segue o contrato separado de DV2-017.
 
 | Etapa | Ainda falta                                                              | Depende de                                              | Projetos                   |
 | ----- | ------------------------------------------------------------------------ | ------------------------------------------------------- | -------------------------- |
@@ -372,7 +425,10 @@ Casos de consulta agora conservam a origem editorial validada e hashes das
 sementes originais/salvas, sem inferir aprovação ou origem de casos antigos.
 A escolha explícita de outras versões de dataset do mesmo template está ligada
 ao console, com paginação autorizada, sem carregar linhas ou alterar casos ao
-selecionar. Isso não conclui datasets de operações/cruzamentos.
+selecionar. Operações têm recortes por consulta importada e importação direta
+da biblioteca, documentados no contrato editorial. Cruzamentos têm sementes por
+fonte vinculadas às suas consultas publicadas, com importação direta e composição
+explícitas também entregues. Ampliação da matriz continua pendente.
 [Rodada da seleção](validation/2026-10-22-dataset-case-choice.md) registra
 paginação, isolamento, migration aditiva e runners nos três motores, sem
 encerrar a matriz integral.

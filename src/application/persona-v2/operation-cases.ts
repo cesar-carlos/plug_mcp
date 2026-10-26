@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { operationDatasetCompositionOriginSchema } from "../../domain/persona-v2/dataset-composition.js";
+import { operationDatasetOriginSchema } from "../../domain/persona-v2/operation-dataset.js";
+import { directOperationDatasetOriginSchema } from "../../domain/persona-v2/direct-operation-dataset.js";
 import type { PersonaTransaction } from "../../domain/ports/persona-v2.port.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
 import { canonicalJson } from "../../domain/persona-v2/catalog.js";
@@ -15,6 +18,13 @@ import { operationTableNameSchema } from "../../domain/persona-v2/operation-trai
 const row = z.record(z.string().regex(/^[a-z_][a-z0-9_]*$/), operationScalarSchema);
 export const operationCaseSchema = z.strictObject({
   name: z.string().min(1),
+  editorialOrigin: z
+    .union([
+      operationDatasetOriginSchema,
+      directOperationDatasetOriginSchema,
+      operationDatasetCompositionOriginSchema,
+    ])
+    .optional(),
   input: z.strictObject({
     parameters: row,
     operationId: z.uuid().optional(),

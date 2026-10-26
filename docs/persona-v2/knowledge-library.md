@@ -211,8 +211,174 @@ autoridade, aprova testes ou cria dependência executável do catálogo. O runne
 usa as sementes salvas e não relê linhas da biblioteca implicitamente.
 
 A integração cobre sementes, escolha de versões do mesmo template e linhagem de consultas.
-Integração com casos de operação/cruzamento continua pendente; não se
-presume suporte completo.
+Operações e cruzamentos têm recortes próprios abaixo; não se presume suporte completo.
+
+### Sementes editoriais para casos de operação SQL
+
+O editor de caso SQL oferece **Usar dataset editorial nas sementes**. A seleção
+explícita começa por uma consulta importada da biblioteca, na mesma persona,
+fonte e dialeto da operação. Consultas sem origem de importação são recusadas;
+sem dataset original associado, é necessário escolher uma versão. Listar consultas
+não afirma que todas tenham material compatível.
+
+POST `/api/admin/personas/:personaId/skills/:skillId/sementes-dataset-operacao`
+recebe `expectedRevision`, `querySkillId`, `queryRevision` e, opcionalmente,
+`dataset` com ID/versão/hash da mesma versão de template. Exige sessão Client,
+CSRF, persona administrável, fonte ativa e papel editorial vigente no catálogo.
+O console permite usar o dataset original ou **Escolher outra versão de dataset**.
+A listagem reutiliza `datasets-caso` da consulta de origem, com revisão exata e
+paginação explícita; limita as opções à mesma versão de template. O seletor não
+escolhe automaticamente a versão mais recente. Preparar envia ID/versão/hash da
+opção escolhida, que o servidor reconfere. Trocar consulta/versão ou reler a lista
+descarta somente a prévia; não altera as sementes já aplicadas ao caso.
+Falha mantém o caso e exige nova tentativa explícita; não reaproveita uma prévia
+antiga como se fosse da nova seleção. Respostas de outro contexto/revisão são
+descartadas, e nenhuma listagem ou preparação salva casos.
+
+O seletor compartilhado de operações/cruzamentos invalida respostas e erros em
+voo a cada mudança de persona, skill, revisão, fonte, publicação, consulta ou
+dataset, inclusive quando a seleção volta ao valor anterior. A prévia e o erro
+anterior são limpos imediatamente; as sementes já aplicadas ao caso permanecem.
+Fechar o editor descarta a entrega tardia. A leitura pendente não é repetida nem
+prometida como cancelada; outra tentativa exige sua conclusão e ação explícita.
+
+O servidor reaproveita a leitura editorial autorizada, não o contrato de consulta.
+Compara tabelas físicas e colunas declaradas com a operação, inclusive datasets
+vazios/colunas só com nulos. Tipos precisam coincidir, sem coerção decimal/inteiro,
+inferência de alias ou ampliação de escrita. Campos não livres são recusados;
+o limite desta preparação continua em 16 tabelas/100 linhas por tabela.
+
+A prévia retorna `executable:false` e `technicalApproval:false`. Aplicar substitui
+somente sementes locais, preservando nome, parâmetros, resultado esperado e SQL
+do caso. Salvar é separado, usa CAS e reconfere toda a origem. O formato próprio
+`operation-dataset-case-origin-v1` fixa consulta/revisão, catálogo, fonte/versão,
+dialeto, template/dataset por ID/versão/hash e hashes de sementes. O servidor
+recalcula hashes e `modified`, ignorando essas declarações do cliente. Editar
+sem reenviar a origem preserva a referência existente; não apaga a linhagem.
+
+Cadastro/edição de casos SQL com essa origem são exclusivos do console Client;
+Bearer/OAuth não podem acrescentar, reassociar ou editar esses casos vinculados.
+Remoção autorizada continua separada, sem reler datasets. Casos sem origem
+continuam válidos. Não há backfill, nova migration, relatório herdado, publicação
+ou execução automática. O runner usa somente sementes salvas; alteração de caso
+invalida a evidência anterior pelo hash/revisão existentes.
+
+Esse caminho usa consulta importada como origem editorial. A alternativa direta
+abaixo dispensa essa consulta. Cruzamentos usam o recorte por fonte posterior.
+
+### Importação direta de sementes para operação SQL
+
+**Importar sementes diretamente da biblioteca** permite selecionar catálogo e
+dataset sem criar consulta intermediária. A listagem existente da biblioteca é
+paginada e retorna metadados; páginas sem datasets ainda podem oferecer mais
+itens. O console oferece a versão listada e permite indicar explicitamente uma
+versão anterior. Preparar lê essa versão e envia sua referência exata; não adota
+atualizações posteriores automaticamente nem mistura datasets.
+
+POST `/api/admin/personas/:personaId/skills/:skillId/sementes-dataset-operacao-direto`
+recebe `expectedRevision`, `catalogId` e `dataset: {id,version,hash}`. Exige sessão
+Client, CSRF, administração da persona e papel colaborador/curador/administrador
+vigente no catálogo. Fonte ativa e dialeto vêm do treinamento da operação; o
+dataset deve referenciar template íntegro do mesmo catálogo, com versão/hash
+exatos. O serviço valida tabelas físicas, colunas livres e tipos da operação,
+inclusive sem linhas, reutilizando os limites de 16 tabelas/100 linhas por tabela.
+Não infere alias, converte tipos ou amplia recursos/escrita.
+
+A resposta `executable:false`, `technicalApproval:false` traz prévia e origem
+`operation-direct-dataset-case-origin-v1`: catálogo, dataset/template imutáveis,
+fonte/versão/dialeto e hashes das sementes. Não inclui consulta ou publicação
+fictícias. Aplicar substitui somente sementes locais e sua referência editorial;
+preserva parâmetros, SQL, nome e resultado esperado. A gravação do caso é uma
+ação separada por CAS e reconfere acesso editorial, fonte, material e compatibilidade.
+Hashes/`modified` enviados pelo cliente são recalculados. Omitir a origem ao editar
+preserva a salva; revogação ou fonte alterada recusam a edição sem apagar o caso.
+
+Cadastro/edição vinculados são exclusivos do Client no navegador; Bearer/OAuth
+não recebem nova capacidade. Remover o caso continua possível com autorização
+própria, sem reler material revogado. Casos antigos e o caminho por consulta
+permanecem válidos, sem backfill ou migration. Runners usam as sementes salvas,
+sem reler biblioteca, executar testes ou produzir relatórios durante a importação.
+Mudança no caso exige nova evidência pelos hashes/revisão existentes.
+
+Este recorte cobre sementes de operações, não importação de contratos/steps.
+A composição e a origem direta de cruzamentos têm contrato próprio abaixo;
+homologação ampliada nos três motores continua pendente.
+
+### Datasets por fonte em casos de cruzamento
+
+Somente casos **SQL pelo transporte em fixtures isoladas** aceitam origem
+editorial. Em cada base, o responsável escolhe uma consulta publicada que já
+participa do cruzamento, lista sua consulta importada e seleciona o dataset
+original ou uma versão do mesmo template. Preparar e aplicar são ações separadas;
+aplicar substitui apenas as sementes daquela base. Não altera SQL, parâmetros,
+plano, resultado esperado nem as sementes/origens das demais fontes.
+
+POST `/api/admin/personas/:personaId/skills/:skillId/sementes-dataset-cruzamento`
+recebe `expectedRevision`, `publicationId`, `querySkillId`, `queryRevision` e
+`dataset` opcional (ID/versão/hash). Exige sessão Client/CSRF, mesma persona,
+acesso editorial vigente, fonte ativa e todas as dependências do cruzamento
+vigentes. A consulta escolhida deve corresponder à publicação fixada no contrato;
+treinamento atual divergente do snapshot publicado é recusado, sem reassociação.
+Essa conferência compila o grafo com entradas vazias, sem enviar SQL às fontes.
+
+Cada fonte recebe `federation-source-dataset-v1`, com consulta/revisão,
+publicação/hash, fonte/versão/dialeto e referências imutáveis de template/dataset.
+O caso agrega essas referências em `federation-dataset-case-origin-v1`, uma por
+fonte, até quatro. Pode misturar fontes com sementes manuais e editoriais, mas
+não funde automaticamente vários datasets da mesma fonte. Nova escolha substitui
+somente a origem dessa fonte.
+
+Salvar reconfere CAS, plano, fontes exatas sem duplicatas, publicações, papel
+editorial e material original. Recalcula `caseSeedsHash`/`modified` por fonte;
+hashes enviados não certificam nada. Omitir referências anteriores não apaga sua
+linhagem. Cadastro/edição vinculados exigem Client; remoção autorizada é separada.
+Mudança de fontes que torne a linhagem incompatível exige novo caso, sem converter
+silenciosamente o histórico. Casos sintéticos de combinação recusam esse formato.
+
+Não há migração, publicação, relatório ou execução automática. Runner continua
+usando apenas sementes salvas em fixtures próprias. Importação direta e combinação
+explícita são alternativas descritas abaixo; homologação ampliada nos três motores
+continua separada.
+
+### Composição explícita e importação direta para cruzamentos
+
+O seletor direto da biblioteca agora está disponível também em cada fonte dos
+casos de transporte de cruzamento. Escolher a consulta publicada fixa o escopo
+exato de tabelas/colunas livres daquela publicação; não exige consulta importada
+nem usa alterações ainda não publicadas do rascunho. Todas as dependências do
+cruzamento precisam permanecer vigentes. A escolha não concede execução.
+
+Em operações e cruzamentos, **Adicionar versão à combinação** fixa catálogo e
+ID/versão/hash do material em uma lista local ordenada, com até quatro itens por
+fonte. A mesma versão não pode aparecer duas vezes. O responsável pode remover
+itens e escolher outros catálogos com acesso vigente. **Preparar combinação de
+datasets** reconfere o conjunto; selecionar/adicionar/preparar não altera o caso.
+Aplicar substitui somente as sementes/origem daquela fonte; salvar é separado.
+
+POST `/api/admin/personas/:personaId/skills/:skillId/compor-sementes-datasets`
+recebe `expectedRevision`, `materials: [{catalogId,dataset:{id,version,hash}}]`
+e `publicationId` obrigatório para cruzamento, ausente para operação SQL. Exige
+Client/CSRF, responsável da persona, revisão atual e papel editorial em cada
+catálogo. Para SQL, confere os tipos declarados na operação; para cruzamento,
+confere o escopo publicado e tipos editoriais do template, sem alegar prova de
+tipos físicos que o contrato da consulta não contém.
+
+Tabelas diferentes são reunidas. Tabela física repetida só concatena linhas
+quando catálogo/template/versão/hash e nomes/tipos das colunas são idênticos.
+Preserva a ordem de seleção e de linhas, inclusive linhas repetidas; não deduplica,
+faz JOIN, infere identidade ou resolve conflitos. Essas linhas podem representar
+casos deliberados de falha de constraint; somente o runner isolado poderá prová-los.
+Tipos incompatíveis, templates distintos para tabela homônima ou excesso de
+16 tabelas/100 linhas por tabela recusam toda a preparação, sem truncamento.
+
+SQL usa `operation-dataset-composition-v1`; cada fonte direta de cruzamento usa
+`federation-source-dataset-composition-v1`, dentro do agregado já existente.
+Ambos guardam fonte/versão/dialeto, todas as referências editoriais e hashes de
+cada material e da combinação. Cruzamento fixa também publicação/hash. Salvar
+reconfere o conjunto, plano/fontes, autoridade e ordem; recalcula hashes/`modified`
+em vez de aceitar os enviados. Omitir origem preserva a salva. Revogação de
+qualquer catálogo ou dependência bloqueia edição; não apaga histórico nem permite
+retry de efeitos. Não há migration, nova capability ou execução automática.
 
 O console oferece **Criar dataset com formulário** ao abrir uma versão salva de
 template. A referência ao ID/versão/hash é fixa; o formulário seleciona somente
@@ -322,5 +488,6 @@ Console aplica somente a novo rascunho em edição após confirmação de descar
 Não salva/publica/adota sozinho. Existência, tipos e enforcement precisam de
 inspeção pelo hub/agente antes da adoção executável. Não habilita DDL de negócio.
 
-Deploy permanece bloqueado. [Plano restante](remaining-plan.md) e
-[aceite](acceptance.md) continuam exigindo os demais gates.
+Aceite integral para clientes permanece bloqueado; o servidor de teste segue
+DV2-017. [Plano restante](remaining-plan.md) e [aceite](acceptance.md) conservam
+os demais gates.

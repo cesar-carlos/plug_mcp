@@ -843,15 +843,15 @@ export class PostgresPersonaTransaction implements PersonaTransaction {
 
   async clearPersonaIcon(personaId: string, expectedRevision: number): Promise<void> {
     const removed = await this.client.query(
-      "DELETE FROM persona_icone WHERE persona_id=$1 AND revision=$2 RETURNING persona_id",
+      "UPDATE persona_icone SET bytes=''::bytea,revision=revision+1,updated_at=now() WHERE persona_id=$1 AND revision=$2 RETURNING persona_id",
       [personaId, expectedRevision],
     );
     if (removed.rowCount !== 1) {
       throw new PersonaV2Error("OPERATION_CONFLICT", "Ícone mudou; recarregue antes de salvar.");
     }
     await this.client.query(
-      "INSERT INTO audit_v2(id,persona_id,evento,origem,sucesso,previous_version,resource_version) VALUES($1,$2,'persona.icon_cleared','admin',true,$3,$3)",
-      [randomUUID(), personaId, expectedRevision],
+      "INSERT INTO audit_v2(id,persona_id,evento,origem,sucesso,previous_version,resource_version) VALUES($1,$2,'persona.icon_cleared','admin',true,$3,$4)",
+      [randomUUID(), personaId, expectedRevision, expectedRevision + 1],
     );
   }
 
@@ -914,7 +914,7 @@ export class PostgresPersonaRepository implements PersonaRepositoryPort {
     const result = await this.pool.query<{ bytes: Buffer; revision: number }>(
       `SELECT i.bytes, i.revision FROM persona_icone i
        JOIN persona p ON p.id=i.persona_id
-       WHERE i.persona_id=$1 AND p.ativa`,
+       WHERE i.persona_id=$1 AND p.ativa AND octet_length(i.bytes)>0`,
       [personaId],
     );
     const row = result.rows[0];

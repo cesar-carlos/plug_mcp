@@ -10,6 +10,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { resolve, sep } from "node:path";
+import { PERSONA_CONSUMER_GUIDANCE } from "../../application/persona-v2/consumer-guidance.js";
+import { personaPluginCompatibility } from "./persona-compatibility.js";
 import {
   readPluginManifest,
   validateConnectionId,
@@ -72,6 +74,23 @@ export const packageSe7ePlugin = async (input: PluginPackageInput): Promise<stri
     files.set(`skills/${path}`, data);
   }
   validatePluginSkills(files, runtime);
+  if (runtime === "persona-v2") {
+    for (const [path, data] of files) {
+      if (!path.endsWith("/SKILL.md")) continue;
+      files.set(
+        path,
+        Buffer.from(
+          data.toString("utf8").trimEnd() +
+            "\n\nConsulte o [guia de compatibilidade, erros e exemplos](references/consumer-guide.md).\n",
+        ),
+      );
+      files.set(
+        path.replace("SKILL.md", "references/consumer-guide.md"),
+        Buffer.from(PERSONA_CONSUMER_GUIDANCE),
+      );
+    }
+    files.set("compatibility.json", json(personaPluginCompatibility(variant)));
+  }
   validatePluginReferences(files);
   // Only the official normal PNGs are copied. No dependency on the external brand folder.
   for (const size of [192, 512]) {

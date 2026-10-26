@@ -1029,6 +1029,50 @@ export const createPersonaAdministrationApp = (input: {
         await catalog.datasetCaseOptions(session(req.get("cookie")), personaId, skillId, req.body),
       );
     });
+    app.post(`${path}/:skillId/sementes-dataset-operacao`, async (req, res) => {
+      const { personaId, skillId } = ids(req);
+      res.json(
+        await catalog.operationDatasetSeeds(
+          session(req.get("cookie")),
+          personaId,
+          skillId,
+          req.body,
+        ),
+      );
+    });
+    app.post(`${path}/:skillId/compor-sementes-datasets`, async (req, res) => {
+      const { personaId, skillId } = ids(req);
+      res.json(
+        await catalog.datasetCompositionSeeds(
+          session(req.get("cookie")),
+          personaId,
+          skillId,
+          req.body,
+        ),
+      );
+    });
+    app.post(`${path}/:skillId/sementes-dataset-operacao-direto`, async (req, res) => {
+      const { personaId, skillId } = ids(req);
+      res.json(
+        await catalog.directOperationDatasetSeeds(
+          session(req.get("cookie")),
+          personaId,
+          skillId,
+          req.body,
+        ),
+      );
+    });
+    app.post(`${path}/:skillId/sementes-dataset-cruzamento`, async (req, res) => {
+      const { personaId, skillId } = ids(req);
+      res.json(
+        await catalog.federationDatasetSeeds(
+          session(req.get("cookie")),
+          personaId,
+          skillId,
+          req.body,
+        ),
+      );
+    });
     app.post(`${path}/:skillId/casos-operacao`, async (req, res) => {
       const { personaId, skillId } = ids(req);
       res.json(

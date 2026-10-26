@@ -11,6 +11,68 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: guia consumidor compartilhado entre runtime e pacote v2, metadados
+  de compatibilidade autenticados e comparação offline por `plugin:compare`.
+  Inclui recuperação de erros e cenários sintéticos, sem afirmar instalação.
+- Added: composição explícita de até quatro datasets por fonte e importação
+  direta em cruzamentos pelo console Client, com CAS, referências exatas,
+  limites agregados e revalidação ao salvar. Não executa SQL nem aprova testes.
+
+
+- Fixed: instruções do plugin v2 distinguem edição delegada de casos de consulta
+  e edição exclusiva no console de operações/cruzamentos com origem editorial,
+  incluindo a importação direta de datasets SQL já implementada.
+
+- Added: importação direta de sementes editoriais para casos SQL no console,
+  sem consulta intermediária. Seleção de catálogo/versão, prévia e aplicação
+  explícitas; gravação reconfere Client, papel editorial, fonte, tipos e hashes.
+  Não altera treinamento, concede execução ou herda relatórios técnicos.
+
+- Fixed: seletor editorial de datasets ignora respostas e erros atrasados após
+  troca de contexto, inclusive ao voltar à seleção original. Limpa prévia/erro
+  antigos sem perder sementes aplicadas, duplicar leituras ou salvar o caso.
+
+- Added: datasets por fonte nos casos de transporte de cruzamentos, com seleção
+  da consulta publicada, prévia e aplicação independentes. Origem por fonte é
+  preservada e revalidada por Client/CAS; divergência do rascunho, suspensão ou
+  dependência incorreta bloqueiam o material. Não herda relatórios ou execução.
+
+- Added: editor de casos SQL permite escolher outra versão de dataset do mesmo
+  template, com paginação, referência exata e preparação explícita. Troca/falha
+  invalida a prévia e preserva o caso, sem salvamento ou atualização automática.
+
+- Added: casos SQL podem preparar sementes de dataset a partir de consulta
+  importada da mesma persona/fonte. Prévia/aplicação/gravação separadas, contrato
+  de origem próprio, revisão CAS, tipos exatos e hashes recalculados; não herda
+  aprovação ou execução. Cadastro/edição vinculados exigem console Client.
+
+- Fixed: edição da persona associa recusas do servidor aos campos e preserva o
+  texto digitado. Links de erro reabrem seções recolhidas para alcançar o campo;
+  erros de outros formulários não marcam a edição da persona.
+
+- Changed: resumo mostra a aparência salva da persona; editor oferece descarte
+  local e releitura explícita após conflito, preservando a escolha e bloqueando
+  reenvio até conferir a revisão. Galeria destaca a seleção, permite baixar PNG
+  separado e recolhe pacotes/instruções em “Usar no ChatGPT ou Codex”. Cobertura
+  de teclado, foco, contraste da seleção, movimento reduzido e reflow ampliado.
+
+- Added: galeria local sob demanda com Marmalade e Voltcoin (aprocom, MIT),
+  prévia animada com pausa/movimento reduzido, seleção de retrato pelo fluxo de
+  ícone e downloads Pets v2 com licença/origem. Ajuda de ChatGPT distingue ícone,
+  mascote e Dot, sem instalação automática ou alteração de concessões.
+
+- Changed: console organizado em cinco grupos de navegação, lateral no desktop e
+  menu com área atual no celular. Visão geral prioriza roteiro; edição e ícone
+  ficam recolhidos, separados da gestão de disponibilidade e suas confirmações.
+
+- Fixed: editor de ícone informa carregamento/salvamento, permite recuperar falha
+  de leitura, preserva seleção válida após arquivo recusado e impede envio duplo
+  durante a leitura local do arquivo. Prévia proporcional e ajuda de formato/tamanho.
+
+- Fixed: revisão do ícone da persona permanece crescente após remoção/recriação,
+  recusando edições de abas antigas e evitando reutilização de URL/ETag. A migração
+  aditiva 0045 conserva a revisão sem conservar os bytes removidos.
+
 - Changed: o consentimento OAuth mostra o nome do rascunho da skill concedida
   e mantém a indicação de publicação indisponível. O nome não autoriza uso.
 

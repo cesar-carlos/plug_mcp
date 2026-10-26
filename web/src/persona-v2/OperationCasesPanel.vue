@@ -6,15 +6,34 @@ import type { TrainingCase } from "../../../src/domain/persona-v2/catalog";
 import { scalar, type OperationTraining } from "./operation-editor";
 import OperationScalarInput from "./OperationScalarInput.vue";
 import OperationCaseTables from "./OperationCaseTables.vue";
+import OperationDatasetPicker from "./OperationDatasetPicker.vue";
+import DirectOperationDatasetPicker from "./DirectOperationDatasetPicker.vue";
+import {
+  datasetCompositionSeedsSchema,
+  type DatasetCompositionSeeds,
+} from "../../../src/domain/persona-v2/dataset-composition";
+import {
+  directOperationDatasetSeedsSchema,
+  type DirectOperationDatasetSeeds,
+} from "../../../src/domain/persona-v2/direct-operation-dataset";
+import {
+  operationDatasetSeedsSchema,
+  type OperationDatasetSeeds,
+} from "../../../src/domain/persona-v2/operation-dataset";
 type Case = z.infer<typeof operationCaseSchema>;
 const props = defineProps<{
   training: OperationTraining;
   cases: readonly TrainingCase[];
   disabled: boolean;
   confirmDiscard: () => Promise<boolean>;
+  api?: <T>(url: string, body?: unknown) => Promise<T>;
+  base?: string;
+  skillId?: string;
+  revision?: number;
 }>();
 const emit = defineEmits<{
   dirty: [boolean];
+  lock: [boolean];
   save: [{ id?: string; remove: boolean; required: boolean; content: Case }];
 }>();
 const current = ref<Case>(),
@@ -25,6 +44,24 @@ const current = ref<Case>(),
 const fingerprint = computed(() =>
   JSON.stringify({ required: required.value, content: current.value }),
 );
+function applyDataset(
+  value: OperationDatasetSeeds | DirectOperationDatasetSeeds | DatasetCompositionSeeds,
+) {
+  if (!current.value || props.disabled) return;
+  if (value.origin.format === "operation-dataset-composition-v1") {
+    const copy = datasetCompositionSeedsSchema.parse(value);
+    if (copy.origin.format !== "operation-dataset-composition-v1") return;
+    current.value.input.fixtures = copy.fixtures;
+    current.value.editorialOrigin = copy.origin;
+    return;
+  }
+  const copy =
+    value.origin.format === "operation-direct-dataset-case-origin-v1"
+      ? directOperationDatasetSeedsSchema.parse(value)
+      : operationDatasetSeedsSchema.parse(value);
+  current.value.input.fixtures = copy.fixtures;
+  current.value.editorialOrigin = copy.origin;
+}
 const dirty = computed(
   () => (!!current.value && fingerprint.value !== saved.value) || removeConfirmed.value,
 );
@@ -107,6 +144,35 @@ async function close() {
           title="Sementes"
           fixtures
         />
+        <DirectOperationDatasetPicker
+          v-if="api && base && skillId && revision"
+          :key="`direct-${id || 'new'}`"
+          :api="api"
+          :base="base"
+          :skill-id="skillId"
+          :revision="revision"
+          :source-id="training.sourceId"
+          :disabled="disabled"
+          @choose="applyDataset"
+          @composition="applyDataset"
+          @lock="emit('lock', $event)"
+        />
+        <OperationDatasetPicker
+          v-if="api && base && skillId && revision"
+          :key="id || 'new'"
+          :api="api"
+          :base="base"
+          :skill-id="skillId"
+          :revision="revision"
+          :source-id="training.sourceId"
+          :disabled="disabled"
+          @choose="applyDataset"
+          @lock="emit('lock', $event)"
+        />
+        <p v-if="current.editorialOrigin" class="field-help">
+          Sementes com origem editorial registrada. A gravação reconfere a origem e calcula se houve
+          alteração; isso não aprova o caso.
+        </p>
         <label
           >Resultado esperado<select
             :value="'error' in current.expected ? current.expected.error : 'success'"

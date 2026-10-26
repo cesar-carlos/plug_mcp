@@ -473,6 +473,10 @@ watch(
     <template v-if="selected && tests">
       <FederationCasesPanel
         :key="caseKey"
+        :api="api"
+        :base="base"
+        :skill-id="selected"
+        :revision="revision"
         :training="training"
         :publications="publications"
         :cases="tests.cases"
@@ -480,6 +484,7 @@ watch(
         :confirm-discard="confirmDiscard"
         @dirty="caseDirty = $event"
         @save="saveCase"
+        @lock="emit('lock', $event)"
       />
       <h3>Relatórios do cruzamento</h3>
       <p>

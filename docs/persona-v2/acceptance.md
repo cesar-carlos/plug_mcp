@@ -86,6 +86,9 @@ Escolha explícita de versões de dataset do mesmo template tem
 recusas, console e publicação por runners nos três motores. Não adota versão
 automaticamente nem habilita datasets de outros tipos de skill.
 [Contrato e limites](knowledge-library.md). Nenhum gate encerrado.
+Operações têm também [importação direta de sementes](validation/2026-10-26-direct-operation-datasets.md)
+sem consulta intermediária, com origem própria e revalidação no salvamento.
+A rodada local não substitui runners nos três motores nem encerra este gate.
 [Rodada parcial](validation/2026-10-14-knowledge-library.md): implementação local
 validada; naquela rodada houve divergência do hub e falhas na cadeia. A
 [repetição atual](validation/2026-10-19-hub-chain-rerun.md) passou, sem encerrar

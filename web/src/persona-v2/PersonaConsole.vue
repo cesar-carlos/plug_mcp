@@ -8,7 +8,7 @@ import { lazyPanel } from "./lazy-panel";
 import { matchesSearch } from "./list-search";
 import RelationshipPathFields from "./RelationshipPathFields.vue";
 import { useRoute, useRouter } from "vue-router";
-import { consoleAreas, type ConsoleArea } from "./navigation";
+import { consoleAreas, consoleGroups, type ConsoleArea } from "./navigation";
 import { queryParameters, type ParameterMode } from "./query-parameters";
 import {
   publicationGrant,
@@ -36,6 +36,7 @@ import { fieldCapabilityLabel } from "./field-capabilities";
 import BrandLogo from "./BrandLogo.vue";
 import DiscardDialog from "./DiscardDialog.vue";
 import PersonaIcon from "./PersonaIcon.vue";
+import PersonaAvatar from "./PersonaAvatar.vue";
 import PersonaSettings from "./PersonaSettings.vue";
 import PersonaState from "./PersonaState.vue";
 import SourceSettings from "./SourceSettings.vue";
@@ -117,6 +118,7 @@ let warningTimer: number | undefined;
 let revealTimer: number | undefined;
 const errorArea = ref<ConsoleArea>("personas");
 const errorFields = ref<readonly string[]>([]);
+const errorForm = ref("");
 const fieldLabels: Record<string, string> = {
   name: "Nome",
   specialty: "Especialidade",
@@ -142,6 +144,10 @@ function focusErrorField(field: string) {
   const input = document.querySelector<HTMLElement>(
     `[data-error-field="${errorArea.value}:${field}"]`,
   );
+  // Error links must also reach fields inside a section the user has collapsed.
+  for (let parent = input?.parentElement; parent; parent = parent.parentElement) {
+    if (parent instanceof HTMLDetailsElement) parent.open = true;
+  }
   if (input?.getClientRects().length) input.focus();
   else document.querySelector<HTMLElement>(".area-error")?.focus();
 }
@@ -296,6 +302,10 @@ watch(reviewDate, () => {
 const settingsDirty = ref(false);
 const iconDirty = ref(false);
 const iconKey = ref(0);
+const iconAppearance = ref<{ base: string; revision: number; hasIcon: boolean }>();
+function updateIconAppearance(value: { base: string; revision: number; hasIcon: boolean }) {
+  if (value.base === path()) iconAppearance.value = value;
+}
 const personaIconFile = ref<File>();
 const queryCaseDirty = ref(false),
   queryTestsKey = ref(0);
@@ -592,12 +602,13 @@ const stopNavigation = router.beforeEach(async (to, from) => {
   }
   return true;
 });
-const run = async (action: () => Promise<void>) => {
+const run = async (action: () => Promise<void>, form = "") => {
   if (busy.value) {
     return;
   }
   busy.value = true;
   errorArea.value = area.value;
+  errorForm.value = form;
   error.value = "";
   errorFields.value = [];
   message.value = "";
@@ -643,6 +654,7 @@ function resetTraining() {
   confirmed.value = false;
 }
 function clearPersona() {
+  iconAppearance.value = undefined;
   sourceSearch.value = "";
   skillSearch.value = "";
   importedDraftFocus.value = undefined;
@@ -1027,7 +1039,7 @@ async function savePersona(input: unknown) {
     confirmed.value = false;
     result.value = undefined;
     message.value = "Persona atualizada. As permissões dos tokens continuam explícitas.";
-  });
+  }, "persona-settings");
 }
 async function changePersonaState(active: boolean) {
   if (personaDirty.value && !(await confirmDiscard())) {
@@ -1666,1505 +1678,1562 @@ onBeforeUnmount(() => {
           required /></label
       ><button :disabled="busy">{{ busy ? "Entrando…" : "Entrar" }}</button>
     </form>
-    <template v-else>
-      <nav aria-label="Áreas do console">
+    <div v-else class="console-layout">
+      <nav aria-label="Áreas do console" class="console-navigation">
         <button
           class="mobile-menu secondary"
+          aria-label="Menu"
           :aria-expanded="menuOpen"
           aria-controls="console-menu"
           @click="menuOpen = !menuOpen"
         >
           Menu
+          <span class="mobile-area">
+            · {{ consoleAreas.find((item) => item.id === area)?.label }}</span
+          >
         </button>
         <div id="console-menu" class="console-menu" :class="{ expanded: menuOpen }">
-          <RouterLink
-            v-for="item in consoleAreas"
-            :key="item.id"
-            :to="{ name: item.id }"
-            :aria-current="area === item.id ? 'page' : undefined"
-            >{{ item.label }}</RouterLink
-          >
+          <div v-for="group in consoleGroups" :key="group.label" class="navigation-group">
+            <p class="navigation-group-title">{{ group.label }}</p>
+            <RouterLink
+              v-for="id in group.areas"
+              :key="id"
+              :to="{ name: id }"
+              :aria-current="area === id ? 'page' : undefined"
+              >{{ consoleAreas.find((item) => item.id === id)?.label }}</RouterLink
+            >
+          </div>
         </div>
       </nav>
-      <div v-if="error" role="alert" class="error area-error" tabindex="-1">
-        <p>{{ error }}</p>
-        <ul v-if="errorFields.length">
-          <li v-for="field in errorFields" :key="field">
-            <button type="button" class="secondary" @click="focusErrorField(field)">
-              Confira {{ fieldLabels[field] }}
-            </button>
-          </li>
-        </ul>
-      </div>
-      <SharedKnowledgePanel
-        v-if="area === 'catalog'"
-        :key="knowledgeKey"
-        :api="knowledgeApi"
-        :confirm-discard="confirmDiscard"
-        :disabled="busy"
-        @dirty="knowledgeDirty = $event"
-        @lock="busy = $event"
-        @open-draft="openImportedDraft"
-      />
-      <fieldset :disabled="busy">
-        <ListSearch
-          v-if="personas.length > 1"
-          v-model="personaSearch"
-          label="Buscar personas"
-          :matches="matchingPersonas.length"
-          :total="personas.length"
-        />
-        <label
-          >Persona<select :value="personaId" @change="choosePersona">
-            <option value="">Selecione</option>
-            <option
-              v-for="p in personas.filter(
-                (p) => p.id === personaId || matchingPersonas.includes(p),
-              )"
-              :key="p.id"
-              :value="p.id"
-            >
-              {{ p.name }}{{ p.active ? "" : " (suspensa)" }}
-            </option>
-          </select></label
-        >
-      </fieldset>
-      <h2 id="console-content" tabindex="-1" class="area-heading">
-        {{ consoleAreas.find((item) => item.id === area)?.label }}
-      </h2>
-      <details class="console-help">
-        <summary>Ajuda: entenda os termos</summary>
-        <dl>
-          <dt>Persona</dt>
-          <dd>Assistente com uma especialidade, fontes e conhecimentos próprios.</dd>
-          <dt>Base ou fonte</dt>
-          <dd>Conexão com os dados que a persona poderá usar.</dd>
-          <dt>Skill</dt>
-          <dd>Consulta ou operação ensinada à persona, com regras e limites definidos.</dd>
-          <dt>Rascunho e publicação</dt>
-          <dd>
-            Salvar guarda a edição. Publicar disponibiliza uma versão revisada, que ainda precisa de
-            permissão para ser usada.
-          </dd>
-          <dt>Token e concessão</dt>
-          <dd>
-            O token é uma chave de acesso. As concessões definem exatamente quais fontes e skills
-            essa chave pode usar.
-          </dd>
-        </dl>
-      </details>
-      <p v-if="!personaId && personas.length && area !== 'catalog'" class="notice">
-        Selecione uma persona acima para acessar suas bases, treinamentos e permissões.
-      </p>
-      <p v-if="personaSearch && personaId" class="field-help">
-        A persona selecionada permanece disponível mesmo quando não corresponde à busca.
-      </p>
-      <p v-if="!personas.length && area === 'personas'" class="notice">
-        Comece criando sua primeira persona. Você poderá conectar as bases depois.
-      </p>
-      <button v-if="!personas.length && area === 'personas'" @click="personaOpen = true">
-        Criar primeira persona
-      </button>
-      <details
-        v-show="area === 'personas'"
-        :open="personaOpen"
-        @toggle="personaOpen = ($event.target as HTMLDetailsElement).open"
-      >
-        <summary>Criar uma persona</summary>
-        <form aria-label="Criar persona" @submit.prevent="createPersona">
-          <fieldset :disabled="busy">
-            <label
-              >Nome<input
-                v-model="personaForm.name"
-                placeholder="Ex.: Assistente financeiro"
-                data-error-field="personas:name"
-                :aria-invalid="invalidField('name') || undefined"
-                :aria-describedby="invalidField('name') ? 'personas-name-error' : undefined"
-                maxlength="200"
-                required
-            /></label>
-            <p v-if="invalidField('name')" id="personas-name-error" class="error">
-              Revise este campo.
-            </p>
-            <label
-              >Especialidade<textarea
-                v-model="personaForm.specialty"
-                data-error-field="personas:specialty"
-                :aria-invalid="invalidField('specialty') || undefined"
-                :aria-describedby="
-                  invalidField('specialty') ? 'personas-specialty-error' : undefined
-                "
-                maxlength="5000"
-                placeholder="Ex.: Contas a receber e fluxo de caixa"
-                required
-              />
-            </label>
-            <p v-if="invalidField('specialty')" id="personas-specialty-error" class="error">
-              Revise este campo.
-            </p>
-            <label
-              >Orientações<textarea
-                v-model="personaForm.instructions"
-                data-error-field="personas:instructions"
-                :aria-invalid="invalidField('instructions') || undefined"
-                :aria-describedby="
-                  invalidField('instructions') ? 'personas-instructions-error' : undefined
-                "
-                maxlength="20000"
-                placeholder="Ex.: Explique os resultados em português e informe as fontes usadas."
-              />
-            </label>
-            <p v-if="invalidField('instructions')" id="personas-instructions-error" class="error">
-              Revise este campo.
-            </p>
-            <label
-              >Ícone opcional
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                @change="personaIconFile = ($event.target as HTMLInputElement).files?.[0]"
-              />
-            </label>
-            <p class="field-help">
-              PNG, JPEG ou WebP. Sem arquivo, a persona usa o ícone Se7e. Isso não concede acesso.
-            </p>
-            <button>Criar persona</button>
-          </fieldset>
-        </form>
-      </details>
-      <template v-if="persona">
-        <PersonaIcon
-          v-if="persona.active"
-          v-show="area === 'overview' || area === 'training'"
-          :key="`${persona.id}:${iconKey}`"
-          :base="path()"
-          :api="api"
-          :busy="busy"
-          @dirty="iconDirty = $event"
-        />
-        <section v-show="area === 'overview'">
-          <h2>{{ persona.name }}</h2>
-          <p>{{ persona.specialty }}</p>
-          <p>
-            A base comum de SQL e uso do plug_server já está disponível. Cada fonte recebe seu
-            próprio treinamento.
-          </p>
-          <PersonaState
-            :key="`${persona.id}:${persona.authorizationVersion}`"
-            :persona="persona"
-            :busy="busy"
-            @change="changePersonaState"
-          />
-          <ProgressPanel
-            v-if="area === 'overview' && persona.active"
-            :key="persona.id"
-            :api="api"
-            :base="path()"
-          />
-          <PersonaSettings
-            v-if="persona.active"
-            :key="`${persona.id}:${persona.authorizationVersion}:${settingsKey}`"
-            :persona="persona"
-            :busy="busy"
-            @save="savePersona"
-            @dirty="settingsDirty = $event"
-          />
-        </section>
-        <section v-show="area === 'sources'">
-          <ListSearch
-            v-if="sources.length"
-            v-model="sourceSearch"
-            label="Buscar bases"
-            :matches="matchingSources.length"
-            :total="sources.length"
-          />
-          <p v-if="!sources.length && !busy" class="notice">
-            Nenhuma base conectada. Abra “Adicionar uma base” para cadastrar a conexão e conferir
-            sua identidade.
-          </p>
-          <h2>Bases conectadas</h2>
-          <p v-if="!sources.length">Cadastre a primeira base desta persona.</p>
-          <ul>
-            <li
-              v-for="s in sources"
-              v-show="matchingSources.includes(s)"
-              :id="`source-${s.id}`"
-              :key="s.id"
-              :class="{ notice: highlightedSourceId === s.id }"
-              tabindex="-1"
-            >
-              <strong>{{ s.name }}</strong> — {{ s.purpose }} ({{ s.dialect }})
-              <p>
-                {{
-                  s.replacedBySourceId
-                    ? "Vínculo substituído"
-                    : s.active
-                      ? "Vínculo ativo"
-                      : "Vínculo suspenso"
-                }}
-                · Banco: {{ s.database }}
-                <span v-if="s.identityVerifiedAt"
-                  >· Identidade conferida em
-                  {{ new Date(s.identityVerifiedAt).toLocaleString() }}</span
-                >
-              </p>
-              <SourceSettings
-                :key="`${s.id}:${sourceFormVersions[s.id] ?? 0}`"
-                :source="s"
-                :busy="busy"
-                :base="path()"
-                :api="api"
-                @lock="busy = $event"
-                @save="saveSource(s.id, $event)"
-                @rotate="saveSource(s.id, $event, true)"
-                @dirty="sourcesDirty[s.id] = $event"
-                @reload="reloadSource(s.id)"
-              />
-              <SourceLifecycle
-                :key="`lifecycle:${s.id}:${sourceFormVersions[s.id] ?? 0}`"
-                :source="s"
-                :busy="busy"
-                :base="path()"
-                :api="api"
-                @lock="busy = $event"
-                @state="(active, input) => changeSourceState(s.id, active, input)"
-                @replace="beginSourceReplacement(s)"
-                @reload="reloadSource(s.id)"
-                @dirty="sourceLifecycleDirty[s.id] = $event"
-              />
+      <div class="console-workspace">
+        <div v-if="error" role="alert" class="error area-error" tabindex="-1">
+          <p>{{ error }}</p>
+          <ul v-if="errorFields.length">
+            <li v-for="field in errorFields" :key="field">
+              <button type="button" class="secondary" @click="focusErrorField(field)">
+                Confira {{ fieldLabels[field] }}
+              </button>
             </li>
           </ul>
-          <details
-            :open="sourceOpen"
-            @toggle="sourceOpen = ($event.target as HTMLDetailsElement).open"
-          >
-            <summary>
-              {{
-                sourceReplacement
-                  ? `Substituir base ${sourceReplacement.name}`
-                  : "Adicionar uma base"
-              }}
-            </summary>
-            <form
-              id="source-registration"
-              tabindex="-1"
-              :aria-label="sourceReplacement ? 'Cadastrar base substituta' : 'Cadastrar base'"
-              @submit.prevent="addSource"
-            >
-              <fieldset :disabled="busy">
-                <label
-                  >Nome da base<input
-                    v-model="sourceForm.name"
-                    data-error-field="sources:name"
-                    :aria-invalid="invalidField('name') || undefined"
-                    :aria-describedby="invalidField('name') ? 'sources-name-error' : undefined"
-                    maxlength="200"
-                    required
-                /></label>
-                <p v-if="invalidField('name')" id="sources-name-error" class="error">
-                  Revise este campo.
-                </p>
-                <label
-                  >Para que essa base será usada?<textarea
-                    v-model="sourceForm.purpose"
-                    data-error-field="sources:purpose"
-                    :aria-invalid="invalidField('purpose') || undefined"
-                    :aria-describedby="
-                      invalidField('purpose') ? 'sources-purpose-error' : undefined
-                    "
-                    maxlength="5000"
-                    required
-                  />
-                </label>
-                <p v-if="invalidField('purpose')" id="sources-purpose-error" class="error">
-                  Revise este campo.
-                </p>
-                <label
-                  >Ambiente<select
-                    v-model="sourceForm.environment"
-                    data-error-field="sources:environment"
-                    :aria-invalid="invalidField('environment') || undefined"
-                    :aria-describedby="
-                      invalidField('environment') ? 'sources-environment-error' : undefined
-                    "
-                  >
-                    <option>desenvolvimento</option>
-                    <option>homologação</option>
-                    <option>produção</option>
-                  </select></label
-                >
-                <p v-if="invalidField('environment')" id="sources-environment-error" class="error">
-                  Revise este campo.
-                </p>
-                <label
-                  >AGENT_ID<input
-                    v-model="sourceForm.agentId"
-                    data-error-field="sources:agentId"
-                    :aria-invalid="invalidField('agentId') || undefined"
-                    :aria-describedby="
-                      invalidField('agentId') ? 'sources-agentId-error' : undefined
-                    "
-                    required
-                /></label>
-                <p v-if="invalidField('agentId')" id="sources-agentId-error" class="error">
-                  Revise este campo.
-                </p>
-                <label
-                  >CLIENT_EMAIL<input
-                    v-model="sourceForm.email"
-                    data-error-field="sources:email"
-                    :aria-invalid="invalidField('email') || undefined"
-                    :aria-describedby="invalidField('email') ? 'sources-email-error' : undefined"
-                    type="email"
-                    autocomplete="off"
-                    required
-                /></label>
-                <p v-if="invalidField('email')" id="sources-email-error" class="error">
-                  Revise este campo.
-                </p>
-                <label
-                  >CLIENT_PASSWORD<input
-                    v-model="sourceForm.password"
-                    data-error-field="sources:password"
-                    :aria-invalid="invalidField('password') || undefined"
-                    :aria-describedby="
-                      invalidField('password') ? 'sources-password-error' : undefined
-                    "
-                    type="password"
-                    autocomplete="off"
-                    required
-                /></label>
-                <p v-if="invalidField('password')" id="sources-password-error" class="error">
-                  Revise este campo.
-                </p>
-                <label
-                  >CLIENT_TOKEN<input
-                    v-model="sourceForm.clientToken"
-                    data-error-field="sources:clientToken"
-                    :aria-invalid="invalidField('clientToken') || undefined"
-                    :aria-describedby="
-                      invalidField('clientToken') ? 'sources-clientToken-error' : undefined
-                    "
-                    type="password"
-                    autocomplete="off"
-                    required
-                /></label>
-                <p v-if="invalidField('clientToken')" id="sources-clientToken-error" class="error">
-                  Revise este campo.
-                </p>
-                <label
-                  >DIALETO<select
-                    v-model="sourceForm.dialect"
-                    data-error-field="sources:dialect"
-                    :aria-invalid="invalidField('dialect') || undefined"
-                    :aria-describedby="
-                      invalidField('dialect') ? 'sources-dialect-error' : undefined
-                    "
-                  >
-                    <option value="mssql">SQL Server</option>
-                    <option value="postgres">PostgreSQL</option>
-                    <option value="sybase">SQL Anywhere</option>
-                  </select></label
-                >
-                <p v-if="invalidField('dialect')" id="sources-dialect-error" class="error">
-                  Revise este campo.
-                </p>
-                <p>
-                  O banco será identificado pela autorização do agente. Credenciais ficam cifradas
-                  no servidor.
-                </p>
-                <p>
-                  Depois de conectar, selecione abaixo o ERP / padrão de estrutura e confira a
-                  compatibilidade pelo agente. Essa etapa é opcional; treinamento privado continua
-                  disponível. Uma base substituta exige nova inspeção, sem herdar vínculos.
-                </p>
-                <template v-if="sourceReplacement">
-                  <p>
-                    O vínculo anterior será preservado e ficará bloqueado. Treinamento, permissões e
-                    operações não serão transferidos.
-                  </p>
-                  <label
-                    ><input v-model="replacementConfirmed" type="checkbox" />Confirmo o cadastro
-                    independente desta base substituta.</label
-                  >
-                </template>
-                <button :disabled="!!sourceReplacement && !replacementConfirmed">
-                  {{ sourceReplacement ? "Verificar e substituir base" : "Conectar base" }}
-                </button>
-                <button v-if="sourceReplacement" type="button" @click="cancelSourceReplacement">
-                  Cancelar substituição
-                </button>
-              </fieldset>
-            </form>
-          </details>
-          <SourceKnowledgeWorkspace
-            v-if="sources.length && area === 'sources'"
-            :key="`source-erp:${personaId}:${sourceKnowledgeKey}`"
-            :sources="sources"
-            :initial-source-id="highlightedSourceId"
-            :persona-base="path()"
-            :api="api"
-            :disabled="busy"
-            :confirm-discard="confirmDiscard"
-            registration
-            @dirty="sourceKnowledgeDirty = $event"
-            @lock="busy = $event"
+        </div>
+        <SharedKnowledgePanel
+          v-if="area === 'catalog'"
+          :key="knowledgeKey"
+          :api="knowledgeApi"
+          :confirm-discard="confirmDiscard"
+          :disabled="busy"
+          @dirty="knowledgeDirty = $event"
+          @lock="busy = $event"
+          @open-draft="openImportedDraft"
+        />
+        <fieldset :disabled="busy">
+          <ListSearch
+            v-if="personas.length > 1"
+            v-model="personaSearch"
+            label="Buscar personas"
+            :matches="matchingPersonas.length"
+            :total="personas.length"
           />
-        </section>
-        <section v-if="sources.length && area === 'training'">
-          <h2>Treinar consultas</h2>
-          <p>
-            Origem: treinamento desta persona e fonte, com versões compartilhadas quando adotadas. A
-            base técnica comum orienta SQL e API; estrutura e significado de negócio exigem revisão.
-          </p>
-          <p>
-            Organize finalidade e fonte, estrutura, relacionamentos, exemplos, parâmetros, regras e
-            testes. O SQL principal permanece o modelo desta skill.
-          </p>
-          <fieldset :disabled="busy">
-            <ListSearch
-              v-if="queryDrafts.length"
-              v-model="skillSearch"
-              label="Buscar skills de consulta"
-              :matches="matchingDrafts.length"
-              :total="queryDrafts.length"
-            />
-            <p v-if="!queryDrafts.length && !busy" class="notice">
-              Nenhuma consulta treinada. Preencha o novo treinamento abaixo; salvar cria um
-              rascunho, e publicar exige uma revisão separada.
+          <label
+            >Persona<select :value="personaId" @change="choosePersona">
+              <option value="">Selecione</option>
+              <option
+                v-for="p in personas.filter(
+                  (p) => p.id === personaId || matchingPersonas.includes(p),
+                )"
+                :key="p.id"
+                :value="p.id"
+              >
+                {{ p.name }}{{ p.active ? "" : " (suspensa)" }}
+              </option>
+            </select></label
+          >
+        </fieldset>
+        <h2 id="console-content" tabindex="-1" class="area-heading">
+          {{ consoleAreas.find((item) => item.id === area)?.label }}
+        </h2>
+        <details class="console-help">
+          <summary>Ajuda: entenda os termos</summary>
+          <dl>
+            <dt>Persona</dt>
+            <dd>Assistente com uma especialidade, fontes e conhecimentos próprios.</dd>
+            <dt>Base ou fonte</dt>
+            <dd>Conexão com os dados que a persona poderá usar.</dd>
+            <dt>Skill</dt>
+            <dd>Consulta ou operação ensinada à persona, com regras e limites definidos.</dd>
+            <dt>Rascunho e publicação</dt>
+            <dd>
+              Salvar guarda a edição. Publicar disponibiliza uma versão revisada, que ainda precisa
+              de permissão para ser usada.
+            </dd>
+            <dt>Token e concessão</dt>
+            <dd>
+              O token é uma chave de acesso. As concessões definem exatamente quais fontes e skills
+              essa chave pode usar.
+            </dd>
+          </dl>
+        </details>
+        <p v-if="!personaId && personas.length && area !== 'catalog'" class="notice">
+          Selecione uma persona acima para acessar suas bases, treinamentos e permissões.
+        </p>
+        <p v-if="personaSearch && personaId" class="field-help">
+          A persona selecionada permanece disponível mesmo quando não corresponde à busca.
+        </p>
+        <p v-if="!personas.length && area === 'personas'" class="notice">
+          Comece criando sua primeira persona. Você poderá conectar as bases depois.
+        </p>
+        <button v-if="!personas.length && area === 'personas'" @click="personaOpen = true">
+          Criar primeira persona
+        </button>
+        <details
+          v-show="area === 'personas'"
+          :open="personaOpen"
+          @toggle="personaOpen = ($event.target as HTMLDetailsElement).open"
+        >
+          <summary>Criar uma persona</summary>
+          <form aria-label="Criar persona" @submit.prevent="createPersona">
+            <fieldset :disabled="busy">
+              <label
+                >Nome<input
+                  v-model="personaForm.name"
+                  placeholder="Ex.: Assistente financeiro"
+                  data-error-field="personas:name"
+                  :aria-invalid="invalidField('name') || undefined"
+                  :aria-describedby="invalidField('name') ? 'personas-name-error' : undefined"
+                  maxlength="200"
+                  required
+              /></label>
+              <p v-if="invalidField('name')" id="personas-name-error" class="error">
+                Revise este campo.
+              </p>
+              <label
+                >Especialidade<textarea
+                  v-model="personaForm.specialty"
+                  data-error-field="personas:specialty"
+                  :aria-invalid="invalidField('specialty') || undefined"
+                  :aria-describedby="
+                    invalidField('specialty') ? 'personas-specialty-error' : undefined
+                  "
+                  maxlength="5000"
+                  placeholder="Ex.: Contas a receber e fluxo de caixa"
+                  required
+                />
+              </label>
+              <p v-if="invalidField('specialty')" id="personas-specialty-error" class="error">
+                Revise este campo.
+              </p>
+              <label
+                >Orientações<textarea
+                  v-model="personaForm.instructions"
+                  data-error-field="personas:instructions"
+                  :aria-invalid="invalidField('instructions') || undefined"
+                  :aria-describedby="
+                    invalidField('instructions') ? 'personas-instructions-error' : undefined
+                  "
+                  maxlength="20000"
+                  placeholder="Ex.: Explique os resultados em português e informe as fontes usadas."
+                />
+              </label>
+              <p v-if="invalidField('instructions')" id="personas-instructions-error" class="error">
+                Revise este campo.
+              </p>
+              <label
+                >Ícone opcional
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  @change="personaIconFile = ($event.target as HTMLInputElement).files?.[0]"
+                />
+              </label>
+              <p class="field-help">
+                PNG, JPEG ou WebP. Sem arquivo, a persona usa o ícone Se7e. Isso não concede acesso.
+              </p>
+              <button>Criar persona</button>
+            </fieldset>
+          </form>
+        </details>
+        <template v-if="persona">
+          <section v-show="area === 'overview'">
+            <div class="persona-heading">
+              <PersonaAvatar
+                :key="persona.id"
+                :name="persona.name"
+                :persona-id="persona.id"
+                :active="persona.active"
+                :current="iconAppearance"
+              />
+              <div>
+                <h2>{{ persona.name }}</h2>
+                <p>{{ persona.specialty }}</p>
+              </div>
+            </div>
+            <p class="persona-status">
+              {{ persona.active ? "Persona ativa" : "Persona suspensa" }}
             </p>
-            <label
-              >Editar treinamento<select :value="draftId" @change="editDraft">
-                <option value="">Novo treinamento</option>
-                <option
-                  v-for="d in queryDrafts.filter(
-                    (d) => d.id === draftId || matchingDrafts.includes(d),
-                  )"
-                  :key="d.id"
-                  :value="d.id"
-                >
-                  {{ d.name }} ·
+            <ProgressPanel
+              v-if="area === 'overview' && persona.active"
+              :key="persona.id"
+              :api="api"
+              :base="path()"
+            />
+            <details v-if="persona.active" class="persona-edit">
+              <summary>Editar persona</summary>
+              <p class="field-help">
+                Atualize nome, especialidade, orientações e imagem. Cada formulário tem seu próprio
+                botão de salvar.
+              </p>
+              <PersonaSettings
+                :key="`${persona.id}:${persona.authorizationVersion}:${settingsKey}`"
+                embedded
+                :persona="persona"
+                :busy="busy"
+                :error-fields="
+                  errorForm === 'persona-settings' && errorArea === area ? errorFields : []
+                "
+                @save="savePersona"
+                @dirty="settingsDirty = $event"
+              />
+              <PersonaIcon
+                :key="`${persona.id}:${iconKey}`"
+                :base="path()"
+                :api="api"
+                :busy="busy"
+                @dirty="iconDirty = $event"
+                @current="updateIconAppearance"
+              />
+            </details>
+            <details class="persona-management">
+              <summary>Gerenciar disponibilidade</summary>
+              <p class="field-help">
+                Suspender interrompe o acesso à persona. Confira o impacto antes de confirmar.
+              </p>
+              <PersonaState
+                :key="`${persona.id}:${persona.authorizationVersion}`"
+                :persona="persona"
+                :busy="busy"
+                @change="changePersonaState"
+              />
+            </details>
+          </section>
+          <section v-show="area === 'sources'">
+            <ListSearch
+              v-if="sources.length"
+              v-model="sourceSearch"
+              label="Buscar bases"
+              :matches="matchingSources.length"
+              :total="sources.length"
+            />
+            <p v-if="!sources.length && !busy" class="notice">
+              Nenhuma base conectada. Abra “Adicionar uma base” para cadastrar a conexão e conferir
+              sua identidade.
+            </p>
+            <h2>Bases conectadas</h2>
+            <p v-if="!sources.length">Cadastre a primeira base desta persona.</p>
+            <ul>
+              <li
+                v-for="s in sources"
+                v-show="matchingSources.includes(s)"
+                :id="`source-${s.id}`"
+                :key="s.id"
+                :class="{ notice: highlightedSourceId === s.id }"
+                tabindex="-1"
+              >
+                <strong>{{ s.name }}</strong> — {{ s.purpose }} ({{ s.dialect }})
+                <p>
                   {{
-                    publications[d.id]
-                      ? publications[d.id].revision === d.revision
-                        ? "publicado"
-                        : "alterações pendentes"
-                      : d.activePublicationId
-                        ? "publicação suspensa"
-                        : "rascunho"
+                    s.replacedBySourceId
+                      ? "Vínculo substituído"
+                      : s.active
+                        ? "Vínculo ativo"
+                        : "Vínculo suspenso"
                   }}
-                </option>
-              </select></label
+                  · Banco: {{ s.database }}
+                  <span v-if="s.identityVerifiedAt"
+                    >· Identidade conferida em
+                    {{ new Date(s.identityVerifiedAt).toLocaleString() }}</span
+                  >
+                </p>
+                <SourceSettings
+                  :key="`${s.id}:${sourceFormVersions[s.id] ?? 0}`"
+                  :source="s"
+                  :busy="busy"
+                  :base="path()"
+                  :api="api"
+                  @lock="busy = $event"
+                  @save="saveSource(s.id, $event)"
+                  @rotate="saveSource(s.id, $event, true)"
+                  @dirty="sourcesDirty[s.id] = $event"
+                  @reload="reloadSource(s.id)"
+                />
+                <SourceLifecycle
+                  :key="`lifecycle:${s.id}:${sourceFormVersions[s.id] ?? 0}`"
+                  :source="s"
+                  :busy="busy"
+                  :base="path()"
+                  :api="api"
+                  @lock="busy = $event"
+                  @state="(active, input) => changeSourceState(s.id, active, input)"
+                  @replace="beginSourceReplacement(s)"
+                  @reload="reloadSource(s.id)"
+                  @dirty="sourceLifecycleDirty[s.id] = $event"
+                />
+              </li>
+            </ul>
+            <details
+              :open="sourceOpen"
+              @toggle="sourceOpen = ($event.target as HTMLDetailsElement).open"
             >
-            <button type="button" class="secondary" :disabled="!draftId" @click="reloadTraining">
-              Recarregar treinamento
-            </button>
-            <form aria-label="Treinar consulta" @submit.prevent="saveTraining">
-              <fieldset :disabled="queryCaseDirty">
-                <label
-                  >Nome<input
-                    v-model="name"
-                    data-error-field="training:name"
-                    :aria-invalid="invalidField('name') || undefined"
-                    :aria-describedby="invalidField('name') ? 'training-name-error' : undefined"
-                    required /></label
-                ><label
-                  >Identificador curto<input
-                    v-model="slug"
-                    data-error-field="training:slug"
-                    :aria-invalid="invalidField('slug') || undefined"
-                    :aria-describedby="invalidField('slug') ? 'training-slug-error' : undefined"
-                    :disabled="!!draftId"
-                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                    placeholder="consulta-pedidos"
-                    required
-                /></label>
-                <p v-if="invalidField('name')" id="training-name-error" class="error">
-                  Revise o nome do treinamento. A edição foi preservada.
-                </p>
-                <p v-if="invalidField('slug')" id="training-slug-error" class="error">
-                  Revise o identificador curto do treinamento.
-                </p>
-                <div
-                  v-if="invalidField('training')"
-                  data-error-field="training:training"
-                  tabindex="-1"
-                  role="group"
-                  aria-label="Treinamento recusado"
-                  aria-describedby="training-content-error"
-                >
-                  <p id="training-content-error" class="error">
-                    O conteúdo do treinamento foi recusado. Revise a base, a estrutura, os exemplos,
-                    parâmetros e regras conforme o motivo acima. Nenhum campo foi apagado.
-                  </p>
-                </div>
-                <label
-                  >Base<select :value="training.sourceId" required @change="changeTrainingSource">
-                    <option value="">Selecione</option>
-                    <option v-for="s in sources" :key="s.id" :value="s.id" :disabled="!s.active">
-                      {{ s.name }}{{ s.active ? "" : " (indisponível)" }}
-                    </option>
-                  </select></label
-                ><label>Objetivo da consulta<textarea v-model="training.purpose" required /></label>
-                <h3>Tabelas</h3>
-                <div v-for="(t, i) in training.tables" :key="i" class="row">
+              <summary>
+                {{
+                  sourceReplacement
+                    ? `Substituir base ${sourceReplacement.name}`
+                    : "Adicionar uma base"
+                }}
+              </summary>
+              <form
+                id="source-registration"
+                tabindex="-1"
+                :aria-label="sourceReplacement ? 'Cadastrar base substituta' : 'Cadastrar base'"
+                @submit.prevent="addSource"
+              >
+                <fieldset :disabled="busy">
                   <label
-                    >Nome físico<input v-model="t.name" placeholder="dbo.pedidos" required /></label
-                  ><label
-                    >Tipo do recurso<select
-                      :value="t.resourceType ?? 'table'"
-                      @change="
-                        t.resourceType = ($event.target as HTMLSelectElement).value as
-                          'table' | 'view'
+                    >Nome da base<input
+                      v-model="sourceForm.name"
+                      data-error-field="sources:name"
+                      :aria-invalid="invalidField('name') || undefined"
+                      :aria-describedby="invalidField('name') ? 'sources-name-error' : undefined"
+                      maxlength="200"
+                      required
+                  /></label>
+                  <p v-if="invalidField('name')" id="sources-name-error" class="error">
+                    Revise este campo.
+                  </p>
+                  <label
+                    >Para que essa base será usada?<textarea
+                      v-model="sourceForm.purpose"
+                      data-error-field="sources:purpose"
+                      :aria-invalid="invalidField('purpose') || undefined"
+                      :aria-describedby="
+                        invalidField('purpose') ? 'sources-purpose-error' : undefined
+                      "
+                      maxlength="5000"
+                      required
+                    />
+                  </label>
+                  <p v-if="invalidField('purpose')" id="sources-purpose-error" class="error">
+                    Revise este campo.
+                  </p>
+                  <label
+                    >Ambiente<select
+                      v-model="sourceForm.environment"
+                      data-error-field="sources:environment"
+                      :aria-invalid="invalidField('environment') || undefined"
+                      :aria-describedby="
+                        invalidField('environment') ? 'sources-environment-error' : undefined
                       "
                     >
-                      <option value="table">Tabela</option>
-                      <option value="view">View</option>
+                      <option>desenvolvimento</option>
+                      <option>homologação</option>
+                      <option>produção</option>
                     </select></label
-                  ><label>Significado<input v-model="t.meaning" required /></label
-                  ><label
-                    >Colunas que identificam um registro<input
-                      :value="t.grain.join(', ')"
-                      placeholder="id"
-                      required
-                      @input="t.grain = split(($event.target as HTMLInputElement).value)" /></label
-                  ><button type="button" @click="training.tables.splice(i, 1)">
-                    Remover tabela
-                  </button>
-                </div>
-                <button type="button" @click="addTable">Adicionar tabela</button>
-                <h3>Colunas</h3>
-                <LimitsEditor
-                  v-model="training.limits"
-                  kind="query"
-                  label="Limites desta skill de consulta"
-                />
-                <fieldset>
-                  <legend>Anexos desta consulta</legend>
-                  <label class="check"
-                    ><input
-                      type="checkbox"
-                      :checked="!!training.attachments"
-                      @change="toggleAttachments"
-                    />Permitir anexos JSON após publicação e concessão explícitas</label
                   >
-                  <template v-if="training.attachments">
-                    <label
-                      >Limite do arquivo (MiB)<input
-                        type="number"
-                        min="0.25"
-                        max="8"
-                        step="0.25"
-                        :value="training.attachments.maxBytes / 1048576"
-                        required
-                        @input="
-                          training.attachments.maxBytes =
-                            Number(($event.target as HTMLInputElement).value) * 1048576
-                        "
-                    /></label>
-                    <label
-                      >Validade do anexo (minutos)<input
-                        type="number"
-                        min="1"
-                        max="15"
-                        step="1"
-                        :value="training.attachments.ttlMs / 60000"
-                        required
-                        @input="
-                          training.attachments.ttlMs =
-                            Number(($event.target as HTMLInputElement).value) * 60000
-                        "
-                    /></label>
+                  <p
+                    v-if="invalidField('environment')"
+                    id="sources-environment-error"
+                    class="error"
+                  >
+                    Revise este campo.
+                  </p>
+                  <label
+                    >AGENT_ID<input
+                      v-model="sourceForm.agentId"
+                      data-error-field="sources:agentId"
+                      :aria-invalid="invalidField('agentId') || undefined"
+                      :aria-describedby="
+                        invalidField('agentId') ? 'sources-agentId-error' : undefined
+                      "
+                      required
+                  /></label>
+                  <p v-if="invalidField('agentId')" id="sources-agentId-error" class="error">
+                    Revise este campo.
+                  </p>
+                  <label
+                    >CLIENT_EMAIL<input
+                      v-model="sourceForm.email"
+                      data-error-field="sources:email"
+                      :aria-invalid="invalidField('email') || undefined"
+                      :aria-describedby="invalidField('email') ? 'sources-email-error' : undefined"
+                      type="email"
+                      autocomplete="off"
+                      required
+                  /></label>
+                  <p v-if="invalidField('email')" id="sources-email-error" class="error">
+                    Revise este campo.
+                  </p>
+                  <label
+                    >CLIENT_PASSWORD<input
+                      v-model="sourceForm.password"
+                      data-error-field="sources:password"
+                      :aria-invalid="invalidField('password') || undefined"
+                      :aria-describedby="
+                        invalidField('password') ? 'sources-password-error' : undefined
+                      "
+                      type="password"
+                      autocomplete="off"
+                      required
+                  /></label>
+                  <p v-if="invalidField('password')" id="sources-password-error" class="error">
+                    Revise este campo.
+                  </p>
+                  <label
+                    >CLIENT_TOKEN<input
+                      v-model="sourceForm.clientToken"
+                      data-error-field="sources:clientToken"
+                      :aria-invalid="invalidField('clientToken') || undefined"
+                      :aria-describedby="
+                        invalidField('clientToken') ? 'sources-clientToken-error' : undefined
+                      "
+                      type="password"
+                      autocomplete="off"
+                      required
+                  /></label>
+                  <p
+                    v-if="invalidField('clientToken')"
+                    id="sources-clientToken-error"
+                    class="error"
+                  >
+                    Revise este campo.
+                  </p>
+                  <label
+                    >DIALETO<select
+                      v-model="sourceForm.dialect"
+                      data-error-field="sources:dialect"
+                      :aria-invalid="invalidField('dialect') || undefined"
+                      :aria-describedby="
+                        invalidField('dialect') ? 'sources-dialect-error' : undefined
+                      "
+                    >
+                      <option value="mssql">SQL Server</option>
+                      <option value="postgres">PostgreSQL</option>
+                      <option value="sybase">SQL Anywhere</option>
+                    </select></label
+                  >
+                  <p v-if="invalidField('dialect')" id="sources-dialect-error" class="error">
+                    Revise este campo.
+                  </p>
+                  <p>
+                    O banco será identificado pela autorização do agente. Credenciais ficam cifradas
+                    no servidor.
+                  </p>
+                  <p>
+                    Depois de conectar, selecione abaixo o ERP / padrão de estrutura e confira a
+                    compatibilidade pelo agente. Essa etapa é opcional; treinamento privado continua
+                    disponível. Uma base substituta exige nova inspeção, sem herdar vínculos.
+                  </p>
+                  <template v-if="sourceReplacement">
                     <p>
-                      Marque exportação nos campos permitidos. Tokens existentes precisam de nova
-                      concessão; esta edição não os amplia.
+                      O vínculo anterior será preservado e ficará bloqueado. Treinamento, permissões
+                      e operações não serão transferidos.
                     </p>
-                  </template>
-                </fieldset>
-                <BinaryAttachmentEditor
-                  v-model="training.binaryAttachments"
-                  :columns="training.columns"
-                />
-                <div v-for="(c, i) in training.columns" :key="i" class="row">
-                  <label
-                    >Tabela<select v-model="c.table" required>
-                      <option value="">Selecione</option>
-                      <option
-                        v-if="c.table && !training.tables.some((t) => t.name === c.table)"
-                        :value="c.table"
-                      >
-                        {{ c.table }} (referência pendente)
-                      </option>
-                      <option
-                        v-for="table in training.tables"
-                        :key="table.name"
-                        :value="table.name"
-                      >
-                        {{ table.name }}
-                      </option>
-                    </select></label
-                  ><label>Coluna<input v-model="c.name" required /></label
-                  ><label>Significado<input v-model="c.meaning" required /></label
-                  ><label
-                    >Classificação<select v-model="c.classification">
-                      <option value="livre">Livre</option>
-                      <option value="sensivel">Sensível</option>
-                      <option value="pessoal">Pessoal</option>
-                      <option value="segredo">Segredo</option>
-                      <option value="inferido">Ainda não confirmado</option>
-                    </select></label
-                  ><button type="button" @click="training.columns.splice(i, 1)">
-                    Remover coluna
-                  </button>
-                  <FieldUseEditor :field="c" @change="training.columns[i] = $event" />
-                </div>
-                <button type="button" @click="addColumn">Adicionar coluna</button>
-                <p>
-                  Campos pessoais e sensíveis exigem finalidades e justificativa explícitas no
-                  treinamento publicado e concessões no token. Segredos e campos não confirmados
-                  permanecem bloqueados.
-                </p>
-                <h3>Relacionamentos</h3>
-                <div v-for="(r, i) in training.relationships" :key="i" class="relationship">
-                  <label
-                    >Identificador do relacionamento<input
-                      v-model="r.id"
-                      pattern="[a-z][a-z0-9_-]*"
-                      maxlength="100"
-                  /></label>
-                  <div class="row">
                     <label
-                      >Tabela de origem<select v-model="r.from" required>
-                        <option value="">Selecione</option>
-                        <option
-                          v-if="r.from && !training.tables.some((t) => t.name === r.from)"
-                          :value="r.from"
-                        >
-                          {{ r.from }} (referência pendente)
-                        </option>
-                        <option
-                          v-for="table in training.tables"
-                          :key="table.name"
-                          :value="table.name"
-                        >
-                          {{ table.name }}
-                        </option>
-                      </select></label
-                    ><label
-                      >Tabela de destino<select v-model="r.to" required>
-                        <option value="">Selecione</option>
-                        <option
-                          v-if="r.to && !training.tables.some((t) => t.name === r.to)"
-                          :value="r.to"
-                        >
-                          {{ r.to }} (referência pendente)
-                        </option>
-                        <option
-                          v-for="table in training.tables"
-                          :key="table.name"
-                          :value="table.name"
-                        >
-                          {{ table.name }}
-                        </option>
-                      </select></label
-                    ><label
-                      >Tipo<select v-model="r.join">
-                        <option value="inner">INNER JOIN</option>
-                        <option value="left">LEFT JOIN</option>
-                      </select></label
-                    ><label
-                      >Cardinalidade<select v-model="r.cardinality">
-                        <option>1:1</option>
-                        <option>N:1</option>
-                        <option>1:N</option>
-                        <option>N:N</option>
-                      </select></label
+                      ><input v-model="replacementConfirmed" type="checkbox" />Confirmo o cadastro
+                      independente desta base substituta.</label
                     >
-                  </div>
-                  <div v-for="(k, j) in r.keys" :key="j" class="row">
-                    <label
-                      >Coluna de origem<select v-model="k.from" required>
-                        <option value="">Selecione</option>
-                        <option
-                          v-if="
-                            k.from &&
-                            !training.columns.some((c) => c.table === r.from && c.name === k.from)
-                          "
-                          :value="k.from"
-                        >
-                          {{ k.from }} (referência pendente)
-                        </option>
-                        <option
-                          v-for="column in training.columns.filter((c) => c.table === r.from)"
-                          :key="column.name"
-                        >
-                          {{ column.name }}
-                        </option>
-                      </select></label
-                    ><label
-                      >Coluna de destino<select v-model="k.to" required>
-                        <option value="">Selecione</option>
-                        <option
-                          v-if="
-                            k.to &&
-                            !training.columns.some((c) => c.table === r.to && c.name === k.to)
-                          "
-                          :value="k.to"
-                        >
-                          {{ k.to }} (referência pendente)
-                        </option>
-                        <option
-                          v-for="column in training.columns.filter((c) => c.table === r.to)"
-                          :key="column.name"
-                        >
-                          {{ column.name }}
-                        </option>
-                      </select></label
-                    ><button type="button" @click="r.keys.splice(j, 1)">Remover par</button>
-                  </div>
-                  <button type="button" @click="r.keys.push({ from: '', to: '' })">
-                    Adicionar par de colunas</button
-                  ><label
-                    >O que esse relacionamento significa?<input
-                      v-model="r.meaning"
-                      required /></label
-                  ><button type="button" @click="training.relationships.splice(i, 1)">
-                    Remover relacionamento
+                  </template>
+                  <button :disabled="!!sourceReplacement && !replacementConfirmed">
+                    {{ sourceReplacement ? "Verificar e substituir base" : "Conectar base" }}
                   </button>
-                  <RelationshipPathFields
-                    v-model="training.relationships[i]"
-                    :relations="training.relationships"
-                    :tables="training.tables"
-                  />
-                </div>
-                <button type="button" @click="addRelationship">Adicionar relacionamento</button>
-                <RelationshipDiagram
-                  :tables="training.tables.map((t) => ({ id: t.name, name: t.name }))"
-                  :relationships="training.relationships"
-                />
-                <h3>Parâmetros</h3>
-                <fieldset v-for="(p, i) in training.parameters" :key="i" class="row">
-                  <legend>Parâmetro {{ i + 1 }}</legend>
-                  <label>Nome do parâmetro<input v-model="p.name" required /></label
-                  ><label
-                    >Tipo do parâmetro<select v-model="p.type">
-                      <option>string</option>
-                      <option>number</option>
-                      <option>integer</option>
-                      <option>decimal</option>
-                      <option>boolean</option>
-                      <option>date</option>
-                      <option>datetime</option>
-                    </select></label
-                  ><label>Significado do parâmetro<input v-model="p.meaning" required /></label
-                  ><label class="check"
-                    ><input v-model="p.required" type="checkbox" />Obrigatório</label
-                  ><button type="button" @click="training.parameters.splice(i, 1)">
-                    Remover parâmetro
+                  <button v-if="sourceReplacement" type="button" @click="cancelSourceReplacement">
+                    Cancelar substituição
                   </button>
                 </fieldset>
-                <button type="button" @click="addParameter">Adicionar parâmetro</button>
-                <label
-                  >Regras de negócio (uma por linha)<textarea
-                    :value="training.rules.join('\n')"
-                    @input="
-                      training.rules = ($event.target as HTMLTextAreaElement).value
-                        .split('\n')
-                        .filter((s) => s.trim())
-                    "
-                  /></label
-                ><label
-                  >Exemplo de SQL<textarea
-                    v-model="training.sqlModel"
-                    class="sql"
-                    spellcheck="false"
-                    required
-                  />
-                </label>
-                <h3>Outros exemplos de consulta</h3>
-                <p v-for="pair in duplicateExamples" :key="pair.join(':')" class="notice">
-                  Possível duplicação entre {{ pair[0] }} e {{ pair[1] }}. Revise a finalidade antes
-                  de consolidar; nenhuma alteração foi aplicada.
-                </p>
-                <p>Os exemplos usam a mesma base, estrutura e parâmetros deste treinamento.</p>
-                <div
-                  v-for="(example, index) in training.examples ?? []"
-                  :key="index"
-                  class="relationship"
-                >
+              </form>
+            </details>
+            <SourceKnowledgeWorkspace
+              v-if="sources.length && area === 'sources'"
+              :key="`source-erp:${personaId}:${sourceKnowledgeKey}`"
+              :sources="sources"
+              :initial-source-id="highlightedSourceId"
+              :persona-base="path()"
+              :api="api"
+              :disabled="busy"
+              :confirm-discard="confirmDiscard"
+              registration
+              @dirty="sourceKnowledgeDirty = $event"
+              @lock="busy = $event"
+            />
+          </section>
+          <section v-if="sources.length && area === 'training'">
+            <h2>Treinar consultas</h2>
+            <p>
+              Origem: treinamento desta persona e fonte, com versões compartilhadas quando adotadas.
+              A base técnica comum orienta SQL e API; estrutura e significado de negócio exigem
+              revisão.
+            </p>
+            <p>
+              Organize finalidade e fonte, estrutura, relacionamentos, exemplos, parâmetros, regras
+              e testes. O SQL principal permanece o modelo desta skill.
+            </p>
+            <fieldset :disabled="busy">
+              <ListSearch
+                v-if="queryDrafts.length"
+                v-model="skillSearch"
+                label="Buscar skills de consulta"
+                :matches="matchingDrafts.length"
+                :total="queryDrafts.length"
+              />
+              <p v-if="!queryDrafts.length && !busy" class="notice">
+                Nenhuma consulta treinada. Preencha o novo treinamento abaixo; salvar cria um
+                rascunho, e publicar exige uma revisão separada.
+              </p>
+              <label
+                >Editar treinamento<select :value="draftId" @change="editDraft">
+                  <option value="">Novo treinamento</option>
+                  <option
+                    v-for="d in queryDrafts.filter(
+                      (d) => d.id === draftId || matchingDrafts.includes(d),
+                    )"
+                    :key="d.id"
+                    :value="d.id"
+                  >
+                    {{ d.name }} ·
+                    {{
+                      publications[d.id]
+                        ? publications[d.id].revision === d.revision
+                          ? "publicado"
+                          : "alterações pendentes"
+                        : d.activePublicationId
+                          ? "publicação suspensa"
+                          : "rascunho"
+                    }}
+                  </option>
+                </select></label
+              >
+              <button type="button" class="secondary" :disabled="!draftId" @click="reloadTraining">
+                Recarregar treinamento
+              </button>
+              <form aria-label="Treinar consulta" @submit.prevent="saveTraining">
+                <fieldset :disabled="queryCaseDirty">
                   <label
-                    >Identificação do exemplo<input
-                      v-model="example.id"
-                      pattern="[a-z][a-z0-9_-]*"
-                      maxlength="100"
+                    >Nome<input
+                      v-model="name"
+                      data-error-field="training:name"
+                      :aria-invalid="invalidField('name') || undefined"
+                      :aria-describedby="invalidField('name') ? 'training-name-error' : undefined"
+                      required /></label
+                  ><label
+                    >Identificador curto<input
+                      v-model="slug"
+                      data-error-field="training:slug"
+                      :aria-invalid="invalidField('slug') || undefined"
+                      :aria-describedby="invalidField('slug') ? 'training-slug-error' : undefined"
+                      :disabled="!!draftId"
+                      pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                      placeholder="consulta-pedidos"
                       required
                   /></label>
-                  <label>Finalidade do exemplo<input v-model="example.purpose" required /></label>
-                  <label
-                    >Estado editorial do exemplo<select
-                      :value="example.state ?? 'approved'"
-                      @change="changeExampleState(example, $event)"
-                    >
-                      <option value="candidate">Candidato — exige revisão</option>
-                      <option value="approved">Revisado para publicação</option>
-                      <option value="inactive">Inativo</option>
-                      <option value="replaced">Substituído</option>
-                    </select></label
+                  <p v-if="invalidField('name')" id="training-name-error" class="error">
+                    Revise o nome do treinamento. A edição foi preservada.
+                  </p>
+                  <p v-if="invalidField('slug')" id="training-slug-error" class="error">
+                    Revise o identificador curto do treinamento.
+                  </p>
+                  <div
+                    v-if="invalidField('training')"
+                    data-error-field="training:training"
+                    tabindex="-1"
+                    role="group"
+                    aria-label="Treinamento recusado"
+                    aria-describedby="training-content-error"
                   >
+                    <p id="training-content-error" class="error">
+                      O conteúdo do treinamento foi recusado. Revise a base, a estrutura, os
+                      exemplos, parâmetros e regras conforme o motivo acima. Nenhum campo foi
+                      apagado.
+                    </p>
+                  </div>
                   <label
-                    >Explicação do exemplo<textarea v-model="example.explanation" required />
+                    >Base<select :value="training.sourceId" required @change="changeTrainingSource">
+                      <option value="">Selecione</option>
+                      <option v-for="s in sources" :key="s.id" :value="s.id" :disabled="!s.active">
+                        {{ s.name }}{{ s.active ? "" : " (indisponível)" }}
+                      </option>
+                    </select></label
+                  ><label
+                    >Objetivo da consulta<textarea v-model="training.purpose" required />
                   </label>
+                  <h3>Tabelas</h3>
+                  <div v-for="(t, i) in training.tables" :key="i" class="row">
+                    <label
+                      >Nome físico<input
+                        v-model="t.name"
+                        placeholder="dbo.pedidos"
+                        required /></label
+                    ><label
+                      >Tipo do recurso<select
+                        :value="t.resourceType ?? 'table'"
+                        @change="
+                          t.resourceType = ($event.target as HTMLSelectElement).value as
+                            'table' | 'view'
+                        "
+                      >
+                        <option value="table">Tabela</option>
+                        <option value="view">View</option>
+                      </select></label
+                    ><label>Significado<input v-model="t.meaning" required /></label
+                    ><label
+                      >Colunas que identificam um registro<input
+                        :value="t.grain.join(', ')"
+                        placeholder="id"
+                        required
+                        @input="
+                          t.grain = split(($event.target as HTMLInputElement).value)
+                        " /></label
+                    ><button type="button" @click="training.tables.splice(i, 1)">
+                      Remover tabela
+                    </button>
+                  </div>
+                  <button type="button" @click="addTable">Adicionar tabela</button>
+                  <h3>Colunas</h3>
+                  <LimitsEditor
+                    v-model="training.limits"
+                    kind="query"
+                    label="Limites desta skill de consulta"
+                  />
+                  <fieldset>
+                    <legend>Anexos desta consulta</legend>
+                    <label class="check"
+                      ><input
+                        type="checkbox"
+                        :checked="!!training.attachments"
+                        @change="toggleAttachments"
+                      />Permitir anexos JSON após publicação e concessão explícitas</label
+                    >
+                    <template v-if="training.attachments">
+                      <label
+                        >Limite do arquivo (MiB)<input
+                          type="number"
+                          min="0.25"
+                          max="8"
+                          step="0.25"
+                          :value="training.attachments.maxBytes / 1048576"
+                          required
+                          @input="
+                            training.attachments.maxBytes =
+                              Number(($event.target as HTMLInputElement).value) * 1048576
+                          "
+                      /></label>
+                      <label
+                        >Validade do anexo (minutos)<input
+                          type="number"
+                          min="1"
+                          max="15"
+                          step="1"
+                          :value="training.attachments.ttlMs / 60000"
+                          required
+                          @input="
+                            training.attachments.ttlMs =
+                              Number(($event.target as HTMLInputElement).value) * 60000
+                          "
+                      /></label>
+                      <p>
+                        Marque exportação nos campos permitidos. Tokens existentes precisam de nova
+                        concessão; esta edição não os amplia.
+                      </p>
+                    </template>
+                  </fieldset>
+                  <BinaryAttachmentEditor
+                    v-model="training.binaryAttachments"
+                    :columns="training.columns"
+                  />
+                  <div v-for="(c, i) in training.columns" :key="i" class="row">
+                    <label
+                      >Tabela<select v-model="c.table" required>
+                        <option value="">Selecione</option>
+                        <option
+                          v-if="c.table && !training.tables.some((t) => t.name === c.table)"
+                          :value="c.table"
+                        >
+                          {{ c.table }} (referência pendente)
+                        </option>
+                        <option
+                          v-for="table in training.tables"
+                          :key="table.name"
+                          :value="table.name"
+                        >
+                          {{ table.name }}
+                        </option>
+                      </select></label
+                    ><label>Coluna<input v-model="c.name" required /></label
+                    ><label>Significado<input v-model="c.meaning" required /></label
+                    ><label
+                      >Classificação<select v-model="c.classification">
+                        <option value="livre">Livre</option>
+                        <option value="sensivel">Sensível</option>
+                        <option value="pessoal">Pessoal</option>
+                        <option value="segredo">Segredo</option>
+                        <option value="inferido">Ainda não confirmado</option>
+                      </select></label
+                    ><button type="button" @click="training.columns.splice(i, 1)">
+                      Remover coluna
+                    </button>
+                    <FieldUseEditor :field="c" @change="training.columns[i] = $event" />
+                  </div>
+                  <button type="button" @click="addColumn">Adicionar coluna</button>
+                  <p>
+                    Campos pessoais e sensíveis exigem finalidades e justificativa explícitas no
+                    treinamento publicado e concessões no token. Segredos e campos não confirmados
+                    permanecem bloqueados.
+                  </p>
+                  <h3>Relacionamentos</h3>
+                  <div v-for="(r, i) in training.relationships" :key="i" class="relationship">
+                    <label
+                      >Identificador do relacionamento<input
+                        v-model="r.id"
+                        pattern="[a-z][a-z0-9_-]*"
+                        maxlength="100"
+                    /></label>
+                    <div class="row">
+                      <label
+                        >Tabela de origem<select v-model="r.from" required>
+                          <option value="">Selecione</option>
+                          <option
+                            v-if="r.from && !training.tables.some((t) => t.name === r.from)"
+                            :value="r.from"
+                          >
+                            {{ r.from }} (referência pendente)
+                          </option>
+                          <option
+                            v-for="table in training.tables"
+                            :key="table.name"
+                            :value="table.name"
+                          >
+                            {{ table.name }}
+                          </option>
+                        </select></label
+                      ><label
+                        >Tabela de destino<select v-model="r.to" required>
+                          <option value="">Selecione</option>
+                          <option
+                            v-if="r.to && !training.tables.some((t) => t.name === r.to)"
+                            :value="r.to"
+                          >
+                            {{ r.to }} (referência pendente)
+                          </option>
+                          <option
+                            v-for="table in training.tables"
+                            :key="table.name"
+                            :value="table.name"
+                          >
+                            {{ table.name }}
+                          </option>
+                        </select></label
+                      ><label
+                        >Tipo<select v-model="r.join">
+                          <option value="inner">INNER JOIN</option>
+                          <option value="left">LEFT JOIN</option>
+                        </select></label
+                      ><label
+                        >Cardinalidade<select v-model="r.cardinality">
+                          <option>1:1</option>
+                          <option>N:1</option>
+                          <option>1:N</option>
+                          <option>N:N</option>
+                        </select></label
+                      >
+                    </div>
+                    <div v-for="(k, j) in r.keys" :key="j" class="row">
+                      <label
+                        >Coluna de origem<select v-model="k.from" required>
+                          <option value="">Selecione</option>
+                          <option
+                            v-if="
+                              k.from &&
+                              !training.columns.some((c) => c.table === r.from && c.name === k.from)
+                            "
+                            :value="k.from"
+                          >
+                            {{ k.from }} (referência pendente)
+                          </option>
+                          <option
+                            v-for="column in training.columns.filter((c) => c.table === r.from)"
+                            :key="column.name"
+                          >
+                            {{ column.name }}
+                          </option>
+                        </select></label
+                      ><label
+                        >Coluna de destino<select v-model="k.to" required>
+                          <option value="">Selecione</option>
+                          <option
+                            v-if="
+                              k.to &&
+                              !training.columns.some((c) => c.table === r.to && c.name === k.to)
+                            "
+                            :value="k.to"
+                          >
+                            {{ k.to }} (referência pendente)
+                          </option>
+                          <option
+                            v-for="column in training.columns.filter((c) => c.table === r.to)"
+                            :key="column.name"
+                          >
+                            {{ column.name }}
+                          </option>
+                        </select></label
+                      ><button type="button" @click="r.keys.splice(j, 1)">Remover par</button>
+                    </div>
+                    <button type="button" @click="r.keys.push({ from: '', to: '' })">
+                      Adicionar par de colunas</button
+                    ><label
+                      >O que esse relacionamento significa?<input
+                        v-model="r.meaning"
+                        required /></label
+                    ><button type="button" @click="training.relationships.splice(i, 1)">
+                      Remover relacionamento
+                    </button>
+                    <RelationshipPathFields
+                      v-model="training.relationships[i]"
+                      :relations="training.relationships"
+                      :tables="training.tables"
+                    />
+                  </div>
+                  <button type="button" @click="addRelationship">Adicionar relacionamento</button>
+                  <RelationshipDiagram
+                    :tables="training.tables.map((t) => ({ id: t.name, name: t.name }))"
+                    :relationships="training.relationships"
+                  />
+                  <h3>Parâmetros</h3>
+                  <fieldset v-for="(p, i) in training.parameters" :key="i" class="row">
+                    <legend>Parâmetro {{ i + 1 }}</legend>
+                    <label>Nome do parâmetro<input v-model="p.name" required /></label
+                    ><label
+                      >Tipo do parâmetro<select v-model="p.type">
+                        <option>string</option>
+                        <option>number</option>
+                        <option>integer</option>
+                        <option>decimal</option>
+                        <option>boolean</option>
+                        <option>date</option>
+                        <option>datetime</option>
+                      </select></label
+                    ><label>Significado do parâmetro<input v-model="p.meaning" required /></label
+                    ><label class="check"
+                      ><input v-model="p.required" type="checkbox" />Obrigatório</label
+                    ><button type="button" @click="training.parameters.splice(i, 1)">
+                      Remover parâmetro
+                    </button>
+                  </fieldset>
+                  <button type="button" @click="addParameter">Adicionar parâmetro</button>
                   <label
-                    >SQL do exemplo<textarea
-                      v-model="example.sql"
+                    >Regras de negócio (uma por linha)<textarea
+                      :value="training.rules.join('\n')"
+                      @input="
+                        training.rules = ($event.target as HTMLTextAreaElement).value
+                          .split('\n')
+                          .filter((s) => s.trim())
+                      "
+                    /></label
+                  ><label
+                    >Exemplo de SQL<textarea
+                      v-model="training.sqlModel"
                       class="sql"
                       spellcheck="false"
                       required
                     />
                   </label>
-                  <button type="button" @click="training.examples?.splice(index, 1)">
-                    Remover exemplo
-                  </button>
+                  <h3>Outros exemplos de consulta</h3>
+                  <p v-for="pair in duplicateExamples" :key="pair.join(':')" class="notice">
+                    Possível duplicação entre {{ pair[0] }} e {{ pair[1] }}. Revise a finalidade
+                    antes de consolidar; nenhuma alteração foi aplicada.
+                  </p>
+                  <p>Os exemplos usam a mesma base, estrutura e parâmetros deste treinamento.</p>
+                  <div
+                    v-for="(example, index) in training.examples ?? []"
+                    :key="index"
+                    class="relationship"
+                  >
+                    <label
+                      >Identificação do exemplo<input
+                        v-model="example.id"
+                        pattern="[a-z][a-z0-9_-]*"
+                        maxlength="100"
+                        required
+                    /></label>
+                    <label>Finalidade do exemplo<input v-model="example.purpose" required /></label>
+                    <label
+                      >Estado editorial do exemplo<select
+                        :value="example.state ?? 'approved'"
+                        @change="changeExampleState(example, $event)"
+                      >
+                        <option value="candidate">Candidato — exige revisão</option>
+                        <option value="approved">Revisado para publicação</option>
+                        <option value="inactive">Inativo</option>
+                        <option value="replaced">Substituído</option>
+                      </select></label
+                    >
+                    <label
+                      >Explicação do exemplo<textarea v-model="example.explanation" required />
+                    </label>
+                    <label
+                      >SQL do exemplo<textarea
+                        v-model="example.sql"
+                        class="sql"
+                        spellcheck="false"
+                        required
+                      />
+                    </label>
+                    <button type="button" @click="training.examples?.splice(index, 1)">
+                      Remover exemplo
+                    </button>
+                  </div>
+                  <button type="button" @click="addExample">Adicionar exemplo SQL</button>
+                  <p v-if="dirty">Há alterações não salvas.</p>
+                  <button>Salvar rascunho</button>
+                </fieldset>
+              </form>
+              <SourceKnowledgeWorkspace
+                v-if="area === 'training' && training.sourceId"
+                :key="`training:${personaId}:${trainingKnowledgeKey}`"
+                :sources="sources"
+                :persona-base="path()"
+                :api="api"
+                :disabled="busy || queryCaseDirty"
+                :confirm-discard="confirmDiscard"
+                :training="training"
+                @vue:mounted="mountedTrainingPanels.add('knowledge')"
+                @training="training = $event"
+                @dirty="trainingKnowledgeDirty = $event"
+                @lock="busy = $event"
+              />
+              <QueryTestsPanel
+                v-if="draftId"
+                :key="`${personaId}:${draftId}:${queryTestsKey}`"
+                :root="`${path()}/skills/${draftId}`"
+                :revision="revision"
+                :training="training"
+                :confirm-discard="confirmDiscard"
+                :api="api"
+                :disabled="busy || dirty || trainingKnowledgeDirty"
+                @vue:mounted="mountedTrainingPanels.add('cases')"
+                @dirty="queryCaseDirty = $event"
+                @lock="busy = $event"
+                @saved="
+                  revision = $event;
+                  preview = undefined;
+                  confirmed = false;
+                  drafts = drafts.map((d) => (d.id === draftId ? { ...d, revision: $event } : d));
+                "
+              />
+              <p v-if="trainingKnowledgeDirty" class="notice">
+                Conclua a inspeção e aplique a seleção compartilhada, ou descarte as alterações
+                antes de revisar a publicação.
+              </p>
+              <label
+                >Prazo de revisão da publicação<input v-model="reviewDate" type="datetime-local"
+              /></label>
+              <button
+                :disabled="!draftId || dirty || queryCaseDirty || trainingKnowledgeDirty"
+                @click="previewTraining"
+              >
+                Revisar publicação
+              </button>
+              <div v-if="preview">
+                <h3>Revisão {{ preview.revision }}</h3>
+                <p>Próxima revisão: {{ new Date(preview.reviewDueAt).toLocaleString() }}</p>
+                <p>Validade: {{ new Date(preview.expiresAt).toLocaleString() }}</p>
+                <p v-for="warning in preview.warnings" :key="warning" class="notice">
+                  {{
+                    warning === "SEM_CASOS_DE_TESTE"
+                      ? "Esta consulta ainda não possui casos de teste cadastrados."
+                      : warning
+                  }}
+                </p>
+                <PublicationReview :preview="preview" />
+                <details>
+                  <summary>Ver pacote e alterações de permissões</summary>
+                  <pre>{{ JSON.stringify(preview, null, 2) }}</pre>
+                </details>
+                <label class="check"
+                  ><input v-model="confirmed" type="checkbox" />Revisei o SQL, a estrutura e as
+                  regras deste pacote.</label
+                ><button :disabled="!confirmed || dirty" @click="publishTraining">
+                  Confirmar publicação
+                </button>
+              </div>
+            </fieldset>
+          </section>
+          <p v-if="area === 'training' && !sources.length && !busy" class="notice">
+            Para treinar consultas SQL, conecte primeiro uma base.
+            <RouterLink :to="{ name: 'sources' }">Conectar primeira base</RouterLink>. Skills
+            externas usam uma integração e têm cadastro próprio abaixo.
+          </p>
+          <FederationSkillEditor
+            v-if="area === 'training' && sources.length"
+            :key="`federation-skill:${persona.id}:${federationSkillKey}`"
+            :base="path()"
+            :sources="sources"
+            :api="api"
+            :disabled="busy"
+            :confirm-discard="confirmDiscard"
+            @vue:mounted="mountedTrainingPanels.add('federation')"
+            @dirty="federationSkillDirty = $event"
+            @lock="busy = $event"
+            @changed="load"
+          />
+          <ExternalSkillEditor
+            v-if="area === 'training'"
+            :key="`external-skill:${persona.id}:${externalSkillKey}`"
+            :base="path()"
+            :api="api"
+            :disabled="busy"
+            :confirm-discard="confirmDiscard"
+            @vue:mounted="mountedTrainingPanels.add('external')"
+            @dirty="externalSkillDirty = $event"
+            @lock="busy = $event"
+            @changed="load"
+          />
+          <OperationSkillEditor
+            v-if="area === 'training' && sources.length"
+            :key="`operation-skill:${persona.id}:${operationSkillKey}`"
+            :base="path()"
+            :sources="sources"
+            :api="api"
+            :disabled="busy"
+            :confirm-discard="confirmDiscard"
+            @vue:mounted="mountedTrainingPanels.add('operation')"
+            @dirty="operationSkillDirty = $event"
+            @lock="busy = $event"
+            @changed="load"
+          />
+          <section v-show="area === 'tokens'">
+            <h2>Tokens e conexões</h2>
+            <OAuthConnectionInfo v-if="area === 'tokens'" :key="persona.id" :api="api" />
+            <OwnerDelegationPanel
+              v-if="area === 'tokens'"
+              :key="`delegation:${persona.id}:${delegationKey}`"
+              :persona-id="persona.id"
+              :api="api"
+              @dirty="delegationDirty = $event"
+              @lock="busy = $event"
+            />
+            <ConnectionPanel
+              v-if="area === 'tokens'"
+              :key="persona.id"
+              :persona-id="persona.id"
+              :bearer="bearer"
+              :call="mcp"
+              @lock="busy = $event"
+            />
+            <TokenManager
+              v-if="area === 'tokens'"
+              :key="`${persona.id}:${tokenManagerKey}`"
+              :api="api"
+              :confirm-discard="confirmDiscard"
+              :base="path()"
+              :refresh="tokenRefresh"
+              :disabled="busy"
+              :publications="tokenPublications"
+              :sources="sources"
+              @dirty="tokenManagerDirty = $event"
+              @lock="busy = $event"
+              @bearer="bearer = $event"
+            />
+            <OAuthConnectionsPanel
+              v-if="area === 'tokens'"
+              :key="`${persona.id}:${oauthConnectionsKey}`"
+              :api="api"
+              :base="path()"
+              :disabled="busy"
+              :refresh="tokenRefresh"
+              @dirty="oauthConnectionsDirty = $event"
+              @lock="busy = $event"
+            />
+            <h3>Emitir token da persona</h3>
+            <section
+              v-if="issuanceRecovery"
+              aria-label="Conferir emissão sem confirmação"
+              class="notice"
+            >
+              <p>
+                A emissão pode ter sido concluída. Não repita o envio. Confira os tokens
+                cadastrados; o segredo perdido não pode ser recuperado.
+              </p>
+              <button :disabled="busy" class="secondary" @click="inspectUncertainIssuance">
+                Conferir tokens antes de nova emissão
+              </button>
+              <ul v-if="issuanceRecovery.checked">
+                <li v-for="item in issuanceRecovery.tokens" :key="item.id">
+                  {{ item.name }} · {{ item.id }} ·
+                  {{ item.revokedAt ? "Revogado" : "Não revogado" }}
+                </li>
+              </ul>
+              <p v-if="issuanceRecovery.checked">
+                A listagem não identifica automaticamente qual cadastro corresponde à tentativa.
+                Revise o consumidor e as concessões em Gerenciar tokens.
+              </p>
+              <button
+                :disabled="busy || !issuanceRecovery.checked"
+                class="secondary"
+                @click="startNewIssuance"
+              >
+                Iniciar nova emissão
+              </button>
+            </section>
+            <form aria-label="Emitir token" @submit.prevent="issueToken">
+              <fieldset :disabled="busy || !!issuanceRecovery">
+                <label>Nome do consumidor<input v-model="tokenName" required /></label>
+                <p>
+                  Selecione consultas, cruzamentos, operações SQL ou capacidades externas.
+                  Selecionar uma capacidade externa concede também sua operação específica. Novos
+                  lançamentos SQL e ações externas exigem aprovação adicional; a política da skill
+                  continua obrigatória. Cada cruzamento exige selecionar também suas consultas
+                  dependentes; nenhuma concessão será adicionada automaticamente.
+                </p>
+                <div v-for="(p, id) in tokenPublications" :key="id">
+                  <label class="check"
+                    ><input
+                      :checked="selectedSkills.includes(String(id))"
+                      :disabled="!!p.suspendedAt"
+                      type="checkbox"
+                      @change="
+                        selectTokenSkill(String(id), ($event.target as HTMLInputElement).checked)
+                      "
+                    />{{
+                      `${p.package.name} · revisão ${p.revision}${p.package.format === "persona-query-v2" ? "" : ` · ${publicationEffectsLabel(p)}`}`
+                    }}</label
+                  >
+                  <ul v-if="p.package.requiredCapabilities.some((c) => c.startsWith('field-use:'))">
+                    <li
+                      v-for="capability in p.package.requiredCapabilities.filter((c) =>
+                        c.startsWith('field-use:'),
+                      )"
+                      :key="capability"
+                    >
+                      {{ fieldCapabilityLabel(capability) }}
+                    </li>
+                  </ul>
                 </div>
-                <button type="button" @click="addExample">Adicionar exemplo SQL</button>
-                <p v-if="dirty">Há alterações não salvas.</p>
-                <button>Salvar rascunho</button>
+                <details>
+                  <summary>Limites do novo token</summary>
+                  <LimitsEditor
+                    v-model="tokenLimits.queryLimits"
+                    kind="query"
+                    label="Consultas do novo token"
+                  />
+                  <LimitsEditor
+                    v-model="tokenLimits.operationLimits"
+                    kind="operation"
+                    label="Lançamentos do novo token"
+                  />
+                  <LimitsEditor
+                    v-model="tokenLimits.federationLimits"
+                    kind="federation"
+                    label="Cruzamentos do novo token"
+                  />
+                  <div v-for="id in selectedSkills" :key="id">
+                    <p>{{ tokenPublications[id]?.package.name }}</p>
+                    <LimitsEditor
+                      v-if="tokenSkillLimits[id]"
+                      v-model="tokenSkillLimits[id].queryLimits"
+                      kind="query"
+                      label="Concessão desta consulta"
+                    />
+                    <LimitsEditor
+                      v-if="tokenSkillLimits[id]"
+                      v-model="tokenSkillLimits[id].federationLimits"
+                      kind="federation"
+                      label="Concessão deste cruzamento"
+                    />
+                  </div>
+                </details>
+                <p>
+                  Selecione explicitamente as consultas. Novas fontes e treinamentos não ampliam
+                  este token.
+                </p>
+                <p>
+                  Selecionar uma publicação concede o conjunto de campos e finalidades exibido. Uma
+                  concessão incompleta bloqueia a publicação inteira.
+                </p>
+                <label class="check"
+                  ><input v-model="tokenNoExpiry" type="checkbox" />Sem expiração (escolha
+                  explícita)</label
+                >
+                <label v-if="!tokenNoExpiry"
+                  >Validade em dias<input
+                    v-model.number="tokenDays"
+                    type="number"
+                    min="1"
+                    max="3650"
+                    required
+                /></label>
+                <fieldset>
+                  <legend>Permissões administrativas</legend>
+                  <label v-for="option in administrativeOptions" :key="option.id"
+                    ><input v-model="tokenAdministrative" type="checkbox" :value="option.id" />{{
+                      option.label
+                    }}</label
+                  >
+                  <p>
+                    Administração exige também delegação vigente no hub. Não substitui autorização
+                    para consultar ou aprovação humana.
+                  </p>
+                  <label v-for="source in sources.filter((s) => s.active)" :key="source.id"
+                    ><input
+                      v-model="tokenAdministrativeSources"
+                      type="checkbox"
+                      :value="source.id"
+                    />Base para administração: {{ source.name }}</label
+                  >
+                  <label
+                    ><input v-model="tokenCanDelegate" type="checkbox" />Permitir delegar as
+                    concessões selecionadas a outros tokens</label
+                  >
+                  <ManagedIntegrationsSelector
+                    v-if="tokenAdministrative.includes('gerenciar_integracoes')"
+                    v-model="tokenManagedIntegrations"
+                    :api="api"
+                    :base="path()"
+                    :disabled="busy"
+                  />
+                </fieldset>
+                <button :disabled="!selectedSkills.length && !tokenAdministrative.length">
+                  Emitir token restrito
+                </button>
               </fieldset>
             </form>
+            <label
+              >Token para conectar o cliente ou testar<input
+                v-model="bearer"
+                :type="showBearer ? 'text' : 'password'"
+                autocomplete="off"
+                :disabled="busy" /></label
+            ><button :disabled="busy || !bearer" @click="copyBearer">Copiar token</button>
+            <button class="secondary" :disabled="busy || !bearer" @click="revealBearer">
+              {{ showBearer ? "Ocultar token" : "Revelar token" }}
+            </button>
+            <button class="secondary" :disabled="busy || !bearer" @click="bearer = ''">
+              Ocultar e descartar token
+            </button>
+            <p>Copie o token antes de sair; ele não é salvo no navegador.</p>
+          </section>
+          <section v-show="area === 'queries'">
+            <p v-if="!bearer" class="notice">
+              Para consultar, informe um token com permissão para uma skill publicada.
+              <RouterLink :to="{ name: 'tokens' }">Configurar acesso às consultas</RouterLink>.
+            </p>
+            <h2>Consultar dados publicados</h2>
+            <label
+              >Token para consultar<input
+                v-model="bearer"
+                type="password"
+                autocomplete="off"
+                :disabled="busy"
+            /></label>
+            <button class="secondary" :disabled="busy || !bearer" @click="inspectToken">
+              Ver consultas permitidas por este token
+            </button>
+            <p v-if="grantedQueries && !Object.keys(queryPublications).length">
+              Nenhuma consulta desta persona foi concedida ao token.
+            </p>
+            <fieldset :disabled="busy">
+              <label
+                >Consulta<select v-model="querySkill">
+                  <option value="">Selecione</option>
+                  <option v-for="(p, id) in queryPublications" :key="id" :value="String(id)">
+                    {{ `${p.package.name} · revisão ${p.revision}` }}
+                  </option>
+                </select></label
+              ><template v-if="active"
+                ><p>Fonte: {{ sources.find((s) => s.id === active?.package.sourceId)?.name }}</p>
+                <div v-for="p in active.package.training.parameters" :key="p.name">
+                  <label
+                    >{{ p.meaning }} ({{ p.name }}) · {{ p.required ? "Obrigatório" : "Opcional"
+                    }}<select
+                      v-if="p.type === 'boolean'"
+                      v-model="queryValues[p.name]"
+                      :disabled="queryModes[p.name] && queryModes[p.name] !== 'value'"
+                    >
+                      <option value="">Escolha</option>
+                      <option value="true">Sim</option>
+                      <option value="false">Não</option></select
+                    ><input
+                      v-else
+                      v-model="queryValues[p.name]"
+                      :disabled="queryModes[p.name] && queryModes[p.name] !== 'value'"
+                  /></label>
+                  <label :for="`mode-${p.name}`">Como enviar {{ p.name }}</label
+                  ><select
+                    :id="`mode-${p.name}`"
+                    :value="queryModes[p.name] ?? 'value'"
+                    @change="
+                      queryModes[p.name] = ($event.target as HTMLSelectElement)
+                        .value as ParameterMode
+                    "
+                  >
+                    <option value="value">Valor informado</option>
+                    <option v-if="p.type === 'string'" value="empty">Texto vazio</option>
+                    <option v-if="!p.required" value="null">Nulo explícito</option>
+                    <option v-if="!p.required" value="omit">Omitir parâmetro</option>
+                  </select>
+                </div>
+                <label
+                  >SQL adaptado (opcional; vazio usa o exemplo publicado)<textarea
+                    v-model="querySql"
+                    class="sql"
+                    spellcheck="false"
+                  /></label
+                ><label
+                  >Linhas por página<select v-model.number="queryPageSize">
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                  </select></label
+                >
+                <button :disabled="!bearer" @click="query(true)">Validar SQL</button
+                ><button :disabled="!bearer" @click="query()">Consultar</button>
+                <button
+                  v-if="active.package.training.attachments"
+                  :disabled="!bearer || busy"
+                  @click="createAttachment('json')"
+                >
+                  Criar anexo JSON
+                </button>
+                <p v-if="active.package.training.attachments">
+                  Criar anexo executa uma nova consulta, com os filtros e a página escolhidos. Exige
+                  exportação concedida para todos os campos retornados.
+                </p>
+                <button
+                  v-if="active.package.training.binaryAttachments"
+                  :disabled="!bearer || busy"
+                  @click="createAttachment('binary')"
+                >
+                  Criar anexo binário
+                </button>
+                <p v-if="active.package.training.binaryAttachments">
+                  Selecione um único registro pelos filtros. Binários não usam paginação e não são
+                  mostrados na tabela de consulta.
+                </p></template
+              >
+            </fieldset>
+            <section v-if="attachment" aria-label="Anexo da consulta">
+              <h3>{{ attachment.format === "binary" ? "Anexo binário" : "Anexo JSON" }}</h3>
+              <p>{{ attachment.mimeType }}</p>
+              <p>
+                {{ attachment.rows }} registros · {{ attachment.bytes }} bytes · leitura em
+                {{ new Date(attachment.readAt).toLocaleString() }}
+              </p>
+              <p :class="attachment.complete ? 'success' : 'notice'">
+                {{
+                  attachment.complete
+                    ? "Completo para esta consulta."
+                    : "Parcial: o arquivo não representa o total."
+                }}
+              </p>
+              <p>
+                Disponível até {{ new Date(attachment.expiresAt).toLocaleString() }}. O download
+                revalida o acesso.
+              </p>
+              <button :disabled="busy || !bearer" @click="downloadAttachment">
+                {{ attachment.format === "binary" ? "Baixar anexo binário" : "Baixar anexo JSON" }}
+              </button>
+            </section>
+            <div v-if="result">
+              <p :class="result.completeness.complete ? 'success' : 'notice'">
+                {{
+                  result.completeness.complete
+                    ? "Resultado completo para esta consulta."
+                    : "Resultado parcial: não utilize estas linhas como total."
+                }}
+              </p>
+              <p>
+                Fonte: {{ sources.find((s) => s.id === result?.provenance.sourceId)?.name }} ·
+                Leitura: {{ new Date(result.provenance.readAt).toLocaleString() }}
+              </p>
+              <p v-if="result.reuse && result.reuse.kind !== 'fresh'" class="notice">
+                Leitura reutilizada, com permissões conferidas novamente. O horário acima é o da
+                consulta original; os dados podem ter mudado desde então.
+              </p>
+              <p v-if="!result.rows.length">
+                Nenhum registro retornado para os filtros desta consulta.
+              </p>
+              <p>
+                Publicação: {{ active?.package.name }} · revisão {{ active?.revision }} · Dialeto:
+                {{ result.provenance.dialect }}
+              </p>
+              <details>
+                <summary>Filtros utilizados e identificação da publicação</summary>
+                <pre>{{
+                  JSON.stringify(
+                    { filtros: submittedFilters, publicacoes: result.provenance.publications },
+                    null,
+                    2,
+                  )
+                }}</pre>
+              </details>
+              <p v-if="result.limits">
+                Limites desta execução: {{ result.limits.maxRows }} linhas,
+                {{ result.limits.pageSize }} por página, {{ result.limits.maxBytes }} bytes e
+                {{ result.limits.timeoutMs }} ms.
+              </p>
+              <div v-if="result.pagination" class="pagination">
+                <button
+                  class="secondary"
+                  :disabled="busy || queryPage <= 1"
+                  @click="query(false, queryPage - 1)"
+                >
+                  Página anterior
+                </button>
+                <span
+                  >Página {{ result.pagination.page }} · {{ result.rows.length }} registros nesta
+                  página</span
+                >
+                <button
+                  class="secondary"
+                  :disabled="busy || !result.pagination.hasNextPage"
+                  @click="query(false, queryPage + 1)"
+                >
+                  Próxima página
+                </button>
+              </div>
+              <div class="scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th v-for="column in result.columns" :key="column" scope="col">
+                        {{ column }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, i) in result.rows" :key="i">
+                      <td v-for="column in result.columns" :key="column">
+                        {{ cell(row[column]) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+          <FederationPanel
+            v-if="area === 'queries'"
+            :key="`${personaId}:${federationKey}`"
+            :persona-id="personaId"
+            :bearer="bearer"
+            :sources="sources"
+            :disabled="busy"
+            :mcp="mcp"
+            :confirm-discard="confirmDiscard"
+            @lock="busy = $event"
+            @dirty="federationDirty = $event"
+          />
+          <section v-if="area === 'knowledge'">
+            <KnowledgeExplorer
+              :key="`explore:${personaId}:${sourceKnowledgeKey}`"
+              :persona-id="personaId"
+              :bearer="bearer"
+              :call="mcp"
+              :disabled="busy"
+              :confirm-discard="confirmDiscard"
+              @lock="busy = $event"
+              @dirty="explorerDirty = $event"
+            />
+            <KnowledgeFeedbackPanel
+              :key="`feedback:${personaId}:${sourceKnowledgeKey}`"
+              :persona-base="path()"
+              :drafts="
+                Object.entries(tokenPublications).map(([id, p]) => ({
+                  id,
+                  name: p.package.name,
+                  activePublicationId: p.id,
+                }))
+              "
+              :api="api"
+              :disabled="busy"
+              :confirm-discard="confirmDiscard"
+              @dirty="knowledgeMaintenanceDirty = $event"
+              @lock="busy = $event"
+            />
             <SourceKnowledgeWorkspace
-              v-if="area === 'training' && training.sourceId"
-              :key="`training:${personaId}:${trainingKnowledgeKey}`"
+              :key="`knowledge:${personaId}:${sourceKnowledgeKey}`"
               :sources="sources"
               :persona-base="path()"
               :api="api"
-              :disabled="busy || queryCaseDirty"
-              :confirm-discard="confirmDiscard"
-              :training="training"
-              @vue:mounted="mountedTrainingPanels.add('knowledge')"
-              @training="training = $event"
-              @dirty="trainingKnowledgeDirty = $event"
-              @lock="busy = $event"
-            />
-            <QueryTestsPanel
-              v-if="draftId"
-              :key="`${personaId}:${draftId}:${queryTestsKey}`"
-              :root="`${path()}/skills/${draftId}`"
-              :revision="revision"
-              :training="training"
-              :confirm-discard="confirmDiscard"
-              :api="api"
-              :disabled="busy || dirty || trainingKnowledgeDirty"
-              @vue:mounted="mountedTrainingPanels.add('cases')"
-              @dirty="queryCaseDirty = $event"
-              @lock="busy = $event"
-              @saved="
-                revision = $event;
-                preview = undefined;
-                confirmed = false;
-                drafts = drafts.map((d) => (d.id === draftId ? { ...d, revision: $event } : d));
-              "
-            />
-            <p v-if="trainingKnowledgeDirty" class="notice">
-              Conclua a inspeção e aplique a seleção compartilhada, ou descarte as alterações antes
-              de revisar a publicação.
-            </p>
-            <label
-              >Prazo de revisão da publicação<input v-model="reviewDate" type="datetime-local"
-            /></label>
-            <button
-              :disabled="!draftId || dirty || queryCaseDirty || trainingKnowledgeDirty"
-              @click="previewTraining"
-            >
-              Revisar publicação
-            </button>
-            <div v-if="preview">
-              <h3>Revisão {{ preview.revision }}</h3>
-              <p>Próxima revisão: {{ new Date(preview.reviewDueAt).toLocaleString() }}</p>
-              <p>Validade: {{ new Date(preview.expiresAt).toLocaleString() }}</p>
-              <p v-for="warning in preview.warnings" :key="warning" class="notice">
-                {{
-                  warning === "SEM_CASOS_DE_TESTE"
-                    ? "Esta consulta ainda não possui casos de teste cadastrados."
-                    : warning
-                }}
-              </p>
-              <PublicationReview :preview="preview" />
-              <details>
-                <summary>Ver pacote e alterações de permissões</summary>
-                <pre>{{ JSON.stringify(preview, null, 2) }}</pre>
-              </details>
-              <label class="check"
-                ><input v-model="confirmed" type="checkbox" />Revisei o SQL, a estrutura e as regras
-                deste pacote.</label
-              ><button :disabled="!confirmed || dirty" @click="publishTraining">
-                Confirmar publicação
-              </button>
-            </div>
-          </fieldset>
-        </section>
-        <p v-if="area === 'training' && !sources.length && !busy" class="notice">
-          Para treinar consultas SQL, conecte primeiro uma base.
-          <RouterLink :to="{ name: 'sources' }">Conectar primeira base</RouterLink>. Skills externas
-          usam uma integração e têm cadastro próprio abaixo.
-        </p>
-        <FederationSkillEditor
-          v-if="area === 'training' && sources.length"
-          :key="`federation-skill:${persona.id}:${federationSkillKey}`"
-          :base="path()"
-          :sources="sources"
-          :api="api"
-          :disabled="busy"
-          :confirm-discard="confirmDiscard"
-          @vue:mounted="mountedTrainingPanels.add('federation')"
-          @dirty="federationSkillDirty = $event"
-          @lock="busy = $event"
-          @changed="load"
-        />
-        <ExternalSkillEditor
-          v-if="area === 'training'"
-          :key="`external-skill:${persona.id}:${externalSkillKey}`"
-          :base="path()"
-          :api="api"
-          :disabled="busy"
-          :confirm-discard="confirmDiscard"
-          @vue:mounted="mountedTrainingPanels.add('external')"
-          @dirty="externalSkillDirty = $event"
-          @lock="busy = $event"
-          @changed="load"
-        />
-        <OperationSkillEditor
-          v-if="area === 'training' && sources.length"
-          :key="`operation-skill:${persona.id}:${operationSkillKey}`"
-          :base="path()"
-          :sources="sources"
-          :api="api"
-          :disabled="busy"
-          :confirm-discard="confirmDiscard"
-          @vue:mounted="mountedTrainingPanels.add('operation')"
-          @dirty="operationSkillDirty = $event"
-          @lock="busy = $event"
-          @changed="load"
-        />
-        <section v-show="area === 'tokens'">
-          <h2>Tokens e conexões</h2>
-          <OAuthConnectionInfo v-if="area === 'tokens'" :key="persona.id" :api="api" />
-          <OwnerDelegationPanel
-            v-if="area === 'tokens'"
-            :key="`delegation:${persona.id}:${delegationKey}`"
-            :persona-id="persona.id"
-            :api="api"
-            @dirty="delegationDirty = $event"
-            @lock="busy = $event"
-          />
-          <ConnectionPanel
-            v-if="area === 'tokens'"
-            :key="persona.id"
-            :persona-id="persona.id"
-            :bearer="bearer"
-            :call="mcp"
-            @lock="busy = $event"
-          />
-          <TokenManager
-            v-if="area === 'tokens'"
-            :key="`${persona.id}:${tokenManagerKey}`"
-            :api="api"
-            :confirm-discard="confirmDiscard"
-            :base="path()"
-            :refresh="tokenRefresh"
-            :disabled="busy"
-            :publications="tokenPublications"
-            :sources="sources"
-            @dirty="tokenManagerDirty = $event"
-            @lock="busy = $event"
-            @bearer="bearer = $event"
-          />
-          <OAuthConnectionsPanel
-            v-if="area === 'tokens'"
-            :key="`${persona.id}:${oauthConnectionsKey}`"
-            :api="api"
-            :base="path()"
-            :disabled="busy"
-            :refresh="tokenRefresh"
-            @dirty="oauthConnectionsDirty = $event"
-            @lock="busy = $event"
-          />
-          <h3>Emitir token da persona</h3>
-          <section
-            v-if="issuanceRecovery"
-            aria-label="Conferir emissão sem confirmação"
-            class="notice"
-          >
-            <p>
-              A emissão pode ter sido concluída. Não repita o envio. Confira os tokens cadastrados;
-              o segredo perdido não pode ser recuperado.
-            </p>
-            <button :disabled="busy" class="secondary" @click="inspectUncertainIssuance">
-              Conferir tokens antes de nova emissão
-            </button>
-            <ul v-if="issuanceRecovery.checked">
-              <li v-for="item in issuanceRecovery.tokens" :key="item.id">
-                {{ item.name }} · {{ item.id }} · {{ item.revokedAt ? "Revogado" : "Não revogado" }}
-              </li>
-            </ul>
-            <p v-if="issuanceRecovery.checked">
-              A listagem não identifica automaticamente qual cadastro corresponde à tentativa.
-              Revise o consumidor e as concessões em Gerenciar tokens.
-            </p>
-            <button
-              :disabled="busy || !issuanceRecovery.checked"
-              class="secondary"
-              @click="startNewIssuance"
-            >
-              Iniciar nova emissão
-            </button>
-          </section>
-          <form aria-label="Emitir token" @submit.prevent="issueToken">
-            <fieldset :disabled="busy || !!issuanceRecovery">
-              <label>Nome do consumidor<input v-model="tokenName" required /></label>
-              <p>
-                Selecione consultas, cruzamentos, operações SQL ou capacidades externas. Selecionar
-                uma capacidade externa concede também sua operação específica. Novos lançamentos SQL
-                e ações externas exigem aprovação adicional; a política da skill continua
-                obrigatória. Cada cruzamento exige selecionar também suas consultas dependentes;
-                nenhuma concessão será adicionada automaticamente.
-              </p>
-              <div v-for="(p, id) in tokenPublications" :key="id">
-                <label class="check"
-                  ><input
-                    :checked="selectedSkills.includes(String(id))"
-                    :disabled="!!p.suspendedAt"
-                    type="checkbox"
-                    @change="
-                      selectTokenSkill(String(id), ($event.target as HTMLInputElement).checked)
-                    "
-                  />{{
-                    `${p.package.name} · revisão ${p.revision}${p.package.format === "persona-query-v2" ? "" : ` · ${publicationEffectsLabel(p)}`}`
-                  }}</label
-                >
-                <ul v-if="p.package.requiredCapabilities.some((c) => c.startsWith('field-use:'))">
-                  <li
-                    v-for="capability in p.package.requiredCapabilities.filter((c) =>
-                      c.startsWith('field-use:'),
-                    )"
-                    :key="capability"
-                  >
-                    {{ fieldCapabilityLabel(capability) }}
-                  </li>
-                </ul>
-              </div>
-              <details>
-                <summary>Limites do novo token</summary>
-                <LimitsEditor
-                  v-model="tokenLimits.queryLimits"
-                  kind="query"
-                  label="Consultas do novo token"
-                />
-                <LimitsEditor
-                  v-model="tokenLimits.operationLimits"
-                  kind="operation"
-                  label="Lançamentos do novo token"
-                />
-                <LimitsEditor
-                  v-model="tokenLimits.federationLimits"
-                  kind="federation"
-                  label="Cruzamentos do novo token"
-                />
-                <div v-for="id in selectedSkills" :key="id">
-                  <p>{{ tokenPublications[id]?.package.name }}</p>
-                  <LimitsEditor
-                    v-if="tokenSkillLimits[id]"
-                    v-model="tokenSkillLimits[id].queryLimits"
-                    kind="query"
-                    label="Concessão desta consulta"
-                  />
-                  <LimitsEditor
-                    v-if="tokenSkillLimits[id]"
-                    v-model="tokenSkillLimits[id].federationLimits"
-                    kind="federation"
-                    label="Concessão deste cruzamento"
-                  />
-                </div>
-              </details>
-              <p>
-                Selecione explicitamente as consultas. Novas fontes e treinamentos não ampliam este
-                token.
-              </p>
-              <p>
-                Selecionar uma publicação concede o conjunto de campos e finalidades exibido. Uma
-                concessão incompleta bloqueia a publicação inteira.
-              </p>
-              <label class="check"
-                ><input v-model="tokenNoExpiry" type="checkbox" />Sem expiração (escolha
-                explícita)</label
-              >
-              <label v-if="!tokenNoExpiry"
-                >Validade em dias<input
-                  v-model.number="tokenDays"
-                  type="number"
-                  min="1"
-                  max="3650"
-                  required
-              /></label>
-              <fieldset>
-                <legend>Permissões administrativas</legend>
-                <label v-for="option in administrativeOptions" :key="option.id"
-                  ><input v-model="tokenAdministrative" type="checkbox" :value="option.id" />{{
-                    option.label
-                  }}</label
-                >
-                <p>
-                  Administração exige também delegação vigente no hub. Não substitui autorização
-                  para consultar ou aprovação humana.
-                </p>
-                <label v-for="source in sources.filter((s) => s.active)" :key="source.id"
-                  ><input
-                    v-model="tokenAdministrativeSources"
-                    type="checkbox"
-                    :value="source.id"
-                  />Base para administração: {{ source.name }}</label
-                >
-                <label
-                  ><input v-model="tokenCanDelegate" type="checkbox" />Permitir delegar as
-                  concessões selecionadas a outros tokens</label
-                >
-                <ManagedIntegrationsSelector
-                  v-if="tokenAdministrative.includes('gerenciar_integracoes')"
-                  v-model="tokenManagedIntegrations"
-                  :api="api"
-                  :base="path()"
-                  :disabled="busy"
-                />
-              </fieldset>
-              <button :disabled="!selectedSkills.length && !tokenAdministrative.length">
-                Emitir token restrito
-              </button>
-            </fieldset>
-          </form>
-          <label
-            >Token para conectar o cliente ou testar<input
-              v-model="bearer"
-              :type="showBearer ? 'text' : 'password'"
-              autocomplete="off"
-              :disabled="busy" /></label
-          ><button :disabled="busy || !bearer" @click="copyBearer">Copiar token</button>
-          <button class="secondary" :disabled="busy || !bearer" @click="revealBearer">
-            {{ showBearer ? "Ocultar token" : "Revelar token" }}
-          </button>
-          <button class="secondary" :disabled="busy || !bearer" @click="bearer = ''">
-            Ocultar e descartar token
-          </button>
-          <p>Copie o token antes de sair; ele não é salvo no navegador.</p>
-        </section>
-        <section v-show="area === 'queries'">
-          <p v-if="!bearer" class="notice">
-            Para consultar, informe um token com permissão para uma skill publicada.
-            <RouterLink :to="{ name: 'tokens' }">Configurar acesso às consultas</RouterLink>.
-          </p>
-          <h2>Consultar dados publicados</h2>
-          <label
-            >Token para consultar<input
-              v-model="bearer"
-              type="password"
-              autocomplete="off"
               :disabled="busy"
-          /></label>
-          <button class="secondary" :disabled="busy || !bearer" @click="inspectToken">
-            Ver consultas permitidas por este token
-          </button>
-          <p v-if="grantedQueries && !Object.keys(queryPublications).length">
-            Nenhuma consulta desta persona foi concedida ao token.
-          </p>
-          <fieldset :disabled="busy">
-            <label
-              >Consulta<select v-model="querySkill">
-                <option value="">Selecione</option>
-                <option v-for="(p, id) in queryPublications" :key="id" :value="String(id)">
-                  {{ `${p.package.name} · revisão ${p.revision}` }}
-                </option>
-              </select></label
-            ><template v-if="active"
-              ><p>Fonte: {{ sources.find((s) => s.id === active?.package.sourceId)?.name }}</p>
-              <div v-for="p in active.package.training.parameters" :key="p.name">
-                <label
-                  >{{ p.meaning }} ({{ p.name }}) · {{ p.required ? "Obrigatório" : "Opcional"
-                  }}<select
-                    v-if="p.type === 'boolean'"
-                    v-model="queryValues[p.name]"
-                    :disabled="queryModes[p.name] && queryModes[p.name] !== 'value'"
-                  >
-                    <option value="">Escolha</option>
-                    <option value="true">Sim</option>
-                    <option value="false">Não</option></select
-                  ><input
-                    v-else
-                    v-model="queryValues[p.name]"
-                    :disabled="queryModes[p.name] && queryModes[p.name] !== 'value'"
-                /></label>
-                <label :for="`mode-${p.name}`">Como enviar {{ p.name }}</label
-                ><select
-                  :id="`mode-${p.name}`"
-                  :value="queryModes[p.name] ?? 'value'"
-                  @change="
-                    queryModes[p.name] = ($event.target as HTMLSelectElement).value as ParameterMode
-                  "
-                >
-                  <option value="value">Valor informado</option>
-                  <option v-if="p.type === 'string'" value="empty">Texto vazio</option>
-                  <option v-if="!p.required" value="null">Nulo explícito</option>
-                  <option v-if="!p.required" value="omit">Omitir parâmetro</option>
-                </select>
-              </div>
-              <label
-                >SQL adaptado (opcional; vazio usa o exemplo publicado)<textarea
-                  v-model="querySql"
-                  class="sql"
-                  spellcheck="false"
-                /></label
-              ><label
-                >Linhas por página<select v-model.number="queryPageSize">
-                  <option :value="25">25</option>
-                  <option :value="50">50</option>
-                  <option :value="100">100</option>
-                </select></label
-              >
-              <button :disabled="!bearer" @click="query(true)">Validar SQL</button
-              ><button :disabled="!bearer" @click="query()">Consultar</button>
-              <button
-                v-if="active.package.training.attachments"
-                :disabled="!bearer || busy"
-                @click="createAttachment('json')"
-              >
-                Criar anexo JSON
-              </button>
-              <p v-if="active.package.training.attachments">
-                Criar anexo executa uma nova consulta, com os filtros e a página escolhidos. Exige
-                exportação concedida para todos os campos retornados.
-              </p>
-              <button
-                v-if="active.package.training.binaryAttachments"
-                :disabled="!bearer || busy"
-                @click="createAttachment('binary')"
-              >
-                Criar anexo binário
-              </button>
-              <p v-if="active.package.training.binaryAttachments">
-                Selecione um único registro pelos filtros. Binários não usam paginação e não são
-                mostrados na tabela de consulta.
-              </p></template
-            >
-          </fieldset>
-          <section v-if="attachment" aria-label="Anexo da consulta">
-            <h3>{{ attachment.format === "binary" ? "Anexo binário" : "Anexo JSON" }}</h3>
-            <p>{{ attachment.mimeType }}</p>
-            <p>
-              {{ attachment.rows }} registros · {{ attachment.bytes }} bytes · leitura em
-              {{ new Date(attachment.readAt).toLocaleString() }}
-            </p>
-            <p :class="attachment.complete ? 'success' : 'notice'">
-              {{
-                attachment.complete
-                  ? "Completo para esta consulta."
-                  : "Parcial: o arquivo não representa o total."
-              }}
-            </p>
-            <p>
-              Disponível até {{ new Date(attachment.expiresAt).toLocaleString() }}. O download
-              revalida o acesso.
-            </p>
-            <button :disabled="busy || !bearer" @click="downloadAttachment">
-              {{ attachment.format === "binary" ? "Baixar anexo binário" : "Baixar anexo JSON" }}
-            </button>
+              :confirm-discard="confirmDiscard"
+              @dirty="sourceKnowledgeDirty = $event"
+              @lock="busy = $event"
+            />
+            <RouterLink :to="{ name: 'catalog' }">Abrir catálogo compartilhado</RouterLink>
           </section>
-          <div v-if="result">
-            <p :class="result.completeness.complete ? 'success' : 'notice'">
-              {{
-                result.completeness.complete
-                  ? "Resultado completo para esta consulta."
-                  : "Resultado parcial: não utilize estas linhas como total."
-              }}
-            </p>
-            <p>
-              Fonte: {{ sources.find((s) => s.id === result?.provenance.sourceId)?.name }} ·
-              Leitura: {{ new Date(result.provenance.readAt).toLocaleString() }}
-            </p>
-            <p v-if="result.reuse && result.reuse.kind !== 'fresh'" class="notice">
-              Leitura reutilizada, com permissões conferidas novamente. O horário acima é o da
-              consulta original; os dados podem ter mudado desde então.
-            </p>
-            <p v-if="!result.rows.length">
-              Nenhum registro retornado para os filtros desta consulta.
-            </p>
-            <p>
-              Publicação: {{ active?.package.name }} · revisão {{ active?.revision }} · Dialeto:
-              {{ result.provenance.dialect }}
-            </p>
-            <details>
-              <summary>Filtros utilizados e identificação da publicação</summary>
-              <pre>{{
-                JSON.stringify(
-                  { filtros: submittedFilters, publicacoes: result.provenance.publications },
-                  null,
-                  2,
-                )
-              }}</pre>
-            </details>
-            <p v-if="result.limits">
-              Limites desta execução: {{ result.limits.maxRows }} linhas,
-              {{ result.limits.pageSize }} por página, {{ result.limits.maxBytes }} bytes e
-              {{ result.limits.timeoutMs }} ms.
-            </p>
-            <div v-if="result.pagination" class="pagination">
-              <button
-                class="secondary"
-                :disabled="busy || queryPage <= 1"
-                @click="query(false, queryPage - 1)"
-              >
-                Página anterior
-              </button>
-              <span
-                >Página {{ result.pagination.page }} · {{ result.rows.length }} registros nesta
-                página</span
-              >
-              <button
-                class="secondary"
-                :disabled="busy || !result.pagination.hasNextPage"
-                @click="query(false, queryPage + 1)"
-              >
-                Próxima página
-              </button>
-            </div>
-            <div class="scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th v-for="column in result.columns" :key="column" scope="col">{{ column }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, i) in result.rows" :key="i">
-                    <td v-for="column in result.columns" :key="column">{{ cell(row[column]) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-        <FederationPanel
-          v-if="area === 'queries'"
-          :key="`${personaId}:${federationKey}`"
-          :persona-id="personaId"
-          :bearer="bearer"
-          :sources="sources"
-          :disabled="busy"
-          :mcp="mcp"
-          :confirm-discard="confirmDiscard"
-          @lock="busy = $event"
-          @dirty="federationDirty = $event"
-        />
-        <section v-if="area === 'knowledge'">
-          <KnowledgeExplorer
-            :key="`explore:${personaId}:${sourceKnowledgeKey}`"
-            :persona-id="personaId"
-            :bearer="bearer"
-            :call="mcp"
-            :disabled="busy"
-            :confirm-discard="confirmDiscard"
-            @lock="busy = $event"
-            @dirty="explorerDirty = $event"
-          />
-          <KnowledgeFeedbackPanel
-            :key="`feedback:${personaId}:${sourceKnowledgeKey}`"
-            :persona-base="path()"
-            :drafts="
-              Object.entries(tokenPublications).map(([id, p]) => ({
-                id,
-                name: p.package.name,
-                activePublicationId: p.id,
-              }))
-            "
+          <OperationsPanel
+            v-if="area === 'operations'"
+            :key="`${personaId}:${operationActionsKey}`"
             :api="api"
-            :disabled="busy"
-            :confirm-discard="confirmDiscard"
-            @dirty="knowledgeMaintenanceDirty = $event"
-            @lock="busy = $event"
-          />
-          <SourceKnowledgeWorkspace
-            :key="`knowledge:${personaId}:${sourceKnowledgeKey}`"
+            :base="path()"
             :sources="sources"
-            :persona-base="path()"
-            :api="api"
-            :disabled="busy"
-            :confirm-discard="confirmDiscard"
-            @dirty="sourceKnowledgeDirty = $event"
-            @lock="busy = $event"
-          />
-          <RouterLink :to="{ name: 'catalog' }">Abrir catálogo compartilhado</RouterLink>
-        </section>
-        <OperationsPanel
-          v-if="area === 'operations'"
-          :key="`${personaId}:${operationActionsKey}`"
-          :api="api"
-          :base="path()"
-          :sources="sources"
-          :disabled="busy"
-          :persona-id="personaId"
-          :bearer="bearer"
-          :call="mcp"
-          :confirm-discard="confirmDiscard"
-          @bearer="bearer = $event"
-          @dirty="operationActionsDirty = $event"
-          @lock="busy = $event"
-        />
-        <NotificationsPanel
-          v-if="area === 'operations'"
-          :key="`${personaId}-${notificationsKey}`"
-          :api="api"
-          :base="path()"
-          :disabled="busy"
-          @dirty="notificationsDirty = $event"
-          @lock="busy = $event"
-        />
-        <HistoryPanel v-if="area === 'history'" :key="personaId" :api="api" :base="path()" />
-        <section v-if="area === 'integrations'">
-          <IntegrationManagementPanel
-            :key="`${personaId}:${integrationManagementKey}`"
-            :api="api"
-            :base="path()"
-            :disabled="busy"
-            :confirm-discard="confirmDiscard"
-            @dirty="integrationManagementDirty = $event"
-            @lock="busy = $event"
-          />
-          <ExternalTestsPanel
-            :key="`${personaId}:${externalTestsKey}`"
-            :api="api"
-            :base="path()"
-            :disabled="busy"
-            :confirm-discard="confirmDiscard"
-            @dirty="externalTestsDirty = $event"
-            @lock="busy = $event"
-          />
-          <ExternalActionsPanel
-            :key="`${personaId}:${externalActionsKey}`"
-            :api="api"
-            :base="path()"
             :disabled="busy"
             :persona-id="personaId"
             :bearer="bearer"
             :call="mcp"
             :confirm-discard="confirmDiscard"
             @bearer="bearer = $event"
-            @dirty="externalActionsDirty = $event"
+            @dirty="operationActionsDirty = $event"
             @lock="busy = $event"
           />
-          <p class="notice">
-            Cadastro direto pelo responsável, suspensão e rotação ficam na gestão acima. Contratos,
-            casos e publicação ficam em Treinamentos, incluindo descoberta MCP e importação OpenAPI
-            como rascunho. Homologação de provedores reais continua pendente; o deploy permanece
-            bloqueado.
-          </p>
-        </section>
-      </template>
-    </template>
+          <NotificationsPanel
+            v-if="area === 'operations'"
+            :key="`${personaId}-${notificationsKey}`"
+            :api="api"
+            :base="path()"
+            :disabled="busy"
+            @dirty="notificationsDirty = $event"
+            @lock="busy = $event"
+          />
+          <HistoryPanel v-if="area === 'history'" :key="personaId" :api="api" :base="path()" />
+          <section v-if="area === 'integrations'">
+            <IntegrationManagementPanel
+              :key="`${personaId}:${integrationManagementKey}`"
+              :api="api"
+              :base="path()"
+              :disabled="busy"
+              :confirm-discard="confirmDiscard"
+              @dirty="integrationManagementDirty = $event"
+              @lock="busy = $event"
+            />
+            <ExternalTestsPanel
+              :key="`${personaId}:${externalTestsKey}`"
+              :api="api"
+              :base="path()"
+              :disabled="busy"
+              :confirm-discard="confirmDiscard"
+              @dirty="externalTestsDirty = $event"
+              @lock="busy = $event"
+            />
+            <ExternalActionsPanel
+              :key="`${personaId}:${externalActionsKey}`"
+              :api="api"
+              :base="path()"
+              :disabled="busy"
+              :persona-id="personaId"
+              :bearer="bearer"
+              :call="mcp"
+              :confirm-discard="confirmDiscard"
+              @bearer="bearer = $event"
+              @dirty="externalActionsDirty = $event"
+              @lock="busy = $event"
+            />
+            <p class="notice">
+              Cadastro direto pelo responsável, suspensão e rotação ficam na gestão acima.
+              Contratos, casos e publicação ficam em Treinamentos, incluindo descoberta MCP e
+              importação OpenAPI como rascunho. Homologação de provedores reais continua pendente; o
+              deploy permanece bloqueado.
+            </p>
+          </section>
+        </template>
+      </div>
+    </div>
   </main>
 </template>

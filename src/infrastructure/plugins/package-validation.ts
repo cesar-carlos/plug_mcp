@@ -17,6 +17,8 @@ import {
   fileHash,
 } from "./package-files.js";
 import { pluginTools, pluginResource, pluginToolCatalogHash } from "./tool-catalog.js";
+import { PERSONA_CONSUMER_GUIDANCE } from "../../application/persona-v2/consumer-guidance.js";
+import { personaPluginCompatibility } from "./persona-compatibility.js";
 
 export const validateConnectionId = (connection: string | undefined): string => {
   if (
@@ -139,6 +141,24 @@ export const validateSe7ePackage = async (
     }
   }
   validatePluginSkills(files, input.runtime);
+  if (input.runtime === "persona-v2") {
+    if (
+      JSON.stringify(json("compatibility.json")) !==
+      JSON.stringify(personaPluginCompatibility(input.variant))
+    )
+      throw new Error("Contrato de instruções do pacote diverge do runtime atual.");
+    for (const [path, content] of files) {
+      if (!path.endsWith("/SKILL.md")) continue;
+      if (
+        !content
+          .toString("utf8")
+          .includes("[guia de compatibilidade, erros e exemplos](references/consumer-guide.md)") ||
+        files.get(path.replace("SKILL.md", "references/consumer-guide.md"))?.toString("utf8") !==
+          PERSONA_CONSUMER_GUIDANCE
+      )
+        throw new Error("Guia compartilhado ausente ou divergente.");
+    }
+  }
   validatePluginReferences(files);
   if (JSON.stringify(pluginInventory(files)) !== JSON.stringify(record.files)) {
     throw new Error("Inventário ou hashes do pacote divergem.");
@@ -147,6 +167,7 @@ export const validateSe7ePackage = async (
     "plugin.json",
     "se7e-package.json",
     "tool-catalog.json",
+    ...(input.runtime === "persona-v2" ? ["compatibility.json"] : []),
     input.variant === "chatgpt" ? ".app.json" : "mcp.json",
     extension.interface.logo,
     extension.interface.composerIcon,

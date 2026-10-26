@@ -41,9 +41,10 @@ Precedência e índice das rules: [AGENTS.md](../AGENTS.md).
 | Templates, datasets e importação estrutural de DDL     | [Biblioteca editorial v2](persona-v2/knowledge-library.md)      |
 | Fixture e cadeia real MCP/hub/agente nos três motores  | [Homologação isolada](persona-v2/homologation-chain.md)         |
 
-## Referências da entrada principal legada
+## Referências da entrada legada
 
-Estes documentos mantêm o contrato da aplicação ainda em uso. Identidade por
+Estes documentos mantêm o contrato da entrada legada explícita, preservada para
+regressões. A entrada padrão é v2. Identidade por
 acesso, tools, migrations, cache e OAuth descritos aqui não são o modelo novo.
 Consulte-os para manutenção do legado, sem importar suas restrições para a v2.
 

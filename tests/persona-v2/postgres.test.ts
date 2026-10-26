@@ -130,6 +130,64 @@ afterAll(async () => {
   await admin.end();
 });
 describe("baseline persona-v2 e administração em PostgreSQL real", () => {
+  it("ícone mantém revisão após remover e recriar e recusa outra aba obsoleta", async () => {
+    const session = await login();
+    const created = await authorized("post", "/api/admin/personas", session).send({
+      name: "Icon revision fixture",
+      specialty: "Test",
+      instructions: "",
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.persona.id as string;
+    const path = `/api/admin/personas/${id}/icone`;
+    const sharp = (await import("sharp")).default;
+    const image = (
+      await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } })
+        .png()
+        .toBuffer()
+    ).toString("base64");
+    expect((await authorized("get", path, session)).body).toEqual({ revision: 0, hasIcon: false });
+    expect(
+      (await authorized("post", path, session).send({ expectedRevision: 0, image })).body,
+    ).toEqual({ revision: 1, hasIcon: true });
+    const publicPath = `/brand/personas/${id}/icon`;
+    const first = await request(runtime.app).get(publicPath);
+    expect(first.status).toBe(200);
+    expect(
+      (await authorized("post", path, session).send({ expectedRevision: 1, image: null })).body,
+    ).toEqual({ revision: 2, hasIcon: false });
+    expect((await request(runtime.app).get(publicPath)).status).toBe(404);
+    expect((await authorized("get", path, session)).body).toEqual({ revision: 2, hasIcon: false });
+    expect(
+      (await authorized("post", path, session).send({ expectedRevision: 2, image })).body,
+    ).toEqual({ revision: 3, hasIcon: true });
+    for (const stale of [0, 1, 2]) {
+      for (const value of [image, null]) {
+        const response = await authorized("post", path, session).send({
+          expectedRevision: stale,
+          image: value,
+        });
+        expect(response.status).toBe(409);
+      }
+    }
+    const fresh = await request(runtime.app)
+      .get(publicPath)
+      .set("If-None-Match", first.headers.etag!);
+    expect(fresh.status).toBe(200);
+    expect(fresh.headers.etag).not.toBe(first.headers.etag);
+    expect(
+      (await db.query("SELECT authorization_version FROM persona WHERE id=$1", [id])).rows[0]
+        .authorization_version,
+    ).toBe(1);
+    const audit = await db.query(
+      "SELECT previous_version,resource_version FROM audit_v2 WHERE persona_id=$1 AND evento='persona.icon_cleared'",
+      [id],
+    );
+    expect(audit.rows).toEqual([{ previous_version: 1, resource_version: 2 }]);
+    // This suite also checks a pristine baseline; remove only this test's persona.
+    await db.query("DELETE FROM audit_v2 WHERE persona_id=$1", [id]);
+    await db.query("DELETE FROM persona WHERE id=$1", [id]);
+  });
   it("upgrade 0039 para 0040 preserva credencial e estado sem migração de autoridade", async () => {
     const name = `persona_upgrade_${suffix}_test`,
       pool = new pg.Pool({ connectionString: urlFor(name) });
@@ -237,6 +295,7 @@ describe("baseline persona-v2 e administração em PostgreSQL real", () => {
       { filename: "0042_notification_terminal_clock.sql" },
       { filename: "0043_dataset_template_versions.sql" },
       { filename: "0044_persona_icon.sql" },
+      { filename: "0045_persona_icon_revision.sql" },
     ]);
     await expect(applyMigrations({ databaseUrl: urlFor(freshName) })).rejects.toThrow(
       "Runner legado recusado",

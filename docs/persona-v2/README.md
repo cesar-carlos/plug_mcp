@@ -1,5 +1,12 @@
 # Persona-v2 — estado da refatoração
 
+Continuação local de 2026-10-26: guia compartilhado e comparação de compatibilidade
+do plugin, combinação explícita de datasets e importação direta para cruzamentos.
+Ver [evidência e limites](validation/2026-10-26-plugin-improvements.md).
+A validação no ChatGPT aguarda conexão sintética dedicada; não há novo deploy
+ou aceite integral decorrente desta rodada.
+
+
 Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementação](first-test-deploy.md). DV2-017 permite validar e ajustar no destino, sem aceite manual prévio. O caminho separado de liberação de teste está implementado com contrato e imagem próprios; o manifesto integral continua bloqueado e não representa aceite fictício.
 
 Contrato ativo: persona central, várias fontes, conhecimento publicado e tokens
@@ -42,24 +49,30 @@ Avaliação separada da IA: [contrato e execução do avaliador v2](consumer-eva
 
 ## Implementado em desenvolvimento
 
-| Área                     | Alcance entregue e contrato                                                                                                                                    |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Persona, fontes e tokens | Criação sem fonte, múltiplas bases, ciclo explícito, credenciais, concessões e administração delegada limitada. [Onboarding](onboarding.md).                   |
-| Conhecimento             | Inspeção, compatibilidade, padrões/perfis, curadoria, busca/grafo, feedback e revisão temporal. [Conhecimento compartilhado](shared-knowledge.md).             |
-| Biblioteca editorial     | Templates, datasets e importação declarativa de DDL, sem executar arquivos ou herdar aprovação. [Biblioteca](knowledge-library.md).                            |
-| Treinamento e publicação | Rascunhos, casos/relatórios, preview/hash/CAS, prazo humano e publicação imutável. [Catálogo](catalog.md).                                                     |
-| Consultas e cruzamentos  | Fontes explícitas, campos/finalidades, limites redutíveis, combinação tipada e proveniência. [Consultas](source-queries.md), [cruzamentos](federation.md).     |
-| Operações SQL            | Preparação, aprovação, journal, execução transacional e conciliação sem reenvio incerto. [Operações](sql-operations.md).                                       |
-| Integrações              | Cadastro/gestão, descoberta MCP, importação OpenAPI, contratos publicados, consulta, ações e conciliação. [Integrações](external-integrations.md).             |
-| Conexões                 | Bearer, OAuth próprio, setups temporários e pacote privado validado localmente. [OAuth](oauth.md), [plugin](plugin.md).                                        |
-| Console                  | Editores dos quatro tipos de skill, casos, publicação, preparações, execução autorizada, diagnóstico e histórico. [Console](console.md).                       |
-| Cache e anexos           | Cache/singleflight isolados, Redis, anexos JSON/binários cifrados e revalidação. [Cache](query-cache.md), [anexos](attachments.md).                            |
-| Manutenção               | Worker, leases, revisão, temporários, retenção, rotação de chaves e outbox. [Worker](review-worker.md), [cofre](vault-rotation.md), [outbox](outbox.md).       |
-| Distribuição             | Imagem candidata, migrations explícitas, reset restrito e verificações de evidência. [Candidata](candidate-distribution.md), [liberação](release-evidence.md). |
+| Área                     | Alcance entregue e contrato                                                                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Persona, fontes e tokens | Criação sem fonte, múltiplas bases, ciclo explícito, credenciais, concessões e administração delegada limitada. [Onboarding](onboarding.md).                          |
+| Conhecimento             | Inspeção, compatibilidade, padrões/perfis, curadoria, busca/grafo, feedback e revisão temporal. [Conhecimento compartilhado](shared-knowledge.md).                    |
+| Biblioteca editorial     | Templates, datasets, sementes SQL por consulta ou importação direta e DDL declarativo, sem executar arquivos ou herdar aprovação. [Biblioteca](knowledge-library.md). |
+| Treinamento e publicação | Rascunhos, casos/relatórios, preview/hash/CAS, prazo humano e publicação imutável. [Catálogo](catalog.md).                                                            |
+| Consultas e cruzamentos  | Fontes explícitas, campos/finalidades, limites redutíveis, combinação tipada e proveniência. [Consultas](source-queries.md), [cruzamentos](federation.md).            |
+| Operações SQL            | Preparação, aprovação, journal, execução transacional e conciliação sem reenvio incerto. [Operações](sql-operations.md).                                              |
+| Integrações              | Cadastro/gestão, descoberta MCP, importação OpenAPI, contratos publicados, consulta, ações e conciliação. [Integrações](external-integrations.md).                    |
+| Conexões                 | Bearer, OAuth próprio, setups temporários e pacote privado validado localmente. [OAuth](oauth.md), [plugin](plugin.md).                                               |
+| Console                  | Editores dos quatro tipos de skill, casos, publicação, preparações, execução autorizada, diagnóstico e histórico. [Console](console.md).                              |
+| Cache e anexos           | Cache/singleflight isolados, Redis, anexos JSON/binários cifrados e revalidação. [Cache](query-cache.md), [anexos](attachments.md).                                   |
+| Manutenção               | Worker, leases, revisão, temporários, retenção, rotação de chaves e outbox. [Worker](review-worker.md), [cofre](vault-rotation.md), [outbox](outbox.md).              |
+| Distribuição             | Imagem candidata, migrations explícitas, reset restrito e verificações de evidência. [Candidata](candidate-distribution.md), [liberação](release-evidence.md).        |
 
 Essas capacidades têm limites documentados. Jornadas administrativas restantes,
 matriz ampliada, instalação real e aceite final continuam no plano restante.
 Não é uma declaração de conclusão dos subsistemas ou dos gates.
+
+O console também oferece navegação agrupada, edição recolhida, aparência por
+persona com descarte e recuperação de conflito, e galeria local de mascotes.
+O [contrato da interface](console.md) separa escolha de imagem, salvamento e
+downloads para uso manual no cliente. Essas capacidades não mudam permissões
+nem configuram automaticamente a aparência no ChatGPT.
 
 ## Uso de desenvolvimento
 

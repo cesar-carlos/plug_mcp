@@ -2541,6 +2541,7 @@ test("suspende e recupera persona preservando histórico e revisão explícita",
   await login(page);
   const name = `Ciclo de vida ${Date.now()}`;
   await createPersona(page, name);
+  await page.getByText("Gerenciar disponibilidade", { exact: true }).click();
   await page.getByRole("button", { name: "Suspender persona", exact: true }).click();
   const form = page.getByRole("form", { name: "Confirmar estado da persona" });
   const suspend = form.getByRole("button", { name: "Confirmar suspensão", exact: true });
@@ -2548,7 +2549,11 @@ test("suspende e recupera persona preservando histórico e revisão explícita",
   await expect(page.getByRole("heading", { name: "Revisar suspensão" })).toBeFocused();
   await form.getByLabel("Revisei os efeitos desta alteração").check();
   await suspend.click();
-  await expect(page.getByText("Persona suspensa", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Estado da persona" })
+      .getByText("Persona suspensa", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Editar persona", { exact: true })).not.toBeVisible();
   await go(page, "Bases");
   await expect(page).toHaveURL(/#\/overview$/);
@@ -2564,7 +2569,11 @@ test("suspende e recupera persona preservando histórico e revisão explícita",
   await page.getByRole("button", { name: "Recuperar persona", exact: true }).click();
   await form.getByLabel("Revisei os efeitos desta alteração").check();
   await form.getByRole("button", { name: "Confirmar recuperação", exact: true }).click();
-  await expect(page.getByText("Persona ativa", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Estado da persona" })
+      .getByText("Persona ativa", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Editar persona", { exact: true })).toBeVisible();
 });
 const addSource = async (page: Page, account: "a" | "b" | "view") => {

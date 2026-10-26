@@ -448,12 +448,17 @@ watch(
     <template v-if="selected && tests">
       <OperationCasesPanel
         :key="caseKey"
+        :api="api"
+        :base="base"
+        :skill-id="selected"
+        :revision="revision"
         :training="training"
         :cases="tests.cases"
         :disabled="busy || disabled || draftDirty || knowledgeDirty || advancedOpen"
         :confirm-discard="confirmDiscard"
         @dirty="caseDirty = $event"
         @save="saveCase"
+        @lock="knowledgeLock"
       />
       <h3>Relatórios do runner</h3>
       <p>

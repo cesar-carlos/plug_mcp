@@ -1,8 +1,13 @@
 # Cruzamentos publicados — desenvolvimento
 
 A entrada `dev:persona-v2` disponibiliza `validar_cruzamento` e
-`executar_cruzamento`. Deploy, imagem e aceite integral permanecem bloqueados.
+`executar_cruzamento`. O servidor de teste segue [DV2-017](first-test-deploy.md);
+aceite integral para clientes permanece pendente.
 O MCP combina resultados de SELECTs; a IA do cliente prepara SQL e parâmetros.
+
+Casos de transporte podem preparar datasets por fonte a partir das consultas
+publicadas do cruzamento. A origem é conferida por fonte e não vira relatório
+aprovado. Contrato: [biblioteca editorial](knowledge-library.md#datasets-por-fonte-em-casos-de-cruzamento).
 Não há scripts, escrita distribuída ou snapshot transacional entre fontes.
 Inteiros numéricos fora do intervalo seguro de JavaScript são recusados na
 entrada local, antes de consultar a próxima fonte ou combinar registros.

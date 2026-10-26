@@ -1524,6 +1524,17 @@ it("capabilities são versionadas e verificar_fonte não executa SQL nem concede
     generation: "persona-v2",
     complete: false,
     authentication: "bearer",
+    pluginCompatibility: {
+      format: "persona-plugin-compatibility-v1",
+      runtime: "persona-v2",
+      variant: "portable",
+      guidanceHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      instructionsHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    },
+    serverBuild: {
+      version: expect.any(String),
+      revision: expect.stringMatching(/^(?:[a-f0-9]{40}|unknown)$/),
+    },
     oauth: false,
     externalQueries: {
       implemented: true,

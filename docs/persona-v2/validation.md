@@ -11,6 +11,21 @@ nem reutilizar evidência de uma revisão para certificar outra.
 
 ## Registrar uma nova rodada
 
+[Compatibilidade do plugin e composição editorial — 2026-10-26](validation/2026-10-26-plugin-improvements.md).
+
+
+[Instruções editoriais do plugin — 2026-10-26](validation/2026-10-26-plugin-editorial-guidance.md).
+
+[Importação direta de datasets para operação SQL — 2026-10-26](validation/2026-10-26-direct-operation-datasets.md).
+
+[Recuperação do seletor editorial — 2026-10-26](validation/2026-10-26-dataset-selection-recovery.md).
+
+[Datasets por fonte em cruzamentos — 2026-10-26](validation/2026-10-26-federation-datasets.md).
+
+[Sementes editoriais de operações SQL — 2026-10-26](validation/2026-10-26-operation-datasets.md).
+
+[Aparência, organização e recuperação do console — 2026-10-26](validation/2026-10-26-console-appearance.md).
+
 [Primeiro deploy remoto de teste v2 — 2026-10-25](validation/2026-10-25-first-remote-test-deployment.md).
 
 [Primeiro deploy de teste v2 — 2026-10-25](validation/2026-10-25-test-deployment.md).

@@ -575,6 +575,12 @@ it("MCP real lista ferramentas do pacote e devolve perfil estável e comprovante
     generation: "persona-v2",
     complete: false,
     authentication: "oauth2",
+    pluginCompatibility: {
+      format: "persona-plugin-compatibility-v1",
+      runtime: "persona-v2",
+      variant: "chatgpt",
+      guidanceHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    },
     oauth: { implemented: true, scope: "se7e:persona", originatorBound: true },
     externalQueries: { implemented: true, explicitOperationGrantRequired: true },
     externalActions: { implemented: true, automaticReplay: false },

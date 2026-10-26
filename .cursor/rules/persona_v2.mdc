@@ -5,6 +5,72 @@ alwaysApply: true
 
 # Persona-v2
 
+Plugin v2 e runtime compartilham guia de recuperação/exemplos. Montagem inclui
+compatibility.json com hashes de instruções, guia e catálogo mínimo por variante;
+validação recusa guia/contrato divergentes, mesmo com inventário recalculado.
+obter_capacidades anuncia esses hashes e versão/revisão do servidor (unknown
+quando ausente). Comparação não certifica instalação no cliente nem concede tools.
+Exemplos são sintéticos, nunca schema ou dados presumidos da persona conectada.
+
+Composição editorial explícita permite até quatro datasets por fonte em casos
+SQL/cruzamentos, por Client/CAS e referências imutáveis. Cruzamento direto fixa
+publicação/hash concedida ao contrato, sem depender do rascunho da consulta.
+Cada material revalida papel editorial e template. Tabelas repetidas exigem mesmo
+catálogo/template/versão/hash e colunas/tipos idênticos; concatena linhas na ordem
+escolhida sem deduplicar ou converter. Limites agregados 16 tabelas/100 linhas
+por tabela; excesso recusa. Origem guarda todos os materiais e hashes recalculados,
+preservados na edição. Não executa/publica/concede, nem infere chaves ou JOIN.
+
+Importação direta de sementes para operação SQL exige Client, CSRF, revisão e
+papel editorial vigente no catálogo. Origem operation-direct-dataset-case-origin-v1
+fixa dataset/template por versão/hash e fonte/versão/dialeto; salvar reconfere
+referências, compatibilidade e hashes. Não cria consulta intermediária, converte
+treinamento ou herda publicação/relatório. Omitir origem na edição a preserva;
+consumidores não cadastram/editam casos vinculados. Cruzamentos não aceitam esse
+formato. Escolha/preparo/aplicação/gravação são ações distintas, sem execução.
+
+Seletores editoriais SQL/cruzamento invalidam respostas e erros por geração da
+seleção, inclusive saída/retorno ao mesmo contexto. Troca limpa prévia/erro,
+preserva sementes aplicadas e não repete leituras. Desmontagem ignora entrega
+tardia e libera bloqueio; não promete cancelamento da requisição.
+
+Datasets de cruzamento têm origem própria por fonte, fixando consulta/revisão e
+publicação/hash. Exigem Client, dependências ativas e treinamento igual ao snapshot
+publicado. Aplicar muda só sementes da fonte; salvar revalida plano/fontes sem
+duplicatas e recalcula hashes por origem. Omissão não apaga linhagem anterior.
+Formato é exclusivo de casos de transporte, sem relatório, execução ou concessão
+herdados. A alternativa direta e a composição têm formatos próprios acima.
+
+Sementes editoriais de operação SQL exigem consulta importada da mesma persona,
+fonte/dialeto, revisões explícitas e papel editorial vigente. Origem própria
+operation-dataset-case-origin-v1 é reconferida ao salvar por Client/CAS; hashes
+e modificação são derivados. Aplicar muda somente sementes locais, sem converter
+treinamento, herdar relatórios ou executar runner. Casos SQL vinculados exigem
+Client para cadastro/edição; remoção continua separada. Cruzamentos não aceitam
+esse formato; ver knowledge-library.md.
+Editor SQL lista versões do dataset pelo vínculo exato da consulta/template,
+sem adotar a mais recente. Troca invalida prévia, preserva caso e exige preparação
+e aplicação explícitas; falha não permite aplicar prévia da seleção anterior.
+
+Galeria de mascotes é apresentação local: assets fixados por revisão/hash/licença,
+prévia opt-in com movimento reduzido e download manual. Escolher retrato só prepara
+PNG; salvar reutiliza sessão/CSRF/CAS do ícone. Nunca anuncia instalação de Pet,
+criação de Dot, mudança de avatar remoto ou ampliação de concessões.
+
+Grupos de navegação são apresentação das rotas existentes, sem conceder acesso.
+Edição da persona/ícone e disponibilidade ficam recolhidas na visão geral;
+recolher preserva rascunhos e navegar mantém confirmação de descarte.
+
+Ícone removido conserva revisão em marcador sem bytes. Recriação nunca reinicia
+a revisão; CAS recusa abas antigas. `hasIcon` indica presença separada da revisão.
+Leitura pública omite marcadores e personas suspensas; não altera autorização.
+Editor bloqueia envio antes de ler arquivo, informa estados e só repete leitura
+por ação explícita; arquivo inválido não descarta seleção válida anterior.
+Resumo mostra aparência salva, nunca o rascunho local. Descarte não envia requisição.
+Conflito ou confirmação perdida exige releitura explícita antes de novo envio,
+preservando a seleção; falha de releitura mantém o bloqueio. Destaque de mascote
+salvo vale apenas na sessão que o escolheu, sem classificação persistida.
+
 Buscas do console filtram somente registros já carregados e preservam seleção e
 edições, sem persistir termos ou ampliar autoridade. Carregamento sob demanda
 mantém guardas de descarte; erros de download não repetem efeitos nem recarregam
@@ -13,6 +79,9 @@ os testes integrados; o comando completo da CI mantém ambas as rodadas.
 
 Feedback de formulário usa validação nativa e mensagens sem valores sensíveis;
 preserva edição não secreta após erro, sem reter credenciais ou sessão expirada.
+Edição de persona associa apenas campos recusados pelo servidor ao formulário
+que enviou a requisição. Links de erro abrem seções recolhidas para focar o campo,
+sem descartar rascunhos ou repetir requisições.
 Roteiro destaca próximo passo segundo estado do servidor, nunca concede acesso.
 Revisão de impacto de fonte bloqueia duplicação antes da primeira espera; feedback
 de processamento não autoriza retry. Avisos de revogação/integração explicam

@@ -7,6 +7,20 @@ O primeiro deploy remoto foi executado em 2026-10-25; veja a
 [evidência do servidor](validation/2026-10-25-first-remote-test-deployment.md).
 As instruções abaixo também servem para preparar um novo destino.
 
+## Atualização de aparência do console
+
+As alterações locais de ícone, navegação e mascotes têm
+[evidência própria](validation/2026-10-26-console-appearance.md); não estão
+certificadas pelo primeiro deploy de 25/10. Sua publicação deve incluir frontend
+e backend da mesma revisão e a migração aditiva `0045_persona_icon_revision.sql`,
+executada explicitamente pelo fluxo abaixo antes da subida dos serviços.
+Ela permite conservar a revisão de ícones removidos; não altera a migration 0044.
+O build inclui retratos, atlas, ZIPs e licença. Não é necessário baixar assets de
+terceiros no servidor em execução. Após publicar, conferir leitura do ícone,
+remoção/recriação, recusa de revisão antiga e downloads da galeria no destino.
+Esta nota não registra commit, push, aplicação da migration ou deploy dessas
+alterações; essas etapas exigem evidência da revisão efetivamente publicada.
+
 ## Implementado
 
 | Frente             | Entrega                                                                                                                                                                                                                    |
@@ -96,8 +110,9 @@ Ela não comprova infraestrutura remota. A [rodada no servidor](validation/2026-
 registra separadamente CI, receptor, configuração, migrations, HTTPS e verificações
 automatizadas do primeiro deploy, sem declarar aceite funcional humano.
 
-A avaliação consumidora real, integração editorial de datasets em operações e
-cruzamentos e homologações ampliadas continuam no [plano](remaining-plan.md).
+A avaliação consumidora real, ampliação da integração editorial de datasets
+(operações têm sementes por consulta e importação direta; cruzamentos, por consulta publicada)
+e homologações ampliadas continuam no [plano](remaining-plan.md).
 Não são funções novas implementadas pelo deploy nem motivo para declarar testes
 manuais aprovados. Rotas e componentes legados compartilhados com regressões
 permanecem; o fluxo ativo não os seleciona.

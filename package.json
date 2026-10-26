@@ -55,6 +55,7 @@
     "training:check": "tsx scripts/check-training-base.ts",
     "plugin:package": "tsx --env-file-if-exists=.env scripts/package-chatgpt-plugin.ts",
     "plugin:check": "tsx scripts/check-plugin-package.ts",
+    "plugin:compare": "tsx scripts/compare-persona-plugin.ts",
     "oauth:revoke": "tsx --env-file-if-exists=.env scripts/revoke-chatgpt-oauth.ts",
     "node:check": "node scripts/check-node-version.mjs",
     "test:chatgpt:https": "vitest run tests/integration/cimd-https.test.ts",

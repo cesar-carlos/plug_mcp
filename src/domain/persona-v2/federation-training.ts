@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { federationDatasetOriginSchema } from "./federation-dataset.js";
 import { fixtureSeedsSchema, queryPublicationCaseSchema } from "./publication-fixture.js";
 import { federationBudgetSchema } from "./federation-budget-schema.js";
 const id = z
@@ -157,6 +158,7 @@ export type FederationTraining = z.infer<typeof federationTrainingSchema>;
 export type FederationCase = z.infer<typeof federationCaseSchema>;
 export const federationPublicationCaseSchema = z.strictObject({
   name: z.string().min(1).max(200),
+  editorialOrigin: federationDatasetOriginSchema.optional(),
   input: z.strictObject({
     plan: federationPlanSchema,
     sources: z

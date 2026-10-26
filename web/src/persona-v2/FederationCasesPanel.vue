@@ -15,15 +15,30 @@ import FederationTypedRowsEditor from "./FederationTypedRowsEditor.vue";
 import { scalarTypes } from "./operation-editor";
 import type { QueryDependency } from "./federation-editor";
 import { useErrorSummary } from "./useErrorSummary";
+import OperationDatasetPicker from "./OperationDatasetPicker.vue";
+import DirectOperationDatasetPicker from "./DirectOperationDatasetPicker.vue";
+import {
+  datasetCompositionSeedsSchema,
+  type DatasetCompositionSeeds,
+} from "../../../src/domain/persona-v2/dataset-composition";
+import {
+  federationDatasetSeedsSchema,
+  type FederationDatasetSeeds,
+} from "../../../src/domain/persona-v2/federation-dataset";
 const props = defineProps<{
   training: FederationTraining;
   publications: QueryDependency[];
   cases: readonly TrainingCase[];
   disabled: boolean;
   confirmDiscard: () => Promise<boolean>;
+  api?: <T>(url: string, body?: unknown) => Promise<T>;
+  base?: string;
+  skillId?: string;
+  revision?: number;
 }>();
 const emit = defineEmits<{
   dirty: [boolean];
+  lock: [boolean];
   save: [
     {
       id?: string;
@@ -40,6 +55,36 @@ const current = ref<FederationCase | FederationPublicationCase>(),
   removeConfirmed = ref(false),
   resetConfirmed = ref(false);
 const mode = ref("transport");
+const datasetPublications = ref<Record<string, string>>({});
+function datasetDependencies(sourceId: string) {
+  return props.publications.filter(
+    (p) =>
+      p.sourceId === sourceId &&
+      props.training.steps.some((s) => s.kind === "local" && s.publicationId === p.id),
+  );
+}
+function applyDataset(value: FederationDatasetSeeds | DatasetCompositionSeeds) {
+  if (!native.value || props.disabled) return;
+  const copy =
+    value.origin.format === "federation-source-dataset-composition-v1"
+      ? datasetCompositionSeedsSchema.parse(value)
+      : federationDatasetSeedsSchema.parse(value);
+  if (copy.origin.format === "operation-dataset-composition-v1") return;
+  const origin = copy.origin;
+  const target = native.value.input.sources.find((source) => source.sourceId === copy.sourceId);
+  if (!target || !datasetDependencies(copy.sourceId).some((p) => p.id === origin.publicationId))
+    return;
+  target.fixtures = copy.fixtures;
+  native.value.editorialOrigin = {
+    format: "federation-dataset-case-origin-v1",
+    sources: [
+      ...(native.value.editorialOrigin?.sources ?? []).filter(
+        (source) => source.sourceId !== copy.sourceId,
+      ),
+      copy.origin,
+    ],
+  };
+}
 const synthetic = computed(() =>
   current.value && "fixtures" in current.value.input
     ? (current.value as FederationCase)
@@ -96,6 +141,7 @@ function resetPlan() {
     return;
   }
   const old = current.value;
+  datasetPublications.value = {};
   mode.value = native.value ? "transport" : "synthetic";
   current.value = { ...freshCase(), name: old.name };
   resetConfirmed.value = false;
@@ -124,6 +170,7 @@ async function edit(test?: TrainingCase) {
     return;
   }
   id.value = test?.id ?? "";
+  datasetPublications.value = {};
   required.value = test?.required ?? true;
   removeConfirmed.value = false;
   resetConfirmed.value = false;
@@ -141,6 +188,7 @@ async function close() {
     return;
   }
   current.value = undefined;
+  datasetPublications.value = {};
   removeConfirmed.value = false;
   error.value = "";
 }
@@ -256,6 +304,56 @@ function submit(remove = false) {
               Estas sementes são destinadas apenas à fixture declarada pelo operador. O console não
               escreve na base cadastrada.
             </p>
+            <template v-if="api && base && skillId && revision">
+              <label
+                >Consulta publicada de origem do dataset
+                <select v-model="datasetPublications[source.sourceId]">
+                  <option value="">Selecione</option>
+                  <option
+                    v-for="dependency in datasetDependencies(source.sourceId)"
+                    :key="dependency.id"
+                    :value="dependency.id"
+                  >
+                    {{ dependency.name }} · revisão {{ dependency.revision }}
+                  </option>
+                </select>
+              </label>
+              <DirectOperationDatasetPicker
+                v-if="datasetPublications[source.sourceId]"
+                :key="`direct:${id}:${source.sourceId}:${datasetPublications[source.sourceId]}`"
+                :api="api"
+                :base="base"
+                :skill-id="skillId"
+                :revision="revision"
+                :source-id="source.sourceId"
+                :federation-publication-id="datasetPublications[source.sourceId]"
+                :disabled="disabled"
+                @composition="applyDataset"
+                @lock="emit('lock', $event)"
+              />
+              <OperationDatasetPicker
+                v-if="datasetPublications[source.sourceId]"
+                :key="`${id}:${source.sourceId}:${datasetPublications[source.sourceId]}`"
+                :api="api"
+                :base="base"
+                :skill-id="skillId"
+                :revision="revision"
+                :source-id="source.sourceId"
+                :federation-publication-id="datasetPublications[source.sourceId]"
+                :disabled="disabled"
+                @federation="applyDataset"
+                @lock="emit('lock', $event)"
+              />
+              <p
+                v-if="
+                  native.editorialOrigin?.sources.some((item) => item.sourceId === source.sourceId)
+                "
+                class="field-help"
+              >
+                Origem editorial registrada somente para esta base; salvar reconfere a publicação e
+                o dataset.
+              </p>
+            </template>
             <fieldset v-for="(table, i) in source.fixtures" :key="i">
               <legend>Tabela sintética {{ i + 1 }}</legend>
               <label

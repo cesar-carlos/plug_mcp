@@ -290,29 +290,33 @@ export class PersonaMaintenance {
     );
   }
 
-  async personaIcon(sessionId: string, personaId: string): Promise<{ revision: number }> {
+  async personaIcon(
+    sessionId: string,
+    personaId: string,
+  ): Promise<{ revision: number; hasIcon: boolean }> {
     z.uuid().parse(personaId);
-    return this.owned(sessionId, personaId, async (tx) => ({
-      revision: (await tx.readPersonaIcon(personaId))?.revision ?? 0,
-    }));
+    return this.owned(sessionId, personaId, async (tx) => {
+      const icon = await tx.readPersonaIcon(personaId);
+      return { revision: icon?.revision ?? 0, hasIcon: !!icon?.bytes.length };
+    });
   }
 
   async setPersonaIcon(
     sessionId: string,
     personaId: string,
     raw: unknown,
-  ): Promise<{ revision: number }> {
+  ): Promise<{ revision: number; hasIcon: boolean }> {
     z.uuid().parse(personaId);
     const input = personaIconSchema.parse(raw);
     return this.owned(sessionId, personaId, async (tx) => {
       const current = (await tx.readPersonaIcon(personaId))?.revision ?? 0;
       this.assertVersion(current, input.expectedRevision);
       if (input.bytes === null) {
-        if (current === 0) return { revision: 0 };
+        if (current === 0) return { revision: 0, hasIcon: false };
         await tx.clearPersonaIcon(personaId, current);
-        return { revision: 0 };
+        return { revision: current + 1, hasIcon: false };
       }
-      return { revision: await tx.savePersonaIcon(personaId, input.bytes, current) };
+      return { revision: await tx.savePersonaIcon(personaId, input.bytes, current), hasIcon: true };
     });
   }
 

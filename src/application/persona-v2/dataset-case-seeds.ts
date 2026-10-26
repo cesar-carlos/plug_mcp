@@ -24,10 +24,16 @@ import { decodeLibrary, validateDataset, type LibraryPayload } from "./knowledge
 type Template = Extract<LibraryPayload, { kind: "template" }>;
 type Dataset = Extract<LibraryPayload, { kind: "dataset" }>;
 
+interface DatasetSeedScope {
+  dialect: QueryTraining["dialect"];
+  tables: { name: string; resourceType?: string }[];
+  columns: { table: string; name: string; classification: string }[];
+}
+
 export function datasetFixtureSeeds(
   template: Template,
   dataset: Dataset,
-  training: QueryTraining,
+  training: DatasetSeedScope,
 ): DatasetCaseSeeds["fixtures"] {
   validateDataset(dataset, template);
   const physicalTables = new Set<string>();

@@ -3,6 +3,8 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { createHash } from "node:crypto";
+import { buildInfo } from "../../config/build-info.js";
+import { personaPluginCompatibility } from "../plugins/persona-compatibility.js";
 import type { PersonaConsumerCatalog } from "../../application/persona-v2/consumer-catalog.js";
 import {
   knowledgeHistorySchema,
@@ -738,6 +740,13 @@ export const createPersonaV2McpHandler = (
                   requireIdentity();
                   return Promise.resolve({
                     ...queries.capabilities(),
+                    pluginCompatibility: personaPluginCompatibility(oauth ? "chatgpt" : "portable"),
+                    serverBuild: {
+                      version: buildInfo().version,
+                      revision: /^[a-f0-9]{40}$/.test(buildInfo().sha)
+                        ? buildInfo().sha
+                        : "unknown",
+                    },
                     authentication: oauth ? "oauth2" : "bearer",
                     oauth: oauth
                       ? { implemented: true, scope: "se7e:persona", originatorBound: true }

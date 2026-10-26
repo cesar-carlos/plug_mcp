@@ -2,6 +2,7 @@ import { reviewDateFixture } from "../helpers/review-deadline.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import pg from "pg";
+import { z } from "zod";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, expect, it } from "vitest";
 import { composePersonaV2 } from "../../src/composition/compose-persona-v2.js";
@@ -10,6 +11,17 @@ import { personaV2TestDatabaseUrl } from "../../src/config/persona-v2-test.js";
 import { testConfig } from "../../src/config/env.js";
 import { structureContent } from "../helpers/persona-v2-structure.js";
 import { datasetCaseOptionsSchema } from "../../src/domain/persona-v2/dataset-case-options.js";
+import { operationTraining } from "../helpers/persona-v2-operation.js";
+import { directOperationDatasetSeedsSchema } from "../../src/domain/persona-v2/direct-operation-dataset.js";
+import { operationCaseSchema } from "../../src/application/persona-v2/operation-cases.js";
+import { datasetCompositionSeedsSchema } from "../../src/domain/persona-v2/dataset-composition.js";
+import { federationTraining, federationPlan } from "../helpers/persona-v2-federation.js";
+import { queryTrainingSchema } from "../../src/application/persona-v2/query-training.js";
+import { federationPublicationCaseSchema } from "../../src/domain/persona-v2/federation-training.js";
+import {
+  federationDatasetSeedsSchema,
+  type FederationDatasetSeeds,
+} from "../../src/domain/persona-v2/federation-dataset.js";
 import { relationshipFixture } from "../helpers/persona-v2-relationships.js";
 import { PostgresPhysicalProfiles } from "../../src/infrastructure/persistence/persona-v2/physical-profiles.js";
 import type {
@@ -516,6 +528,576 @@ it("template exige mapeamento explícito de fonte/dialeto e cria somente rascunh
     .send({ confirmationHash: preview.body.confirmationHash })
     .expect(409);
 });
+it("importa dataset diretamente para operação sem consulta e reconfere origem, fonte e papel no salvamento", async () => {
+  const c = await catalog();
+  const library = `/api/admin/catalogos/${c.id}/biblioteca`;
+  const reference = (value: unknown) =>
+    z.object(directOperationDatasetSeedsSchema.shape.template.shape).parse(value);
+  const template = reference(
+    (
+      await api(alice, "post", library)
+        .send({
+          slug: "direct-template",
+          name: "Template direto",
+          expectedVersion: 0,
+          payload: { kind: "template", content: structureContent() },
+        })
+        .expect(201)
+    ).body,
+  );
+  const dataset = reference(
+    (
+      await api(alice, "post", library)
+        .send({
+          slug: "direct-dataset",
+          name: "Dataset direto",
+          expectedVersion: 0,
+          payload: {
+            kind: "dataset",
+            templateId: template.id,
+            templateVersion: template.version,
+            templateHash: template.hash,
+            provenance: { kind: "synthetic", description: "Fixture direta isolada" },
+            tables: [
+              {
+                tableId: "orders",
+                columns: [{ name: "amount", type: "decimal" }],
+                rows: [["17.25"]],
+              },
+            ],
+          },
+        })
+        .expect(201)
+    ).body,
+  );
+  const persona = (
+    await api(bob, "post", "/api/admin/personas")
+      .send({
+        name: "Sem consulta intermediária",
+        specialty: "Fixture",
+        instructions: "Não inventar",
+      })
+      .expect(201)
+  ).body.persona as { id: string };
+  const base = `/api/admin/personas/${persona.id}`;
+  const source = (
+    await api(bob, "post", `${base}/fontes`)
+      .send({
+        name: "Fonte isolada",
+        purpose: "Fixture",
+        environment: "test",
+        agentId: randomUUID(),
+        dialect: "postgres",
+        email: "source@fixture.test",
+        password: "fixture-password",
+        clientToken: "fixture-token",
+      })
+      .expect(201)
+  ).body.fonte as { id: string };
+  const operation = (
+    await api(bob, "post", `${base}/skills`)
+      .send({
+        slug: "direct-operation",
+        name: "Operação direta",
+        kind: "operacao_sql",
+        training: operationTraining(source.id),
+      })
+      .expect(201)
+  ).body.skill as { id: string };
+  const root = `${base}/skills/${operation.id}`;
+  const endpoint = `${root}/sementes-dataset-operacao-direto`;
+  const selection = { expectedRevision: 1, catalogId: c.id, dataset };
+  await api(bob, "post", endpoint).send(selection).expect(403);
+  await api(alice, "post", `/api/admin/catalogos/${c.id}/membros`)
+    .send({ expectedVersion: 1, hubClientId: "bob", role: "reader" })
+    .expect(204);
+  await api(bob, "post", endpoint).send(selection).expect(403);
+  await api(alice, "post", `/api/admin/catalogos/${c.id}/membros`)
+    .send({ expectedVersion: 2, hubClientId: "bob", role: "contributor" })
+    .expect(204);
+  await api(alice, "post", endpoint).send(selection).expect(403);
+  await api(bob, "post", endpoint).set("X-CSRF-Token", "wrong").send(selection).expect(403);
+  await request(runtime.app)
+    .post(endpoint)
+    .set("Host", "127.0.0.1:3333")
+    .set("Origin", "http://127.0.0.1:3333")
+    .set("Authorization", "Bearer fixture-not-session")
+    .send(selection)
+    .expect(403);
+  await api(bob, "post", endpoint)
+    .send({ ...selection, expectedRevision: 2 })
+    .expect(409);
+  await api(bob, "post", endpoint)
+    .send({ ...selection, dataset: { ...dataset, hash: "0".repeat(64) } })
+    .expect(409);
+  await api(bob, "post", endpoint)
+    .send({ ...selection, dataset: { ...dataset, version: 999 } })
+    .expect(403);
+  const prepared = directOperationDatasetSeedsSchema.parse(
+    (await api(bob, "post", endpoint).send(selection).expect(200)).body,
+  );
+  expect(prepared.origin).toMatchObject({
+    format: "operation-direct-dataset-case-origin-v1",
+    sourceId: source.id,
+    template,
+    dataset,
+    modified: false,
+  });
+  expect(prepared.origin).not.toHaveProperty("querySkillId");
+  expect(prepared.fixtures[0]?.rows[0]?.amount).toEqual({ type: "decimal", value: "17.25" });
+  expect(
+    (await db.query("SELECT count(*) n FROM skill_v2 WHERE persona_id=$1", [persona.id])).rows[0].n,
+  ).toBe("1");
+  const before = (await api(bob, "get", `${root}/testes-operacao`).expect(200)).body as {
+    cases: unknown[];
+    reports: unknown[];
+    revision: number;
+  };
+  expect(before).toMatchObject({ cases: [], reports: [], revision: 1 });
+  const content = operationCaseSchema.parse({
+    name: "Caso direto",
+    editorialOrigin: prepared.origin,
+    input: { parameters: {}, fixtures: prepared.fixtures },
+    expected: { error: "INVALID_PLAN" },
+  });
+  for (const origin of [
+    { ...prepared.origin, sourceVersion: 999 },
+    { ...prepared.origin, template: { ...template, hash: "0".repeat(64) } },
+    { ...prepared.origin, sourceId: randomUUID() },
+  ])
+    await api(bob, "post", `${root}/casos-operacao`)
+      .send({
+        expectedRevision: 1,
+        required: true,
+        content: { ...content, editorialOrigin: origin },
+      })
+      .expect(409);
+  await api(bob, "post", `${root}/casos-operacao`)
+    .send({
+      expectedRevision: 1,
+      required: true,
+      content: {
+        ...content,
+        editorialOrigin: {
+          ...prepared.origin,
+          sourceSeedsHash: "0".repeat(64),
+          caseSeedsHash: "0".repeat(64),
+          modified: true,
+        },
+      },
+    })
+    .expect(200);
+  const saved = (await api(bob, "get", `${root}/testes-operacao`).expect(200)).body as {
+    cases: { id: string; content: unknown }[];
+    reports: unknown[];
+    requiredApproved: boolean;
+  };
+  expect(operationCaseSchema.parse(saved.cases[0]!.content).editorialOrigin).toEqual(
+    prepared.origin,
+  );
+  expect(saved.reports).toEqual([]);
+  expect(saved.requiredApproved).toBe(false);
+  const edited = structuredClone(content);
+  delete edited.editorialOrigin;
+  edited.input.fixtures[0]!.rows[0]!.amount = { type: "decimal", value: "9.50" };
+  await db.query("UPDATE fonte SET authorization_version=authorization_version+1 WHERE id=$1", [
+    source.id,
+  ]);
+  await api(bob, "post", `${root}/casos-operacao`)
+    .send({ expectedRevision: 2, id: saved.cases[0]!.id, required: true, content: edited })
+    .expect(409);
+  await db.query(
+    "UPDATE fonte SET authorization_version=authorization_version-1, ativa=false WHERE id=$1",
+    [source.id],
+  );
+  await api(bob, "post", endpoint)
+    .send({ ...selection, expectedRevision: 2 })
+    .expect(409);
+  await db.query("UPDATE fonte SET ativa=true WHERE id=$1", [source.id]);
+  await api(bob, "post", `${root}/casos-operacao`)
+    .send({ expectedRevision: 2, id: saved.cases[0]!.id, required: true, content: edited })
+    .expect(200);
+  const reread = (await api(bob, "get", `${root}/testes-operacao`).expect(200)).body as {
+    cases: { content: unknown }[];
+  };
+  expect(operationCaseSchema.parse(reread.cases[0]!.content).editorialOrigin).toMatchObject({
+    ...prepared.origin,
+    caseSeedsHash: expect.any(String),
+    modified: true,
+  });
+  await api(alice, "post", `/api/admin/catalogos/${c.id}/membros`)
+    .send({ expectedVersion: 3, hubClientId: "bob", role: null })
+    .expect(204);
+  await api(bob, "post", endpoint)
+    .send({ ...selection, expectedRevision: 3 })
+    .expect(403);
+  await api(bob, "post", `${root}/casos-operacao`)
+    .send({ expectedRevision: 3, id: saved.cases[0]!.id, required: true, content: edited })
+    .expect(403);
+  // Removing the case does not re-read revoked editorial data.
+  await api(bob, "post", `${root}/casos-operacao`)
+    .send({
+      expectedRevision: 3,
+      id: saved.cases[0]!.id,
+      required: true,
+      content: edited,
+      remove: true,
+    })
+    .expect(200);
+  await api(alice, "post", `/api/admin/catalogos/${c.id}/membros`)
+    .send({ expectedVersion: 4, hubClientId: "bob", role: "contributor" })
+    .expect(204);
+  const other = reference(
+    (
+      await api(alice, "post", library)
+        .send({
+          slug: "direct-second",
+          name: "Segundo dataset",
+          expectedVersion: 0,
+          payload: {
+            kind: "dataset",
+            templateId: template.id,
+            templateVersion: template.version,
+            templateHash: template.hash,
+            provenance: { kind: "synthetic", description: "Outra fixture" },
+            tables: [
+              {
+                tableId: "orders",
+                columns: [{ name: "amount", type: "decimal" }],
+                rows: [["8.50"]],
+              },
+            ],
+          },
+        })
+        .expect(201)
+    ).body,
+  );
+  const materials = [
+    { catalogId: c.id, dataset },
+    { catalogId: c.id, dataset: other },
+  ];
+  const composed = datasetCompositionSeedsSchema.parse(
+    (
+      await api(bob, "post", `${root}/compor-sementes-datasets`)
+        .send({ expectedRevision: 4, materials })
+        .expect(200)
+    ).body,
+  );
+  expect(composed.fixtures[0]!.rows.map((row) => row.amount!.value)).toEqual(["17.25", "8.50"]);
+  expect(composed.origin.materials).toHaveLength(2);
+  await api(bob, "post", `${root}/compor-sementes-datasets`)
+    .send({ expectedRevision: 4, materials: [materials[0], materials[0]] })
+    .expect(400);
+  const compositeContent = {
+    ...content,
+    editorialOrigin: composed.origin,
+    input: { ...content.input, fixtures: composed.fixtures },
+  };
+  await api(bob, "post", `${root}/casos-operacao`)
+    .send({ expectedRevision: 4, required: true, content: compositeContent })
+    .expect(200);
+  const compositeSaved = (await api(bob, "get", `${root}/testes-operacao`).expect(200)).body as {
+    cases: { id: string; content: unknown }[];
+    reports: unknown[];
+  };
+  expect(operationCaseSchema.parse(compositeSaved.cases[0]!.content).editorialOrigin).toEqual(
+    composed.origin,
+  );
+  expect(compositeSaved.reports).toEqual([]);
+  await api(alice, "post", `/api/admin/catalogos/${c.id}/membros`)
+    .send({ expectedVersion: 5, hubClientId: "bob", role: null })
+    .expect(204);
+  await api(bob, "post", `${root}/casos-operacao`)
+    .send({
+      expectedRevision: 5,
+      id: compositeSaved.cases[0]!.id,
+      required: true,
+      content: compositeContent,
+    })
+    .expect(403);
+});
+
+it("datasets de cruzamento preservam fontes e publicações sem herdar relatório ou aceitar rascunho divergente", async () => {
+  const c = await catalog();
+  const library = `/api/admin/catalogos/${c.id}/biblioteca`;
+  const template = (
+    await api(alice, "post", library)
+      .send({
+        slug: "federation-template",
+        name: "Template",
+        expectedVersion: 0,
+        payload: { kind: "template", content: structureContent() },
+      })
+      .expect(201)
+  ).body;
+  const persona = (
+    await api(alice, "post", "/api/admin/personas")
+      .send({ name: "Cruzamento editorial", specialty: "Fixture", instructions: "Não inventar" })
+      .expect(201)
+  ).body.persona;
+  const base = `/api/admin/personas/${persona.id}`;
+  const dependencies: {
+    id: string;
+    publicationId: string;
+    queryId: string;
+    queryRevision: number;
+  }[] = [];
+  for (let index = 0; index < 2; index++) {
+    const source = (
+      await api(alice, "post", `${base}/fontes`)
+        .send({
+          name: `Base ${index}`,
+          purpose: "Fixture",
+          environment: "test",
+          agentId: randomUUID(),
+          dialect: "postgres",
+          email: "source@fixture.test",
+          password: "fixture-password",
+          clientToken: "fixture-token",
+        })
+        .expect(201)
+    ).body.fonte;
+    const dataset = (
+      await api(alice, "post", library)
+        .send({
+          slug: `federation-data-${index}`,
+          name: `Dataset ${index}`,
+          expectedVersion: 0,
+          payload: {
+            kind: "dataset",
+            templateId: template.id,
+            templateVersion: 1,
+            templateHash: template.hash,
+            provenance: { kind: "synthetic", description: "Fixture exclusiva" },
+            tables: [
+              {
+                tableId: "orders",
+                columns: [
+                  { name: "id", type: "integer" },
+                  { name: "amount", type: "decimal" },
+                ],
+                rows: [[1, index === 0 ? "10.25" : "20.50"]],
+              },
+            ],
+          },
+        })
+        .expect(201)
+    ).body;
+    let query = (
+      await api(alice, "post", `${base}/skills/template`)
+        .send({
+          catalogId: c.id,
+          templateId: template.id,
+          templateVersion: 1,
+          templateHash: template.hash,
+          sourceId: source.id,
+          sourceVersion: source.authorizationVersion,
+          dialect: "postgres",
+          exampleId: "orders-after-id",
+          slug: `federation-query-${index}`,
+          name: `Consulta ${index}`,
+          dataset: { id: dataset.id, version: 1, hash: dataset.hash },
+        })
+        .expect(201)
+    ).body.skill;
+    query = (
+      await api(alice, "post", `${base}/skills/${query.id}/rascunho`)
+        .send({
+          name: query.name,
+          expectedRevision: query.revision,
+          training: {
+            ...query.training,
+            examples: queryTrainingSchema.parse(query.training).examples!.map((example) => ({
+              ...example,
+              state: "inactive",
+            })),
+          },
+        })
+        .expect(200)
+    ).body.skill;
+    const preview = (
+      await api(alice, "post", `${base}/skills/${query.id}/preview`)
+        .send({ reviewDueAt: reviewDateFixture() })
+        .expect(200)
+    ).body;
+    const publicationResponse = await api(
+      alice,
+      "post",
+      `${base}/skills/${query.id}/publicar`,
+    ).send({ confirmationHash: preview.confirmationHash });
+    expect(publicationResponse.status, JSON.stringify(publicationResponse.body)).toBe(201);
+    const published = publicationResponse.body.publication;
+    dependencies.push({
+      id: source.id,
+      publicationId: published.id,
+      queryId: query.id,
+      queryRevision: query.revision,
+    });
+  }
+  const cross = (
+    await api(alice, "post", `${base}/skills`)
+      .send({
+        slug: "editorial-cross",
+        name: "Cruzamento",
+        kind: "cruzamento",
+        training: federationTraining(dependencies),
+      })
+      .expect(201)
+  ).body.skill;
+  const root = `${base}/skills/${cross.id}`;
+  const selection = (index: number) => ({
+    expectedRevision: 1,
+    publicationId: dependencies[index]!.publicationId,
+    querySkillId: dependencies[index]!.queryId,
+    queryRevision: dependencies[index]!.queryRevision,
+  });
+  await api(bob, "post", `${root}/sementes-dataset-cruzamento`).send(selection(0)).expect(403);
+  await api(alice, "post", `${root}/sementes-dataset-cruzamento`)
+    .send({ ...selection(0), publicationId: randomUUID() })
+    .expect(409);
+  const loadedSeeds: FederationDatasetSeeds[] = [];
+  for (let index = 0; index < 2; index++)
+    loadedSeeds.push(
+      federationDatasetSeedsSchema.parse(
+        (
+          await api(alice, "post", `${root}/sementes-dataset-cruzamento`)
+            .send(selection(index))
+            .expect(200)
+        ).body,
+      ),
+    );
+  const seeds = [loadedSeeds[0]!, loadedSeeds[1]!] as const;
+  expect(seeds[0].sourceId).not.toBe(seeds[1].sourceId);
+  expect(seeds.map((seed) => seed.fixtures[0]!.rows[0]!.amount!.value)).toEqual(["10.25", "20.50"]);
+  const content = {
+    name: "Caso editorial",
+    editorialOrigin: {
+      format: "federation-dataset-case-origin-v1",
+      sources: seeds.map((seed) => seed.origin),
+    },
+    input: {
+      plan: federationPlan(dependencies, randomUUID()),
+      sources: seeds.map((seed) => ({ sourceId: seed.sourceId, fixtures: seed.fixtures })),
+    },
+    expected: { errorCode: "INVALID_PLAN" },
+  };
+  await api(alice, "post", `${root}/casos-cruzamento`)
+    .send({
+      expectedRevision: 1,
+      required: true,
+      content: {
+        ...content,
+        editorialOrigin: {
+          ...content.editorialOrigin,
+          sources: [seeds[0].origin, seeds[0].origin],
+        },
+      },
+    })
+    .expect(400);
+  await api(alice, "post", `${root}/casos-cruzamento`)
+    .send({ expectedRevision: 1, required: true, content })
+    .expect(200);
+  const saved = (await api(alice, "get", `${root}/testes-cruzamento`).expect(200)).body;
+  expect(saved.reports).toEqual([]);
+  expect(saved.requiredApproved).toBe(false);
+  expect(saved.cases[0].content.editorialOrigin).toEqual(content.editorialOrigin);
+  const changed = structuredClone(content);
+  changed.editorialOrigin.sources = [seeds[0].origin];
+  changed.input.sources[0]!.fixtures[0]!.rows[0]!.amount!.value = "1.00";
+  await api(alice, "post", `${root}/casos-cruzamento`)
+    .send({ expectedRevision: 2, id: saved.cases[0].id, required: true, content: changed })
+    .expect(200);
+  const origins = federationPublicationCaseSchema.parse(
+    (await api(alice, "get", `${root}/testes-cruzamento`).expect(200)).body.cases[0].content,
+  ).editorialOrigin!.sources;
+  expect(origins).toHaveLength(2);
+  expect(origins.find((origin) => origin.sourceId === seeds[0].sourceId)!.modified).toBe(true);
+  expect(origins.find((origin) => origin.sourceId === seeds[1].sourceId)!.modified).toBe(false);
+  const directCross = (
+    await api(alice, "post", `${base}/skills`)
+      .send({
+        slug: "direct-cross",
+        name: "Cruzamento direto",
+        kind: "cruzamento",
+        training: federationTraining(dependencies),
+      })
+      .expect(201)
+  ).body.skill as { id: string };
+  const directRoot = `${base}/skills/${directCross.id}`;
+  const directSelection = {
+    expectedRevision: 1,
+    publicationId: dependencies[0]!.publicationId,
+    materials: seeds.map((seed) => ({
+      catalogId: seed.catalogId,
+      dataset: { id: seed.dataset.id, version: seed.dataset.version, hash: seed.dataset.hash },
+    })),
+  };
+  await api(bob, "post", `${directRoot}/compor-sementes-datasets`)
+    .send(directSelection)
+    .expect(403);
+  await api(alice, "post", `${directRoot}/compor-sementes-datasets`)
+    .send({ ...directSelection, publicationId: randomUUID() })
+    .expect(409);
+  const directSeeds = datasetCompositionSeedsSchema.parse(
+    (
+      await api(alice, "post", `${directRoot}/compor-sementes-datasets`)
+        .send(directSelection)
+        .expect(200)
+    ).body,
+  );
+  expect(directSeeds.origin.format).toBe("federation-source-dataset-composition-v1");
+  expect(directSeeds.fixtures[0]!.rows.map((row) => row.amount!.value)).toEqual(["10.25", "20.50"]);
+  const directContent = federationPublicationCaseSchema.parse({
+    ...content,
+    editorialOrigin: { format: "federation-dataset-case-origin-v1", sources: [directSeeds.origin] },
+    input: {
+      ...content.input,
+      sources: [
+        { sourceId: seeds[0].sourceId, fixtures: directSeeds.fixtures },
+        content.input.sources[1],
+      ],
+    },
+  });
+  await api(alice, "post", `${directRoot}/casos-cruzamento`)
+    .send({ expectedRevision: 1, required: true, content: directContent })
+    .expect(200);
+  const directSaved = (await api(alice, "get", `${directRoot}/testes-cruzamento`).expect(200))
+    .body as { cases: { id: string; content: unknown }[]; reports: unknown[] };
+  expect(
+    federationPublicationCaseSchema.parse(directSaved.cases[0]!.content).editorialOrigin,
+  ).toEqual(directContent.editorialOrigin);
+  expect(directSaved.reports).toEqual([]);
+  await db.query(
+    "UPDATE skill_v2 SET rascunho=jsonb_set(rascunho,'{purpose}','\"Mudou\"'), revisao=revisao+1 WHERE id=$1",
+    [dependencies[0]!.queryId],
+  );
+  await api(alice, "post", `${root}/sementes-dataset-cruzamento`)
+    .send({
+      ...selection(0),
+      expectedRevision: 3,
+      queryRevision: dependencies[0]!.queryRevision + 1,
+    })
+    .expect(409);
+  await api(alice, "post", `${base}/skills/${dependencies[1]!.queryId}/suspender`)
+    .send({})
+    .expect(204);
+  const suspended = await api(alice, "post", `${root}/sementes-dataset-cruzamento`).send({
+    ...selection(1),
+    expectedRevision: 3,
+  });
+  expect(suspended.body.error.code).toBe("STALE_AUTHORIZATION");
+  await api(alice, "post", `${root}/compor-sementes-datasets`)
+    .send({
+      expectedRevision: 3,
+      publicationId: dependencies[0]!.publicationId,
+      materials: [{ catalogId: c.id, dataset: seeds[0].dataset }].map(({ catalogId, dataset }) => ({
+        catalogId,
+        dataset: { id: dataset.id, version: dataset.version, hash: dataset.hash },
+      })),
+    })
+    .expect(409);
+});
+
 it("sementes do dataset exigem sessão, revisão, origem exata e papel editorial vigente sem criar casos", async () => {
   const c = await catalog();
   const library = `/api/admin/catalogos/${c.id}/biblioteca`;
@@ -636,6 +1218,125 @@ it("sementes do dataset exigem sessão, revisão, origem exata e papel editorial
   }
   const current = await db.query("SELECT revisao FROM skill_v2 WHERE id=$1", [skill.id]);
   expect(current.rows[0].revisao).toBe(1);
+  const operation = (
+    await api(bob, "post", `${base}/skills`)
+      .send({
+        slug: "dataset-operation",
+        name: "Operação editorial",
+        kind: "operacao_sql",
+        training: operationTraining(source.id),
+      })
+      .expect(201)
+  ).body.skill;
+  const opRoot = `${base}/skills/${operation.id}`;
+  const selection = { expectedRevision: 1, querySkillId: skill.id, queryRevision: 1 };
+  await api(alice, "post", `${opRoot}/sementes-dataset-operacao`).send(selection).expect(403);
+  await api(bob, "post", `${opRoot}/sementes-dataset-operacao`)
+    .set("X-CSRF-Token", "wrong")
+    .send(selection)
+    .expect(403);
+  await api(bob, "post", `${opRoot}/sementes-dataset-operacao`)
+    .send({ ...selection, expectedRevision: 2 })
+    .expect(409);
+  await api(bob, "post", `${opRoot}/sementes-dataset-operacao`)
+    .send({ ...selection, queryRevision: 2 })
+    .expect(409);
+  await api(bob, "post", `${opRoot}/sementes-dataset-operacao`)
+    .send({ ...selection, querySkillId: randomUUID() })
+    .expect(409);
+  const opSeeds = (
+    await api(bob, "post", `${opRoot}/sementes-dataset-operacao`).send(selection).expect(200)
+  ).body;
+  expect(opSeeds).toMatchObject({
+    executable: false,
+    technicalApproval: false,
+    origin: {
+      format: "operation-dataset-case-origin-v1",
+      querySkillId: skill.id,
+      queryRevision: 1,
+      modified: false,
+    },
+  });
+  expect(opSeeds.fixtures).toEqual(result.body.fixtures);
+  const datasetV2 = (
+    await api(alice, "post", `${library}/${dataset.body.id}/versoes`)
+      .send({
+        slug: "seed-dataset",
+        name: "Dataset alternativo v2",
+        expectedVersion: 1,
+        payload: {
+          kind: "dataset",
+          templateId: template.body.id,
+          templateVersion: 1,
+          templateHash: template.body.hash,
+          provenance: { kind: "synthetic", description: "Fixture exclusiva" },
+          tables: [
+            {
+              tableId: "orders",
+              columns: [
+                { name: "id", type: "integer" },
+                { name: "amount", type: "decimal" },
+              ],
+              rows: [[2, "4.25"]],
+            },
+          ],
+        },
+      })
+      .expect(201)
+  ).body;
+  const explicitDataset = { id: datasetV2.id, version: 2, hash: datasetV2.hash };
+  const alternateSeeds = (
+    await api(bob, "post", `${opRoot}/sementes-dataset-operacao`)
+      .send({ ...selection, dataset: explicitDataset })
+      .expect(200)
+  ).body;
+  expect(alternateSeeds.origin.dataset).toEqual(explicitDataset);
+  expect(alternateSeeds.fixtures[0].rows[0].amount).toEqual({ type: "decimal", value: "4.25" });
+  await api(bob, "post", `${opRoot}/sementes-dataset-operacao`)
+    .send({ ...selection, dataset: { ...explicitDataset, hash: "0".repeat(64) } })
+    .expect(409);
+  // Publishing another dataset version never updates the original query binding.
+  const originalAgain = (
+    await api(bob, "post", `${opRoot}/sementes-dataset-operacao`).send(selection).expect(200)
+  ).body;
+  expect(originalAgain.origin.dataset).toEqual(opSeeds.origin.dataset);
+  const opContent = {
+    name: "Caso editorial SQL",
+    editorialOrigin: { ...opSeeds.origin, modified: true, caseSeedsHash: "0".repeat(64) },
+    input: { parameters: {}, fixtures: opSeeds.fixtures },
+    expected: { error: "INVALID_PLAN" },
+  };
+  const opTests = `${opRoot}/testes-operacao`;
+  expect((await api(bob, "get", opTests).expect(200)).body.cases).toEqual([]);
+  await api(bob, "post", `${opRoot}/casos-operacao`)
+    .send({
+      expectedRevision: 1,
+      required: true,
+      content: {
+        ...opContent,
+        editorialOrigin: { ...opSeeds.origin, sourceId: randomUUID() },
+      },
+    })
+    .expect(409);
+  await api(bob, "post", `${opRoot}/casos-operacao`)
+    .send({ expectedRevision: 1, required: true, content: opContent })
+    .expect(200);
+  const opSaved = (await api(bob, "get", opTests).expect(200)).body;
+  expect(opSaved.cases[0].content.editorialOrigin).toEqual(opSeeds.origin);
+  expect(opSaved.reports).toEqual([]);
+  expect(opSaved.requiredApproved).toBe(false);
+  const opEdited = structuredClone(opContent);
+  delete (opEdited as { editorialOrigin?: unknown }).editorialOrigin;
+  opEdited.input.fixtures[0].rows[0].amount.value = "2.25";
+  await api(bob, "post", `${opRoot}/casos-operacao`)
+    .send({ expectedRevision: 2, id: opSaved.cases[0].id, required: true, content: opEdited })
+    .expect(200);
+  expect(
+    (await api(bob, "get", opTests).expect(200)).body.cases[0].content.editorialOrigin,
+  ).toMatchObject({
+    modified: true,
+    sourceSeedsHash: opSeeds.origin.sourceSeedsHash,
+  });
   const caseContent = {
     name: "Caso revisado",
     editorialOrigin: result.body.origin,
@@ -652,7 +1353,7 @@ it("sementes do dataset exigem sessão, revisão, origem exata e papel editorial
   const casesEndpoint = `${base}/skills/${skill.id}/casos-consulta`;
   for (const origin of [
     { ...result.body.origin, catalogId: randomUUID() },
-    { ...result.body.origin, dataset: { ...result.body.origin.dataset, version: 2 } },
+    { ...result.body.origin, dataset: { ...result.body.origin.dataset, version: 999 } },
   ]) {
     await api(bob, "post", casesEndpoint)
       .send({
@@ -660,7 +1361,7 @@ it("sementes do dataset exigem sessão, revisão, origem exata e papel editorial
         required: true,
         content: { ...caseContent, editorialOrigin: origin },
       })
-      .expect(origin.dataset.version === 2 ? 403 : 409);
+      .expect(origin.dataset.version === 999 ? 403 : 409);
   }
   await api(bob, "post", `${base}/skills/${skill.id}/casos`)
     .send({

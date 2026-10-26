@@ -7,6 +7,29 @@ por DV2-017; isso não comprova conexão ChatGPT nem libera o aceite integral.
 
 ## Gerações e variantes
 
+O empacotador v2 gera `references/consumer-guide.md` em cada skill a partir do
+mesmo guia usado no runtime. A validação confere conteúdo e referência, mesmo
+se o inventário for recalculado. O guia cobre recuperação de erros e exemplos
+sintéticos; não comprova comportamento real do modelo.
+
+`compatibility.json` registra variante e hashes das instruções, guia e catálogo.
+`obter_capacidades` autenticado retorna `pluginCompatibility` e `serverBuild`;
+a revisão declarada fica `unknown` quando não há SHA válido. Não inferir revisão
+instalada nem integridade do deploy apenas desse metadado.
+
+Após montar/validar o pacote, salvar o objeto decodificado de capacidades em
+arquivo local sem credenciais e executar:
+
+```sh
+npm run plugin:compare -- --package=CAMINHO_DO_PACOTE --capabilities=capacidades.json
+```
+
+A comparação recusa pacote inválido/obsoleto e retorna falha quando os contratos
+divergem. `installedPackageVerified:false` permanece explícito: pacote local e
+snapshot da resposta não comprovam instalação no ChatGPT. O roteiro de
+[validação sintética no cliente](plugin-client-validation.md) registra a pendência.
+
+
 | Geração      | Fonte                     | Portátil                                   | ChatGPT                                   |
 | ------------ | ------------------------- | ------------------------------------------ | ----------------------------------------- |
 | `legacy`     | `plugins/se7e-chatgpt`    | `/mcp/chatgpt`, OAuth legado               | `.app.json` com ID real da conexão legada |
@@ -20,6 +43,18 @@ exato e revisão/publicação. Prazo humano fica no console e runners são separ
 publicar não aprova lançamentos. Gestão editorial geral e homologação continuam
 no [plano restante](remaining-plan.md). Não há captura automática de consultas.
 O pacote legado conserva seus contratos próprios.
+
+As instruções de treinamento do pacote v2 distinguem casos comuns de casos com
+origem editorial. Cadastro/edição de casos SQL e cruzamentos vinculados a datasets
+exigem Client no console; tools não podem apagar a origem para contornar essa
+restrição. A importação direta SQL é orientada pelo navegador, sem nova tool ou
+consulta intermediária. Casos de consulta conservam a edição delegada limitada
+à origem já salva. [Contrato editorial](knowledge-library.md).
+
+Manutenção segue a skill `plugin-creator:update-plugin` pelo caminho de servidor
+MCP hospedado separadamente: editar este repositório e usar a distribuição
+existente, preservando identidade, conexão e permissões. Revisar ou montar o
+pacote local não cria outro plugin na conta nem atualiza uma instalação remota.
 
 ## Montagem e verificação
 
@@ -101,10 +136,18 @@ anuncia essas URLs em `serverInfo.icons`. Registro por pacote usa a cópia inter
 um formulário que só aceita arquivo pode baixar essas URLs. A URL não concede
 acesso nem substitui o arquivo enviado pelo operador no cliente.
 Cada persona pode ter um PNG próprio em `/brand/personas/{personaId}/icon`.
-A escolha é feita no console, na visão geral ou no treinamento, e não altera
+A escolha é feita no console, em Visão geral → Editar persona, e não altera
 `authorization_version`, publicação ou concessões. Sem imagem, vale o ícone Se7e.
 O `initialize` continua anunciando somente os ícones oficiais do servidor.
 O [console](console.md) documenta os demais assets da interface.
+Inclui galeria de mascotes comunitários MIT com retratos e pacotes Pets v2 para
+download manual. Retrato escolhido continua sendo PNG da persona; animação é
+prévia local. Não substitui a identidade oficial do pacote, configura avatar de
+Dot ou instala conexões/Pets no ChatGPT. Compatibilidade do atlas depende do
+cliente; ver [formatos e limites](console.md#mascotes-comunitários-e-chatgpt).
+O PNG pode ser baixado separadamente em cada cartão. ZIPs e instruções ficam
+recolhidos em “Usar no ChatGPT ou Codex”; nenhum desses downloads confirma
+instalação ou muda o ícone oficial do plugin.
 
 ## OAuth v2 e aceite pendente
 
