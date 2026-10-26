@@ -1842,8 +1842,11 @@ it("pagina perfis pelo catálogo, identidade física e versão base sem revelar 
 afterAll(async () => {
   await runtime?.close();
   await db.end();
-  await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-  await admin.end();
+  try {
+    await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
+  } finally {
+    await admin.end();
+  }
 });
 it("keeps catalogs private, grants readers published snapshots only and revokes direct reads", async () => {
   const c = await catalog();
@@ -2152,7 +2155,7 @@ it("upgrades existing v2 privately and expires previews created before predecess
     ).toBe(0);
   } finally {
     await upgrade.end();
-    await admin.query(`DROP DATABASE IF EXISTS "${upgradeName}" WITH (FORCE)`);
+    await admin.query(`DROP DATABASE IF EXISTS "${upgradeName}"`);
   }
 });
 it("revalidates the hub and keeps metadata-only audit separate from structure payloads", async () => {

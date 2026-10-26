@@ -37,6 +37,11 @@ anteriores preservadas. Esta rodada não representa commit, push ou deploy.
 
 ## Limites
 
+A mesma corrida de fechamento reapareceu em conhecimento compartilhado, após
+332 testes aprovados. O ajuste sem FORCE também cobre as limpezas restantes
+de conhecimento, upgrade, baseline e delegação: todas já encerravam seus pools
+antes do DROP. Conexão vazada continua falhando, em vez de ser interrompida.
+
 Na preparação remota, o CI expôs formatação pendente em nove documentos e uma
 corrida na limpeza da fixture de curadoria física: os 332 testes PostgreSQL
 passaram, mas o DROP com FORCE interrompeu uma conexão ainda em fechamento.

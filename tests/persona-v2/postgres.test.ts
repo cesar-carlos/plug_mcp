@@ -236,7 +236,7 @@ describe("baseline persona-v2 e administração em PostgreSQL real", () => {
       expect(suspensa_em).toBeNull();
     } finally {
       await pool.end();
-      await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+      await admin.query(`DROP DATABASE "${name}"`);
     }
   });
   it("aplica/reaplica baseline e não cria catálogo nem extensões vetoriais", async () => {

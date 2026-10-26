@@ -168,8 +168,11 @@ beforeAll(async () => {
 afterAll(async () => {
   await runtime?.close();
   await db.end();
-  await adminDb.query(`DROP DATABASE "${name}" WITH (FORCE)`);
-  await adminDb.end();
+  try {
+    await adminDb.query(`DROP DATABASE "${name}"`);
+  } finally {
+    await adminDb.end();
+  }
 });
 beforeEach(async () => {
   now = new Date();
