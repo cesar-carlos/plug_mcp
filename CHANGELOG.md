@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: build do console fixa o modo de produção no próprio processo, mesmo
+  quando chamado por fixtures com `NODE_ENV=test`, alinhando navegador e imagem
+  distribuída sem alterar o ambiente de teste do backend.
+
 - Added: guia consumidor compartilhado entre runtime e pacote v2, metadados
   de compatibilidade autenticados e comparação offline por `plugin:compare`.
   Inclui recuperação de erros e cenários sintéticos, sem afirmar instalação.

@@ -9,6 +9,11 @@ As instruções abaixo também servem para preparar um novo destino.
 
 ## Atualização de aparência do console
 
+`npm run build --prefix web` fixa `NODE_ENV=production` somente no processo de
+build do frontend. As fixtures mantêm `NODE_ENV=test` no backend; a interface
+testada deve ser a mesma variante distribuída pelo Docker, sem herdar o modo
+de teste do processo chamador. `npm run dev --prefix web` permanece separado.
+
 As alterações locais de ícone, navegação e mascotes têm
 [evidência própria](validation/2026-10-26-console-appearance.md); não estão
 certificadas pelo primeiro deploy de 25/10. Sua publicação deve incluir frontend

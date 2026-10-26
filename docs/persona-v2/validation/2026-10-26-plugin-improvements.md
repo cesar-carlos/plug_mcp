@@ -44,6 +44,14 @@ A limpeza agora encerra o pool e usa DROP sem FORCE, mantendo a recusa se houver
 conexões remanescentes. Essa correção de teste não altera o runtime nem aprova
 o deploy por si só; a publicação exige nova rodada CI bem-sucedida.
 
+O CI também revelou que o comando de navegador herdava `NODE_ENV=test` ao
+compilar o frontend. Em container Linux isolado, o build normal passou nos
+25 testes; o build herdando test reproduziu três falhas nos seletores SQL.
+O comando web agora fixa production somente em seu processo de compilação.
+Repetir o cenário com `NODE_ENV=test` no chamador passou nos 25 testes (35,5 s),
+sem retirar testes ou mudar expectativas. Falhas anteriores de ícone/reflow do
+runner permanecem no histórico; o aceite da revisão exige CI completo.
+
 A conexão sintética ChatGPT ainda não existe, conforme informado pelo responsável.
 [Roteiro preparado](../plugin-client-validation.md), sem aprovação real do modelo.
 Não foi executada nova cadeia de homologação PostgreSQL/SQL Server/SQL Anywhere
