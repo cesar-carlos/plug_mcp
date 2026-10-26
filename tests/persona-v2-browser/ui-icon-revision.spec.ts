@@ -948,6 +948,8 @@ test("ícone removido conserva revisão no console e recriação usa a revisão 
   await panel.getByRole("button", { name: "Salvar ícone" }).click();
   await expect(panel.getByRole("button", { name: "Salvar ícone" })).toBeDisabled();
   await expect(panel.locator("img")).toHaveAttribute("src", "/brand/icon-192.png");
+  await expect(panel.getByText("Ícone padrão salvo.", { exact: true })).toBeVisible();
+  await expect(panel.getByLabel("Imagem PNG, JPEG ou WebP")).toBeEnabled();
   await panel.getByLabel("Imagem PNG, JPEG ou WebP").setInputFiles({
     name: "icon.png",
     mimeType: "image/png",

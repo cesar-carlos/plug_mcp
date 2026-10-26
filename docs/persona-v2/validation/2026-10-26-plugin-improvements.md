@@ -52,6 +52,13 @@ Repetir o cenário com `NODE_ENV=test` no chamador passou nos 25 testes (35,5 s)
 sem retirar testes ou mudar expectativas. Falhas anteriores de ícone/reflow do
 runner permanecem no histórico; o aceite da revisão exige CI completo.
 
+A rodada seguinte confirmou os seletores corrigidos, mas manteve falhas de
+reflow e sincronização do teste de ícone. O cabeçalho permite quebra e o texto
+do console quebra palavras longas sem recorte; o teste cobre também fonte larga.
+A recriação de ícone aguarda confirmação e campo habilitado, pois `setInputFiles`
+pode preencher controles ainda bloqueados. Os 25 testes passaram em Linux com
+`NODE_ENV=test` (29,6 s). A evidência remota final depende da rodada completa.
+
 A conexão sintética ChatGPT ainda não existe, conforme informado pelo responsável.
 [Roteiro preparado](../plugin-client-validation.md), sem aprovação real do modelo.
 Não foi executada nova cadeia de homologação PostgreSQL/SQL Server/SQL Anywhere

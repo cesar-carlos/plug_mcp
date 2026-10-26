@@ -344,6 +344,12 @@ test("conteúdo tem acesso por teclado, semântica acessível e reflow a 200%", 
   expect(
     await page.evaluate<boolean>("document.documentElement.scrollWidth <= window.innerWidth"),
   ).toBe(true);
+  // A wider fallback font must not turn enlarged navigation/header text into
+  // horizontal scrolling on Linux runners with different installed fonts.
+  await page.evaluate("document.documentElement.style.fontFamily = 'monospace'");
+  expect(
+    await page.evaluate<boolean>("document.documentElement.scrollWidth <= window.innerWidth"),
+  ).toBe(true);
   await page.getByRole("link", { name: "Bases", exact: true }).click();
   await expect(page).toHaveTitle("Bases — Se7e");
   await expect(page.getByText(/Nenhuma base conectada/)).toBeVisible();

@@ -1,5 +1,6 @@
 :root {
   font-family: system-ui, sans-serif;
+  overflow-wrap: anywhere;
   color: #18322f;
   background: #f2f5f3;
 }
@@ -57,6 +58,7 @@ main {
 }
 header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -335,6 +337,7 @@ p {
   min-width: 0;
 }
 .navigation-group-title {
+  overflow-wrap: anywhere;
   margin: 4px 12px 6px;
   color: #455c52;
   font-size: 0.8rem;

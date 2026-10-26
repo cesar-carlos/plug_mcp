@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: cabeçalho e textos do console permitem quebra com zoom e fontes largas;
+  regressão de ícone aguarda a confirmação e a liberação do seletor antes do
+  próximo envio, sem ignorar o bloqueio durante salvamento.
+
 - Fixed: build do console fixa o modo de produção no próprio processo, mesmo
   quando chamado por fixtures com `NODE_ENV=test`, alinhando navegador e imagem
   distribuída sem alterar o ambiente de teste do backend.
