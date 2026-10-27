@@ -106,12 +106,12 @@ test("atalhos e filtros de acesso preservam a edição e levam o foco ao destino
   await expect(form.getByRole("heading", { name: "Editar A", exact: true })).toBeFocused();
   const name = form.getByLabel("Nome do consumidor", { exact: true });
   await name.fill("Edição preservada");
-  const shortcuts = page.getByRole("navigation", { name: "Atalhos de tokens e conexões" });
-  await shortcuts.getByRole("button", { name: "Usar e testar", exact: true }).click();
+  const sections = page.getByRole("tablist", { name: "Seções de tokens e conexões", exact: true });
+  await sections.getByRole("tab", { name: "Usar e testar", exact: true }).click();
   await expect(page.locator("#access-connect")).toBeFocused();
+  await sections.getByRole("tab", { name: "Tokens cadastrados", exact: true }).click();
+  await expect(page.getByRole("tabpanel", { name: "Gerenciar tokens", exact: true })).toBeFocused();
   await expect(name).toHaveValue("Edição preservada");
-  await shortcuts.getByRole("button", { name: "Gerenciar tokens", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Gerenciar tokens", exact: true })).toBeFocused();
   await page.getByLabel("Buscar tokens", { exact: true }).fill("inexistente");
   await expect(page.getByRole("button", { name: "Editar A", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Limpar filtros", exact: true }).click();
@@ -193,7 +193,9 @@ test("sessão expirada durante leitura remove a área autenticada", async ({ pag
   state.expired = true;
   await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
   await expect(page.getByRole("button", { name: "Entrar", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Gerenciar tokens", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tabpanel", { name: "Gerenciar tokens", exact: true })).toHaveCount(
+    0,
+  );
   await expect(page.getByLabel("Senha", { exact: true })).toHaveValue("");
   await expect(
     page.getByText("Sua sessão expirou. Entre novamente.", { exact: true }),
@@ -246,10 +248,13 @@ test("roteiro destaca o próximo passo e ignora resposta da persona anterior", a
     });
   });
   await page.getByRole("link", { name: "Visão geral", exact: true }).click();
+  await page.getByRole("button", { name: "Atualizar roteiro", exact: true }).click();
   await expect.poll(() => started).toBe(true);
   await expect(page.getByText("Conferindo os próximos passos…", { exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: /^Persona/ }).selectOption("second-persona");
-  const next = page.getByRole("complementary", { name: "Próximo passo recomendado", exact: true });
+  const next = page
+    .getByRole("region", { name: "Roteiro da persona", exact: true })
+    .getByRole("complementary", { name: "Próximo passo recomendado", exact: true });
   await expect(
     next.getByRole("link", { name: "Continuar: Abrir bases", exact: true }),
   ).toBeVisible();
@@ -288,7 +293,8 @@ test("diálogo preserva foco e console cabe em tela de celular", async ({ page }
 test("falha OAuth termina carregamento e permite nova tentativa explícita", async ({ page }) => {
   const state = await fixture(page);
   await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
-  const panel = page.getByRole("region", { name: "Conexão ChatGPT", exact: true });
+  await page.getByRole("tab", { name: "Conectar no ChatGPT", exact: true }).click();
+  const panel = page.getByRole("tabpanel", { name: "Conexão ChatGPT", exact: true });
   await expect(panel.getByRole("alert")).toBeVisible();
   await expect(panel).toHaveAttribute("aria-busy", "false");
   await expect(
@@ -391,7 +397,7 @@ test("emissão sob demanda preserva rascunho e resume permissões", async ({ pag
   await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
   const form = page.getByRole("form", { name: "Emitir token", exact: true });
   await expect(form).toBeHidden();
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   await form.getByLabel("Nome do consumidor", { exact: true }).fill("Novo consumidor");
   await form
     .getByLabel("Administrar tokens dentro dos limites de delegação", { exact: true })
@@ -401,7 +407,7 @@ test("emissão sob demanda preserva rascunho e resume permissões", async ({ pag
   await expect(summary).toContainText("Nenhuma base selecionada");
   await page.getByRole("button", { name: "Recolher formulário", exact: true }).click();
   await expect(form).toBeHidden();
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   await expect(form.getByLabel("Nome do consumidor", { exact: true })).toHaveValue(
     "Novo consumidor",
   );
@@ -467,7 +473,8 @@ test("conexão destaca cliente e token e mantém identificadores nos detalhes", 
     }),
   );
   await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
-  const panel = page.getByRole("region", { name: "Conexões OAuth da persona", exact: true });
+  await page.getByRole("tab", { name: "Conexões e delegação", exact: true }).click();
+  const panel = page.getByRole("tabpanel", { name: "Conexões OAuth da persona", exact: true });
   await panel.getByRole("button", { name: "Atualizar conexões OAuth", exact: true }).click();
   await expect(panel.getByText("chatgpt.com", { exact: true })).toBeVisible();
   await expect(panel.getByText("Token financeiro", { exact: true })).toBeVisible();

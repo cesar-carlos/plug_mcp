@@ -930,7 +930,8 @@ test("falha ao buscar retrato mantém a escolha anterior e downloads também apa
   await expect(panel.getByRole("status")).toHaveText("Ícone padrão salvo.");
   expect(sent).toEqual([1]);
   await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
-  const connection = page.getByRole("region", { name: "Conexão ChatGPT", exact: true });
+  await page.getByRole("tab", { name: "Conectar no ChatGPT", exact: true }).click();
+  const connection = page.getByRole("tabpanel", { name: "Conexão ChatGPT", exact: true });
   await connection.getByText("Ícone, mascotes e Dots", { exact: true }).click();
   await connection.getByRole("button", { name: "Ver mascotes para download" }).click();
   await connection.getByText("Usar no ChatGPT ou Codex", { exact: true }).click();
