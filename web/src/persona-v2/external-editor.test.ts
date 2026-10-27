@@ -7,6 +7,9 @@ import {
   proposedRemoteSchema,
   NEW_EXTERNAL_OPERATION,
   editableExternalContract,
+  importedExternalContract,
+  externalDraftStale,
+  externalTestsRevisionChanged,
 } from "./external-editor";
 const field = {
   type: "string" as const,
@@ -85,4 +88,52 @@ it("restrições remotas não suportadas permanecem recusadas, mesmo com campos 
     },
   };
   expect(externalContractSchema.safeParse(raw).success).toBe(false);
+});
+it("proposta importada preenche só o formulário e limpa efeito de consulta", () => {
+  const action = importedExternalContract(
+    {
+      purpose: "Registrar",
+      effect: "acao",
+      transport: { kind: "rest", method: "POST", path: "/x" },
+      input: { id: { ...field } },
+      output: { id: { ...field } },
+    },
+    "11111111-1111-4111-8111-111111111111",
+  );
+  expect(action.integrationId).toBe("11111111-1111-4111-8111-111111111111");
+  expect(action.approval).toBe("human");
+  const query = importedExternalContract(
+    {
+      purpose: "Consultar",
+      effect: "consulta",
+      transport: { kind: "rest", method: "GET", path: "/x" },
+      input: { id: { ...field } },
+      output: { id: { ...field } },
+    },
+    "11111111-1111-4111-8111-111111111111",
+  );
+  expect(query.approval).toBeUndefined();
+  expect(query.effectDescription).toBeUndefined();
+  expect(query.reconciliation).toBeUndefined();
+});
+it("detecta contrato ou revisão divergentes sem alterar o rascunho", () => {
+  const current = contract();
+  expect(
+    externalDraftStale({ contract: current, name: "Serviço isolado" }, current, "Serviço isolado"),
+  ).toBe(false);
+  expect(
+    externalDraftStale({ contract: current, name: "Serviço isolado" }, current, "Outro nome"),
+  ).toBe(true);
+  expect(
+    externalTestsRevisionChanged(
+      { revision: 1, packageHash: "aa", casesHash: "bb" },
+      { revision: 1, packageHash: "aa", casesHash: "bb" },
+    ),
+  ).toBe(false);
+  expect(
+    externalTestsRevisionChanged(
+      { revision: 1, packageHash: "aa", casesHash: "bb" },
+      { revision: 2, packageHash: "aa", casesHash: "bb" },
+    ),
+  ).toBe(true);
 });

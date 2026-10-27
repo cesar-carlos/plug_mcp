@@ -1,10 +1,22 @@
-import type { Training } from "./model";
+import type { CatalogPublication, PublishedPackage } from "../../../src/domain/persona-v2/catalog";
 import type {
   FederationTraining,
   FederationCase,
 } from "../../../src/domain/persona-v2/federation-training";
+import type { Source, Training } from "./model";
 
 export type TrainingStep = FederationTraining["steps"][number];
+export const federationSemanticsLabels: {
+  readonly [K in keyof FederationTraining["semantics"]]: string;
+} = {
+  matching: "Correspondência de registros",
+  normalization: "Normalização das chaves",
+  missing: "Ausência de registros",
+  duplicates: "Duplicidades e grão",
+  units: "Unidades",
+  currency: "Moedas",
+  calendar: "Calendário",
+};
 export function emptyFederation(): FederationTraining {
   return {
     purpose: "",
@@ -112,4 +124,32 @@ export interface QueryDependency {
   sourceName: string;
   dialect: string;
   training: Training;
+}
+
+/** Keep only active query publications. Suspended or non-query packages stay out. */
+export function federationPublicationCandidate(
+  publication: CatalogPublication<PublishedPackage> | null,
+  sources: readonly Pick<Source, "id" | "name" | "dialect" | "active">[],
+): QueryDependency | null {
+  if (
+    !publication ||
+    publication.suspendedAt ||
+    publication.package.format !== "persona-query-v2"
+  ) {
+    return null;
+  }
+  const sourceId = publication.package.sourceId;
+  const source = sources.find((item) => item.id === sourceId);
+  if (!source?.active) {
+    return null;
+  }
+  return {
+    id: publication.id,
+    sourceId: source.id,
+    name: publication.package.name,
+    revision: publication.revision,
+    sourceName: source.name,
+    dialect: source.dialect,
+    training: publication.package.training as Training,
+  };
 }

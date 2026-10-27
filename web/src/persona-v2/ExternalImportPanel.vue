@@ -38,6 +38,7 @@ onBeforeUnmount(() => {
   documentText.value = "";
   result.value = undefined;
   emit("dirty", false);
+  emit("lock", false);
 });
 async function fileChanged(event: Event) {
   const input = event.target as HTMLInputElement,

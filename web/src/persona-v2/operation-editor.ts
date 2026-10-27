@@ -1,5 +1,6 @@
 import type { OperationTraining } from "../../../src/domain/persona-v2/operation-training";
 import type { TypedScalar } from "../../../src/domain/persona-v2/operation";
+import type { Source } from "./model";
 export type { OperationTraining };
 export const scalarTypes = ["string", "integer", "decimal", "date", "uuid", "boolean"] as const;
 export const names = (value: string): string[] =>
@@ -13,6 +14,19 @@ export const scalar = (type: TypedScalar["type"]): TypedScalar =>
     : type === "boolean"
       ? { type, value: false }
       : { type, value: "" };
+/** Rebind the draft to another source. Does not republish or transfer grants. */
+export function operationSourceAssignment(
+  training: OperationTraining,
+  source: Pick<Source, "id" | "dialect"> | undefined,
+  nextId: string,
+): OperationTraining {
+  const next = { ...training, sourceId: nextId };
+  if (source && source.dialect !== "firebird") {
+    next.dialect = source.dialect;
+  }
+  delete next.sharedKnowledge;
+  return next;
+}
 export const emptyOperation = (): OperationTraining => ({
   sourceId: "",
   dialect: "mssql",

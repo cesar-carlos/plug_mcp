@@ -1,3 +1,7 @@
+export function fieldUseCapabilities(capabilities: readonly string[]): string[] {
+  return capabilities.filter((capability) => capability.startsWith("field-use:"));
+}
+
 export function fieldCapabilityLabel(capability: string): string {
   const parts = capability.split(":");
   const labels: Record<string, string> = {

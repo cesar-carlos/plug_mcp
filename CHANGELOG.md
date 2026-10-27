@@ -11,6 +11,36 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: desmontagem do console durante espera (expiração da sessão Client ou
+  `ADMIN_SESSION_EXPIRED`) libera o bloqueio em catálogo, importação externa e
+  revisão de impacto de fonte; o login seguinte volta a aceitar ações. Não
+  reenvia POST, não repete descoberta e não altera CAS, descarte, autorização
+  nem segredo.
+
+- Changed: suspensão de versão do catálogo compartilhado no console passa a usar
+  o diálogo acessível já empregado em tokens, em vez do alerta nativo; o texto
+  continua a distinguir preservação do conteúdo e indisponibilidade para
+  leitores, sem alterar CAS, publicação ativa ou concessões.
+
+- Added: aviso "Guia passo a passo" no console, visível em todas as áreas da
+  persona ativa, reaproveitando o roteiro já existente (`/progresso`) para
+  destacar o próximo passo pendente (ex.: conectar base, preparar skill,
+  publicar, emitir token) com atalho direto; o item correspondente ganha um
+  indicador no menu lateral. É só apresentação do estado do servidor — não
+  concede acesso nem introduz etapas novas; pode ser ocultado/reaberto na
+  sessão. Lógica de leitura do roteiro extraída para um composable
+  compartilhado com o painel completo da Visão geral, evitando duplicação.
+
+- Changed: lista "Tokens cadastrados" do console passa a usar grade responsiva
+  (várias colunas em telas largas) em vez de coluna única; filtro de situação
+  dos tokens passa a ocultar revogados por padrão, com opção explícita para
+  reexibi-los, sem alterar emissão/edição/revogação.
+
+- Changed: "Tokens e conexões" reorganizado em abas reais (Tokens cadastrados,
+  Novo token, Usar e testar, Conectar no ChatGPT, Conexões e delegação) no
+  lugar dos atalhos que apenas rolavam uma única página longa; cada aba mostra
+  só sua seção, preservando rascunhos em edição ao trocar de aba.
+
 - Fixed: teste integrado OAuth confirma o diálogo acessível de delegação do
   console, acompanhando a substituição do alerta nativo sem pular a confirmação.
   Limpeza da fixture OAuth legada não força encerramento de conexões após fechar

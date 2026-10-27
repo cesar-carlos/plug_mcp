@@ -1,43 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
-import type { PersonaProgress } from "../../../src/domain/persona-v2/console";
-import { useErrorSummary } from "./useErrorSummary";
+import { progressStateLabels, usePersonaProgress } from "./use-persona-progress";
 const props = defineProps<{ api: <T>(url: string, body?: unknown) => Promise<T>; base: string }>();
-const progress = ref<PersonaProgress>(),
-  loading = ref(false);
-const { error, errorSummary } = useErrorSummary();
-let live = true;
-onBeforeUnmount(() => {
-  live = false;
+const base = computed(() => props.base);
+const { progress, loading, error, nextStep, load } = usePersonaProgress(props.api, base);
+const errorSummary = ref<HTMLElement>();
+watch(error, async (value) => {
+  if (!value) return;
+  await nextTick();
+  errorSummary.value?.focus();
 });
-const nextStep = computed(() =>
-  progress.value?.steps.find(
-    (step) => step.state !== "concluido" && step.state !== "nao_aplicavel",
-  ),
-);
-const states = {
-  pendente: "Pendente",
-  disponivel: "Disponível",
-  concluido: "Concluído",
-  bloqueado: "Bloqueado",
-  nao_aplicavel: "Não aplicável",
-};
-async function load() {
-  if (loading.value) return;
-  loading.value = true;
-  error.value = "";
-  try {
-    const result = await props.api<PersonaProgress>(`${props.base}/progresso`);
-    if (live) progress.value = result;
-  } catch (cause) {
-    if (!live) return;
-    progress.value = undefined;
-    error.value = cause instanceof Error ? cause.message : "Não foi possível conferir o roteiro.";
-  } finally {
-    loading.value = false;
-  }
-}
 onMounted(load);
 </script>
 <template>
@@ -54,13 +27,13 @@ onMounted(load);
     <p v-if="error" ref="errorSummary" role="alert" tabindex="-1" class="error">{{ error }}</p>
     <p v-if="loading" role="status">Conferindo os próximos passos…</p>
     <aside v-if="nextStep" class="next-step" aria-label="Próximo passo recomendado">
-      <strong>{{ nextStep.label }} · {{ states[nextStep.state] }}</strong>
+      <strong>{{ nextStep.label }} · {{ progressStateLabels[nextStep.state] }}</strong>
       <p>{{ nextStep.reason }}</p>
       <RouterLink :to="{ name: nextStep.area }">Continuar: {{ nextStep.action }}</RouterLink>
     </aside>
     <ol v-if="progress" class="onboarding">
       <li v-for="step in progress.steps" :key="step.id">
-        <strong>{{ step.label }} · {{ states[step.state] }}</strong>
+        <strong>{{ step.label }} · {{ progressStateLabels[step.state] }}</strong>
         <p>{{ step.reason }}</p>
         <RouterLink :to="{ name: step.area }">{{ step.action }}</RouterLink>
       </li>

@@ -320,9 +320,12 @@ Sem recorte, compara o conteúdo integral. Fonte, evidência, catálogo e perfil
 revalidados antes da entrega. `executionReady`, `semanticApproval` e
 `automaticAdoption` permanecem falsos; publicação da skill faz a validação definitiva.
 
-Os [editores do console](console.md#inspeção-compatibilidade-e-perfis-físicos)
-oferecem inspeção, diagnóstico, rascunhos/publicação de perfis e aplicação explícita
-ao rascunho de consultas. A seleção não modifica publicações ou concessões existentes.
+O [workspace de conhecimento da fonte](console.md#inspeção-compatibilidade-e-perfis-físicos)
+orquestra a escolha da versão publicada, a inspeção da base, a conferência de
+compatibilidade, a seleção de tabelas e campos para adoção explícita no rascunho,
+o editor de perfil físico e os painéis de curadoria e calendário de revisão.
+Nenhum padrão ou perfil é adotado automaticamente. A seleção não modifica
+publicações ou concessões existentes.
 
 ## Curadoria e ferramentas MCP
 

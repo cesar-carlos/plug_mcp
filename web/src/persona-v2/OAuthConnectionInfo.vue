@@ -52,6 +52,7 @@ async function copy() {
 <template>
   <section
     id="access-chatgpt"
+    role="tabpanel"
     aria-label="Conexão ChatGPT"
     :aria-busy="loading"
     class="access-card"

@@ -106,6 +106,21 @@ recarrega automaticamente a página. O build não eleva o limite de aviso de tam
 Ao abrir treinamento importado, o foco aguarda a montagem dos painéis e o fim
 das leituras bloqueantes, para não ser perdido por um editor carregado depois.
 
+O shell do console (`PersonaConsole`) orquestra sessão Client, persona ativa,
+descarte por área e o `run` bloqueante. Cada área tem workspace próprio (personas,
+visão geral, bases, treinamentos, consultas, conhecimento, operações, histórico,
+integrações, tokens, catálogo) e composables de bases, treinamentos e consulta/MCP;
+edição de token e concessão ficam no editor dedicado. A extração não concede acesso
+nem altera CAS, confirmação de descarte ou autorização. Suspensão de versão do
+catálogo compartilhado usa o mesmo diálogo acessível das demais confirmações, sem
+alerta nativo.
+
+Sessão Client, ciclo da persona e descarte por área ficam em composables próprios
+(`useConsoleSession`, `useConsolePersona`, `useConsoleDiscard`); o shell só
+orquestra workspaces, busca local e o foco pós-importação. A extração não muda
+CAS, autorização nem o mapa de edição pendente, inclusive o ícone ainda associado
+ao descarte de treinamentos.
+
 Ajuda expansível explica persona, fonte, skill, rascunho/publicação e token/concessão.
 Cadastro de persona oferece exemplos de preenchimento. Estados sem seleção,
 fonte, treinamento ou token orientam a próxima ação; zero resultados da busca
@@ -642,7 +657,13 @@ das capacidades ainda não incluídas no diagnóstico precisam ser concluídos.
 ## Histórico administrativo
 
 `GET /api/admin/personas/:personaId/progresso` retorna as oito etapas, horário,
-motivo, ação e indicação de disponibilidade remota não verificada.
+motivo, ação e indicação de disponibilidade remota não verificada. Além do
+roteiro completo em Visão geral, um aviso compacto ("Guia passo a passo") lê a
+mesma resposta e fica visível nas demais áreas do console, com o próximo passo
+pendente e um atalho; o item correspondente no menu lateral recebe um indicador
+visual. O aviso é só apresentação do mesmo estado do servidor — não concede
+acesso, não recalcula etapas localmente e pode ser ocultado/reaberto pelo
+responsável durante a sessão, sem persistir essa preferência.
 `GET /api/admin/personas/:personaId/historico` retorna até cinquenta eventos e
 `nextCursor { at, id }`, em ordem decrescente de horário/identificador.
 Filtros opcionais: `from`, `to` (ISO com fuso), `event` e `resourceId` (UUID).

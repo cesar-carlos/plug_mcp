@@ -155,6 +155,26 @@ button:disabled {
   padding: 16px;
   margin: 16px 0;
 }
+.guided-setup {
+  margin: 20px 0;
+  padding: 16px 20px;
+  border: 1px solid #c7d5cc;
+  border-radius: 12px;
+  background: #f7faf8;
+}
+.guided-setup-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.guided-setup-heading h3 {
+  margin: 0;
+}
+.guided-setup-heading button {
+  margin: 0;
+}
 .processing-status {
   position: sticky;
   top: 8px;
@@ -340,6 +360,18 @@ p {
   color: white;
   background: #126348;
 }
+.console-menu a.nav-next-step {
+  font-weight: 700;
+}
+.console-menu a.nav-next-step span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #bd651a;
+}
+.console-menu a.nav-next-step[aria-current="page"] span {
+  color: #ffd9ad;
+}
 .mobile-menu {
   display: none;
 }
@@ -351,7 +383,7 @@ p {
   border: 0;
   background: transparent;
 }
-.access-shortcuts,
+.access-tabs,
 .access-actions,
 .access-card-heading,
 .access-record-heading {
@@ -360,13 +392,20 @@ p {
   gap: 8px 16px;
   align-items: center;
 }
-.access-shortcuts {
+.access-tabs {
   margin: 20px 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #c7d5cc;
 }
-.access-shortcuts button,
+.access-tabs button,
 .access-actions button,
 .access-card-heading button {
   margin: 0;
+}
+.access-tabs button[aria-selected="true"] {
+  color: white;
+  background: #126348;
+  border-color: #126348;
 }
 .access-card-heading,
 .access-record-heading {
@@ -400,7 +439,9 @@ p {
   list-style: none;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 12px;
+  align-items: start;
 }
 .access-records > li {
   padding: 16px;

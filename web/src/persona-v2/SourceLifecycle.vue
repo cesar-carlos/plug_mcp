@@ -29,6 +29,7 @@ const summary = ref<HTMLElement>();
 let live = true;
 onBeforeUnmount(() => {
   live = false;
+  emit("lock", false);
 });
 const dirty = computed(() => !!pending.value || Object.values(credentials).some(Boolean));
 watch(dirty, (value) => emit("dirty", value), { immediate: true });

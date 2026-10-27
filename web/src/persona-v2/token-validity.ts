@@ -17,3 +17,15 @@ export const tokenValidityLabels = {
   vence_em_breve: "Vence em até 7 dias",
   desconhecido: "Validade indisponível",
 };
+
+export function localExpiryInput(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+export function expiryFromLocalInput(value: string): string | null {
+  return value ? new Date(value).toISOString() : null;
+}

@@ -1,4 +1,7 @@
+import { canonicalJson } from "../../../src/domain/persona-v2/catalog";
 import type { ExternalContract } from "../../../src/domain/persona-v2/external-contract";
+import type { ExternalImportCandidate } from "../../../src/domain/persona-v2/external-import";
+import type { ExternalTestDetails } from "../../../src/domain/persona-v2/external-run";
 import { reactive } from "vue";
 export function editableExternalContract(value: ExternalContract): ExternalContract {
   // There are no Vue refs in a wire contract. Its recursive JSON schemas remain
@@ -42,4 +45,38 @@ export function newExternalContractFrom(value: ExternalContract): ExternalContra
     operationId: NEW_EXTERNAL_OPERATION,
     ...(value.effect === "acao" ? { approval: "human" as const } : {}),
   };
+}
+
+/** Assemble a form contract from an import proposal. Does not save, publish or grant. */
+export function importedExternalContract(
+  proposal: NonNullable<ExternalImportCandidate["proposal"]>,
+  connectionId: string,
+): ExternalContract {
+  return {
+    ...emptyExternalContract(),
+    ...proposal,
+    integrationId: connectionId,
+    ...(proposal.effect === "consulta"
+      ? { approval: undefined, effectDescription: undefined, reconciliation: undefined }
+      : {}),
+  };
+}
+
+export function externalDraftStale(
+  tests: Pick<ExternalTestDetails, "contract" | "name">,
+  contract: ExternalContract,
+  name: string,
+): boolean {
+  return canonicalJson(tests.contract) !== canonicalJson(contract) || tests.name !== name;
+}
+
+export function externalTestsRevisionChanged(
+  previous: Pick<ExternalTestDetails, "revision" | "packageHash" | "casesHash">,
+  next: Pick<ExternalTestDetails, "revision" | "packageHash" | "casesHash">,
+): boolean {
+  return (
+    previous.revision !== next.revision ||
+    previous.packageHash !== next.packageHash ||
+    previous.casesHash !== next.casesHash
+  );
 }

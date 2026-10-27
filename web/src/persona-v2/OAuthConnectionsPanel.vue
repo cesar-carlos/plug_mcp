@@ -105,6 +105,7 @@ async function revoke() {
 <template>
   <section
     id="access-connections"
+    role="tabpanel"
     aria-labelledby="oauth-connections-heading"
     :aria-busy="busy"
     class="access-card"

@@ -1,29 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import SqlPreparationPanel from "./SqlPreparationPanel.vue";
 import ConsumerOperationPanel from "./ConsumerOperationPanel.vue";
-import type {
-  OperationState,
-  OperationReceipt,
-  OperationReconciliation,
-  SqlOperationCommand,
-} from "../../../src/domain/persona-v2/operation";
 import type { Source } from "./model";
-import type { OperationRetention } from "../../../src/domain/persona-v2/operation-retention";
 import OperationRetentionNotice from "./OperationRetentionNotice.vue";
-interface Operation {
-  operationId: string;
-  publicationId: string;
-  sourceId: string;
-  fingerprint: string;
-  state: OperationState;
-  expiresAt: string;
-  version: number;
-  requireHumanApproval: boolean;
-  receipt: OperationReceipt | null;
-  reconciliation: OperationReconciliation | null;
-  retention?: OperationRetention;
-}
+import { useOperationReview } from "./use-operation-review";
+
 const props = defineProps<{
   api: <T>(url: string, body?: unknown) => Promise<T>;
   base: string;
@@ -39,108 +20,25 @@ const emit = defineEmits<{
   dirty: [value: boolean];
   bearer: [value: string];
 }>();
-const consumerDirty = ref(false);
-const preparationDirty = ref(false);
-const rows = ref<Operation[]>([]),
-  cursor = ref<string | null>(null);
-const selected = ref<Operation & { command: SqlOperationCommand | null }>();
-const busy = ref(false),
-  error = ref(""),
-  message = ref(""),
-  confirmed = ref(false);
-const now = ref(Date.now()),
-  filter = ref("");
-watch([confirmed, consumerDirty, preparationDirty], () =>
-  emit("dirty", confirmed.value || consumerDirty.value || preparationDirty.value),
-);
-const states: Record<OperationState, string> = {
-  preparada: "Preparada",
-  aprovacao_pendente: "Aprovação pendente",
-  aprovada: "Aprovada",
-  executando: "Em execução",
-  concluida: "Concluída",
-  recusada: "Recusada",
-  expirada: "Expirada",
-  rollback_confirmado: "Rollback confirmado",
-  cancelamento_solicitado: "Cancelamento solicitado",
-  cancelada: "Cancelada",
-  resultado_desconhecido: "Resultado desconhecido",
-};
-const visibleRows = computed(() =>
-  rows.value.filter((row) => !filter.value || row.state === filter.value),
-);
-const mayApprove = computed(
-  () =>
-    !!selected.value?.command &&
-    selected.value.state === "aprovacao_pendente" &&
-    Date.parse(selected.value.expiresAt) > now.value &&
-    confirmed.value,
-);
-let live = true;
-const timer = window.setInterval(() => {
-  now.value = Date.now();
-}, 1000);
-onBeforeUnmount(() => {
-  live = false;
-  selected.value = undefined;
-  window.clearInterval(timer);
-  emit("lock", false);
-  emit("dirty", false);
-});
-async function run(action: () => Promise<void>) {
-  if (busy.value || props.disabled) return;
-  busy.value = true;
-  emit("lock", true);
-  error.value = "";
-  message.value = "";
-  try {
-    await action();
-  } catch (cause) {
-    if (live) error.value = cause instanceof Error ? cause.message : "Operação indisponível.";
-  } finally {
-    busy.value = false;
-    emit("lock", false);
-  }
-}
-async function load(more = false) {
-  const result = await props.api<{ operations: Operation[]; nextCursor: string | null }>(
-    `${props.base}/operations${more && cursor.value ? `?after=${encodeURIComponent(cursor.value)}` : ""}`,
-  );
-  if (!live) return;
-  rows.value = more ? [...rows.value, ...result.operations] : result.operations;
-  cursor.value = result.nextCursor;
-}
-async function review(id: string) {
-  if (busy.value || props.disabled) return;
-  if ((confirmed.value || consumerDirty.value) && !(await props.confirmDiscard())) return;
-  if (!live || props.disabled) return;
-  selected.value = undefined;
-  confirmed.value = false;
-  await run(async () => {
-    const result = await props.api<Operation & { command: SqlOperationCommand | null }>(
-      `${props.base}/operations/${id}`,
-    );
-    if (live) selected.value = result;
-  });
-}
-async function approve() {
-  if (!mayApprove.value || !selected.value) return;
-  const reference = {
-    operationId: selected.value.operationId,
-    fingerprint: selected.value.fingerprint,
-  };
-  await run(async () => {
-    const result = await props.api<Operation>(`${props.base}/operations/approve`, reference);
-    if (!live) return;
-    selected.value = undefined;
-    confirmed.value = false;
-    await load();
-    message.value = `Operação ${result.operationId} aprovada. A execução continua dependendo do token solicitante e das permissões vigentes.`;
-  });
-}
-onMounted(() => {
-  void run(() => load());
-});
+const {
+  consumerDirty,
+  preparationDirty,
+  cursor,
+  selected,
+  busy,
+  error,
+  message,
+  confirmed,
+  now,
+  filter,
+  states,
+  visibleRows,
+  mayApprove,
+  run,
+  load,
+  review,
+  approve,
+} = useOperationReview(props, emit);
 </script>
 <template>
   <SqlPreparationPanel

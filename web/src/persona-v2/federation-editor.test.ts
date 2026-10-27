@@ -1,6 +1,14 @@
 import { expect, it } from "vitest";
 import { reactive } from "vue";
-import { emptyFederation, emptyFederationCase, newStep, stepColumns } from "./federation-editor";
+import {
+  emptyFederation,
+  emptyFederationCase,
+  federationPublicationCandidate,
+  federationSemanticsLabels,
+  newStep,
+  stepColumns,
+} from "./federation-editor";
+import type { CatalogPublication, PublishedPackage } from "../../../src/domain/persona-v2/catalog";
 import {
   federationTrainingSchema,
   federationEditableCaseSchema,
@@ -107,4 +115,41 @@ it("casos pelo transporte têm sementes e resultado tipados; não converte forma
       expected: { ...test.expected, rows: [{ value: { type: "decimal", value: 10.25 } }] },
     }).success,
   ).toBe(false);
+});
+it("dependência de cruzamento exige publicação de consulta ativa na base vigente", () => {
+  const publication = {
+    id: "11111111-1111-4111-8111-111111111111",
+    personaId: "22222222-2222-4222-8222-222222222222",
+    skillId: "33333333-3333-4333-8333-333333333333",
+    revision: 3,
+    hash: "a".repeat(64),
+    sourceVersion: 1,
+    sourceFingerprint: "f",
+    suspendedAt: null,
+    package: {
+      format: "persona-query-v2",
+      name: "Pedidos",
+      sourceId: "src-1",
+      training: { tables: [] },
+    },
+  } as CatalogPublication<PublishedPackage>;
+  const source = {
+    id: "src-1",
+    name: "ERP",
+    dialect: "postgres",
+    active: true,
+  } as const;
+  const candidate = federationPublicationCandidate(publication, [source]);
+  expect(candidate).toMatchObject({
+    id: publication.id,
+    sourceId: "src-1",
+    name: "Pedidos",
+    sourceName: "ERP",
+    dialect: "postgres",
+  });
+  expect(
+    federationPublicationCandidate({ ...publication, suspendedAt: new Date() }, [source]),
+  ).toBeNull();
+  expect(federationPublicationCandidate(publication, [{ ...source, active: false }])).toBeNull();
+  expect(Object.keys(federationSemanticsLabels)).toEqual(Object.keys(emptyFederation().semantics));
 });
