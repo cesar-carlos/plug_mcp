@@ -130,7 +130,7 @@ test("gestão de integrações no token exige seleção explícita e permite ret
     );
     const id = await seedExternalConnection(pool, crypto, personaId, "rest");
     await go(page, "Tokens e conexões");
-    await page.getByRole("button", { name: "Novo token", exact: true }).click();
+    await page.getByRole("tab", { name: "Novo token", exact: true }).click();
     const form = page.getByRole("form", { name: "Emitir token", exact: true });
     await form.getByLabel("Nome do consumidor", { exact: true }).fill("Gestor explícito");
     await form
@@ -157,6 +157,7 @@ test("gestão de integrações no token exige seleção explícita e permite ret
       externalOperationIds: [],
       skills: [],
     });
+    await page.getByRole("tab", { name: "Tokens cadastrados", exact: true }).click();
     await page.getByRole("button", { name: "Editar Gestor explícito", exact: true }).click();
     const edit = page.getByRole("form", { name: "Editar token", exact: true });
     const selected = edit
@@ -202,6 +203,7 @@ test("delegação recupera leitura e confirmação perdida sem repetir a mutaç�
     await route.abort("failed");
   });
   await go(page, "Tokens e conexões");
+  await page.getByRole("tab", { name: "Conexões e delegação", exact: true }).click();
   const panel = page.getByRole("region", { name: "Delegação administrativa", exact: true });
   await expect(panel.getByRole("alert")).toBeFocused();
   await panel.getByRole("button", { name: "Conferir estado da delegação", exact: true }).click();
@@ -258,7 +260,7 @@ test("emissão incerta exige conferir lista e nova escolha explícita sem reenvi
     await route.abort("failed");
   });
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const form = page.getByRole("form", { name: "Emitir token", exact: true });
   await form.getByLabel("Nome do consumidor", { exact: true }).fill("Consumidor sem resposta");
   await form
@@ -331,7 +333,7 @@ test("tokens bloqueiam nova alteração após confirmação perdida e recuperam 
     await route.abort("failed");
   });
   await go(page, "Tokens e conexões");
-  const panel = page.getByRole("region", { name: "Gerenciar tokens", exact: true });
+  const panel = page.getByRole("tabpanel", { name: "Gerenciar tokens", exact: true });
   await panel.getByRole("button", { name: "Editar Consumidor fixture", exact: true }).click();
   await panel.getByLabel("Nome do consumidor", { exact: true }).fill("Nome alterado");
   await panel.getByRole("button", { name: "Salvar token", exact: true }).click();
@@ -650,7 +652,8 @@ test("responsável revoga uma conexão OAuth no console sem revogar token ou out
         [id, personaId, tokenId, JSON.stringify(permissions)],
       );
     await go(page, "Tokens e conexões");
-    const panel = page.getByRole("region", { name: "Conexões OAuth da persona", exact: true });
+    await page.getByRole("tab", { name: "Conexões e delegação", exact: true }).click();
+    const panel = page.getByRole("tabpanel", { name: "Conexões OAuth da persona", exact: true });
     await panel.getByRole("button", { name: "Atualizar conexões OAuth", exact: true }).click();
     await expect(
       panel.getByRole("button", { name: `Revisar revogação ${first}`, exact: true }),
@@ -1694,7 +1697,7 @@ test("consumidor prepara ação externa publicada pelo formulário sem executar"
     await page.getByRole("combobox", { name: "Persona", exact: true }).selectOption("");
     await page.getByRole("combobox", { name: "Persona", exact: true }).selectOption(persona.id);
     await go(page, "Tokens e conexões");
-    await page.getByRole("button", { name: "Novo token", exact: true }).click();
+    await page.getByRole("tab", { name: "Novo token", exact: true }).click();
     const tokenForm = page.getByRole("form", { name: "Emitir token", exact: true });
     await tokenForm
       .getByLabel("Nome do consumidor", { exact: true })
@@ -1768,7 +1771,8 @@ test("consumidor prepara ação externa publicada pelo formulário sem executar"
     expect(await page.evaluate(() => localStorage.getItem("bearer"))).toBeNull();
     const originalRequest = await prepareRequest;
     await go(page, "Tokens e conexões");
-    const manager = page.getByRole("region", { name: "Gerenciar tokens", exact: true });
+    await page.getByRole("tab", { name: "Tokens cadastrados", exact: true }).click();
+    const manager = page.getByRole("tabpanel", { name: "Gerenciar tokens", exact: true });
     await manager
       .getByRole("button", { name: "Editar Consumidor externo visual", exact: true })
       .click();
@@ -2268,7 +2272,7 @@ test("emite token administrativo sem consulta e exige seleção explícita de fo
   await createPersona(page, "Treinamento administrativo");
   await addSource(page, "a");
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const form = page.getByRole("form", { name: "Emitir token", exact: true });
   await form.getByLabel("Nome do consumidor", { exact: true }).fill("Treinador limitado");
   await expect(form.getByLabel("Treinar skills nas bases selecionadas")).not.toBeChecked();
@@ -2287,6 +2291,7 @@ test("emite token administrativo sem consulta e exige seleção explícita de fo
   expect(submitted.permissions.sourceIds).toHaveLength(1);
   expect(submitted.permissions.skills).toEqual([]);
   expect(submitted.delegation).toEqual(submitted.permissions);
+  await page.getByRole("tab", { name: "Usar e testar", exact: true }).click();
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
   ).not.toHaveValue("");
@@ -2800,7 +2805,7 @@ test("publica exportação explícita e baixa anexo JSON; troca de token limpa o
   await addSource(page, "a");
   await train(page, "a", true);
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
   await tokens.getByLabel("Nome do consumidor", { exact: true }).fill("Exportação sintética");
   await tokens.getByLabel(/^Pedidos a · revisão 1/).check();
@@ -2895,7 +2900,7 @@ test("publica coluna binária e baixa bytes originais sem mostrá-los na consult
     page.getByText("Treinamento publicado. Libere seu uso em um token.", { exact: true }),
   ).toBeVisible();
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
   await tokens.getByLabel("Nome do consumidor", { exact: true }).fill("Documento sintético");
   await tokens.getByLabel(/^Documento a · revisão 2/).check();
@@ -2955,7 +2960,7 @@ test("reduz limites publicados, do token e da concessão no console", async ({ p
     page.getByText("Treinamento publicado. Libere seu uso em um token.", { exact: true }),
   ).toBeVisible();
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
   await tokens.getByLabel("Nome do consumidor", { exact: true }).fill("Tetos menores");
   await tokens.getByLabel(/^Pedidos a · revisão 2/).check();
@@ -3026,7 +3031,7 @@ test("configura finalidade pessoal no formulário e concede somente o uso public
     page.getByText("Treinamento publicado. Libere seu uso em um token.", { exact: true }),
   ).toBeVisible();
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
   await expect(tokens.getByText("public.orders.amount · filtrar", { exact: true })).toBeVisible();
   await tokens.getByLabel("Nome do consumidor", { exact: true }).fill("Somente filtro");
@@ -3883,12 +3888,13 @@ test("cria persona, conecta duas bases, publica treinamento e consulta dados rea
   await train(page, "a");
   await train(page, "b");
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
   await tokens.getByLabel("Nome do consumidor", { exact: true }).fill("Consulta das duas bases");
   await tokens.getByLabel(/^Pedidos a · revisão/).check();
   await tokens.getByLabel(/^Pedidos b · revisão/).check();
   await tokens.getByRole("button", { name: "Emitir token restrito", exact: true }).click();
+  await page.getByRole("tab", { name: "Usar e testar", exact: true }).click();
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
   ).not.toHaveValue("");
@@ -4147,7 +4153,8 @@ test("teste de conexão não executa SQL, explica ausência de concessões e rec
   const { csrfToken } = await login(page);
   await createPersona(page, "Consumidor isolado");
   await go(page, "Tokens e conexões");
-  await expect(page.getByRole("region", { name: "Conexão ChatGPT", exact: true })).toContainText(
+  await page.getByRole("tab", { name: "Conectar no ChatGPT", exact: true }).click();
+  await expect(page.getByRole("tabpanel", { name: "Conexão ChatGPT", exact: true })).toContainText(
     "OAuth indisponível neste ambiente",
   );
   // The query-token UI requires a published skill. Exercise the existing empty-grant API
@@ -4160,6 +4167,7 @@ test("teste de conexão não executa SQL, explica ausência de concessões e rec
   });
   expect(issued.status()).toBe(201);
   const { bearer } = (await issued.json()) as { bearer: string };
+  await page.getByRole("tab", { name: "Usar e testar", exact: true }).click();
   const bearerInput = page.getByLabel("Token para conectar o cliente ou testar", { exact: true });
   await bearerInput.fill(bearer);
   const calls: string[] = [];
@@ -4188,6 +4196,7 @@ test("teste de conexão não executa SQL, explica ausência de concessões e rec
   ]);
   await createPersona(page, "Outra persona do consumidor");
   await go(page, "Tokens e conexões");
+  await page.getByRole("tab", { name: "Usar e testar", exact: true }).click();
   await bearerInput.fill(bearer);
   calls.length = 0;
   await connection.getByRole("button", { name: "Testar conexão", exact: true }).click();
@@ -4229,6 +4238,8 @@ test("preserva edição pendente e limpa o contexto na troca de persona", async 
   await expect(
     page.getByText("Cadastre a primeira base desta persona.", { exact: true }),
   ).toBeVisible();
+  await go(page, "Tokens e conexões");
+  await page.getByRole("tab", { name: "Usar e testar", exact: true }).click();
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
   ).toHaveValue("");
@@ -4287,7 +4298,7 @@ test("edita persona e fonte, troca credenciais e consulta somente após republic
     }),
   ).toBeVisible();
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
   await expect(tokens.getByLabel(/^Pedidos a · revisão/)).not.toBeVisible();
   await expect(tokens.getByLabel(/^Pedidos b · revisão/)).toBeVisible();
@@ -4490,12 +4501,13 @@ test("nome do rascunho não substitui nome publicado e token pode ser revogado",
     "Nome ainda não publicado · alterações pendentes",
   );
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const issue = page.getByRole("form", { name: "Emitir token" });
   await expect(issue.getByLabel("Pedidos a · revisão 1", { exact: true })).toBeVisible();
   await issue.getByLabel("Nome do consumidor", { exact: true }).fill("Consumidor revogável");
   await issue.getByLabel("Pedidos a · revisão 1", { exact: true }).check();
   await issue.getByRole("button", { name: "Emitir token restrito" }).click();
+  await page.getByRole("tab", { name: "Tokens cadastrados", exact: true }).click();
   await expect(page.getByRole("button", { name: "Editar Consumidor revogável" })).toBeVisible();
   await page.getByRole("button", { name: "Editar Consumidor revogável" }).click();
   const edit = page.getByRole("form", { name: "Editar token" });
@@ -4508,6 +4520,7 @@ test("nome do rascunho não substitui nome publicado e token pode ser revogado",
     .getByRole("button", { name: "Confirmar revogação", exact: true })
     .click();
   await expect(page.getByText("Token revogado.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Usar e testar", exact: true }).click();
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
   ).toHaveValue("");
@@ -4566,7 +4579,7 @@ test("consulta de view preserva o tipo publicado e respeita policy que recusa ta
   };
   const issueAndQuery = async (revision: number) => {
     await go(page, "Tokens e conexões");
-    await page.getByRole("button", { name: "Novo token", exact: true }).click();
+    await page.getByRole("tab", { name: "Novo token", exact: true }).click();
     const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
     await tokens
       .getByLabel("Nome do consumidor", { exact: true })
@@ -4574,6 +4587,7 @@ test("consulta de view preserva o tipo publicado e respeita policy que recusa ta
     await tokens.getByLabel(new RegExp(`^Pedidos da view · revisão ${revision}`)).check();
     await tokens.getByRole("button", { name: "Emitir token restrito", exact: true }).click();
     await expect(page.getByText(/Token emitido/)).toBeVisible();
+    await page.getByRole("tab", { name: "Usar e testar", exact: true }).click();
     const issued = await page
       .getByLabel("Token para conectar o cliente ou testar", { exact: true })
       .inputValue();
@@ -4908,7 +4922,7 @@ test("releitura do treinamento resolve conflito sem perder edição antes de con
   await form.getByRole("button", { name: "Salvar rascunho", exact: true }).click();
   expect((await saved).status()).toBe(200);
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   await expect(
     page
       .getByRole("form", { name: "Emitir token" })
@@ -5683,7 +5697,7 @@ for (const mode of ["somente_parametros", "sql_adaptavel"] as const) {
       throw new Error("Missing SQL publication");
     await go(page, "Tokens e conexões");
     await page.getByRole("button", { name: "Descartar alterações", exact: true }).click();
-    await page.getByRole("button", { name: "Novo token", exact: true }).click();
+    await page.getByRole("tab", { name: "Novo token", exact: true }).click();
     const tokenForm = page.getByRole("form", { name: "Emitir token", exact: true });
     await tokenForm.getByLabel("Nome do consumidor", { exact: true }).fill("Preparação visual SQL");
     const operationChoice = tokenForm.getByRole("checkbox", { name: /revisão.*UPDATE/ });
@@ -6098,7 +6112,7 @@ test("cruza duas bases por publicação real, pagina depois de combinar e recusa
   await page.getByRole("combobox", { name: "Persona", exact: true }).selectOption("");
   await page.getByRole("combobox", { name: "Persona", exact: true }).selectOption(personaId);
   await go(page, "Tokens e conexões");
-  await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokenForm = page.getByRole("form", { name: "Emitir token", exact: true });
   await tokenForm.getByLabel("Nome do consumidor").fill("Cliente de cruzamento");
   await tokenForm.getByLabel(/^Comparar bases · revisão/).check();

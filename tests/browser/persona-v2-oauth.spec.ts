@@ -302,7 +302,8 @@ test("console mostra endereço OAuth vigente e copia sem Bearer", async ({ page,
     .getByRole("navigation", { name: "Áreas do console" })
     .getByRole("link", { name: "Tokens e conexões", exact: true })
     .click();
-  const region = page.getByRole("region", { name: "Conexão ChatGPT", exact: true });
+  await page.getByRole("tab", { name: "Conectar no ChatGPT", exact: true }).click();
+  const region = page.getByRole("tabpanel", { name: "Conexão ChatGPT", exact: true });
   await expect(region).toContainText(`${origin}/mcp/chatgpt`);
   await region.getByRole("button", { name: "Copiar endereço OAuth sem token" }).click();
   await expect(region.getByRole("status")).toContainText("sem token");
@@ -327,6 +328,7 @@ test("delegação no console, consentimento administrativo e setup de uso único
     .getByRole("navigation", { name: "Áreas do console" })
     .getByRole("link", { name: "Tokens e conexões", exact: true })
     .click();
+  await page.getByRole("tab", { name: "Conexões e delegação", exact: true }).click();
   const delegationPanel = page.getByRole("region", { name: "Delegação administrativa" });
   await delegationPanel.getByLabel("Iniciar cadastro e rotação de bases no navegador").check();
   await delegationPanel.getByLabel("Treinar skills nas bases selecionadas").check();
