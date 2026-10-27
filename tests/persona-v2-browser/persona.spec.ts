@@ -2405,8 +2405,11 @@ test("cria catálogo privado, importa padrão e publica somente após revisão e
   await history.getByLabel("Versão de destino").selectOption({ index: 1 });
   await history.getByRole("button", { name: "Comparar versões", exact: true }).click();
   await expect(history.getByText("Alterado: label", { exact: true })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
   await history.getByRole("button", { name: "Suspender revisão 1", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Suspender versão", exact: true })
+    .click();
   await expect(
     region.getByText("Versão suspensa. O conteúdo publicado foi preservado."),
   ).toBeVisible();
@@ -4117,6 +4120,7 @@ test("cria persona, conecta duas bases, publica treinamento e consulta dados rea
   const progress = page.getByRole("region", { name: "Roteiro da persona", exact: true });
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Descartar alterações", exact: true }).click();
+  await progress.getByRole("button", { name: "Atualizar roteiro", exact: true }).click();
   await expect(progress.getByText("Conexão · Concluído", { exact: true })).toBeVisible();
   await expect(progress.getByText("Primeira consulta · Concluído", { exact: true })).toBeVisible();
   await go(page, "Histórico");

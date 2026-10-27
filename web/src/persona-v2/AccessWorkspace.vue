@@ -98,7 +98,13 @@ async function selectTokenTab(tab: AccessTokenTab): Promise<void> {
     tokenCreationOpen.value = true;
   }
   await nextTick();
-  document.getElementById(ACCESS_TOKEN_TAB_SECTIONS[tab])?.focus();
+  const alert =
+    tab === "connections"
+      ? document.querySelector<HTMLElement>(
+          'section[aria-label="Delegação administrativa"] [role="alert"]',
+        )
+      : null;
+  (alert ?? document.getElementById(ACCESS_TOKEN_TAB_SECTIONS[tab]))?.focus();
 }
 </script>
 <template>
@@ -198,6 +204,7 @@ async function selectTokenTab(tab: AccessTokenTab): Promise<void> {
       v-show="tokenTab === 'connections'"
       :key="`delegation:${persona.id}:${delegationKey}`"
       :persona-id="persona.id"
+      :visible="tokenTab === 'connections'"
       :api="api"
       @dirty="delegationDirty = $event"
       @lock="emit('lock', $event)"

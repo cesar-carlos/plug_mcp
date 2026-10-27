@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed, watch } from "vue";
+import { nextTick, onBeforeUnmount, ref, computed, watch } from "vue";
 import { administrativeOptions } from "./administrative-options";
 import { useErrorSummary } from "./useErrorSummary";
 import ConfirmationDialog from "./ConfirmationDialog.vue";
@@ -7,6 +7,7 @@ import { useConfirmation } from "./useConfirmation";
 const { confirmation, ask, answer } = useConfirmation();
 const props = defineProps<{
   personaId: string;
+  visible: boolean;
   api: <T>(url: string, body?: unknown) => Promise<T>;
 }>();
 const state = ref<{
@@ -70,7 +71,22 @@ async function load() {
     }
   }
 }
-onMounted(load);
+watch(
+  () => props.visible,
+  (shown) => {
+    if (!shown) {
+      return;
+    }
+    if (error.value) {
+      void nextTick(() => errorSummary.value?.focus());
+      return;
+    }
+    if (!state.value && !busy.value) {
+      void load();
+    }
+  },
+  { immediate: true },
+);
 async function change(action: "create" | "revoke") {
   if (busy.value || !state.value || !verified.value) return;
   if (

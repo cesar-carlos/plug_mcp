@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: ao abrir a aba Conexões e delegação, o resumo de erro da verificação
+  recebe foco de novo; a leitura só começa com a aba visível, sem alterar
+  autoridade, CAS ou a mutação.
+
 - Fixed: desmontagem do console durante espera (expiração da sessão Client ou
   `ADMIN_SESSION_EXPIRED`) libera o bloqueio em catálogo, importação externa e
   revisão de impacto de fonte; o login seguinte volta a aceitar ações. Não
