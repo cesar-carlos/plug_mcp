@@ -1,5 +1,80 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { ContextRequests, ConsoleRequestError, MCP_TOKEN_REFUSED_MESSAGE } from "./model";
+import { TOKEN_JSON_BYTES } from "../../../src/domain/persona-v2/admin-request-limits";
+
+const tokenPath = "/api/admin/personas/11111111-1111-4111-8111-111111111111/tokens";
+it("conserva incerteza e referência quando o corpo da resposta é ilegível", async () => {
+  const requestId = "11111111-1111-4111-8111-111111111111";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () => new Response("invalid", { status: 503, headers: { "X-Request-ID": requestId } }),
+    ),
+  );
+  const error = await new ContextRequests()
+    .json(tokenPath, { method: "POST", body: "{}" })
+    .catch((cause: unknown) => cause);
+  expect(error).toMatchObject({ code: "RESPONSE_UNCONFIRMED" });
+  expect(error).toBeInstanceOf(ConsoleRequestError);
+  expect((error as Error).message).toContain(requestId);
+});
+it.each(["11111111-1111-4111-8111-111111111111", "private-header"])(
+  "mostra somente referência segura recebida: %s",
+  async (requestId) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: { code: "REQUEST_TOO_LARGE", message: "Seleção excede limite." },
+            }),
+            { status: 413, headers: { "X-Request-ID": requestId } },
+          ),
+      ),
+    );
+    const error = await new ContextRequests()
+      .json(tokenPath, { method: "POST", body: "{}" })
+      .catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ConsoleRequestError);
+    expect((error as Error).message).toBe(
+      requestId === "private-header"
+        ? "Seleção excede limite."
+        : `Seleção excede limite. Código de atendimento: ${requestId}.`,
+    );
+  },
+);
+it.each([
+  "",
+  "/22222222-2222-4222-8222-222222222222/editar",
+  "/22222222-2222-4222-8222-222222222222/rotacionar",
+])("bloqueia excesso UTF-8 antes do envio e preserva conteúdo em %s", async (suffix) => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const init = { method: "POST", body: JSON.stringify({ name: "á".repeat(TOKEN_JSON_BYTES / 2) }) };
+  const original = init.body;
+  await expect(new ContextRequests().json(tokenPath + suffix, init)).rejects.toMatchObject({
+    code: "REQUEST_TOO_LARGE",
+    status: 413,
+  });
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(init.body).toBe(original);
+});
+it("aceita exatamente o teto em bytes sem truncar ou repetir", async () => {
+  const fetchMock = vi.fn(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetchMock);
+  const body = JSON.stringify("a".repeat(TOKEN_JSON_BYTES - 2));
+  await new ContextRequests().json(tokenPath, { method: "POST", body });
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(tokenPath, expect.objectContaining({ body }));
+});
+it("explica 413 HTML do proxy sem expor HTML ou classificar como confirmação perdida", async () => {
+  const fetchMock = vi.fn(async () => new Response("<html>private</html>", { status: 413 }));
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(
+    new ContextRequests().json(tokenPath, { method: "POST", body: "{}" }),
+  ).rejects.toMatchObject({ code: "REQUEST_TOO_LARGE", status: 413 });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();

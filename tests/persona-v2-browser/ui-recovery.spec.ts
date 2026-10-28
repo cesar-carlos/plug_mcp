@@ -202,6 +202,72 @@ test("sessão expirada durante leitura remove a área autenticada", async ({ pag
   ).toBeVisible();
 });
 
+test("recusa de tamanho mostra atendimento e conserva edição sem reenviar", async ({ page }) => {
+  await fixture(page);
+  let attempts = 0;
+  const requestId = "11111111-1111-4111-8111-111111111111";
+  await page.route("**/tokens/token-0/editar", (route) => {
+    attempts++;
+    return route.fulfill({
+      status: 413,
+      headers: { "X-Request-ID": requestId },
+      json: { error: { code: "REQUEST_TOO_LARGE", message: "Seleção excede limite." } },
+    });
+  });
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await page.getByRole("button", { name: "Editar A", exact: true }).click();
+  const form = page.getByRole("form", { name: "Editar token", exact: true });
+  await form.getByLabel("Nome do consumidor", { exact: true }).fill("Edição preservada");
+  await expect(form.getByRole("region", { name: "Tamanho das permissões" })).toContainText(
+    "Delegação:",
+  );
+  await form.getByRole("button", { name: "Salvar token", exact: true }).click();
+  await expect(
+    page.getByText(`Seleção excede limite. Código de atendimento: ${requestId}.`, { exact: true }),
+  ).toBeVisible();
+  await expect(form.getByLabel("Nome do consumidor", { exact: true })).toHaveValue(
+    "Edição preservada",
+  );
+  expect(attempts).toBe(1);
+});
+
+test("editor bloqueia salvar e rotacionar acima do teto sem perder rascunho", async ({ page }) => {
+  const state = await fixture(page);
+  const permissions = {
+    sourceIds: [],
+    externalOperationIds: [],
+    administrative: [],
+    skills: [
+      {
+        skillId: "synthetic",
+        effects: ["select"],
+        requireHumanApproval: false,
+        capabilities: Array.from({ length: 1400 }, (_, index) => `cap-${index}-${"a".repeat(390)}`),
+      },
+    ],
+  };
+  Object.assign(state.tokens[0]!, { permissions, delegation: permissions });
+  let attempts = 0;
+  await page.route("**/tokens/token-0/*", async (route) => {
+    attempts++;
+    await route.fulfill({ json: {} });
+  });
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await page.getByRole("button", { name: "Editar A", exact: true }).click();
+  const form = page.getByRole("form", { name: "Editar token", exact: true });
+  await form.getByLabel("Nome do consumidor", { exact: true }).fill("Edição grande preservada");
+  await expect(form.getByRole("button", { name: "Salvar token", exact: true })).toBeDisabled();
+  await expect(form.getByRole("button", { name: "Gerar novo token", exact: true })).toBeDisabled();
+  await expect(form.getByRole("region", { name: "Tamanho das permissões" })).toContainText(
+    "ultrapassa",
+  );
+  await form.getByLabel("Nome do consumidor", { exact: true }).press("Enter");
+  await expect(form.getByLabel("Nome do consumidor", { exact: true })).toHaveValue(
+    "Edição grande preservada",
+  );
+  expect(attempts).toBe(0);
+});
+
 test("falha ao salvar conserva a edição do token", async ({ page }) => {
   await fixture(page);
   await page.route("**/tokens/token-0/editar", (route) =>
@@ -399,6 +465,7 @@ test("emissão sob demanda preserva rascunho e resume permissões", async ({ pag
   await expect(form).toBeHidden();
   await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   await form.getByLabel("Nome do consumidor", { exact: true }).fill("Novo consumidor");
+  await form.locator("summary").filter({ hasText: "Administração e delegação" }).click();
   await form
     .getByLabel("Administrar tokens dentro dos limites de delegação", { exact: true })
     .check();

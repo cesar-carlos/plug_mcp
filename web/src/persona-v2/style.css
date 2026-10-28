@@ -481,6 +481,38 @@ p {
   border-radius: 8px;
   background: #f2f7f4;
 }
+.token-form-section {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid #c7d5cc;
+  border-radius: 8px;
+}
+.token-form-section > summary {
+  font-weight: 600;
+}
+.token-form-section[open] > summary {
+  margin-bottom: 16px;
+}
+.token-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.token-skill-option {
+  padding: 12px 0;
+  border-bottom: 1px solid #dce5df;
+}
+.token-skill-option:last-child {
+  border-bottom: 0;
+}
+.token-skill-option details {
+  margin: 8px 0 0 24px;
+  overflow-wrap: anywhere;
+}
+.token-permission-help {
+  margin: 12px 0;
+}
 .permission-summary h4 {
   margin-top: 0;
 }

@@ -3,20 +3,19 @@ import {
   assertIssuanceSelection,
   chosenIssuanceSkills,
   clearUncertainIssuance,
-  issuanceExpiresAt,
   listedIssuanceTokens,
   markUncertainIssuance,
 } from "./access-workspace";
 import { ConsoleRequestError, type GrantPublication } from "./model";
 import {
   buildNewTokenPermissions,
-  emptyTokenPermissions,
   selectTokenSkill,
   type PermissionLimits,
   type TokenPermissions,
   type UncertainIssuance,
 } from "./token-permissions";
 import { useConfirmation, type Confirmation } from "./useConfirmation";
+import { tokenIssuanceBody } from "./token-request-size";
 
 export function useTokenIssuance(input: {
   publications: { readonly value: Record<string, GrantPublication> };
@@ -131,12 +130,19 @@ export function useTokenIssuance(input: {
       });
       const ownerPersona = input.personaId.value;
       const issued = await input
-        .api<{ bearer: string }>(`${input.base.value}/tokens`, {
-          name: tokenName.value,
-          expiresAt: issuanceExpiresAt(tokenNoExpiry.value, tokenDays.value, Date.now()),
-          delegation: tokenCanDelegate.value ? nextPermissions : emptyTokenPermissions(),
-          permissions: nextPermissions,
-        })
+        .api<{ bearer: string }>(
+          `${input.base.value}/tokens`,
+          tokenIssuanceBody(
+            {
+              name: tokenName.value,
+              noExpiry: tokenNoExpiry.value,
+              days: tokenDays.value,
+              canDelegate: tokenCanDelegate.value,
+              permissions: nextPermissions,
+            },
+            Date.now(),
+          ),
+        )
         .catch((cause: unknown) => {
           if (cause instanceof ConsoleRequestError && cause.code === "RESPONSE_UNCONFIRMED") {
             input.uncertainIssuance.value = markUncertainIssuance(

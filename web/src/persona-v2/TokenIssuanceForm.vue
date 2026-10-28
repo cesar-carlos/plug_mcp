@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import TokenRequestSize from "./TokenRequestSize.vue";
+import { tokenIssuanceBody, tokenRequestSize } from "./token-request-size";
 import { administrativeOptions } from "./administrative-options";
-import { fieldCapabilityLabel, fieldUseCapabilities } from "./field-capabilities";
+import { groupedFieldLabels } from "./token-list";
 import LimitsEditor from "./LimitsEditor.vue";
 import ManagedIntegrationsSelector from "./ManagedIntegrationsSelector.vue";
 import type { GrantPublication, Source } from "./model";
@@ -38,6 +40,27 @@ const tokenManagedIntegrations = defineModel<string[]>("tokenManagedIntegrations
 const tokenCanDelegate = defineModel<boolean>("tokenCanDelegate", { required: true });
 const tokenNoExpiry = defineModel<boolean>("tokenNoExpiry", { required: true });
 const tokenDays = defineModel<number>("tokenDays", { required: true });
+const requestBody = computed(() => {
+  if (
+    !props.permissions ||
+    (!tokenNoExpiry.value &&
+      (!Number.isFinite(tokenDays.value) || tokenDays.value < 1 || tokenDays.value > 3650))
+  )
+    return undefined;
+  return tokenIssuanceBody(
+    {
+      name: tokenName.value,
+      noExpiry: tokenNoExpiry.value,
+      days: tokenDays.value,
+      canDelegate: tokenCanDelegate.value,
+      permissions: props.permissions,
+    },
+    Date.now(),
+  );
+});
+const tooLarge = computed(() =>
+  requestBody.value ? tokenRequestSize(requestBody.value).exceeded : false,
+);
 const emit = defineEmits<{
   collapse: [];
   inspect: [];
@@ -54,9 +77,7 @@ const issuanceSkillOptions = computed(() =>
             label: `${publication.package.name} · revisão ${publication.revision}${publication.package.format === "persona-query-v2" ? "" : ` · ${publicationEffectsLabel(publication)}`}`,
             checked: selectedSkills.value.includes(id),
             disabled: !!publication.suspendedAt,
-            details: fieldUseCapabilities(publication.package.requiredCapabilities).map(
-              fieldCapabilityLabel,
-            ),
+            details: groupedFieldLabels(publication.package.requiredCapabilities),
           },
         ]
       : [],
@@ -105,30 +126,39 @@ const issuanceSkillOptions = computed(() =>
         Iniciar nova emissão
       </button>
     </section>
-    <form aria-label="Emitir token" @submit.prevent="emit('issue')">
+    <form aria-label="Emitir token" @submit.prevent="!tooLarge && emit('issue')">
       <fieldset :disabled="busy || !!issuanceRecovery">
-        <label>Nome do consumidor<input v-model="tokenName" required /></label>
+        <label>Nome do consumidor<input v-model="tokenName" required maxlength="200" /></label>
         <h4>Escolha o que este token pode acessar</h4>
-        <p v-if="!Object.keys(publications).length" class="notice">
-          Nenhuma skill publicada disponível. Publique uma skill em Treinamentos para conceder
-          acesso às consultas ou operações.
-        </p>
-        <p class="field-help" role="status">
-          {{ selectedSkills.length }} skill(s) selecionada(s) ·
-          {{ tokenAdministrative.length }} permissão(ões) administrativa(s).
-        </p>
-        <p>
-          Selecione consultas, cruzamentos, operações SQL ou capacidades externas. Selecionar uma
-          capacidade externa concede também sua operação específica. Novos lançamentos SQL e ações
-          externas exigem aprovação adicional; a política da skill continua obrigatória. Cada
-          cruzamento exige selecionar também suas consultas dependentes; nenhuma concessão será
-          adicionada automaticamente.
-        </p>
-        <TokenSkillList
-          :options="issuanceSkillOptions"
-          @change="(id, checked) => emit('selectSkill', id, checked)"
-        />
-        <details>
+        <TokenRequestSize v-if="requestBody" :body="requestBody" />
+        <details class="token-form-section" open>
+          <summary>Consultas e operações · {{ selectedSkills.length }} selecionada(s)</summary>
+          <p v-if="!Object.keys(publications).length" class="notice">
+            Nenhuma skill publicada disponível. Publique uma skill em Treinamentos para conceder
+            acesso às consultas ou operações.
+          </p>
+          <p class="field-help" role="status">
+            {{ selectedSkills.length }} skill(s) selecionada(s) ·
+            {{ tokenAdministrative.length }} permissão(ões) administrativa(s).
+          </p>
+          <details class="token-permission-help">
+            <summary>Como funcionam estas permissões</summary>
+            <p>
+              Selecione consultas, cruzamentos, operações SQL ou capacidades externas. Selecionar
+              uma capacidade externa concede também sua operação específica. Novos lançamentos SQL e
+              ações externas exigem aprovação adicional; a política da skill continua obrigatória.
+              Cada cruzamento exige selecionar também suas consultas dependentes; nenhuma concessão
+              será adicionada automaticamente.
+            </p>
+          </details>
+          <TokenSkillList
+            :options="issuanceSkillOptions"
+            :publications="publications"
+            :sources="sources"
+            @change="(id, checked) => emit('selectSkill', id, checked)"
+          />
+        </details>
+        <details class="token-form-section">
           <summary>Limites do novo token</summary>
           <LimitsEditor
             v-model="tokenLimits.queryLimits"
@@ -179,36 +209,41 @@ const issuanceSkillOptions = computed(() =>
             max="3650"
             required
         /></label>
-        <fieldset>
-          <legend>Permissões administrativas</legend>
-          <label v-for="option in administrativeOptions" :key="option.id" class="check"
-            ><input v-model="tokenAdministrative" type="checkbox" :value="option.id" />{{
-              option.label
-            }}</label
-          >
-          <p>
-            Administração exige também delegação vigente no hub. Não substitui autorização para
-            consultar ou aprovação humana.
-          </p>
-          <label
-            v-for="source in sources.filter((item) => item.active)"
-            :key="source.id"
-            class="check"
-            ><input v-model="tokenAdministrativeSources" type="checkbox" :value="source.id" />Base
-            para administração: {{ source.name }}</label
-          >
-          <label class="check"
-            ><input v-model="tokenCanDelegate" type="checkbox" />Permitir delegar as concessões
-            selecionadas a outros tokens</label
-          >
-          <ManagedIntegrationsSelector
-            v-if="tokenAdministrative.includes('gerenciar_integracoes')"
-            v-model="tokenManagedIntegrations"
-            :api="api"
-            :base="base"
-            :disabled="busy"
-          />
-        </fieldset>
+        <details class="token-form-section">
+          <summary>
+            Administração e delegação · {{ tokenAdministrative.length }} permissão(ões)
+          </summary>
+          <fieldset>
+            <legend>Permissões administrativas</legend>
+            <label v-for="option in administrativeOptions" :key="option.id" class="check"
+              ><input v-model="tokenAdministrative" type="checkbox" :value="option.id" />{{
+                option.label
+              }}</label
+            >
+            <p>
+              Administração exige também delegação vigente no hub. Não substitui autorização para
+              consultar ou aprovação humana.
+            </p>
+            <label
+              v-for="source in sources.filter((item) => item.active)"
+              :key="source.id"
+              class="check"
+              ><input v-model="tokenAdministrativeSources" type="checkbox" :value="source.id" />Base
+              para administração: {{ source.name }}</label
+            >
+            <label class="check"
+              ><input v-model="tokenCanDelegate" type="checkbox" />Permitir delegar as concessões
+              selecionadas a outros tokens</label
+            >
+            <ManagedIntegrationsSelector
+              v-if="tokenAdministrative.includes('gerenciar_integracoes')"
+              v-model="tokenManagedIntegrations"
+              :api="api"
+              :base="base"
+              :disabled="busy"
+            />
+          </fieldset>
+        </details>
         <PermissionSummary
           v-if="permissions"
           :permissions="permissions"
@@ -221,7 +256,18 @@ const issuanceSkillOptions = computed(() =>
         <p v-if="tokenCanDelegate" class="notice">
           Este token poderá delegar as permissões acima, dentro dos limites selecionados.
         </p>
-        <button :disabled="!permissions || (!selectedSkills.length && !tokenAdministrative.length)">
+        <p v-if="permissions" class="notice" aria-label="Resumo da emissão" role="status">
+          {{ permissions.skills.length }} consulta(s) e operação(ões) ·
+          {{ permissions.sourceIds.length }} base(s) ·
+          {{ permissions.administrative.length }} permissão(ões) administrativa(s). Delegação:
+          {{ tokenCanDelegate ? "permitida dentro das concessões selecionadas" : "não permitida" }}.
+          {{ tokenNoExpiry ? "Sem expiração." : `Validade: ${tokenDays} dia(s).` }}
+        </p>
+        <button
+          :disabled="
+            tooLarge || !permissions || (!selectedSkills.length && !tokenAdministrative.length)
+          "
+        >
           Emitir token restrito
         </button>
       </fieldset>

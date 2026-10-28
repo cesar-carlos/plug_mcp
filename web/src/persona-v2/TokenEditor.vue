@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import TokenRequestSize from "./TokenRequestSize.vue";
+import { tokenRequestSize } from "./token-request-size";
+import { tokenMutationBody } from "./token-manager";
 import { administrativeOptions } from "./administrative-options";
 import ManagedIntegrationsSelector from "./ManagedIntegrationsSelector.vue";
 import type { GrantPublication, Source } from "./model";
@@ -23,6 +26,10 @@ const props = defineProps<{
   base: string;
 }>();
 const edited = defineModel<ManagedToken>("edited", { required: true });
+const requestBody = computed(() =>
+  tokenMutationBody(edited.value, props.editing.authorizationVersion),
+);
+const tooLarge = computed(() => tokenRequestSize(requestBody.value).exceeded);
 const emit = defineEmits<{
   save: [rotate?: boolean];
   reload: [];
@@ -68,7 +75,7 @@ function setExpiry(event: Event): void {
 }
 </script>
 <template>
-  <form aria-label="Editar token" class="access-editor" @submit.prevent="emit('save')">
+  <form aria-label="Editar token" class="access-editor" @submit.prevent="!tooLarge && emit('save')">
     <h4 ref="heading" tabindex="-1">Editar {{ editing.name }}</h4>
     <p class="field-help">
       Revise as permissões antes de salvar. Versão do cadastro:
@@ -86,6 +93,7 @@ function setExpiry(event: Event): void {
         <pre>{{ JSON.stringify({ atual: listed, edicao: edited }, null, 2) }}</pre>
       </details>
       <label>Nome do consumidor<input v-model="edited.name" required maxlength="200" /></label>
+      <TokenRequestSize :body="requestBody" />
       <label
         >Validade (horário local)<input
           type="datetime-local"
@@ -141,7 +149,12 @@ function setExpiry(event: Event): void {
           recebem aprovação adicional; a política da skill continua obrigatória. Concessões
           existentes são preservadas até alteração explícita.
         </p>
-        <TokenSkillList :options="publishedSkillOptions" @change="grant" />
+        <TokenSkillList
+          :options="publishedSkillOptions"
+          :publications="publications"
+          :sources="sources"
+          @change="grant"
+        />
       </details>
       <p class="notice">
         Salvar ou gerar novo token invalida concessões derivadas anteriores. Permissões
@@ -153,8 +166,13 @@ function setExpiry(event: Event): void {
         :publications="publications"
         :sources="sources"
       />
-      <button :disabled="unconfirmed">Salvar token</button
-      ><button type="button" class="secondary" :disabled="unconfirmed" @click="emit('save', true)">
+      <button :disabled="unconfirmed || tooLarge">Salvar token</button
+      ><button
+        type="button"
+        class="secondary"
+        :disabled="unconfirmed || tooLarge"
+        @click="emit('save', true)"
+      >
         Gerar novo token
       </button>
       <button type="button" class="secondary" @click="emit('discard')">

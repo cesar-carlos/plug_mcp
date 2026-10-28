@@ -5,6 +5,23 @@ alwaysApply: true
 
 # Persona-v2
 
+Formulários de tokens recolhem seções e finalidades sem desmontar campos ou
+alterar concessões. Administração e detalhes do resumo começam fechados;
+expandir/recolher campos é apresentação local, sem requisição ou persistência.
+Busca e filtro de selecionadas preservam concessões fora da lista visível.
+Agrupamento usa identidade da fonte; finalidades agrupadas são apresentação,
+sem fundir fontes, truncar capabilities ou alterar a autorização enviada.
+
+POST administrativo de emissão/edição/rotação de tokens tem teto JSON UTF-8 de
+1 MiB; demais rotas conservam 64 KiB. Console e servidor compartilham o teto,
+recusam excesso com REQUEST_TOO_LARGE/413 antes da mutação e preservam edição,
+sem retry, truncamento ou mudança das concessões/delegação. Schemas e autoridade
+continuam independentes do limite de transporte. Contrato: console.md.
+Medidor inclui delegação e avisa em 80%; excesso bloqueia envio sem mudar seleção.
+X-Request-ID nasce no servidor; código exibido exige UUID válido. Logs técnicos
+limitam-se a ID, rota fixa, status, teto e bytes declarados/recebidos do parser,
+sem URL/corpo/concessões. Não substitui auditoria ou garante idempotência.
+
 Plugin v2 e runtime compartilham guia de recuperação/exemplos. Montagem inclui
 compatibility.json com hashes de instruções, guia e catálogo mínimo por variante;
 validação recusa guia/contrato divergentes, mesmo com inventário recalculado.

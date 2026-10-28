@@ -133,6 +133,7 @@ test("gestão de integrações no token exige seleção explícita e permite ret
     await page.getByRole("tab", { name: "Novo token", exact: true }).click();
     const form = page.getByRole("form", { name: "Emitir token", exact: true });
     await form.getByLabel("Nome do consumidor", { exact: true }).fill("Gestor explícito");
+    await form.locator("summary").filter({ hasText: "Administração e delegação" }).click();
     await form
       .getByLabel("Gerenciar integrações (execução exige concessões próprias)", { exact: true })
       .check();
@@ -263,6 +264,7 @@ test("emissão incerta exige conferir lista e nova escolha explícita sem reenvi
   await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const form = page.getByRole("form", { name: "Emitir token", exact: true });
   await form.getByLabel("Nome do consumidor", { exact: true }).fill("Consumidor sem resposta");
+  await form.locator("summary").filter({ hasText: "Administração e delegação" }).click();
   await form
     .getByLabel("Administrar tokens dentro dos limites de delegação", { exact: true })
     .check();
@@ -2275,6 +2277,7 @@ test("emite token administrativo sem consulta e exige seleção explícita de fo
   await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const form = page.getByRole("form", { name: "Emitir token", exact: true });
   await form.getByLabel("Nome do consumidor", { exact: true }).fill("Treinador limitado");
+  await form.locator("summary").filter({ hasText: "Administração e delegação" }).click();
   await expect(form.getByLabel("Treinar skills nas bases selecionadas")).not.toBeChecked();
   await expect(
     form.getByLabel("Permitir delegar as concessões selecionadas a outros tokens"),

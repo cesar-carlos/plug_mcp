@@ -1,5 +1,47 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+O formulário de emissão organiza consultas/operações, limites e administração em
+seções recolhíveis. Campos/finalidades de cada publicação começam fechados, com
+ações de expandir/recolher todos os campos. Administração/delegação e detalhes do
+resumo começam recolhidos; contagens e seleção permanecem visíveis no cabeçalho.
+Recolher preserva o rascunho, não altera concessões e não envia requisições.
+Os controles nativos funcionam por teclado e mantêm os campos montados.
+
+A lista de capacidades tem busca local por nome, sem distinguir caixa/acentos,
+e filtro Todas/Selecionadas. Grupos recolhíveis usam a identidade da base;
+cruzamentos e integrações externas têm grupos próprios. Contagens mostram a
+seleção total mesmo quando filtros escondem itens. Campos da mesma fonte são
+exibidos uma vez com suas finalidades reunidas; fontes distintas não se fundem.
+Filtrar, agrupar e limpar busca não alteram capabilities, fontes ou seleção, nem
+enviam requisições. O resumo junto à emissão informa consultas/operações, bases,
+administração, delegação e validade, independentemente do filtro visual.
+
+Emissão, edição e rotação administrativas de tokens aceitam até 1 MiB de JSON
+UTF-8 por POST (incluindo permissões e delegação); as demais rotas preservam
+64 KiB. O limite de transporte é adicional aos schemas e à autoridade vigente,
+não uma promessa de aceitar toda combinação máxima de concessões. O console
+confere os bytes antes do envio e preserva o formulário ao recusar excesso.
+O servidor responde HTTP 413 com `REQUEST_TOO_LARGE`, antes da mutação, sem
+registrar o corpo ou repetir a chamada. Resposta HTML 413 de proxy recebe aviso
+seguro, sem exibir HTML nem tratar como confirmação perdida. Concessões não são
+truncadas, removidas ou copiadas implicitamente: permissões e teto de delegação
+continuam explícitos e independentes. Este limite não amplia os endpoints MCP.
+
+Emissão e edição mostram o tamanho total e a parcela da delegação, avisam a
+partir de 80% e bloqueiam os botões acima do teto. A orientação para separar
+tokens por consumidor/finalidade preserva cada publicação completa e as consultas
+dependentes de cruzamentos no mesmo token; nenhuma seleção é feita automaticamente.
+O medidor usa o mesmo corpo da emissão, incluindo nome, prazo e bytes UTF-8.
+
+O servidor gera `X-Request-ID` próprio, ignorando o identificador do chamador.
+O console exibe UUID válido como código de atendimento nas recusas. Logs técnicos
+registram esse ID, rótulo fixo da rota, status e teto. Para excesso, registram
+somente bytes declarados/recebidos fornecidos pelo parser, quando disponíveis,
+distinguindo tamanho declarado de bytes efetivamente recebidos. Não guardam URL,
+query string, credenciais, concessões ou corpo. Esses logs não substituem auditoria
+de emissão. Código de atendimento não é autorização, idempotência ou prova de
+mutação. Proxy que recusa antes da aplicação pode não fornecer esse código.
+
 Os seletores editoriais de casos SQL e cruzamentos permitem adicionar até quatro
 versões explícitas à combinação por fonte, remover escolhas, preparar prévia e
 aplicar sementes antes de salvar o caso. Cruzamentos também selecionam diretamente

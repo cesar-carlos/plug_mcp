@@ -11,6 +11,22 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: busca e filtro de capacidades selecionadas, grupos por base, finalidades
+  reunidas por campo e resumo junto à emissão. Filtros preservam as concessões.
+
+- Changed: formulário de tokens ganha seções recolhíveis, controles de expandir
+  e recolher campos e resumo compacto. Recolher conserva escolhas e rascunhos.
+
+- Added: medidor de tamanho nas concessões de tokens com impacto da delegação,
+  aviso em 80% e orientação para organizar acessos por finalidade. Falhas
+  administrativas recebem código de atendimento; logs de excesso guardam
+  somente metadados seguros de tamanho, rota e status.
+
+- Fixed: emissão, edição e rotação de tokens no console aceitam até 1 MiB de
+  concessões explícitas, preservando 64 KiB nas demais rotas. Excesso retorna
+  HTTP 413 com mensagem específica, em vez de falha genérica 503. Console mede
+  UTF-8 antes do envio, conserva o formulário e trata 413 de proxy sem retry.
+
 - Fixed: consultar dados autenticado usa a frase fixa do código e a
   autenticação do `/mcp` explica o token recusado em vez de só o status 401.
   Texto recebido do hub continua oculto. Recusa de gravação no banco de controle

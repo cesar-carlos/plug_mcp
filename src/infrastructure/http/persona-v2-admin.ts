@@ -1,4 +1,11 @@
 import express, { type Express } from "express";
+import { adminRequestDiagnostics, requestSizeMetadata } from "./persona-admin-diagnostics.js";
+import {
+  ADMIN_JSON_BYTES,
+  TOKEN_JSON_BYTES,
+  TOKEN_REQUEST_TOO_LARGE,
+  isTokenWritePath,
+} from "../../domain/persona-v2/admin-request-limits.js";
 import { createRateLimiter } from "./rate-limit.js";
 import type { PersonaNotifications } from "../../application/persona-v2/notifications.js";
 import type { PersonaOAuthConnections } from "../../application/persona-v2/oauth-connections.js";
@@ -89,7 +96,13 @@ export const createPersonaAdministrationApp = (input: {
   const loginAttempts = new Map<string, { count: number; reset: number }>();
   app.disable("x-powered-by");
   app.use(helmet());
-  app.use(express.json({ limit: "64kb" }));
+  app.use(adminRequestDiagnostics(input.logger));
+  const defaultJson = express.json({ limit: ADMIN_JSON_BYTES });
+  const tokenJson = express.json({ limit: TOKEN_JSON_BYTES });
+  app.use((req, res, next) => {
+    const parser = isTokenWritePath(req.path, req.method) ? tokenJson : defaultJson;
+    parser(req, res, next);
+  });
   app.use((_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     next();
@@ -1137,6 +1150,29 @@ export const createPersonaAdministrationApp = (input: {
   }
   app.use(
     (error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "type" in error &&
+        error.type === "entity.too.large" &&
+        "status" in error &&
+        error.status === 413
+      ) {
+        res.setHeader("Cache-Control", "no-store");
+        input.logger?.warn("admin request too large", {
+          requestId: res.getHeader("X-Request-ID"),
+          ...requestSizeMetadata(error),
+        });
+        res.status(413).json({
+          error: {
+            code: "REQUEST_TOO_LARGE",
+            message: isTokenWritePath(_req.path, _req.method)
+              ? TOKEN_REQUEST_TOO_LARGE
+              : "A solicitação excede o limite de 64 KiB. Reduza o conteúdo antes de enviar. Nenhuma alteração foi aplicada.",
+          },
+        });
+        return;
+      }
       if (error instanceof PersonaV2Error) {
         res
           .status(
@@ -1222,7 +1258,10 @@ export const createPersonaAdministrationApp = (input: {
       } else {
         // Never serialize upstream errors: they may contain credentials or payloads.
         const failure = adminUnexpectedFailure(error);
-        input.logger?.error("admin request failed", failure.log);
+        input.logger?.error("admin request failed", {
+          ...failure.log,
+          requestId: res.getHeader("X-Request-ID"),
+        });
         res.status(503).json({
           error: { code: failure.code, message: failure.message },
         });

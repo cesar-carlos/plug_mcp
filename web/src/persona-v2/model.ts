@@ -1,4 +1,9 @@
 import type { OperationPackage } from "../../../src/domain/persona-v2/operation-training";
+import {
+  TOKEN_JSON_BYTES,
+  TOKEN_REQUEST_TOO_LARGE,
+  isTokenWritePath,
+} from "../../../src/domain/persona-v2/admin-request-limits";
 export type Dialect = "mssql" | "postgres" | "sybase" | "firebird";
 export interface Persona {
   id: string;
@@ -187,6 +192,14 @@ export class ContextRequests {
     this.controller = new AbortController();
   }
   async json<T>(url: string, init: RequestInit = {}, format: "json" | "mcp" = "json"): Promise<T> {
+    const tokenWrite = isTokenWritePath(url.split("?")[0] ?? url, init.method ?? "GET");
+    if (
+      tokenWrite &&
+      typeof init.body === "string" &&
+      new TextEncoder().encode(init.body).byteLength > TOKEN_JSON_BYTES
+    ) {
+      throw new ConsoleRequestError(TOKEN_REQUEST_TOO_LARGE, "REQUEST_TOO_LARGE", 413);
+    }
     const version = this.version;
     const changesState = !["GET", "HEAD", "OPTIONS"].includes((init.method ?? "GET").toUpperCase());
     const transportFailure = () => {
@@ -212,6 +225,12 @@ export class ContextRequests {
       throw transportFailure();
     }
     let value: unknown;
+    const requestId = response.headers.get("X-Request-ID");
+    const withReference = (message: string): string =>
+      requestId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)
+        ? `${message} Código de atendimento: ${requestId}.`
+        : message;
     try {
       if (response.status === 204) {
         value = undefined;
@@ -246,9 +265,24 @@ export class ContextRequests {
         throw new Error("O contexto mudou. A resposta anterior foi descartada.");
       }
       if (format === "mcp" && response.status === 401) {
-        throw new ConsoleRequestError(MCP_TOKEN_REFUSED_MESSAGE, "AUTHORIZATION_DENIED", 401);
+        throw new ConsoleRequestError(
+          withReference(MCP_TOKEN_REFUSED_MESSAGE),
+          "AUTHORIZATION_DENIED",
+          401,
+        );
       }
-      throw transportFailure();
+      if (tokenWrite && response.status === 413) {
+        throw new ConsoleRequestError(
+          withReference(
+            "O servidor recusou a solicitação por excesso de tamanho. Reduza a seleção ou confira o limite do servidor. O formulário foi preservado.",
+          ),
+          "REQUEST_TOO_LARGE",
+          413,
+        );
+      }
+      const failure = transportFailure();
+      failure.message = withReference(failure.message);
+      throw failure;
     }
     if (version !== this.version) {
       throw new Error("O contexto mudou. A resposta anterior foi descartada.");
@@ -260,16 +294,18 @@ export class ContextRequests {
           : undefined;
       if (format === "mcp" && response.status === 401) {
         throw new ConsoleRequestError(
-          error?.message ?? MCP_TOKEN_REFUSED_MESSAGE,
+          withReference(error?.message ?? MCP_TOKEN_REFUSED_MESSAGE),
           error?.code ?? "AUTHORIZATION_DENIED",
           401,
         );
       }
       throw new ConsoleRequestError(
-        error?.message ??
-          (response.status === 401
-            ? "A autenticação foi recusada. Entre novamente no console ou confira se o token da consulta ainda é válido."
-            : `Não foi possível concluir a solicitação (${response.status}).`),
+        withReference(
+          error?.message ??
+            (response.status === 401
+              ? "A autenticação foi recusada. Entre novamente no console ou confira se o token da consulta ainda é válido."
+              : `Não foi possível concluir a solicitação (${response.status}).`),
+        ),
         error?.code ?? "TRANSPORT_ERROR",
         response.status,
         Array.isArray(error?.fields)
