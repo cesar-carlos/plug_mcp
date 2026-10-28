@@ -20,7 +20,7 @@ import {
   sourceQuerySchema,
   type PersonaSourceQueries,
 } from "../../application/persona-v2/source-query.js";
-import { DomainError } from "../../domain/errors/domain-error.js";
+import { personaV2ToolError } from "./persona-v2-tool-error.js";
 import type { PersonaPublishedFederation } from "../../application/persona-v2/published-federation.js";
 import { federationRequestSchema } from "../../application/persona-v2/federation-training.js";
 import {
@@ -175,35 +175,7 @@ export const createPersonaV2McpHandler = (
               content: [
                 {
                   type: "text" as const,
-                  text: JSON.stringify({
-                    error: {
-                      code:
-                        error instanceof PersonaV2Error || error instanceof DomainError
-                          ? error.code
-                          : "CAPABILITY_UNAVAILABLE",
-                      message:
-                        error instanceof PersonaV2Error ||
-                        (error instanceof DomainError && error.source === "sql")
-                          ? error.message
-                          : error instanceof DomainError
-                            ? `Não foi possível concluir a consulta (${error.code}, ${error.source ?? "mcp"}).`
-                            : "Serviço indisponível.",
-                      ...(error instanceof DomainError
-                        ? {
-                            source: error.source ?? "mcp",
-                            stage: error.stage,
-                            hint:
-                              error.source === "sql"
-                                ? error.hint
-                                : "Confira code/source. Falha de transporte não autoriza reescrever SQL; não repita automaticamente.",
-                            retryable: false,
-                          }
-                        : {}),
-                      ...(error instanceof PersonaV2Error && error.source
-                        ? { source: error.source, hint: error.hint, retryable: false }
-                        : {}),
-                    },
-                  }),
+                  text: JSON.stringify({ error: personaV2ToolError(error) }),
                 },
               ],
             };

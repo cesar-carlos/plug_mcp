@@ -6,6 +6,7 @@
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | AUTHORIZATION_DENIED                              | Administração: 403; Bearer inválido: 401. Corrigir autenticação/concessão.                                                                       |
 | AUTHORITY_UNAVAILABLE                             | Autoridade indisponível: 503; bloquear execução/entrega.                                                                                         |
+| CONTROL_WRITE_FAILED                              | Gravação recusada no banco de controle: 503. Conferir a lista; não é autoridade do hub. O log guarda `sqlstate` e constraint.                    |
 | CAPABILITY_UNAVAILABLE                            | Recurso sem suporte negociado, tipo ainda inerte ou fonte sem prova nativa; não usar fallback.                                                   |
 | STALE_AUTHORIZATION                               | Fonte/publicação/credencial/concessão incompatível. Suspender vínculos/dependências quando a prova física mudar; não reassociar automaticamente. |
 | OPERATION_CONFLICT                                | CAS/preview/conteúdo divergente ou reenvio recusado.                                                                                             |
@@ -16,7 +17,8 @@
 
 Entrada inválida na administração retorna 400. Tools sinalizam isError e resources
 recusam acesso sem devolver pacote. Falhas locais de SQL preservam code/message/hint
-com source=sql; falhas upstream preservam origem/estágio e sanitizam a mensagem.
+com source=sql; falhas upstream preservam origem/estágio e substituem mensagem
+e orientação pela frase fixa do código.
 Transporte indisponível não prova substituição de base nem autoriza retry.
 `SOURCE_IDENTITY_MISMATCH` do agente é preservado pelo adapter como
 `CREDENTIAL_STALE`, origem `client_token_rpc`, sem retry. Na consulta v2,

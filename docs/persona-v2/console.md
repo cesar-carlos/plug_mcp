@@ -436,8 +436,9 @@ concedidas e seus hashes; a execução faz nova conferência. A ação envia
 `POST /mcp` com `Authorization: Bearer` do token colado (não a sessão Client).
 HTTP 401 (`AUTHORIZATION_DENIED`) é recusa desse Bearer: o console explica que
 o token foi recusado e não reenvia. Recusa já autenticada de `consultar_dados`
-informa código e origem. A mensagem do motor SQL é mostrada; texto vindo do hub
-não é repetido. Token válido sem consultas concedidas
+usa a frase fixa do código quando o catálogo público a tem. A mensagem do motor
+SQL local é mostrada. Texto e orientação recebidos do hub não são repetidos.
+Token válido sem consultas concedidas
 continua 200, com a lista vazia. Parâmetros distinguem
 valor, texto vazio, nulo e omissão; decimais são enviados como texto. Uma página
 não representa o total. Fonte, publicação, dialeto,
@@ -549,8 +550,11 @@ adicionais expansíveis. Essas mudanças não ampliam concessões nem executam
 testes de conexão automaticamente.
 
 Falha inesperada ao gravar, inclusive na emissão de token, não é apresentada
-como autoridade do hub. Recusa do banco de controle pede conferir a lista; o
-código e a constraint ficam no log do servidor, sem a mensagem bruta. Falhas de
+como autoridade do hub. Recusa do banco de controle responde
+`CONTROL_WRITE_FAILED` e pede conferir a lista. O log registra `sqlstate` e a
+constraint, sem a mensagem bruta e sem usar o campo `code`, que o logger redacta.
+`AUTHORITY_UNAVAILABLE` permanece para a autoridade que não pôde ser consultada.
+Falhas de
 rede ou respostas ilegíveis após POST/alteração são apresentadas como
 resultado não confirmado. O console orienta conferir listagem ou identificador,
 sem recomendar reenvio automático e sem afirmar sucesso, rollback ou estado

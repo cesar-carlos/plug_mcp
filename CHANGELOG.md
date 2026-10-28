@@ -11,12 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
-- Fixed: consultar dados autenticado informa código e origem da recusa, e a
+- Fixed: consultar dados autenticado usa a frase fixa do código e a
   autenticação do `/mcp` explica o token recusado em vez de só o status 401.
-  Texto recebido do hub continua oculto. Falha inesperada do
-  console deixa de ser apresentada como autoridade do hub; recusa do banco de
-  controle pede conferir a lista e o detalhe bruto continua só no log. As
-  finalidades por campo na emissão de token começam recolhidas.
+  Texto recebido do hub continua oculto. Recusa de gravação no banco de controle
+  responde `CONTROL_WRITE_FAILED`; o log guarda `sqlstate` e a constraint, fora
+  do campo `code` que o logger redacta. As finalidades por campo na emissão de
+  token começam recolhidas.
 
 - Fixed: **Ver consultas permitidas por este token** passa a explicar HTTP 401
   do `POST /mcp` como token recusado, em vez do status genérico ou da mensagem
