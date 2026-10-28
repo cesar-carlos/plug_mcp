@@ -11,9 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
-- Fixed: consultar dados e a autenticação do `/mcp` passam a mostrar a mensagem
-  e a orientação já seguras da recusa (token recusado, sessão ou falha do hub),
-  em vez de só o status 401 ou “serviço indisponível”. Falha inesperada do
+- Fixed: consultar dados autenticado informa código e origem da recusa, e a
+  autenticação do `/mcp` explica o token recusado em vez de só o status 401.
+  Texto recebido do hub continua oculto. Falha inesperada do
   console deixa de ser apresentada como autoridade do hub; recusa do banco de
   controle pede conferir a lista e o detalhe bruto continua só no log. As
   finalidades por campo na emissão de token começam recolhidas.

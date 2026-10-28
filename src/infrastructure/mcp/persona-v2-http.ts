@@ -182,14 +182,20 @@ export const createPersonaV2McpHandler = (
                           ? error.code
                           : "CAPABILITY_UNAVAILABLE",
                       message:
-                        error instanceof PersonaV2Error || error instanceof DomainError
+                        error instanceof PersonaV2Error ||
+                        (error instanceof DomainError && error.source === "sql")
                           ? error.message
-                          : "Serviço indisponível.",
+                          : error instanceof DomainError
+                            ? `Não foi possível concluir a consulta (${error.code}, ${error.source ?? "mcp"}).`
+                            : "Serviço indisponível.",
                       ...(error instanceof DomainError
                         ? {
                             source: error.source ?? "mcp",
                             stage: error.stage,
-                            hint: error.hint,
+                            hint:
+                              error.source === "sql"
+                                ? error.hint
+                                : "Confira code/source. Falha de transporte não autoriza reescrever SQL; não repita automaticamente.",
                             retryable: false,
                           }
                         : {}),

@@ -436,8 +436,8 @@ concedidas e seus hashes; a execução faz nova conferência. A ação envia
 `POST /mcp` com `Authorization: Bearer` do token colado (não a sessão Client).
 HTTP 401 (`AUTHORIZATION_DENIED`) é recusa desse Bearer: o console explica que
 o token foi recusado e não reenvia. Recusa já autenticada de `consultar_dados`
-mostra a mensagem e a orientação seguras da falha, inclusive quando a origem é
-o hub. Token válido sem consultas concedidas
+informa código e origem. A mensagem do motor SQL é mostrada; texto vindo do hub
+não é repetido. Token válido sem consultas concedidas
 continua 200, com a lista vazia. Parâmetros distinguem
 valor, texto vazio, nulo e omissão; decimais são enviados como texto. Uma página
 não representa o total. Fonte, publicação, dialeto,
