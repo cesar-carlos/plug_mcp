@@ -72,8 +72,19 @@ const {
   bearer,
   uncertainIssuance,
   onStatus: (value) => emit("status", value),
+  onIssued: (value) => void presentToken(value),
 });
 const tokenTab = ref<AccessTokenTab>("list");
+const tokenGenerated = ref(false);
+async function presentToken(value: string): Promise<void> {
+  bearer.value = value;
+  if (!value) return;
+  tokenGenerated.value = true;
+  await selectTokenTab("connect");
+}
+watch(bearer, (value) => {
+  if (!value) tokenGenerated.value = false;
+});
 const tokenManagerDirty = ref(false);
 const tokenManagerKey = ref(0);
 const oauthConnectionsDirty = ref(false);
@@ -131,7 +142,7 @@ async function selectTokenTab(tab: AccessTokenTab): Promise<void> {
       :sources="sources"
       @dirty="tokenManagerDirty = $event"
       @lock="emit('lock', $event)"
-      @bearer="bearer = $event"
+      @bearer="presentToken"
     />
 
     <TokenIssuanceForm
@@ -170,17 +181,23 @@ async function selectTokenTab(tab: AccessTokenTab): Promise<void> {
       <AccessBearerSession
         v-model:bearer="bearer"
         :disabled="disabled"
-        :run="run"
+        :generated="tokenGenerated"
+        @update:bearer="tokenGenerated = false"
+        @manage="selectTokenTab('list')"
+        @create="selectTokenTab('new')"
         @status="emit('status', $event)"
       />
-      <ConnectionPanel
-        v-if="active"
-        :key="persona.id"
-        :persona-id="persona.id"
-        :bearer="bearer"
-        :call="call"
-        @lock="emit('lock', $event)"
-      />
+      <details class="permission-section">
+        <summary>Testar conexão (opcional)</summary>
+        <ConnectionPanel
+          v-if="active"
+          :key="persona.id"
+          :persona-id="persona.id"
+          :bearer="bearer"
+          :call="call"
+          @lock="emit('lock', $event)"
+        />
+      </details>
     </section>
     <OAuthConnectionInfo
       v-if="active"

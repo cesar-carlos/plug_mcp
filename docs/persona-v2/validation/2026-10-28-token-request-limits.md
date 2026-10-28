@@ -75,3 +75,18 @@ parser não chama o serviço de emissão/alteração. Não houve nova imagem, de
 teste funcional no destino ou aprovação de gates integrais nesta evidência.
 A publicação continua vinculada ao fluxo de CI/imagem exatos do
 [servidor de teste](../first-test-deploy.md).
+
+## Continuação: entrega e cópia do token
+
+Emissão e rotação confirmadas direcionam para Copiar e usar token, com foco no
+painel e segredo mascarado. Cópia exige clique, mostra confirmação local e
+orienta cópia manual quando o navegador recusa a área de transferência.
+Estado vazio oferece acesso à lista e explica a rotação explícita; teste de
+conexão e descarte são recolhidos. Não altera concessões ou armazenamento.
+
+Validação local: 18 regressões de recuperação passaram; o teste de transporte
+passou após ajuste do encaminhamento do valor emitido; uma regressão adicional
+comprovou rotação única após confirmação e descarte na troca de persona.
+Build, tipos, lint do console e verificação documental passaram. Inspeção visual
+realizada sobre captura de fixture sintética. Não certifica emissão em banco real,
+clipboard do dispositivo do usuário, instalação ChatGPT ou deploy desta alteração.

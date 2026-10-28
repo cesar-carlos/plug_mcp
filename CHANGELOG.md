@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: emissão e rotação abrem a etapa de cópia do token; estado vazio orienta
+  a recuperação por rotação explícita. Cópia informa sucesso ou alternativa manual,
+  e teste de conexão fica recolhido como etapa opcional.
+
 - Added: busca e filtro de capacidades selecionadas, grupos por base, finalidades
   reunidas por campo e resumo junto à emissão. Filtros preservam as concessões.
 

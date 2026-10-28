@@ -3,6 +3,8 @@ description: "Contrato ativo persona-v2 e limites da transição"
 alwaysApply: true
 ---
 
+
+Após emissão ou rotação confirmada, o console abre e focaliza Copiar e usar token. O segredo fica mascarado e somente em memória; copiar exige clique e informa sucesso ou alternativa manual. Sem segredo disponível, a tela explica a impossibilidade de recuperação e orienta a rotação explícita, que invalida o valor anterior. Teste de conexão é opcional e recolhido. Não há cópia, rotação ou retry automático.
 # Persona-v2
 
 Formulários de tokens recolhem seções e finalidades sem desmontar campos ou

@@ -27,6 +27,7 @@ export function useTokenIssuance(input: {
   bearer: Ref<string>;
   uncertainIssuance: Ref<Record<string, UncertainIssuance>>;
   onStatus: (value: string) => void;
+  onIssued?: (bearer: string) => void;
 }): {
   tokenLimits: Ref<PermissionLimits>;
   tokenSkillLimits: Ref<Record<string, PermissionLimits>>;
@@ -157,6 +158,7 @@ export function useTokenIssuance(input: {
       tokenRefresh.value++;
       input.bearer.value = issued.bearer;
       reset();
+      input.onIssued?.(issued.bearer);
       tokenCreationOpen.value = true;
       input.onStatus("Token emitido. Copie agora; ele fica somente na memória desta página.");
     });

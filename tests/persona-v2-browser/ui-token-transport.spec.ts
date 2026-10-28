@@ -190,6 +190,50 @@ test("tamanho, delegação, recusa e recuperação pelo navegador/proxy/HTTP", a
     await expect.poll(() => issued).toBe(1);
     expect(attempts).toBe(1);
 
+    await expect(page.getByRole("tab", { name: "Copiar e usar token" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.locator("#access-connect")).toBeFocused();
+    await expect(
+      page.getByRole("heading", { name: "Token gerado — copie e guarde agora" }),
+    ).toBeVisible();
+    await expect(
+      page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
+    ).toHaveAttribute("type", "password");
+    await page.evaluate(() =>
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async () => {
+            throw new Error("denied");
+          },
+        },
+      }),
+    );
+    await page.getByRole("button", { name: "Copiar token", exact: true }).click();
+    await expect(page.getByText(/Não foi possível copiar automaticamente/)).toBeVisible();
+    await page.evaluate(() =>
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async () => {} },
+      }),
+    );
+    await page.getByRole("button", { name: "Copiar token", exact: true }).click();
+    await expect(
+      page.getByText("Token copiado. Guarde-o em um local seguro antes de sair."),
+    ).toBeVisible();
+    await page.screenshot({ path: "test-results/token-copy-flow.png", fullPage: true });
+    await page.locator("summary").filter({ hasText: "Remover token desta página" }).click();
+    await page.getByRole("button", { name: "Ocultar e descartar token" }).click();
+    await expect(page.getByText("Nenhum token disponível para copiar nesta sessão.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Copiar token", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Ir para tokens cadastrados" }).click();
+    await expect(page.getByRole("tab", { name: "Tokens cadastrados" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
     // A caller bypassing the UI is still refused before application issuance.
     const rejected = await page.evaluate(
       async ({ path, limit }) => {
@@ -214,6 +258,7 @@ test("tamanho, delegação, recusa e recuperação pelo navegador/proxy/HTTP", a
 
     // A proxy with a smaller limit returns HTML; the UI keeps the draft without retry.
     proxyLimit = 100;
+    await page.getByRole("tab", { name: "Novo token", exact: true }).click();
     await name.fill("Preservado após proxy");
     await form
       .getByLabel("Administrar tokens dentro dos limites de delegação", { exact: true })

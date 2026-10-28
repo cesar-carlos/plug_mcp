@@ -11,7 +11,7 @@ const emit = defineEmits<{
 const labels: Record<AccessTokenTab, string> = {
   list: "Tokens cadastrados",
   new: "Novo token",
-  connect: "Usar e testar",
+  connect: "Copiar e usar token",
   chatgpt: "Conectar no ChatGPT",
   connections: "Conexões e delegação",
 };

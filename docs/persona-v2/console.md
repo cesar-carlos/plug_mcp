@@ -1,5 +1,7 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+Após emissão ou rotação confirmada, o console abre e focaliza Copiar e usar token. O segredo fica mascarado e somente em memória; copiar exige clique e informa sucesso ou alternativa manual. Sem segredo disponível, a tela explica a impossibilidade de recuperação e orienta a rotação explícita, que invalida o valor anterior. Teste de conexão é opcional e recolhido. Não há cópia, rotação ou retry automático.
+
 O formulário de emissão organiza consultas/operações, limites e administração em
 seções recolhíveis. Campos/finalidades de cada publicação começam fechados, com
 ações de expandir/recolher todos os campos. Administração/delegação e detalhes do

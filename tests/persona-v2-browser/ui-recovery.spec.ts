@@ -107,7 +107,7 @@ test("atalhos e filtros de acesso preservam a edição e levam o foco ao destino
   const name = form.getByLabel("Nome do consumidor", { exact: true });
   await name.fill("Edição preservada");
   const sections = page.getByRole("tablist", { name: "Seções de tokens e conexões", exact: true });
-  await sections.getByRole("tab", { name: "Usar e testar", exact: true }).click();
+  await sections.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
   await expect(page.locator("#access-connect")).toBeFocused();
   await sections.getByRole("tab", { name: "Tokens cadastrados", exact: true }).click();
   await expect(page.getByRole("tabpanel", { name: "Gerenciar tokens", exact: true })).toBeFocused();
@@ -554,4 +554,28 @@ test("conexão destaca cliente e token e mantém identificadores nos detalhes", 
   await expect(
     panel.getByRole("button", { name: "Confirmar revogação da conexão", exact: true }),
   ).toBeDisabled();
+});
+
+test("rotação confirmada abre cópia e troca de persona descarta o segredo", async ({ page }) => {
+  await fixture(page);
+  let rotations = 0;
+  await page.route("**/tokens/token-0/rotacionar", async (route) => {
+    rotations++;
+    await route.fulfill({ json: { bearer: "synthetic-rotated-token" } });
+  });
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await page.getByRole("button", { name: "Editar A", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar novo token", exact: true }).click();
+  expect(rotations).toBe(0);
+  await page.getByRole("button", { name: "Gerar e invalidar o anterior", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Token gerado — copie e guarde agora" }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
+  ).toHaveValue("synthetic-rotated-token");
+  expect(rotations).toBe(1);
+  await page.getByRole("combobox", { name: /^Persona/ }).selectOption("second-persona");
+  await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
+  await expect(page.getByText("Nenhum token disponível para copiar nesta sessão.")).toBeVisible();
 });
