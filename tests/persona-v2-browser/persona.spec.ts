@@ -3036,6 +3036,9 @@ test("configura finalidade pessoal no formulário e concede somente o uso public
   await go(page, "Tokens e conexões");
   await page.getByRole("tab", { name: "Novo token", exact: true }).click();
   const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
+  const purposes = tokens.locator("details").filter({ hasText: "public.orders.amount · filtrar" });
+  await expect(purposes.getByRole("listitem")).toBeHidden();
+  await purposes.getByText(/^Finalidades por campo \(\d+\)$/).click();
   await expect(tokens.getByText("public.orders.amount · filtrar", { exact: true })).toBeVisible();
   await tokens.getByLabel("Nome do consumidor", { exact: true }).fill("Somente filtro");
   await tokens.getByLabel(/^Pedidos a · revisão 2/).check();
