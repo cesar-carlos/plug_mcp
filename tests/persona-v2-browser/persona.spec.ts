@@ -2295,8 +2295,8 @@ test("emite token administrativo sem consulta e exige seleção explícita de fo
   expect(submitted.permissions.skills).toEqual([]);
   expect(submitted.delegation).toEqual(submitted.permissions);
   await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
-  if (await page.locator("#access-connect > details:not([open])").count()) {
-    await page.locator("#access-connect > details > summary").click();
+  if (await page.locator("#access-connect > details.permission-section:not([open])").count()) {
+    await page.locator("#access-connect > details.permission-section > summary").click();
   }
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
@@ -3907,8 +3907,8 @@ test("cria persona, conecta duas bases, publica treinamento e consulta dados rea
   await tokens.getByLabel(/^Pedidos b · revisão/).check();
   await tokens.getByRole("button", { name: "Emitir token restrito", exact: true }).click();
   await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
-  if (await page.locator("#access-connect > details:not([open])").count()) {
-    await page.locator("#access-connect > details > summary").click();
+  if (await page.locator("#access-connect > details.permission-section:not([open])").count()) {
+    await page.locator("#access-connect > details.permission-section > summary").click();
   }
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
@@ -4184,8 +4184,8 @@ test("teste de conexão não executa SQL, explica ausência de concessões e rec
   expect(issued.status()).toBe(201);
   const { bearer } = (await issued.json()) as { bearer: string };
   await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
-  if (await page.locator("#access-connect > details:not([open])").count()) {
-    await page.locator("#access-connect > details > summary").click();
+  if (await page.locator("#access-connect > details.permission-section:not([open])").count()) {
+    await page.locator("#access-connect > details.permission-section > summary").click();
   }
   const bearerInput = page.getByLabel("Token para conectar o cliente ou testar", { exact: true });
   await bearerInput.fill(bearer);
@@ -4216,8 +4216,8 @@ test("teste de conexão não executa SQL, explica ausência de concessões e rec
   await createPersona(page, "Outra persona do consumidor");
   await go(page, "Tokens e conexões");
   await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
-  if (await page.locator("#access-connect > details:not([open])").count()) {
-    await page.locator("#access-connect > details > summary").click();
+  if (await page.locator("#access-connect > details.permission-section:not([open])").count()) {
+    await page.locator("#access-connect > details.permission-section > summary").click();
   }
   await bearerInput.fill(bearer);
   calls.length = 0;
@@ -4262,8 +4262,8 @@ test("preserva edição pendente e limpa o contexto na troca de persona", async 
   ).toBeVisible();
   await go(page, "Tokens e conexões");
   await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
-  if (await page.locator("#access-connect > details:not([open])").count()) {
-    await page.locator("#access-connect > details > summary").click();
+  if (await page.locator("#access-connect > details.permission-section:not([open])").count()) {
+    await page.locator("#access-connect > details.permission-section > summary").click();
   }
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
@@ -4546,8 +4546,8 @@ test("nome do rascunho não substitui nome publicado e token pode ser revogado",
     .click();
   await expect(page.getByText("Token revogado.", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
-  if (await page.locator("#access-connect > details:not([open])").count()) {
-    await page.locator("#access-connect > details > summary").click();
+  if (await page.locator("#access-connect > details.permission-section:not([open])").count()) {
+    await page.locator("#access-connect > details.permission-section > summary").click();
   }
   await expect(
     page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
@@ -4616,8 +4616,8 @@ test("consulta de view preserva o tipo publicado e respeita policy que recusa ta
     await tokens.getByRole("button", { name: "Emitir token restrito", exact: true }).click();
     await expect(page.getByText(/Token emitido/)).toBeVisible();
     await page.getByRole("tab", { name: "Copiar e usar token", exact: true }).click();
-    if (await page.locator("#access-connect > details:not([open])").count()) {
-      await page.locator("#access-connect > details > summary").click();
+    if (await page.locator("#access-connect > details.permission-section:not([open])").count()) {
+      await page.locator("#access-connect > details.permission-section > summary").click();
     }
     const issued = await page
       .getByLabel("Token para conectar o cliente ou testar", { exact: true })
