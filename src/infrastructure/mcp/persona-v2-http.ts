@@ -98,11 +98,21 @@ export const createPersonaV2McpHandler = (
     const bearer = readBearer(req);
     if (oauth && !bearer) {
       res.setHeader("WWW-Authenticate", chatGptOAuthChallenge(publicBaseUrl));
-      res.status(401).json({ error: { code: "AUTHORIZATION_DENIED" } });
+      res.status(401).json({
+        error: {
+          code: "AUTHORIZATION_DENIED",
+          message: "Autenticação necessária. Informe o token da persona.",
+        },
+      });
       return;
     }
     if (req.get("authorization") && !bearer) {
-      res.status(401).json({ error: { code: "AUTHORIZATION_DENIED" } });
+      res.status(401).json({
+        error: {
+          code: "AUTHORIZATION_DENIED",
+          message: "O cabeçalho de autorização não contém um token utilizável.",
+        },
+      });
       return;
     }
     if (bearer) {
@@ -115,9 +125,12 @@ export const createPersonaV2McpHandler = (
             "WWW-Authenticate",
             oauth ? chatGptOAuthChallenge(publicBaseUrl, true) : 'Bearer realm="persona-v2"',
           );
-        res
-          .status(denied ? 401 : 503)
-          .json({ error: { code: denied ? "AUTHORIZATION_DENIED" : "AUTHORITY_UNAVAILABLE" } });
+        res.status(denied ? 401 : 503).json({
+          error: {
+            code: denied ? "AUTHORIZATION_DENIED" : "AUTHORITY_UNAVAILABLE",
+            message: error instanceof PersonaV2Error ? error.message : "Autoridade indisponível.",
+          },
+        });
         return;
       }
     }
@@ -169,18 +182,14 @@ export const createPersonaV2McpHandler = (
                           ? error.code
                           : "CAPABILITY_UNAVAILABLE",
                       message:
-                        error instanceof PersonaV2Error ||
-                        (error instanceof DomainError && error.source === "sql")
+                        error instanceof PersonaV2Error || error instanceof DomainError
                           ? error.message
                           : "Serviço indisponível.",
                       ...(error instanceof DomainError
                         ? {
                             source: error.source ?? "mcp",
                             stage: error.stage,
-                            hint:
-                              error.source === "sql"
-                                ? error.hint
-                                : "Confira code/source. Falha de transporte não autoriza reescrever SQL; não repita automaticamente.",
+                            hint: error.hint,
                             retryable: false,
                           }
                         : {}),

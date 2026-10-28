@@ -3,6 +3,14 @@ export interface McpToolResponse {
   error?: unknown;
 }
 
+export function mcpAuthorizationHeader(token: string): string {
+  const value = token
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  return `Bearer ${value}`;
+}
+
 export function assertTokenPersona(context: { id: string }, personaId: string): void {
   if (context.id !== personaId) {
     throw new Error("Este token pertence a outra persona.");
@@ -28,8 +36,22 @@ export function assertGrantedPublication(
   }
 }
 
+export function mcpToolErrorMessage(
+  value: { error?: { message?: string; hint?: string } } | null,
+): string {
+  const message = value?.error?.message?.trim();
+  const hint = value?.error?.hint?.trim();
+  if (!message) {
+    return "Solicitação recusada. Confira treinamento, fonte e permissões.";
+  }
+  if (!hint || message.includes(hint)) {
+    return message;
+  }
+  return `${message} ${hint}`;
+}
+
 export function parseMcpToolResult<T>(response: McpToolResponse): T {
-  let value: { error?: { message?: string } } | null;
+  let value: { error?: { message?: string; hint?: string } } | null;
   try {
     value = JSON.parse(response.result?.content[0]?.text ?? "null") as typeof value;
   } catch {
@@ -38,9 +60,7 @@ export function parseMcpToolResult<T>(response: McpToolResponse): T {
     );
   }
   if (!response.result || response.result.isError) {
-    throw new Error(
-      value?.error?.message ?? "Solicitação recusada. Confira treinamento, fonte e permissões.",
-    );
+    throw new Error(mcpToolErrorMessage(value));
   }
   return value as T;
 }

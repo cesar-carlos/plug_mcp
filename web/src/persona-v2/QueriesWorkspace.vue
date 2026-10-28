@@ -38,39 +38,42 @@ const emit = defineEmits<{
 }>();
 </script>
 <template>
-  <section>
-    <QueryRunnerPanel
-      v-model:bearer="bearer"
-      v-model:query-skill="querySkill"
-      v-model:query-sql="querySql"
-      v-model:query-values="queryValues"
-      v-model:query-modes="queryModes"
-      v-model:query-page-size="queryPageSize"
-      :busy="busy"
-      :publications="publications"
+  <div>
+    <!-- Parent v-show ignores fragments; this wrapper keeps the query panel on Consultas. -->
+    <section>
+      <QueryRunnerPanel
+        v-model:bearer="bearer"
+        v-model:query-skill="querySkill"
+        v-model:query-sql="querySql"
+        v-model:query-values="queryValues"
+        v-model:query-modes="queryModes"
+        v-model:query-page-size="queryPageSize"
+        :busy="busy"
+        :publications="publications"
+        :sources="sources"
+        :active="active"
+        :granted-queries="grantedQueries"
+        :query-page="queryPage"
+        :submitted-filters="submittedFilters"
+        :result="result"
+        :attachment="attachment"
+        @inspect="emit('inspect')"
+        @query="(validation, page) => emit('query', validation, page)"
+        @create-attachment="emit('createAttachment', $event)"
+        @download-attachment="emit('downloadAttachment')"
+      />
+    </section>
+    <FederationPanel
+      v-if="activeArea"
+      :key="`${personaId}:${federationKey}`"
+      :persona-id="personaId"
+      :bearer="bearer"
       :sources="sources"
-      :active="active"
-      :granted-queries="grantedQueries"
-      :query-page="queryPage"
-      :submitted-filters="submittedFilters"
-      :result="result"
-      :attachment="attachment"
-      @inspect="emit('inspect')"
-      @query="(validation, page) => emit('query', validation, page)"
-      @create-attachment="emit('createAttachment', $event)"
-      @download-attachment="emit('downloadAttachment')"
+      :disabled="disabled"
+      :mcp="mcp"
+      :confirm-discard="confirmDiscard"
+      @lock="emit('lock', $event)"
+      @dirty="emit('federationDirty', $event)"
     />
-  </section>
-  <FederationPanel
-    v-if="activeArea"
-    :key="`${personaId}:${federationKey}`"
-    :persona-id="personaId"
-    :bearer="bearer"
-    :sources="sources"
-    :disabled="disabled"
-    :mcp="mcp"
-    :confirm-discard="confirmDiscard"
-    @lock="emit('lock', $event)"
-    @dirty="emit('federationDirty', $event)"
-  />
+  </div>
 </template>

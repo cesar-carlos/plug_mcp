@@ -11,6 +11,19 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: consultar dados e a autenticação do `/mcp` passam a mostrar a mensagem
+  e a orientação já seguras da recusa (token recusado, sessão ou falha do hub),
+  em vez de só o status 401 ou “serviço indisponível”. Falha inesperada do
+  console deixa de ser apresentada como autoridade do hub; recusa do banco de
+  controle pede conferir a lista e o detalhe bruto continua só no log. As
+  finalidades por campo na emissão de token começam recolhidas.
+
+- Fixed: **Ver consultas permitidas por este token** passa a explicar HTTP 401
+  do `POST /mcp` como token recusado, em vez do status genérico ou da mensagem
+  de confirmação perdida; o painel deixa de vazar para Início > Personas por
+  causa de um fragmento Vue que ignorava `v-show`. Não reenvia, não altera a
+  autorização do servidor e não registra o Bearer.
+
 - Fixed: ao abrir a aba Conexões e delegação, o resumo de erro da verificação
   recebe foco de novo; a leitura só começa com a aba visível, sem alterar
   autoridade, CAS ou a mutação.

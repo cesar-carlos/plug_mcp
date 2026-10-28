@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { assertGrantedPublication, assertTokenPersona, parseMcpToolResult } from "./mcp-client";
+import {
+  assertGrantedPublication,
+  assertTokenPersona,
+  mcpAuthorizationHeader,
+  mcpToolErrorMessage,
+  parseMcpToolResult,
+} from "./mcp-client";
+
+describe("autorização MCP do console", () => {
+  it("envia um único prefixo Bearer e remove espaços extras", () => {
+    expect(mcpAuthorizationHeader("  token-value  ")).toBe("Bearer token-value");
+    expect(mcpAuthorizationHeader("Bearer token-value")).toBe("Bearer token-value");
+    expect(mcpAuthorizationHeader("token-value")).toBe("Bearer token-value");
+  });
+});
 
 describe("resultado de tool MCP", () => {
   it("devolve o JSON da tool quando a chamada conclui", () => {
@@ -27,6 +41,17 @@ describe("resultado de tool MCP", () => {
         },
       }),
     ).toThrow("Skill não concedida.");
+  });
+
+  it("acrescenta a orientação quando a consulta explica a recusa", () => {
+    expect(
+      mcpToolErrorMessage({
+        error: {
+          message: "Tempo esgotado aguardando o agente.",
+          hint: "Não repita automaticamente.",
+        },
+      }),
+    ).toBe("Tempo esgotado aguardando o agente. Não repita automaticamente.");
   });
 
   it("recusa ausência de resultado sem inventar autorização", () => {

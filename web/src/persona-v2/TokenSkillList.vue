@@ -24,8 +24,11 @@ const emit = defineEmits<{
         @change="emit('change', option.id, ($event.target as HTMLInputElement).checked)"
       />{{ option.label }}</label
     >
-    <ul v-if="option.details?.length">
-      <li v-for="detail in option.details" :key="detail">{{ detail }}</li>
-    </ul>
+    <details v-if="option.details?.length">
+      <summary>Finalidades por campo ({{ option.details.length }})</summary>
+      <ul>
+        <li v-for="detail in option.details" :key="detail">{{ detail }}</li>
+      </ul>
+    </details>
   </div>
 </template>

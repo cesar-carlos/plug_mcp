@@ -432,7 +432,13 @@ Consultas exigem Bearer da persona, mesmo com responsável autenticado. Validaç
 técnica e execução são ações separadas. A paginação envia `page` e `pageSize`
 juntos, com padrão de 100 e opções 25/50/100, mantendo a validação definitiva
 no servidor. **Ver consultas permitidas por este token** filtra pelas publicações
-concedidas e seus hashes; a execução faz nova conferência. Parâmetros distinguem
+concedidas e seus hashes; a execução faz nova conferência. A ação envia
+`POST /mcp` com `Authorization: Bearer` do token colado (não a sessão Client).
+HTTP 401 (`AUTHORIZATION_DENIED`) é recusa desse Bearer: o console explica que
+o token foi recusado e não reenvia. Recusa já autenticada de `consultar_dados`
+mostra a mensagem e a orientação seguras da falha, inclusive quando a origem é
+o hub. Token válido sem consultas concedidas
+continua 200, com a lista vazia. Parâmetros distinguem
 valor, texto vazio, nulo e omissão; decimais são enviados como texto. Uma página
 não representa o total. Fonte, publicação, dialeto,
 filtros, horário e completude acompanham o resultado. Alterar SQL, parâmetros,
@@ -542,7 +548,10 @@ ao formulário. Instruções ChatGPT são apresentadas em passos, com detalhes
 adicionais expansíveis. Essas mudanças não ampliam concessões nem executam
 testes de conexão automaticamente.
 
-Falhas de rede ou respostas ilegíveis após POST/alteração são apresentadas como
+Falha inesperada ao gravar, inclusive na emissão de token, não é apresentada
+como autoridade do hub. Recusa do banco de controle pede conferir a lista; o
+código e a constraint ficam no log do servidor, sem a mensagem bruta. Falhas de
+rede ou respostas ilegíveis após POST/alteração são apresentadas como
 resultado não confirmado. O console orienta conferir listagem ou identificador,
 sem recomendar reenvio automático e sem afirmar sucesso, rollback ou estado
 terminal da operação. Isso também vale para POST MCP. Leituras GET podem ser
@@ -559,7 +568,8 @@ administração e um teto de delegação igual às concessões selecionadas, som
 por opção explícita. Integrações possuem jornadas próprias de cadastro, gestão e
 contratos; a permissão administrativa não concede execução. Selecionar uma skill
 externa concede explicitamente suas capabilities e o ID exato da operação
-publicada, sem efeitos SQL. Ações novas começam com aprovação adicional;
+publicada, sem efeitos SQL. As finalidades por campo de cada publicação começam
+recolhidas; abri-las só mostra o conjunto já concedido e não altera a seleção. Ações novas começam com aprovação adicional;
 consultas externas continuam sem aprovação adicional. O editor permite retirar
 a operação separadamente: executar exige tanto a skill quanto a operação.
 Permissões externas e limites preexistentes são preservados.

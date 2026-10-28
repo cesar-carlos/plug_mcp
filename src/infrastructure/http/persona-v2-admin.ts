@@ -19,6 +19,7 @@ import { registerKnowledgeMaintenanceRoutes } from "./persona-v2-knowledge-maint
 import type { PersonaAdministration } from "../../application/persona-v2/administration.js";
 import type { PersonaMaintenance } from "../../application/persona-v2/maintenance.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
+import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { permissionsSchema } from "../persistence/persona-v2/permissions-schema.js";
@@ -74,6 +75,7 @@ export const createPersonaAdministrationApp = (input: {
   knowledgeMaintenance?: PersonaKnowledgeMaintenance;
   knowledgeTraining?: PersonaKnowledgeTraining;
   crypto: CryptoPort;
+  logger?: LoggerPort;
   publicBaseUrl: string;
   readPersonaIcon?: (personaId: string) => Promise<StoredPersonaIcon | null>;
   ready: () => Promise<boolean>;
@@ -1218,11 +1220,34 @@ export const createPersonaAdministrationApp = (input: {
         });
       } else {
         // Never serialize upstream errors: they may contain credentials or payloads.
-        res
-          .status(503)
-          .json({ error: { code: "AUTHORITY_UNAVAILABLE", message: "Autoridade indisponível." } });
+        const persistence = persistenceFailure(error);
+        input.logger?.error("admin request failed", {
+          name: error instanceof Error ? error.name : "unknown",
+          ...(persistence ? { code: persistence.code, constraint: persistence.constraint } : {}),
+        });
+        res.status(503).json({
+          error: {
+            code: "AUTHORITY_UNAVAILABLE",
+            message: persistence
+              ? "Não foi possível gravar no banco de controle. Confira a lista antes de repetir; esta falha não é a autoridade do hub."
+              : "Não foi possível concluir a solicitação. Confira o estado antes de repetir; o motivo técnico ficou no log do servidor.",
+          },
+        });
       }
     },
   );
   return app;
+};
+
+const persistenceFailure = (
+  error: unknown,
+): { code: string; constraint: string | undefined } | undefined => {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+  const severity =
+    "severity" in error && typeof error.severity === "string" ? error.severity : undefined;
+  if (!code || !severity || !/^[0-9A-Z]{5}$/.test(code)) return undefined;
+  const constraint =
+    "constraint" in error && typeof error.constraint === "string" ? error.constraint : undefined;
+  return { code, constraint };
 };

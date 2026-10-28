@@ -47,7 +47,7 @@ function sourceName(sourceId: string | undefined): string | undefined {
         autocomplete="off"
         :disabled="busy"
     /></label>
-    <button class="secondary" :disabled="busy || !bearer" @click="emit('inspect')">
+    <button class="secondary" :disabled="busy || !bearer.trim()" @click="emit('inspect')">
       Ver consultas permitidas por este token
     </button>
     <p v-if="grantedQueries && !Object.keys(publications).length">

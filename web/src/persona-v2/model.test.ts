@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ContextRequests, ConsoleRequestError } from "./model";
+import { ContextRequests, ConsoleRequestError, MCP_TOKEN_REFUSED_MESSAGE } from "./model";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -64,6 +64,80 @@ it("não apresenta corpo HTML de falha de transporte nem persiste credenciais", 
   expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
     credentials: "same-origin",
     cache: "no-store",
+  });
+});
+
+it("explica 401 sem mensagem como autenticação recusada", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: "AUTHORIZATION_DENIED" } }), { status: 401 }),
+    ),
+  );
+  const error = await new ContextRequests()
+    .json("/api/admin/personas")
+    .catch((cause: unknown) => cause);
+  expect(error).toBeInstanceOf(ConsoleRequestError);
+  expect(error).toMatchObject({ status: 401 });
+  expect((error as ConsoleRequestError).message).toContain("autenticação foi recusada");
+});
+
+it("explica 401 do MCP como token recusado sem tratar como confirmação perdida", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code: "AUTHORIZATION_DENIED" } }), { status: 401 }),
+    ),
+  );
+  const error = await new ContextRequests()
+    .json("/mcp", { method: "POST", body: "{}" }, "mcp")
+    .catch((cause: unknown) => cause);
+  expect(error).toBeInstanceOf(ConsoleRequestError);
+  expect(error).toMatchObject({
+    code: "AUTHORIZATION_DENIED",
+    status: 401,
+    message: MCP_TOKEN_REFUSED_MESSAGE,
+  });
+  expect((error as Error).message).not.toContain("Confira o estado");
+});
+
+it("não trata corpo ilegível de 401 MCP como mutação não confirmada", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("<html>private upstream</html>", { status: 401 })),
+  );
+  const error = await new ContextRequests()
+    .json("/mcp", { method: "POST", body: "{}" }, "mcp")
+    .catch((cause: unknown) => cause);
+  expect(error).toMatchObject({
+    code: "AUTHORIZATION_DENIED",
+    status: 401,
+    message: MCP_TOKEN_REFUSED_MESSAGE,
+  });
+  expect((error as Error).message).not.toContain("private upstream");
+});
+
+it("preserva mensagem explícita de 401 MCP quando o servidor a envia", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: { code: "AUTHORIZATION_DENIED", message: "Token expirado neste consumidor." },
+          }),
+          { status: 401 },
+        ),
+    ),
+  );
+  await expect(
+    new ContextRequests().json("/mcp", { method: "POST", body: "{}" }, "mcp"),
+  ).rejects.toMatchObject({
+    code: "AUTHORIZATION_DENIED",
+    status: 401,
+    message: "Token expirado neste consumidor.",
   });
 });
 

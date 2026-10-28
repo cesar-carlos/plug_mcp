@@ -1,6 +1,11 @@
 import { computed, reactive, ref, watch, type ComputedRef, type Ref } from "vue";
 import type { AttachmentDescriptor } from "../../../src/domain/persona-v2/attachments";
-import { assertGrantedPublication, assertTokenPersona, parseMcpToolResult } from "./mcp-client";
+import {
+  assertGrantedPublication,
+  assertTokenPersona,
+  mcpAuthorizationHeader,
+  parseMcpToolResult,
+} from "./mcp-client";
 import type { ContextRequests, Persona, Publication, QueryResult } from "./model";
 import { queryParameters, type ParameterMode } from "./query-parameters";
 import { useQueryAttachment } from "./use-query-attachment";
@@ -80,7 +85,7 @@ export function useConsoleQuery(
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json, text/event-stream",
-          Authorization: `Bearer ${bearer.value}`,
+          Authorization: mcpAuthorizationHeader(bearer.value),
         },
         body: JSON.stringify({
           jsonrpc: "2.0",

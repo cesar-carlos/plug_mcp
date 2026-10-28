@@ -237,8 +237,10 @@ export const composePersonaV2 = async (
       externalIntegrations,
       externalAdapters,
     );
+    const logger = new PinoLoggerAdapter(createPino(config.LOG_LEVEL, false));
     return {
       app: createPersonaAdministrationApp({
+        logger,
         attachments,
         externalIntegrations,
         integrationManagement: new PersonaIntegrationManagement(

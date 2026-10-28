@@ -34,12 +34,16 @@ const emit = defineEmits<{
     <button type="button" class="secondary" @click="emit('remove', g.skillId)">
       Remover concessão
     </button>
-    <fieldset
+    <details
       v-if="
         fieldUseCapabilities(publications[g.skillId]?.package.requiredCapabilities ?? []).length
       "
     >
-      <legend>Finalidades concedidas por campo</legend>
+      <summary>
+        Finalidades concedidas por campo ({{
+          fieldUseCapabilities(publications[g.skillId]?.package.requiredCapabilities ?? []).length
+        }})
+      </summary>
       <label
         v-for="capability in fieldUseCapabilities(
           publications[g.skillId]?.package.requiredCapabilities ?? [],
@@ -55,6 +59,6 @@ const emit = defineEmits<{
         A publicação exige seu conjunto completo. Remover uma finalidade bloqueia a skill inteira;
         não libera uma consulta parcial.
       </p>
-    </fieldset>
+    </details>
   </div>
 </template>

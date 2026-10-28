@@ -174,6 +174,9 @@ export class ConsoleRequestError extends Error {
   }
 }
 
+export const MCP_TOKEN_REFUSED_MESSAGE =
+  "O token foi recusado. Confira se ainda é válido, não expirou e tem concessão para esta persona. Não reenvie automaticamente.";
+
 /** A request from a discarded persona/session cannot update the current screen. */
 export class ContextRequests {
   private version = 0;
@@ -239,6 +242,12 @@ export class ContextRequests {
         value = await response.json();
       }
     } catch {
+      if (version !== this.version) {
+        throw new Error("O contexto mudou. A resposta anterior foi descartada.");
+      }
+      if (format === "mcp" && response.status === 401) {
+        throw new ConsoleRequestError(MCP_TOKEN_REFUSED_MESSAGE, "AUTHORIZATION_DENIED", 401);
+      }
       throw transportFailure();
     }
     if (version !== this.version) {
@@ -249,8 +258,18 @@ export class ContextRequests {
         value && typeof value === "object" && "error" in value
           ? (value as { error?: { code?: string; message?: string; fields?: unknown } }).error
           : undefined;
+      if (format === "mcp" && response.status === 401) {
+        throw new ConsoleRequestError(
+          error?.message ?? MCP_TOKEN_REFUSED_MESSAGE,
+          error?.code ?? "AUTHORIZATION_DENIED",
+          401,
+        );
+      }
       throw new ConsoleRequestError(
-        error?.message ?? `Não foi possível concluir a solicitação (${response.status}).`,
+        error?.message ??
+          (response.status === 401
+            ? "A autenticação foi recusada. Entre novamente no console ou confira se o token da consulta ainda é válido."
+            : `Não foi possível concluir a solicitação (${response.status}).`),
         error?.code ?? "TRANSPORT_ERROR",
         response.status,
         Array.isArray(error?.fields)
