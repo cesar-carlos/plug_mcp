@@ -216,7 +216,7 @@ test("tamanho, delegação, recusa e recuperação pelo navegador/proxy/HTTP", a
     await page.evaluate(() =>
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
-        value: { writeText: async () => {} },
+        value: { writeText: async () => undefined },
       }),
     );
     await page.getByRole("button", { name: "Copiar token", exact: true }).click();
