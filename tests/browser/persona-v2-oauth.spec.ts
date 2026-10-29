@@ -365,6 +365,11 @@ test("delegação no console, consentimento administrativo e setup de uso único
   await page.goto(begin());
   await page.getByLabel("Token da persona").fill(administrative);
   await page.getByRole("button", { name: "Revisar conexão" }).click();
+  await page.getByText(/^Administração: selecione somente as permissões desejadas ·/).click();
+  await expect(
+    page.locator('input[name="administrative"][value="gerenciar_fontes"]'),
+  ).not.toBeChecked();
+  await expect(page.locator('input[name="administrative"][value="treinar"]')).not.toBeChecked();
   await page.locator('input[name="administrative"][value="gerenciar_fontes"]').check();
   await page.locator('input[name="administrative"][value="treinar"]').check();
   await expect(page.locator('input[name="administrative"][value="gerenciar_tokens"]')).toHaveCount(

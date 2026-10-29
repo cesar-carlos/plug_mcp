@@ -56,3 +56,12 @@ com paginação inválida, sem autorizar ou executar no agente. Também passaram
 os 62 testes direcionados, os 77 testes PostgreSQL de consulta/manutenção,
 typecheck/build com TypeScript 7, ESLint e docs:check. O Node local permanece
 24.18; a confirmação de runtime e da bateria completa depende do CI desta revisão.
+
+## Ajuste da jornada OAuth de consentimento
+
+O CI de `5992c70` aprovou o onboarding integrado, incluindo a regressão binária,
+mas encontrou timeout na jornada OAuth administrativa: o teste tentava marcar
+checkboxes dentro do grupo Administração recolhido. A reprodução local confirmou
+`element is not visible`. O teste agora abre o grupo pela interface e confere
+as opções inicialmente desmarcadas antes de selecionar as permissões explícitas.
+Não usa force, não modifica consentimento, não aumenta timeout nem remove asserts.
