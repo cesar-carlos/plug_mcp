@@ -40,3 +40,19 @@ foram tratados como skips aprovados. Testes de dialeto usam parser/mocks; não
 certificam execução real nos três motores nem reproduzem as consultas privadas.
 Node 24.18 está abaixo do mínimo 24.21 do projeto: o gate de runtime/release
 permanece pendente. Nenhum gate integral ou validação remota foi aprovado.
+
+## Ajuste da precedência após falha do CI
+
+O CI do commit `044a71a` encontrou uma regressão no teste Chromium de coluna
+binária: a consulta comum recebeu erro de paginação antes da recusa de campo.
+A validação de paginação foi extraída e é chamada após campos/finalidades na
+execução de consultas. Nenhuma guarda foi removida; ambas terminam antes de
+qualquer autorização remota ou envio. Os demais consumidores de validateSourceSql
+continuam validando paginação quando fornecem opções.
+
+O teste de navegador original foi preservado e passou em fixture PostgreSQL
+isolada. Novas regressões unitárias verificam a recusa de consulta comum e JSON
+com paginação inválida, sem autorizar ou executar no agente. Também passaram
+os 62 testes direcionados, os 77 testes PostgreSQL de consulta/manutenção,
+typecheck/build com TypeScript 7, ESLint e docs:check. O Node local permanece
+24.18; a confirmação de runtime e da bateria completa depende do CI desta revisão.

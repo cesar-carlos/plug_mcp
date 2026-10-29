@@ -1,6 +1,6 @@
 import type { Dialeto } from "../../domain/entities/dialeto.js";
 import type { EscopoSkill } from "../../domain/entities/escopo.js";
-import { validarAstNoEscopo } from "../use-cases/shared/validar-escopo.js";
+import { exigirPaginacaoEstavel, validarAstNoEscopo } from "../use-cases/shared/validar-escopo.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 import { parseSelect, type SqlAstSelect } from "../use-cases/shared/sql-ast.js";
 
@@ -15,8 +15,16 @@ export const validateSourceSql = (
   const ast = validarAstNoEscopo(
     parseSelect(sql, dialect, { allowSchemaQualifiedTables: true }),
     scope,
-    options,
   );
+  assertSourcePagination(ast, options);
+  return ast;
+};
+
+export const assertSourcePagination = (
+  ast: SqlAstSelect,
+  options?: { page?: number; pageSize?: number },
+): void => {
+  exigirPaginacaoEstavel(ast.sql, ast, options);
   if (options?.page !== undefined) {
     const qualified = ast.orderByRefs.filter((ref) => ref.table);
     const projected = ast.orderByRefs.every((ref) =>
@@ -36,5 +44,4 @@ export const validateSourceSql = (
       );
     }
   }
-  return ast;
 };

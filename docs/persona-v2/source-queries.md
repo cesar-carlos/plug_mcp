@@ -1,5 +1,10 @@
 # Consultas por fonte — contrato implementado
 
+A autorização de campos/finalidades, incluindo a recusa de binários na consulta
+comum, precede a validação de paginação. Ambas permanecem obrigatórias antes
+da autorização remota e do envio de SQL; a prioridade não permite executar
+consulta com paginação inválida.
+
 Paginação gerenciada exige nomes ou aliases simples projetados no `ORDER BY`.
 Prefira aliases sem prefixo de tabela, especialmente em agregações, DISTINCT e
 CTEs. Expressões, posições numéricas e NULLS FIRST/LAST são recusados antes da

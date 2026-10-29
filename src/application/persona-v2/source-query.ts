@@ -10,7 +10,7 @@ import { uniaoEscopos } from "../../domain/entities/escopo.js";
 import type { ParametroSkill } from "../../domain/entities/skill.js";
 import type { SourceQueryGatewayPort } from "../../domain/ports/source-query.port.js";
 import type { SqlExecuteResult } from "../../domain/ports/plug-server-gateway.port.js";
-import { validateSourceSql } from "./source-sql.js";
+import { assertSourcePagination, validateSourceSql } from "./source-sql.js";
 import { assertFanoutSeguro } from "../use-cases/shared/assert-fanout.js";
 import {
   bindNamedParams,
@@ -468,7 +468,7 @@ export class PersonaSourceQueries {
       );
     }
     const scope = uniaoEscopos(publications.map((p) => p.package.scope));
-    const ast = validateSourceSql(sql, source.dialect, scope, input.options);
+    const ast = validateSourceSql(sql, source.dialect, scope);
     if (attachment?.format === "binary")
       assertBinaryProjection(ast, trainings[0]!.binaryAttachments!);
     const binaryFields = new Set(
@@ -493,6 +493,9 @@ export class PersonaSourceQueries {
         Object.fromEntries(ast.colunas.map((column) => [column.alias, ["exportacao"]])),
       );
     }
+    // Field authority (including binary projection) takes precedence over pagination.
+    // Both checks still complete before remote authorization or SQL dispatch.
+    assertSourcePagination(ast, input.options);
     assertFanoutSeguro(ast, scope);
     enforceSourceRestrictions(ast, scope, restrictions);
     const columns = ast.colunas.map((c) => c.alias);

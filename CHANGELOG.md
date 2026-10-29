@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: validação de campos binários precede paginação, preservando a recusa
+  de projeção na consulta comum e todas as guardas antes do envio ao agente.
+
 - Fixed: paginação v2 valida ordenação compatível antes do envio ao agente e
   orienta aliases projetados; progresso serializa leituras na transação PostgreSQL
   para evitar chamadas concorrentes na mesma conexão.

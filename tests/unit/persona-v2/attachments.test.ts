@@ -537,3 +537,23 @@ it("guarda estrutural verifica apenas dependências; prova desconhecida recusa s
   ).rejects.toMatchObject({ code: "STALE_AUTHORIZATION" });
   expect(mismatch).toHaveBeenCalledOnce();
 });
+
+it.each(["run", "exportJson"] as const)(
+  "%s prioriza a recusa de campo binário mesmo com paginação inválida",
+  async (method) => {
+    const f = binaryFixture();
+    await expect(
+      f.queries[method](identity, {
+        ...binaryInput.query,
+        options: { page: 1, pageSize: 10 },
+      }),
+    ).rejects.toMatchObject({
+      code: "AUTHORIZATION_DENIED",
+      message: expect.stringContaining(
+        method === "run" ? "Campo ou finalidade" : "Exportação não publicada",
+      ),
+    });
+    expect(f.gateway.authorize).not.toHaveBeenCalled();
+    expect(f.lease.execute).not.toHaveBeenCalled();
+  },
+);

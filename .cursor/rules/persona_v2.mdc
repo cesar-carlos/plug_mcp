@@ -9,6 +9,9 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Campos/finalidades e recusa de binários na consulta comum precedem paginação;
+ambas as validações continuam obrigatórias antes de autorizar/enviar SQL.
+
 Paginação gerenciada usa nomes/aliases simples projetados no ORDER BY; expressões,
 posições e NULLS FIRST/LAST são recusados antes do envio. Ordenação qualificada
 exige projeção simples e correspondência única; preferir alias sem prefixo em
