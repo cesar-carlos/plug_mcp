@@ -5,6 +5,8 @@ alwaysApply: true
 
 
 Após emissão ou rotação confirmada, o console abre e focaliza Copiar e usar token. O segredo fica mascarado e somente em memória; copiar exige clique e informa sucesso ou alternativa manual. Sem segredo disponível, a tela explica a impossibilidade de recuperação e orienta a rotação explícita, que invalida o valor anterior. Teste de conexão é opcional e recolhido. Não há cópia, rotação ou retry automático.
+
+A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, com seleção explícita de todos/nenhum por grupo e contagens locais. Nenhum item começa selecionado; seleção em lote não inclui fontes/dependências de outros grupos nem amplia o token. Limites opcionais preservam valores ao recolher. Aprimoramento usa script estático autorizado por hash CSP, sem rede ou persistência; sem JavaScript a seleção individual continua disponível. Cancelar não exige validar limites opcionais.
 # Persona-v2
 
 Formulários de tokens recolhem seções e finalidades sem desmontar campos ou

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { consentScript, consentStyle } from "./persona-v2-consent-ui.js";
 import express, { type Express, type Request, type Response } from "express";
 import { z } from "zod";
 import { administrativePermissionSchema } from "../../domain/persona-v2/administrative-permissions.js";
@@ -40,7 +42,7 @@ export const consentSkillTitle = (
   (draftName ? `${draftName} · sem publicação utilizável` : "Skill sem publicação utilizável");
 const choices = (permissions: Permissions, labels: ReadonlyMap<string, string>) => {
   const group = (title: string, name: string, items: readonly string[]) =>
-    `<fieldset><legend>${title}</legend>${items.length ? items.map((id) => `<label><input type="checkbox" name="${name}" value="${escapeHtml(id)}"> ${escapeHtml(labels.get(id) ?? id)}</label>`).join("") : "<p>Nenhuma concessão.</p>"}</fieldset>`;
+    `<details class="consent-group" ${items.length && (name === "sources" || name === "skills") ? "open" : ""}><summary>${title} · ${items.length}</summary><fieldset class="section" data-choice-group><legend>${title}</legend>${items.length ? `<div class="bulk" hidden><button type="button" class="secondary" data-select="all">Marcar todos</button><button type="button" class="secondary" data-select="none">Desmarcar todos</button><span class="hint" data-count aria-live="polite"></span></div>` + items.map((id) => `<label class="choice"><input type="checkbox" name="${name}" value="${escapeHtml(id)}"><span>${escapeHtml(labels.get(id) ?? id)}</span></label>`).join("") : '<p class="hint">Nenhuma concessão disponível neste token.</p>'}</fieldset></details>`;
   return (
     group("Bases", "sources", permissions.sourceIds) +
     group(
@@ -71,14 +73,14 @@ const limitChoices = (permissions: Permissions) => {
     maxAffectedRows: "Linhas diretamente afetadas por lançamento",
   };
   const group = (prefix: string, title: string, limits: object) =>
-    `<fieldset><legend>${title}</legend><p>Opcional: reduza os tetos desta conexão. Em branco preserva os limites existentes. Publicações e outras concessões podem impor valores menores.</p>${Object.entries(
+    `<details class="consent-group"><summary>${title} · opcional</summary><fieldset class="section"><legend>${title}</legend><p>Opcional: reduza os tetos desta conexão. Em branco preserva os limites existentes. Publicações e outras concessões podem impor valores menores.</p>${Object.entries(
       limits,
     )
       .map(
         ([key, max]) =>
           `<label>${labels[key]}<input type="number" name="${prefix}_${key}" min="1" max="${String(max)}" step="1"></label>`,
       )
-      .join("")}</fieldset>`;
+      .join("")}</fieldset></details>`;
   return (
     group("query", "Limites de consulta da conexão", queryLimits(permissions.queryLimits ?? {})) +
     group(
@@ -209,7 +211,7 @@ export const registerPersonaOAuthRoutes = (
       const result = await oauth.authenticate(body.transaction, cookie(req), body.csrf, body.token);
       res.set(
         "Content-Security-Policy",
-        `default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self' ${new URL(result.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
+        `default-src 'none'; script-src 'sha256-${createHash("sha256").update(consentScript).digest("base64")}'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self' ${new URL(result.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
       );
       const [sources, skills, draftNames] = await Promise.all([
         catalog.sources(result.identity),
@@ -234,7 +236,7 @@ export const registerPersonaOAuthRoutes = (
         .type("html")
         .send(
           page(
-            `<p><img src="${escapeHtml(iconSrc)}" alt="" width="64" height="64"></p><p>Persona: <strong>${escapeHtml(result.persona)}</strong></p><p>Selecione explicitamente as concessões. Sem seleção, a conexão terá apenas o contexto da persona. Fontes e dependências da skill precisam estar selecionadas. Administração depende da delegação vigente e das opções selecionadas; aprovação humana não é delegada. Cada seleção preserva os limites do token e da publicação; o consentimento não os amplia.</p><form method="post" action="${root}/consent">${hiddenField("transaction", body.transaction)}${hiddenField("csrf", result.csrf)}${choices(result.permissions, labels)}<button name="confirmed" value="yes" type="submit">Confirmar conexão</button><button name="confirmed" value="no" type="submit">Cancelar</button></form>`,
+            `<style>${consentStyle}</style><p class="hint">Etapa 2 de 2 · Revise o acesso</p><div class="consent-persona"><img src="${escapeHtml(iconSrc)}" alt="" width="48" height="48"><p>Persona<br><strong>${escapeHtml(result.persona)}</strong></p></div><p>Escolha o que o ChatGPT poderá acessar. Nada será autorizado até você confirmar.</p><details class="consent-group"><summary>Como funcionam as permissões?</summary><p class="consent-help">Selecione explicitamente as concessões. Sem seleção, a conexão terá apenas o contexto da persona. Fontes e dependências da skill precisam estar selecionadas. Administração depende da delegação vigente e das opções selecionadas; aprovação humana não é delegada. Cada seleção preserva os limites do token e da publicação; o consentimento não os amplia.</p></details><form method="post" action="${root}/consent">${hiddenField("transaction", body.transaction)}${hiddenField("csrf", result.csrf)}${choices(result.permissions, labels)}<p class="hint">Revise os grupos selecionados antes de confirmar. Marcar todos afeta somente o grupo escolhido e não seleciona dependências em outros grupos.</p><div class="actions"><button name="confirmed" value="yes" type="submit">Confirmar conexão</button><button class="secondary" name="confirmed" value="no" type="submit" formnovalidate>Cancelar</button></div></form><script>${consentScript}</script>`,
           ),
         );
     }),

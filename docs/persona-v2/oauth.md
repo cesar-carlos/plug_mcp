@@ -1,5 +1,7 @@
 # OAuth persona-v2 e conexão privada ChatGPT
 
+A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, com seleção explícita de todos/nenhum por grupo e contagens locais. Nenhum item começa selecionado; seleção em lote não inclui fontes/dependências de outros grupos nem amplia o token. Limites opcionais preservam valores ao recolher. Aprimoramento usa script estático autorizado por hash CSP, sem rede ou persistência; sem JavaScript a seleção individual continua disponível. Cancelar não exige validar limites opcionais.
+
 Implementado na composição v2, separado do OAuth legado e habilitado explicitamente.
 Deploy/imagens permanecem bloqueados; esta entrega não comprova instalação
 privada nem conversa no cliente real. [Aceite](acceptance.md#oauth-and-console).

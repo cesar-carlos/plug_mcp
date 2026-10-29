@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: revisão OAuth com checkboxes alinhados, grupos recolhíveis, seleção explícita de todos/nenhum por grupo, limites opcionais recolhidos e cancelamento independente da validação dos limites.
+
 - Fixed: emissão e rotação abrem a etapa de cópia do token; estado vazio orienta
   a recuperação por rotação explícita. Cópia informa sucesso ou alternativa manual,
   e teste de conexão fica recolhido como etapa opcional.
