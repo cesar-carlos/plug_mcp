@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: paginação v2 valida ordenação compatível antes do envio ao agente e
+  orienta aliases projetados; progresso serializa leituras na transação PostgreSQL
+  para evitar chamadas concorrentes na mesma conexão.
+
 - Fixed: revisão OAuth com checkboxes alinhados, grupos recolhíveis, seleção explícita de todos/nenhum por grupo, limites opcionais recolhidos e cancelamento independente da validação dos limites.
 
 - Fixed: emissão e rotação abrem a etapa de cópia do token; estado vazio orienta

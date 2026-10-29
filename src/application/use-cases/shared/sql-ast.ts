@@ -90,6 +90,8 @@ export interface SqlAstSelect {
   readonly temAgregacaoLocal: boolean;
   readonly temGroupBy: boolean;
   readonly temOrderBy: boolean;
+  readonly simplePaginationOrder?: boolean;
+  readonly simplePaginationProjection?: boolean;
   readonly temLimite: boolean;
   readonly temStar: boolean;
   readonly temLiteralTextoFiltro: boolean;
@@ -606,6 +608,18 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     temAgregacao: temAgregacao || nestedAggr,
     temGroupBy: groupCols.length > 0,
     temOrderBy: ast.orderby != null && asArray(ast.orderby).length > 0,
+    simplePaginationOrder: asArray(ast.orderby).every(
+      (term) =>
+        isRecord(term) &&
+        isRecord(term.expr) &&
+        term.expr.type === "column_ref" &&
+        !term.nulls &&
+        !term.expr.collate,
+    ),
+    simplePaginationProjection:
+      !distinct &&
+      cteNomes.length === 0 &&
+      colunas.every((column) => !column.isExpression && !column.isStar),
     // PostgreSQL parser emits limit:{value:[]} even when SQL has no LIMIT/OFFSET.
     temLimite:
       (ast.limit != null &&

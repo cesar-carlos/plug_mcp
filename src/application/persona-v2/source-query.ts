@@ -77,7 +77,15 @@ export const sourceQuerySchema = z.strictObject({
       maxRows: z.number().int().min(1).max(5000).optional(),
       maxBytes: z.number().int().min(1).max(QUERY_LIMITS.maxBytes).optional(),
       timeoutMs: z.number().int().min(1).max(60000).optional(),
-      page: z.number().int().min(1).max(1000000).optional(),
+      page: z
+        .number()
+        .int()
+        .min(1)
+        .max(1000000)
+        .describe(
+          "Exige ORDER BY por nome ou alias simples projetado; prefira alias sem prefixo de tabela. Não use expressão, posição numérica ou limite SQL.",
+        )
+        .optional(),
       pageSize: z.number().int().min(1).max(5000).optional(),
     })
     .refine(

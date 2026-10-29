@@ -1,5 +1,13 @@
 # Consultas por fonte — contrato implementado
 
+Paginação gerenciada exige nomes ou aliases simples projetados no `ORDER BY`.
+Prefira aliases sem prefixo de tabela, especialmente em agregações, DISTINCT e
+CTEs. Expressões, posições numéricas e NULLS FIRST/LAST são recusados antes da
+autorização remota. Ordenação qualificada só é admitida com projeção simples e
+correspondência única. Sem paginação, essas restrições adicionais não se aplicam.
+O MCP não reescreve SQL nem repete chamadas; o consumidor revisa explicitamente
+a consulta. O schema e os guias descrevem o mesmo contrato.
+
 `obter_capacidades` descreve a composição do endpoint atual. `authentication`
 é `bearer` em `/mcp` ou `oauth2` em `/mcp/chatgpt`; `oauth` é falso no endpoint
 manual e informa scope/limitação pelo originador no endpoint OAuth. Isso não

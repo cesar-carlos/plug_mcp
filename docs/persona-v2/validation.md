@@ -11,6 +11,8 @@ nem reutilizar evidência de uma revisão para certificar outra.
 
 ## Registrar uma nova rodada
 
+[Paginação e concorrência PostgreSQL — 2026-10-29](validation/2026-10-29-pagination-postgres-concurrency.md).
+
 [Limites e diagnóstico de tokens — 2026-10-28](validation/2026-10-28-token-request-limits.md).
 
 [Compatibilidade do plugin e composição editorial — 2026-10-26](validation/2026-10-26-plugin-improvements.md).

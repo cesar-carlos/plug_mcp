@@ -126,11 +126,13 @@ export class PersonaMaintenance {
           break;
         }
       }
-      const publications = await Promise.all(
-        drafts
-          .filter((d) => d.activePublicationId)
-          .map((d) => tx.catalog.publication(personaId, d.activePublicationId!)),
-      );
+      const publications: (CatalogPublication<PublishedPackage> | null)[] = [];
+      // A transaction owns one PostgreSQL connection; do not overlap its queries.
+      for (const draft of drafts) {
+        if (draft.activePublicationId) {
+          publications.push(await tx.catalog.publication(personaId, draft.activePublicationId));
+        }
+      }
       const current = (p: CatalogPublication<PublishedPackage> | null): boolean => {
         if (
           !p ||

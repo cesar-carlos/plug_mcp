@@ -608,3 +608,71 @@ it("falha de transporte não suspende a identidade nem repete SQL", async () => 
   expect(f.credentials.invalidateIdentity).not.toHaveBeenCalled();
   expect(f.hub.executeSql).toHaveBeenCalledTimes(1);
 });
+
+it.each(["postgres", "mssql", "sybase"] as const)(
+  "paginação %s recusa expressões antes de autorizar ou enviar SQL",
+  async (dialect) => {
+    for (const order of ["p.id + 1", "1", "COALESCE(p.id, 0)"]) {
+      const f = fixture(dialect);
+      await expect(
+        f.service.run(identity, {
+          sql: queryTraining().sqlModel.replace("ORDER BY p.id", `ORDER BY ${order}`),
+          params: { minimum: 0 },
+          options: { page: 1, pageSize: 10 },
+        }),
+      ).rejects.toMatchObject({ code: "INVALID_PLAN" });
+      expect(f.gateway.authorize).not.toHaveBeenCalled();
+      expect(f.execute).not.toHaveBeenCalled();
+    }
+  },
+);
+it.each(["postgres", "mssql", "sybase"] as const)(
+  "paginação %s aceita alias projetado sem reescrever SQL",
+  async (dialect) => {
+    const f = fixture(dialect);
+    const sql = queryTraining().sqlModel.replace("ORDER BY p.id", "ORDER BY id DESC");
+    await f.service.run(identity, {
+      sql,
+      params: { minimum: 0 },
+      options: { page: 1, pageSize: 10 },
+    });
+    expect(f.execute).toHaveBeenCalledTimes(1);
+    expect(f.execute.mock.calls[0]![0]).toBe(sql);
+  },
+);
+
+it.each(["postgres", "mssql", "sybase"] as const)(
+  "paginação %s usa alias em projeção agregada",
+  async (dialect) => {
+    const f = fixture(dialect);
+    const sql =
+      "SELECT p.id, SUM(p.amount) AS amount FROM orders p WHERE p.id > :minimum GROUP BY p.id ORDER BY p.id";
+    await expect(
+      f.service.run(identity, { sql, params: { minimum: 0 }, options: { page: 1, pageSize: 10 } }),
+    ).rejects.toMatchObject({ code: "INVALID_PLAN" });
+    expect(f.execute).not.toHaveBeenCalled();
+    const revised = sql.replace("ORDER BY p.id", "ORDER BY id");
+    await f.service.run(identity, {
+      sql: revised,
+      params: { minimum: 0 },
+      options: { page: 1, pageSize: 10 },
+    });
+    expect(f.execute).toHaveBeenCalledTimes(1);
+    expect(f.execute.mock.calls[0]![0]).toBe(revised);
+  },
+);
+it("sem paginação preserva ORDER BY por expressão; NULLS LAST paginado é recusado", async () => {
+  const f = fixture();
+  await f.service.run(identity, {
+    sql: queryTraining().sqlModel.replace("ORDER BY p.id", "ORDER BY p.id + 1"),
+    params: { minimum: 0 },
+  });
+  await expect(
+    f.service.run(identity, {
+      sql: `${queryTraining().sqlModel} NULLS LAST`,
+      params: { minimum: 0 },
+      options: { page: 1, pageSize: 10 },
+    }),
+  ).rejects.toMatchObject({ code: "INVALID_PLAN" });
+  expect(f.execute).toHaveBeenCalledTimes(1);
+});

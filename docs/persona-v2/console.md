@@ -1,5 +1,9 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+O diagnóstico de progresso lê publicações sequencialmente na conexão da mesma
+transação PostgreSQL; falha interrompe a leitura e preserva o rollback, sem
+consultas sobrepostas ou mudança de autoridade.
+
 Após emissão ou rotação confirmada, o console abre e focaliza Copiar e usar token. O segredo fica mascarado e somente em memória; copiar exige clique e informa sucesso ou alternativa manual. Sem segredo disponível, a tela explica a impossibilidade de recuperação e orienta a rotação explícita, que invalida o valor anterior. Teste de conexão é opcional e recolhido. Não há cópia, rotação ou retry automático.
 
 O formulário de emissão organiza consultas/operações, limites e administração em
