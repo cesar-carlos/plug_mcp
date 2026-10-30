@@ -280,7 +280,8 @@ amplia. Revalidação antes do dispatch e da entrega impede usar orçamento anti
 Falhas capturadas pelo executor de tools v2 retornam `isError: true` e `error` com
 `code`, `message`, `source`/`stage` quando disponíveis e `supportId` UUID gerado
 no servidor por falha. O mesmo ID aparece no evento `persona-v2 tool failed`,
-com metadados diagnósticos, sem SQL, parâmetros, resultados, stack ou texto bruto
+com `errorCode` (o `code` público), separado de `code` que continua mascarado
+por poder conter códigos secretos de OAuth. O evento conserva metadados diagnósticos, sem SQL, parâmetros, resultados, stack ou texto bruto
 do hub. O ID não concede acesso nem autoriza retry.
 
 `details` é opcional: permite somente `rpcCode` inteiro de erro JSON-RPC,

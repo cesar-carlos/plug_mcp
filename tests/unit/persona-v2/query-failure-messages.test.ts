@@ -160,7 +160,7 @@ describe("diagnóstico seguro e atendimento", () => {
       "persona-v2 tool failed",
       {
         supportId: first.supportId,
-        code: "CAPABILITY_UNAVAILABLE",
+        errorCode: "CAPABILITY_UNAVAILABLE",
         source: undefined,
         stage: undefined,
         details: undefined,

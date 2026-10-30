@@ -110,3 +110,7 @@ Na v2, falhas capturadas pelo executor de tools incluem supportId UUID gerado
 pelo servidor e correlacionado com log de metadados. Preservar somente detalhes
 diagnósticos de lista permitida; nunca encaminhar texto bruto do hub, SQL,
 parâmetros ou segredos. A resposta não autoriza retry automático.
+
+Logs de falhas de tools v2 usam errorCode para o código diagnóstico; code
+continua protegido pela redação de segredos. Testar com o logger Pino real,
+incluindo correlação supportId e ausência de payloads e segredos.

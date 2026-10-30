@@ -120,7 +120,7 @@ export function reportPersonaV2ToolError(
   const supportId = randomUUID();
   logger?.warn("persona-v2 tool failed", {
     supportId,
-    code: body.code,
+    errorCode: body.code,
     source: body.source,
     stage: body.stage,
     details: body.details,

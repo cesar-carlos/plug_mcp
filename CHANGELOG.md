@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: logs de falhas MCP v2 usam errorCode para preservar o diagnóstico
+  associado ao supportId, mantendo códigos OAuth e demais segredos mascarados.
+
 - Fixed: erros de tools v2 preservam diagnósticos seguros de RPC/rede/SQLSTATE
   e incluem identificador de atendimento correlacionado com logs sem payloads.
 

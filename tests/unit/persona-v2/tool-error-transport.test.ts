@@ -77,6 +77,7 @@ it.each([false, true])(
       "persona-v2 tool failed",
       expect.objectContaining({
         supportId: error.supportId,
+        errorCode: "PLUG_SERVER_ERROR",
         details: { rpcCode: -32602, reason: "invalid_params" },
       }),
     );
