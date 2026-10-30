@@ -9,6 +9,10 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Deploy de teste compara com a última etapa de publicação efetivamente concluída,
+sem tratar workflow verde sem envio como baseline. Inclui commits acumulados;
+falha de histórico não permite ignorar deploy nem contornar gates de imagem/CI.
+
 Campos/finalidades e recusa de binários na consulta comum precedem paginação;
 ambas as validações continuam obrigatórias antes de autorizar/enviar SQL.
 

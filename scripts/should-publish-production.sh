@@ -8,7 +8,7 @@ while IFS= read -r file || [ -n "$file" ]; do
     src/* | web/* | drizzle/* | migrations/* | contracts/persona-v2-release.json | scripts/check-persona-release.mjs | scripts/persona-release-evidence.mjs | scripts/tested-image.mjs | scripts/accepted-image-origin.mjs | scripts/check-persona-production-config.ts | docs/mcp/error-mapping.md | Dockerfile | docker-entrypoint.sh | docker-entrypoint-persona-v2.sh | package.json | package-lock.json | docker-compose.yml | docker-compose.persona-v2*.yml | .github/workflows/ci.yml | .github/workflows/deploy.yml)
       found=1
       ;;
-    scripts/persona-production.ts | scripts/check-persona-test-deploy.mjs | scripts/deploy-persona-test.mjs | scripts/deploy-production.sh | contracts/persona-v2-test-deploy.json)
+    scripts/persona-production.ts | scripts/check-persona-test-deploy.mjs | scripts/deploy-persona-test.mjs | scripts/deploy-production.sh | scripts/pending-test-deployment.mjs | scripts/should-publish-production.sh | contracts/persona-v2-test-deploy.json)
       found=1
       ;;
   esac

@@ -35,14 +35,8 @@ jobs:
         name: Decide se há alteração de runtime
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          set -euo pipefail
-          git show --pretty=format: --name-only "$SHA" > "$RUNNER_TEMP/changed-files"
-          if bash scripts/should-publish-production.sh < "$RUNNER_TEMP/changed-files"; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          fi
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/pending-test-deployment.mjs
 
       - id: accepted-image
         name: Verify test-only contract, exact CI run and all required checks

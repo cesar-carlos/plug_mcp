@@ -38,6 +38,8 @@ describe("publicação de produção", () => {
     expect(publishes("scripts/check-persona-production-config.ts\n")).toBe(true);
     expect(publishes("scripts/persona-production.ts\n")).toBe(true);
     expect(publishes("docker-entrypoint-persona-v2.sh\n")).toBe(true);
+    expect(publishes("scripts/pending-test-deployment.mjs\n")).toBe(true);
+    expect(publishes("scripts/should-publish-production.sh\n")).toBe(true);
   });
 
   it("ignora documentação que fica fora da imagem", () => {

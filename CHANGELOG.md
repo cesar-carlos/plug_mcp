@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: deploy considera mudanças acumuladas desde o último envio comprovado,
+  evitando perder correções quando o commit seguinte altera apenas testes/docs.
+
 - Fixed: validação de campos binários precede paginação, preservando a recusa
   de projeção na consulta comum e todas as guardas antes do envio ao agente.
 

@@ -80,6 +80,15 @@ própria; não amplia concessões existentes. Não publicar banco/Redis na inter
 
 ## Envio e verificação no destino
 
+O gate compara o candidato com a última publicação efetiva registrada no workflow
+`deploy.yml`: exige origem do próprio repositório/main e sucesso da etapa
+`Publish the CI image`. Workflow verde que pulou o envio não avança a referência.
+O histórico é paginado e considera o horário de conclusão do envio, inclusive
+reexecuções. O diff inclui todas as alterações acumuladas, com renomes tratados
+como remoção/adição. Sem comprovante, exige publicação com os gates normais; erro
+de API/histórico ou candidato anterior/divergente recusa o fluxo. Esse comprovante
+não detecta mudanças manuais no host; a conferência remota permanece obrigatória.
+
 Após commit/push explicitamente solicitados, o CI executa os jobs exigidos.
 O workflow de deploy verifica origem do mesmo repositório, push/main, revisão,
 rodada concluída com sucesso e cada job obrigatório; artefato ausente, duplicado,
