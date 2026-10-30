@@ -46,3 +46,7 @@ Requisitos de navegador e segredos em `security.mdc`.
   Metadata pública não concede autorização.
 - Shutdown fecha recursos da composição: sessões, pool, Redis e Agents HTTP
   quando presentes. Não compartilhar stores entre runtimes.
+
+Erros upstream no console usam frases fixas por código e correlação X-Request-ID.
+Timeout do bridge não é recusa de autoridade. Não devolver mensagem nativa,
+corpo ou detalhes livres do hub; não disparar retry ou rotação de credenciais.

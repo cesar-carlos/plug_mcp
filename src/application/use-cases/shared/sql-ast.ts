@@ -354,7 +354,7 @@ interface FromItem {
 const parseFromItem = (
   item: unknown,
   database: ParserDatabase,
-  cteNomes: ReadonlySet<string>,
+  ctes: ReadonlyMap<string, SqlAstSelect | null>,
 ): { tabela: SqlAstTabela | null; join: SqlAstJoin | null } => {
   if (!isRecord(item)) {
     return { tabela: null, join: null };
@@ -363,7 +363,7 @@ const parseFromItem = (
   if (isRecord(from.expr) && from.expr.ast) {
     return {
       tabela: {
-        derived: fromSelectAst(from.expr.ast, "", database),
+        derived: fromSelectAst(from.expr.ast, "", database, ctes),
         nome: readString(from.as) ?? "_subquery",
         alias: readString(from.as),
         isCte: false,
@@ -390,7 +390,7 @@ const parseFromItem = (
   const tabela: SqlAstTabela = {
     nome,
     alias,
-    isCte: cteNomes.has(nome.toLowerCase()),
+    isCte: ctes.has(nome.toLowerCase()),
     isSubquery: false,
   };
   if (!from.join) {
@@ -465,12 +465,6 @@ const collectSelectsIn = (node: unknown, out: unknown[]): void => {
 
 const collectSubqueryAsts = (select: Record<string, unknown>): unknown[] => {
   const out: unknown[] = [];
-  for (const item of asArray(select.with)) {
-    const stmt = cteStmt(item);
-    if (stmt) {
-      out.push(stmt);
-    }
-  }
   for (const item of asArray(select.from)) {
     if (isRecord(item) && isRecord(item.expr) && item.expr.ast) {
       out.push(item.expr.ast);
@@ -487,7 +481,12 @@ const collectSubqueryAsts = (select: Record<string, unknown>): unknown[] => {
   return out;
 };
 
-const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): SqlAstSelect => {
+const fromSelectAst = (
+  ast: unknown,
+  sql: string,
+  database: ParserDatabase,
+  inheritedCtes: ReadonlyMap<string, SqlAstSelect | null> = new Map(),
+): SqlAstSelect => {
   if (!isRecord(ast) || ast.type !== "select") {
     throw DomainError.pacote({
       code: ERROR_CODES.INVALID_SQL,
@@ -495,20 +494,38 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
       hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
     });
   }
-  const cteNomes = asArray(ast.with)
-    .map((item) => cteName(item)?.toLowerCase())
-    .filter((nome): nome is string => Boolean(nome));
-  const cteSet = new Set(cteNomes);
+  // Bind each CTE once in lexical order. Pending names shadow outer bindings,
+  // but never become physical tables or authorize recursion/forward references.
+  const ctes = new Map(inheritedCtes);
+  const localNames = new Set<string>();
+  const cteQueries: SqlAstSelect[] = [];
+  const refuseCte = (): never => {
+    throw DomainError.pacote({
+      code: ERROR_CODES.INVALID_SQL,
+      message: "CTE duplicada, recursiva ou com referência futura não suportada.",
+      hint: "Declare CTEs não recursivas em ordem de dependência, com nomes únicos.",
+    });
+  };
+  for (const item of asArray(ast.with)) {
+    const name = cteName(item)?.toLowerCase();
+    if (!name || localNames.has(name)) refuseCte();
+    localNames.add(name!);
+    ctes.set(name!, null);
+  }
+  for (const item of asArray(ast.with)) {
+    const query = fromSelectAst(cteStmt(item), sql, database, ctes);
+    ctes.set(cteName(item)!.toLowerCase(), query);
+    cteQueries.push(query);
+  }
+  const cteNomes = [...ctes.keys()];
   const tabelas: SqlAstTabela[] = [];
   const joins: SqlAstJoin[] = [];
   for (const item of asArray(ast.from)) {
-    const parsed = parseFromItem(item, database, cteSet);
+    const parsed = parseFromItem(item, database, ctes);
     if (parsed.tabela) {
-      const cte = asArray(ast.with).find(
-        (item) => cteName(item)?.toLowerCase() === parsed.tabela?.nome.toLowerCase(),
-      );
-      if (cte) {
-        tabelas.push({ ...parsed.tabela, derived: fromSelectAst(cteStmt(cte), sql, database) });
+      if (parsed.tabela.isCte) {
+        const derived = ctes.get(parsed.tabela.nome.toLowerCase()) ?? refuseCte();
+        tabelas.push({ ...parsed.tabela, derived });
       } else {
         tabelas.push(parsed.tabela);
       }
@@ -518,11 +535,14 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     }
   }
   const { colunas, temStar, temAgregacao } = parseColumns(ast.columns, database);
-  const subqueries = collectSubqueryAsts(ast).map((sub) => fromSelectAst(sub, sql, database));
+  const subqueries = [
+    ...cteQueries,
+    ...collectSubqueryAsts(ast).map((sub) => fromSelectAst(sub, sql, database, ctes)),
+  ];
   const setOp = typeof ast.set_op === "string" ? ast.set_op.toLowerCase() : null;
   const setBranches =
     isRecord(ast._next) && ast._next.type === "select"
-      ? [fromSelectAst(ast._next, sql, database)]
+      ? [fromSelectAst(ast._next, sql, database, ctes)]
       : [];
   const nestedStar =
     subqueries.some((sub) => sub.temStar) || setBranches.some((sub) => sub.temStar);

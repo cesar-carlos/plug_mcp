@@ -46,3 +46,11 @@ JWT do hub **por `usuarioId`**, só em memória — regras em [auth.md](auth.md)
 ## Por que não Socket/relay
 
 Cada tool MCP é um request isolado — o caso que o hub recomenda para REST. O bridge já materializa `stream_id`. Socket/relay de consumer (`/consumers`) está **fora de escopo** (não é fase seguinte).
+
+### Timeout de inspeção estrutural
+
+O HTTP 503 SERVICE_UNAVAILABLE com a mensagem fixa do bridge indicando espera
+expirada pela resposta do agente é PLUG_SERVER_TIMEOUT, sem retry automático.
+Outros 503 mantêm o diagnóstico de indisponibilidade. As etapas sql.describeSchema
+e sql.describeSource são preservadas. Resposta inválida ou sem correlação no
+agente pode causar esse timeout; não inferir revogação a partir dele.

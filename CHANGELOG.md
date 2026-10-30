@@ -11,6 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: CTEs encadeadas conservam a linhagem física em JOINs, derivadas e
+  ramos de conjunto; definições duplicadas, recursivas ou futuras são recusadas.
+
+- Fixed: diagnóstico administrativo distingue timeout do bridge, indisponibilidade
+  e recusa de acesso, com correlação segura; inspeção conserva sua etapa no erro.
+
 - Added: métricas comerciais e sinônimos versionados no treinamento de consultas,
   editor no console, contexto concedido e busca lexical sem ampliação de acesso.
 - Changed: novas publicações com agregação, JOIN ou métricas exigem casos

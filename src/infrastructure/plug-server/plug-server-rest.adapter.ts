@@ -422,8 +422,10 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
     const stage =
       commandMethod === "client_token.getPolicy"
         ? "getPolicy"
-        : commandMethod === "sql.execute"
-          ? "sql.execute"
+        : commandMethod === "sql.execute" ||
+            commandMethod === "sql.describeSchema" ||
+            commandMethod === "sql.describeSource"
+          ? commandMethod
           : "rpc";
     let response: Response;
     try {

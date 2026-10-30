@@ -1,5 +1,12 @@
 # Consultas por fonte — contrato implementado
 
+CTEs não recursivas são resolvidas em ordem de dependência, conservando o
+contexto nas CTEs seguintes, derivadas e ramos de conjunto. JOIN continua
+dependendo do relacionamento físico completo publicado. Definições duplicadas,
+recursivas ou com referência futura são recusadas; nomes de CTE não autorizam
+tabelas físicas. Esta correção de linhagem não aprova semântica, cardinalidade
+ou relatórios de negócio.
+
 `obter_treinamento_base({topic})` permite solicitar `sql`, `knowledge`,
 `operations` ou `administration`. Sem topic conserva a base completa anterior.
 Cada tópico informa `baseHash` e `contentHash` do guia retornado; não são

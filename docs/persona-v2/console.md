@@ -1262,3 +1262,11 @@ valida no Chromium os dois modos e confirmação perdida após persistência, se
 reenvio. Casos positivos/negativos do modo adaptável são cadastrados no editor e
 aprovados pelo runner separado. A cadeia instalada e o aceite integral seguem
 pendentes; essa rodada não substitui homologação nos três motores.
+
+### Diagnóstico de inspeção e transporte
+
+Erros de domínio do upstream usam mensagens fixas por código no console. Timeout,
+indisponibilidade e recusa de acesso são distintos; o texto recebido do hub não
+é devolvido. O X-Request-ID correlaciona código e status no log administrativo,
+sem conteúdo da requisição. Timeout de resposta do agente no bridge não comprova
+falta de permissão nem autoriza troca de credenciais ou repetição automática.

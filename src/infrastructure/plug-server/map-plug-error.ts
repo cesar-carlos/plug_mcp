@@ -648,6 +648,22 @@ export const mapPlugServerFailure = (
       stage,
     });
   }
+  // The bridge can time out after rejecting an agent response; 503 alone is not offline.
+  if (
+    failure.status === 503 &&
+    reason === "service_unavailable" &&
+    /timed out waiting for agent response/i.test(rpc.message ?? "")
+  ) {
+    return new DomainError({
+      code: ERROR_CODES.PLUG_SERVER_TIMEOUT,
+      message: "O hub excedeu o prazo de espera pela resposta do agente.",
+      hint: "Confira os logs de contrato e correlação do hub/agente. Não altere credenciais nem repita automaticamente.",
+      source: HUB_ERROR_SOURCE.http,
+      stage,
+      retryable: false,
+    });
+  }
+
   if (failure.status === 503) {
     return new DomainError({
       code: ERROR_CODES.AGENT_UNAVAILABLE,

@@ -422,3 +422,39 @@ describe("PlugServerRestAdapter network errors", () => {
     });
   });
 });
+
+it("inspeção conserva etapa e distingue timeout do bridge de recusa de acesso", async () => {
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        code: "SERVICE_UNAVAILABLE",
+        message: "Timed out waiting for agent response",
+      }),
+      { status: 503 },
+    ),
+  );
+  const adapter = new PlugServerRestAdapter(
+    "http://hub.fixture.test",
+    new SilentTestLogger(),
+    fetcher,
+  );
+  await expect(
+    adapter.describeSchema({
+      accessToken: "fixture",
+      agentId: "fixture",
+      clientToken: "fixture",
+      database: "fixture",
+      expectedSource: { version: 1, dialect: "mssql", identityHash: "a".repeat(64) },
+      inspection: {
+        resources: [{ schema: "dbo", name: "orders", type: "table" }],
+        offset: 0,
+        pageSize: 1,
+      },
+    }),
+  ).rejects.toMatchObject({
+    code: "PLUG_SERVER_TIMEOUT",
+    stage: "sql.describeSchema",
+    retryable: false,
+  });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});

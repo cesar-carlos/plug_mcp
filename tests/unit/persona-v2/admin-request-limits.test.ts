@@ -1,3 +1,4 @@
+import { DomainError } from "../../../src/domain/errors/domain-error.js";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -154,4 +155,35 @@ describe("limites HTTP administrativos de tokens", () => {
     expect(response.status).toBe(403);
     expect(f.administration.issueToken).not.toHaveBeenCalled();
   });
+});
+
+it.each([
+  ["PLUG_SERVER_TIMEOUT", "tempo limite"],
+  ["AGENT_UNAVAILABLE", "indisponível"],
+  ["PERMISSION_DENIED", "não autoriza"],
+] as const)("console distingue falha %s sem expor upstream", async (code, message) => {
+  const f = fixture();
+  const csrf = await f.login();
+  f.administration.issueToken.mockRejectedValueOnce(
+    new DomainError({
+      code,
+      message: "private-upstream",
+      hint: "private-secret",
+      source: "plug_server_http",
+    }),
+  );
+  const response = await f.agent
+    .post(base)
+    .set("Host", "localhost")
+    .set("Origin", "http://localhost")
+    .set("x-csrf-token", csrf)
+    .send(body);
+  expect(response.body.error.code).toBe(code);
+  expect(response.body.error.message).toContain(message);
+  expect(JSON.stringify(response.body)).not.toContain("private-");
+  expect(f.logger.warnings).toContainEqual({
+    message: "admin upstream request failed",
+    fields: { requestId: response.get("X-Request-ID"), errorCode: code, status: response.status },
+  });
+  expect(f.administration.issueToken).toHaveBeenCalledTimes(1);
 });

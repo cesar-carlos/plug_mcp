@@ -9,6 +9,11 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+CTEs não recursivas preservam contexto lexical e linhagem física através das
+dependências, derivadas e ramos de conjunto. Nomes duplicados, recursão e
+referência futura são recusados; não relaxar JOIN composto, escopo ou finalidades
+para aceitar uma consulta. Teste sintético do parser não homologa SQL no ERP.
+
 Semântica comercial opcional v1 fixa métricas e sinônimos no contrato da consulta,
 com referências executáveis, identidades únicas e revisão explícita. Não compila
 fórmula textual nem comprova equivalência SQL; novas concessões não são automáticas.

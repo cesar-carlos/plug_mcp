@@ -30,6 +30,7 @@ import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { adminUnexpectedFailure } from "./admin-unexpected-error.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
+import { publicQueryFailure } from "../../domain/errors/public-query-failure.js";
 import { permissionsSchema } from "../persistence/persona-v2/permissions-schema.js";
 import type { PersonaCatalog } from "../../application/persona-v2/catalog.js";
 import type { PersonaConsumerCatalog } from "../../application/persona-v2/consumer-catalog.js";
@@ -1250,11 +1251,19 @@ export const createPersonaAdministrationApp = (input: {
               : error.code === "RATE_LIMITED"
                 ? 429
                 : 503;
+        const published = publicQueryFailure(error.code);
+        input.logger?.warn("admin upstream request failed", {
+          requestId: res.getHeader("X-Request-ID"),
+          errorCode: error.code,
+          status,
+        });
         res.status(status).json({
           error: {
             code: error.code,
             source: error.source,
-            message: "Falha na autoridade da conexão; confira a conta e o vínculo da fonte.",
+            message:
+              published?.message ??
+              "Não foi possível concluir a solicitação; consulte o código de atendimento.",
           },
         });
       } else {
