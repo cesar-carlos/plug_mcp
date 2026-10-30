@@ -1,10 +1,15 @@
 ---
+
 description: "Contrato MCP por runtime e isolamento das respostas"
 globs: ["src/infrastructure/mcp/**/*.ts", "src/application/**/*.ts"]
 alwaysApply: false
 ---
 
 # Protocolo MCP
+
+Diagnóstico de AGREGACAO_INSEGURA local registra somente aggregationReason
+enumerado e supportId, sem SQL, aliases, nomes físicos, valores ou detalhes livres.
+Preservar as recusas de grão/cardinalidade; categoria não autoriza retry.
 
 Escolher o runtime antes de alterar tools/resources. `AGENTS.md` define a transição.
 Não misturar os contratos de mesmo nome entre as duas entradas.

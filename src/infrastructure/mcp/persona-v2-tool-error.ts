@@ -118,9 +118,28 @@ export function reportPersonaV2ToolError(
 ): PersonaV2ToolErrorBody & { readonly supportId: string } {
   const body = personaV2ToolError(error);
   const supportId = randomUUID();
+  const aggregationReason =
+    error instanceof DomainError &&
+    error.code === "AGREGACAO_INSEGURA" &&
+    error.source === "sql" &&
+    error.details &&
+    typeof error.details === "object"
+      ? (error.details as Record<string, unknown>).aggregationReason
+      : undefined;
+  const safeAggregationReason =
+    typeof aggregationReason === "string" &&
+    [
+      "invalid_declared_grain",
+      "join_grain_unproven",
+      "relationship_unproven",
+      "measure_multiplication",
+    ].includes(aggregationReason)
+      ? aggregationReason
+      : undefined;
   logger?.warn("persona-v2 tool failed", {
     supportId,
     errorCode: body.code,
+    ...(safeAggregationReason ? { aggregationReason: safeAggregationReason } : {}),
     source: body.source,
     stage: body.stage,
     details: body.details,

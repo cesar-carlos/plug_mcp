@@ -277,6 +277,15 @@ amplia. Revalidação antes do dispatch e da entrega impede usar orçamento anti
 
 ## Diagnóstico de erros de tools
 
+Para `AGREGACAO_INSEGURA` local (`source: sql`), o evento técnico registra
+`aggregationReason` junto ao `supportId`: `invalid_declared_grain` (chaves do
+grão incompatíveis), `join_grain_unproven` (JOIN sem prova de origem),
+`relationship_unproven` (relacionamento/cardinalidade/linhagem não comprovados)
+ou `measure_multiplication` (medida potencialmente multiplicada).
+Somente esses valores fixos entram no log, sem SQL, aliases, nomes físicos ou
+valores. Não altera a resposta pública nem as validações. Categoria ausente em
+evento histórico não pode ser reconstruída por suposição.
+
 Falhas capturadas pelo executor de tools v2 retornam `isError: true` e `error` com
 `code`, `message`, `source`/`stage` quando disponíveis e `supportId` UUID gerado
 no servidor por falha. O mesmo ID aparece no evento `persona-v2 tool failed`,

@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: logs de AGREGACAO_INSEGURA distinguem quatro causas locais por categoria
+  enumerada e supportId, sem expor SQL/identificadores/dados nem alterar validações.
+
 - Changed: treinamento v2 orienta resumos SQL na base, GROUP BY/HAVING no SQL
   Server, cardinalidade e conciliação de medidas, com ABC sobre universo completo
   e exemplos sintéticos validados; runtime e guia de plugin compartilham o texto.

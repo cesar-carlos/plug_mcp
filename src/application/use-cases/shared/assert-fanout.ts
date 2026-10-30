@@ -14,6 +14,7 @@ export const assertFanoutSeguro = (ast: SqlAstSelect, escopo: EscopoSkill): void
       throw DomainError.pacote({
         code: ERROR_CODES.AGREGACAO_INSEGURA,
         message: "Grão declarado não corresponde às chaves físicas do pacote.",
+        details: { aggregationReason: "invalid_declared_grain" },
         hint: "Confirme o grão novamente; não use GROUP BY como evidência de chave única.",
       });
   }
@@ -29,6 +30,7 @@ export const assertFanoutSeguro = (ast: SqlAstSelect, escopo: EscopoSkill): void
 };
 
 interface Edge {
+  unknown: boolean;
   from: string;
   to: string;
   multiplying: boolean;
@@ -144,6 +146,7 @@ const assertMeasureGrain = (
         lower(eq.leftAlias) === target ? eq.leftColumn : eq.rightColumn,
       );
       edges.push({
+        unknown,
         from: source,
         to: target,
         multiplying: Boolean(
@@ -153,6 +156,7 @@ const assertMeasureGrain = (
         ),
       });
       edges.push({
+        unknown,
         from: target,
         to: source,
         multiplying: Boolean(
@@ -166,6 +170,7 @@ const assertMeasureGrain = (
       throw DomainError.pacote({
         code: ERROR_CODES.AGREGACAO_INSEGURA,
         message: "Não foi possível demonstrar o grão do JOIN agregado.",
+        details: { aggregationReason: "join_grain_unproven" },
         hint: "Use JOINs compostos certificados ou pré-agregação no grão da medida.",
       });
     }
@@ -211,6 +216,11 @@ const assertMeasureGrain = (
             throw DomainError.pacote({
               code: ERROR_CODES.AGREGACAO_INSEGURA,
               message: `A medida ${measure.alias || "agregada"} pode ser multiplicada pelo JOIN.`,
+              details: {
+                aggregationReason: edge.unknown
+                  ? "relationship_unproven"
+                  : "measure_multiplication",
+              },
               hint: "Preserve o grão com pré-agregação ou EXISTS. Não corrija com SUM(DISTINCT valor); confirme cardinalidade e origem física no rascunho e republique.",
             });
           }
