@@ -6,7 +6,7 @@ const shaPattern = /^[a-f0-9]{40}$/;
 
 // A successful workflow may only have reported "no runtime changes".
 // Only the successful SSH publication step is evidence of a deployed image.
-export function publishedRevision(run, jobs, repository) {
+function publication(run, jobs, repository) {
   if (
     run.path !== ".github/workflows/deploy.yml" ||
     run.repository?.full_name !== repository ||
@@ -18,7 +18,9 @@ export function publishedRevision(run, jobs, repository) {
     !shaPattern.test(run.head_sha ?? "")
   )
     return null;
-  const publishers = jobs.filter((job) => job.name === "publish");
+  const publishers = jobs.filter(
+    (job) => job.name === "publish" || job.name?.startsWith("publish / "),
+  );
   if (publishers.length !== 1) return null;
   const publisher = publishers[0];
   const steps = publisher.steps?.filter((step) => step.name === "Publish the CI image") ?? [];
@@ -27,8 +29,17 @@ export function publishedRevision(run, jobs, repository) {
     steps.length === 1 &&
     steps[0].status === "completed" &&
     steps[0].conclusion === "success"
-    ? run.head_sha
+    ? {
+        // workflow_run.head_sha can be newer than the triggering CI revision.
+        // Old jobs without an explicit revision cannot prove their deployed SHA.
+        revision: /^publish \/ ([a-f0-9]{40})$/.exec(publisher.name)?.[1] ?? null,
+        completed: Date.parse(steps[0].completed_at),
+      }
     : null;
+}
+
+export function publishedRevision(run, jobs, repository) {
+  return publication(run, jobs, repository)?.revision ?? null;
 }
 
 export function findPublishedRevision(api, repository, currentRunId) {
@@ -47,13 +58,9 @@ export function findPublishedRevision(api, repository, currentRunId) {
       );
       if (!Array.isArray(response.jobs) || response.total_count !== response.jobs.length)
         throw new Error("Incomplete deployment jobs.");
-      const revision = publishedRevision(run, response.jobs, repository);
-      if (revision) {
-        const completed = Date.parse(
-          response.jobs
-            .find((job) => job.name === "publish")
-            .steps.find((step) => step.name === "Publish the CI image").completed_at,
-        );
+      const receipt = publication(run, response.jobs, repository);
+      if (receipt) {
+        const { revision, completed } = receipt;
         if (!Number.isFinite(completed)) throw new Error("Missing publication time.");
         if (latest && completed === latest.completed && revision !== latest.revision)
           throw new Error("Ambiguous publication history.");

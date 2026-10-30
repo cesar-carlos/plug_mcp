@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: comprovante de deploy identifica o SHA do CI disparador, sem confundir
+  uma main mais recente no workflow_run com a revisão efetivamente publicada.
+
 - Fixed: ORDER BY reconhece aliases únicos da projeção em consultas agregadas
   com JOIN/CTE sem confundi-los com campos físicos; regressões preservam escopo,
   finalidades e sinalização de rankings com mais de 500 produtos.

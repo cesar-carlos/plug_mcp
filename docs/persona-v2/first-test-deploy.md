@@ -83,6 +83,11 @@ própria; não amplia concessões existentes. Não publicar banco/Redis na inter
 O gate compara o candidato com a última publicação efetiva registrada no workflow
 `deploy.yml`: exige origem do próprio repositório/main e sucesso da etapa
 `Publish the CI image`. Workflow verde que pulou o envio não avança a referência.
+O nome do job `publish / <SHA>` fixa a revisão do CI disparador, a mesma usada
+no checkout e no envio. O `head_sha` do workflow de deploy pode apontar para uma
+main mais recente e não comprova a revisão publicada. Envios históricos sem SHA
+explícito não fornecem baseline: exigem nova publicação verificada, sem ignorar
+correções pendentes nem reutilizar comprovante anterior ao último envio.
 O histórico é paginado e considera o horário de conclusão do envio, inclusive
 reexecuções. O diff inclui todas as alterações acumuladas, com renomes tratados
 como remoção/adição. Sem comprovante, exige publicação com os gates normais; erro

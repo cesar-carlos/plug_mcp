@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -34,7 +34,7 @@ const run = {
   conclusion: "success",
 };
 const job = {
-  name: "publish",
+  name: `publish / ${sha}`,
   status: "completed",
   conclusion: "success",
   steps: [
@@ -133,6 +133,7 @@ it("reexecução antiga usa o horário da publicação, não a criação do work
               jobs: [
                 {
                   ...job,
+                  name: `publish / ${p.includes("/runs/2/") ? older.head_sha : sha}`,
                   steps: [
                     {
                       ...job.steps[0],
@@ -148,4 +149,40 @@ it("reexecução antiga usa o horário da publicação, não a criação do work
       999,
     ),
   ).toBe(older.head_sha);
+});
+
+it("workflow_run com main adiantada preserva o SHA do CI efetivamente publicado", () => {
+  const workflow = readFileSync(resolve(".github/workflows/deploy.yml"), "utf8");
+  expect(workflow).toContain("name: publish / ${{ github.event.workflow_run.head_sha }}");
+  expect(workflow).toContain("ref: ${{ github.event.workflow_run.head_sha }}");
+  expect(workflow).toContain("SHA: ${{ github.event.workflow_run.head_sha }}");
+  expect(publishedRevision({ ...run, head_sha: "b".repeat(40) }, [job], repo)).toBe(sha);
+  expect(publishedRevision(run, [{ ...job, name: "publish" }], repo)).toBeNull();
+  expect(publishedRevision(run, [{ ...job, name: "publish / invalid" }], repo)).toBeNull();
+});
+
+it("publicação posterior sem SHA explícito não reutiliza comprovante antigo", () => {
+  expect(
+    findPublishedRevision(
+      (path) =>
+        path.includes("/workflows/")
+          ? { workflow_runs: [run, { ...run, id: 2 }] }
+          : {
+              total_count: 1,
+              jobs: [
+                {
+                  ...job,
+                  ...(path.includes("/runs/2/")
+                    ? {
+                        name: "publish",
+                        steps: [{ ...job.steps[0], completed_at: "2026-10-29T12:00:00Z" }],
+                      }
+                    : {}),
+                },
+              ],
+            },
+      repo,
+      999,
+    ),
+  ).toBeNull();
 });

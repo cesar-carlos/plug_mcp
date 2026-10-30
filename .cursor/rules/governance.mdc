@@ -75,7 +75,10 @@ Preserva schema/migrations; não desfaz efeitos externos nem substitui corte.
 Contrato: docs/persona-v2/development-reset.md.
 
 Publicação depende de todos os jobs obrigatórios; não publicar dentro da matriz
-de testes. Preservar e verificar o artefato da rodada exata, sem reconstrução ou
+de testes. O comprovante de deploy fixa o SHA do CI disparador no job de envio;
+head_sha de workflow_run não comprova a revisão instalada. Sem revisão explícita
+no último envio, exigir publicação verificada e conferência remota.
+Preservar e verificar o artefato da rodada exata, sem reconstrução ou
 fallback para tag mutável. Ausência/expiração/falha bloqueia; integridade não
 substitui aceite dos gates. Contrato: docs/persona-v2/release-evidence.md.
 
