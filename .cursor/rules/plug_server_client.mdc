@@ -16,6 +16,11 @@ vira unknown, nunca approved. Não inferir revogação ou recuperar concessões.
 - Canal do MCP é REST `POST /api/v1/agents/commands`. Socket/relay são canais
   do hub/agente, não uma nova conexão consumer deste MCP.
 - Hub valida/encaminha; não interpreta SQL nem reescreve dialeto.
+- Treinamento v2 orienta resumos de uma fonte no banco com GROUP BY/agregações
+  quando o pacote e as finalidades permitirem; o hub não agrega automaticamente.
+  ABC calcula o universo completo antes de paginar, sem presumir cortes ou suporte
+  irrestrito a janelas. Não somar páginas parciais como total nem multiplicar medidas
+  de cabeçalho por itens; preservar grão e conciliação conforme treinamento.
 - Contrato fixado em `contracts/plug-mcp-rest-v1.json`: commit upstream exato e
   `hub-persona-v2.snapshot.patch` histórico com SHA-256, já incorporado naquele commit.
   CI/`training:check` verificam ancestralidade e bytes commitados no candidato

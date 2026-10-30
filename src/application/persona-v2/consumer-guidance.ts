@@ -1,3 +1,5 @@
+import { SQL_SUMMARY_GUIDANCE } from "./sql-summary-guidance.js";
+
 /** Shared by runtime instructions and generated private packages; not an authorization source. */
 export const PERSONA_CONSUMER_GUIDANCE = `## Compatibilidade e recuperação
 
@@ -6,6 +8,8 @@ Use somente tools descobertas na conexão atual e contratos publicados concedido
 Em INCOMPLETE_INPUT ou INVALID_PLAN, explique o campo/contrato a revisar sem inventar SQL, schema ou parâmetros ausentes. Em OPERATION_CONFLICT, releia a revisão e preserve o rascunho; não sobrescreva nem reapresente confirmação antiga. Em AUTHORIZATION_DENIED ou STALE_AUTHORIZATION, explique a limitação e encaminhe o responsável ao console; nunca solicite segredos no chat, amplie concessões ou use outra conexão para contornar a recusa. Falha de transporte não significa resultado vazio. Resultado parcial não é total. Timeout, confirmação perdida e estado desconhecido de efeito exigem consultar a operação original; nunca repetir a escrita. Aprovação Client continua no navegador, separada de publicação e consentimento OAuth.
 
 Datasets são material editorial de fixture: escolha/preparo/aplicação/gravação são distintos de execução e aprovação técnica. Casos SQL/cruzamentos com origem editorial são cadastrados/editados no console Client; não remova a origem para usar tools. Exemplos abaixo são cenários sintéticos, não contratos ou dados reais da persona conectada.
+
+${SQL_SUMMARY_GUIDANCE}
 
 ## Exemplos por persona — somente dados sintéticos
 

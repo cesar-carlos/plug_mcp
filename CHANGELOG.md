@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: treinamento v2 orienta resumos SQL na base, GROUP BY/HAVING no SQL
+  Server, cardinalidade e conciliação de medidas, com ABC sobre universo completo
+  e exemplos sintéticos validados; runtime e guia de plugin compartilham o texto.
+
 - Fixed: comprovante de deploy identifica o SHA do CI disparador, sem confundir
   uma main mais recente no workflow_run com a revisão efetivamente publicada.
 

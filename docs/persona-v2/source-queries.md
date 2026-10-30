@@ -294,6 +294,30 @@ nem os erros de validação produzidos pelo SDK antes da execução da tool.
 
 ## Aliases de saída e completude de rankings
 
+### Planejamento de resumos na fonte
+
+O treinamento base `persona-v2-sql-summary-1` entrega `sqlSummaries`, com orientação
+compartilhada pelas instruções do runtime e pelo guia dos pacotes gerados.
+Para perguntas agregadas de uma fonte, preferir filtros e `GROUP BY` no banco,
+retornando apenas dimensões/medidas necessárias. O hub encaminha; não agrega nem
+reescreve dialeto. Detalhes solicitados continuam pagináveis, sem ampliar tetos.
+
+No SQL Server, agrupar/filtrar grupos por expressões físicas qualificadas;
+ordenar por alias simples único projetado, com desempate estável na paginação.
+`SUM`, `COUNT`, `MIN`, `MAX`, `AVG` e `HAVING` dependem do significado publicado,
+escopo e finalidades. Não somar cabeçalhos multiplicados por itens nem corrigir
+duplicatas com `SUM(DISTINCT valor)`. Médias de médias não dão média global.
+
+ABC exige total/acumulado do universo completo antes de classificar/resumir ou
+paginar. Cortes, empates e valores zero/negativos vêm do treinamento; CTEs/janelas
+dependem do suporte efetivo do dialeto/validador, sem promessa irrestrita.
+Poucas linhas agregadas não provam entrada completa. Recusa exige diagnóstico e
+revisão explícita, sem contornar autorização, limites ou repetir transporte.
+Os exemplos SQL Server usam apenas `fixture_sales`; não provam schema real,
+execução nativa, resultado comercial ou autorização da persona.
+
+### Resolução e limites
+
 O validador resolve referências simples e não qualificadas do ORDER BY para
 uma saída única do mesmo SELECT, inclusive agregados com GROUP BY e JOIN
 e projeções de CTEs. As referências físicas da expressão continuam sujeitas
