@@ -144,6 +144,50 @@ async function revoke() {
           <p>Cliente autorizado: {{ row.clientId }}</p>
           <p>ID da conexão: {{ row.id }}</p>
         </details>
+        <details v-if="row.health">
+          <summary>Saúde da conexão</summary>
+          <p>
+            {{
+              {
+                available: "Consentimento local disponível",
+                grant_revoked: "Conexão revogada",
+                grant_expired: "Consentimento expirado",
+                token_revoked: "Token originador revogado",
+                token_expired: "Token originador expirado",
+                authorization_changed: "Permissões alteradas; conecte novamente",
+                persona_inactive: "Persona suspensa",
+              }[row.health.reason]
+            }}
+          </p>
+          <p>
+            Última renovação:
+            {{
+              row.health.lastRefreshedAt
+                ? new Date(row.health.lastRefreshedAt).toLocaleString()
+                : "Não registrada"
+            }}
+          </p>
+          <p>
+            Último access token válido até:
+            {{
+              row.health.accessExpiresAt
+                ? new Date(row.health.accessExpiresAt).toLocaleString()
+                : "Não registrado"
+            }}
+          </p>
+          <p>
+            Token originador:
+            {{
+              row.health.tokenExpiresAt
+                ? new Date(row.health.tokenExpiresAt).toLocaleString()
+                : "Sem data de expiração"
+            }}
+          </p>
+          <p>
+            O access token dura até 15 minutos e pode ser renovado pelo cliente OAuth enquanto o
+            consentimento estiver válido. Estes dados não confirmam atividade no ChatGPT.
+          </p>
+        </details>
         <p>
           Consentimento: {{ row.permissions.sourceIds.length }} base(s),
           {{ row.permissions.skills.length }} skill(s),

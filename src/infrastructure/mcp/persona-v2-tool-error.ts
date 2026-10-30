@@ -115,8 +115,29 @@ function safeDetails(value: unknown): Record<string, string | number> {
 export function reportPersonaV2ToolError(
   error: unknown,
   logger?: LoggerPort,
+  authorizationReason?: string,
 ): PersonaV2ToolErrorBody & { readonly supportId: string } {
   const body = personaV2ToolError(error);
+  const candidate =
+    authorizationReason ??
+    (error instanceof PersonaV2Error ? error.authorizationReason : undefined);
+  const safeAuthorizationReason =
+    error instanceof PersonaV2Error &&
+    ["AUTHORIZATION_DENIED", "STALE_AUTHORIZATION"].includes(error.code) &&
+    candidate &&
+    [
+      "token_expired",
+      "token_revoked",
+      "authorization_changed",
+      "access_expired",
+      "grant_expired",
+      "grant_revoked",
+      "identity_invalid",
+      "permission_denied",
+      "authentication_unavailable",
+    ].includes(candidate)
+      ? candidate
+      : undefined;
   const supportId = randomUUID();
   const aggregationReason =
     error instanceof DomainError &&
@@ -139,10 +160,26 @@ export function reportPersonaV2ToolError(
   logger?.warn("persona-v2 tool failed", {
     supportId,
     errorCode: body.code,
+    ...(safeAuthorizationReason ? { authorizationReason: safeAuthorizationReason } : {}),
     ...(safeAggregationReason ? { aggregationReason: safeAggregationReason } : {}),
     source: body.source,
     stage: body.stage,
     details: body.details,
   });
-  return { ...body, supportId };
+  return {
+    ...body,
+    ...(safeAuthorizationReason
+      ? {
+          details: { ...body.details, authorizationReason: safeAuthorizationReason },
+          hint:
+            safeAuthorizationReason === "permission_denied"
+              ? "Conexão válida. Confira as permissões e a disponibilidade do recurso com o responsável; reconectar não concede acesso."
+              : safeAuthorizationReason === "authentication_unavailable"
+                ? "Não foi possível conferir a conexão. Isso não comprova expiração; informe o supportId ao responsável."
+                : "A autenticação precisa ser renovada pelo cliente OAuth; reconecte somente se a renovação não resolver.",
+          retryable: false as const,
+        }
+      : {}),
+    supportId,
+  };
 }

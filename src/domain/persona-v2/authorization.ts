@@ -79,13 +79,22 @@ export const assertConsumer = (
     token.personaId !== persona.id ||
     token.id !== identity.tokenId
   ) {
-    throw new PersonaV2Error("AUTHORIZATION_DENIED", "Consumidor sem autorização vigente.");
+    throw new PersonaV2Error("AUTHORIZATION_DENIED", "Consumidor sem autorização vigente.", {
+      authorizationReason:
+        token.revokedAt !== null
+          ? "token_revoked"
+          : token.expiresAt !== null && token.expiresAt <= now
+            ? "token_expired"
+            : "identity_invalid",
+    });
   }
   if (
     token.authorizationVersion !== identity.tokenVersion ||
     persona.authorizationVersion !== identity.personaVersion
   ) {
-    throw new PersonaV2Error("STALE_AUTHORIZATION", "A autorização mudou; renove o contexto.");
+    throw new PersonaV2Error("STALE_AUTHORIZATION", "A autorização mudou; renove o contexto.", {
+      authorizationReason: "authorization_changed",
+    });
   }
   if (!identity.grant) {
     return [token.permissions];
@@ -100,7 +109,15 @@ export const assertConsumer = (
     grant.expiresAt <= now ||
     grant.tokenVersion !== token.authorizationVersion
   ) {
-    throw new PersonaV2Error("AUTHORIZATION_DENIED", "Concessão OAuth inválida ou revogada.");
+    throw new PersonaV2Error("AUTHORIZATION_DENIED", "Concessão OAuth inválida ou revogada.", {
+      authorizationReason: grant?.revokedAt
+        ? "grant_revoked"
+        : grant && grant.expiresAt <= now
+          ? "grant_expired"
+          : identity.grant.expiresAt !== undefined && identity.grant.expiresAt <= now.getTime()
+            ? "access_expired"
+            : "identity_invalid",
+    });
   }
   return [token.permissions, grant.permissions];
 };

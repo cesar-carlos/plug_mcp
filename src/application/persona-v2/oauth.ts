@@ -408,7 +408,12 @@ export class PersonaOAuth {
   async resolve(bearer: string): Promise<ConsumerIdentity> {
     const row = opaque.test(bearer) ? await this.store.record(this.crypto.sha256Hex(bearer)) : null;
     if (!row?.identity?.grant || row.kind !== "access_token" || row.expiresAt <= this.now()) {
-      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Conexão OAuth inválida ou expirada.");
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Conexão OAuth inválida ou expirada.", {
+        authorizationReason:
+          row?.kind === "access_token" && row.expiresAt <= this.now()
+            ? "access_expired"
+            : "identity_invalid",
+      });
     }
     try {
       this.allowed(row);

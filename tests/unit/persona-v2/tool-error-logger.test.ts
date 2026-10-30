@@ -3,6 +3,42 @@ import { describe, expect, it } from "vitest";
 
 // Capture real Pino stdout in an isolated process: no mock of LoggerPort or redaction.
 describe("diagnósticos com o logger de produção", () => {
+  it("correlaciona causas de autorização enumeradas sem registrar mensagens ou credenciais", () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `
+      import {createPino,PinoLoggerAdapter} from './src/infrastructure/logging/pino-logger.adapter.ts';
+      import {reportPersonaV2ToolError} from './src/infrastructure/mcp/persona-v2-tool-error.ts';
+      import {PersonaV2Error} from './src/domain/persona-v2/model.ts';
+      const logger=new PinoLoggerAdapter(createPino('warn',false));
+      const reasons=['access_expired','token_revoked','authorization_changed','permission_denied','authentication_unavailable','sensitive-token'];
+      const ids=reasons.map(reason=>reportPersonaV2ToolError(new PersonaV2Error('AUTHORIZATION_DENIED','sensitive-message'),logger,reason).supportId);
+      console.log(JSON.stringify({ids}));
+    `,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(output).not.toContain("sensitive-");
+    const lines = output
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line));
+    const events = lines.filter((line) => line.msg === "persona-v2 tool failed");
+    expect(events.map((e) => e.authorizationReason)).toEqual([
+      "access_expired",
+      "token_revoked",
+      "authorization_changed",
+      "permission_denied",
+      "authentication_unavailable",
+      undefined,
+    ]);
+    expect(events.map((e) => e.supportId)).toEqual(lines.find((e) => e.ids).ids);
+  });
   it("registra apenas categorias enumeradas de agregação com o supportId", () => {
     const output = execFileSync(
       process.execPath,

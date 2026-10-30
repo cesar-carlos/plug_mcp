@@ -143,6 +143,14 @@ export interface AuthorizationSnapshot {
 }
 
 export class PersonaV2Error extends Error {
+  readonly authorizationReason?:
+    | "token_expired"
+    | "token_revoked"
+    | "authorization_changed"
+    | "access_expired"
+    | "grant_expired"
+    | "grant_revoked"
+    | "identity_invalid";
   readonly source?: "mcp" | "client_agent_access" | "client_token_rpc";
   readonly hint?: string;
   constructor(
@@ -160,11 +168,16 @@ export class PersonaV2Error extends Error {
       | "APPROVAL_REQUIRED"
       | "CAPABILITY_UNAVAILABLE",
     message: string,
-    context?: { source: "mcp" | "client_agent_access" | "client_token_rpc"; hint: string },
+    context?: {
+      source?: "mcp" | "client_agent_access" | "client_token_rpc";
+      hint?: string;
+      authorizationReason?: PersonaV2Error["authorizationReason"];
+    },
   ) {
     super(message);
     this.name = "PersonaV2Error";
     this.source = context?.source;
     this.hint = context?.hint;
+    this.authorizationReason = context?.authorizationReason;
   }
 }

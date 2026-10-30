@@ -128,10 +128,12 @@ export const createPersonaV2McpHandler = (
             oauth ? chatGptOAuthChallenge(publicBaseUrl, true) : 'Bearer realm="persona-v2"',
           );
         res.status(denied ? 401 : 503).json({
-          error: {
-            code: denied ? "AUTHORIZATION_DENIED" : "AUTHORITY_UNAVAILABLE",
-            message: error instanceof PersonaV2Error ? error.message : "Autoridade indisponível.",
-          },
+          error: denied
+            ? reportPersonaV2ToolError(error, logger)
+            : {
+                code: "AUTHORITY_UNAVAILABLE",
+                message: "Autoridade indisponível.",
+              },
         });
         return;
       }
@@ -165,11 +167,34 @@ export const createPersonaV2McpHandler = (
           try {
             return { content: [{ type: "text" as const, text: JSON.stringify(await action()) }] };
           } catch (error) {
-            return {
-              isError: true,
-              ...(oauth &&
+            // A denied operation does not imply that the OAuth connection is invalid.
+            // Recheck only authentication; never retry the failed action.
+            let reconnect = false;
+            let authorizationReason: string | undefined;
+            if (
+              oauth &&
+              bearer &&
               error instanceof PersonaV2Error &&
               ["AUTHORIZATION_DENIED", "STALE_AUTHORIZATION"].includes(error.code)
+            ) {
+              try {
+                await oauth.resolve(bearer);
+                authorizationReason = "permission_denied";
+              } catch (authenticationError) {
+                reconnect =
+                  authenticationError instanceof PersonaV2Error &&
+                  ["AUTHORIZATION_DENIED", "STALE_AUTHORIZATION"].includes(
+                    authenticationError.code,
+                  );
+                authorizationReason =
+                  reconnect && authenticationError instanceof PersonaV2Error
+                    ? (authenticationError.authorizationReason ?? "identity_invalid")
+                    : "authentication_unavailable";
+              }
+            }
+            return {
+              isError: true,
+              ...(reconnect
                 ? {
                     _meta: { "mcp/www_authenticate": [chatGptOAuthChallenge(publicBaseUrl, true)] },
                   }
@@ -177,7 +202,9 @@ export const createPersonaV2McpHandler = (
               content: [
                 {
                   type: "text" as const,
-                  text: JSON.stringify({ error: reportPersonaV2ToolError(error, logger) }),
+                  text: JSON.stringify({
+                    error: reportPersonaV2ToolError(error, logger, authorizationReason),
+                  }),
                 },
               ],
             };

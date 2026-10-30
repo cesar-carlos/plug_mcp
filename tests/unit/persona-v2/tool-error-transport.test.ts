@@ -7,6 +7,87 @@ import type { PersonaConsumerCatalog } from "../../../src/application/persona-v2
 import type { PersonaOAuth } from "../../../src/application/persona-v2/oauth.js";
 import type { LoggerPort } from "../../../src/domain/ports/logger.port.js";
 import { parseMcpPayload, toolJson } from "../../helpers/mcp-rpc.js";
+import { PersonaV2Error } from "../../../src/domain/persona-v2/model.js";
+
+it.each([
+  ["AUTHORIZATION_DENIED", "valid", false],
+  ["STALE_AUTHORIZATION", "valid", false],
+  ["AUTHORIZATION_DENIED", "expired", true],
+  ["AUTHORIZATION_DENIED", "stale", true],
+  ["AUTHORIZATION_DENIED", "unavailable", false],
+  ["INVALID_PLAN", "valid", false],
+] as const)("reconexão depende da autenticação: %s / %s", async (code, state, reconnect) => {
+  const identity = { personaId: "fixture", tokenId: "fixture", tokenVersion: 1, personaVersion: 1 };
+  const resolve = vi.fn().mockResolvedValue(identity);
+  if (state !== "valid") {
+    resolve
+      .mockResolvedValueOnce(identity)
+      .mockRejectedValue(
+        state === "unavailable"
+          ? new Error("sensitive-database")
+          : new PersonaV2Error(
+              state === "stale" ? "STALE_AUTHORIZATION" : "AUTHORIZATION_DENIED",
+              "Conexão indisponível.",
+            ),
+      );
+  }
+  const persona = vi.fn().mockRejectedValue(new PersonaV2Error(code, "Operação recusada."));
+  const warn = vi.fn();
+  const app = express();
+  app.use(express.json());
+  app.post(
+    "/mcp",
+    createPersonaV2McpHandler(
+      { persona } as unknown as PersonaConsumerCatalog,
+      "http://fixture.test",
+      undefined,
+      undefined,
+      undefined,
+      { resolve } as unknown as PersonaOAuth,
+      undefined,
+      undefined,
+      undefined,
+      { warn } as unknown as LoggerPort,
+    ),
+  );
+  const response = await request(app)
+    .post("/mcp")
+    .set("Host", "fixture.test")
+    .set("Authorization", "Bearer fixture")
+    .set("Accept", "application/json, text/event-stream")
+    .send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "obter_contexto_persona", arguments: {} },
+    });
+  const payload = parseMcpPayload(response);
+  expect(payload.result).toMatchObject({ isError: true });
+  const result = payload.result as { _meta?: Record<string, unknown> };
+  expect(Boolean(result._meta?.["mcp/www_authenticate"])).toBe(reconnect);
+  const { error } = toolJson(payload) as { error: { code: string; supportId: string } };
+  expect(error.code).toBe(code);
+  if (code !== "INVALID_PLAN") {
+    expect(error).toMatchObject({
+      details: {
+        authorizationReason:
+          state === "valid"
+            ? "permission_denied"
+            : state === "unavailable"
+              ? "authentication_unavailable"
+              : "identity_invalid",
+      },
+      retryable: false,
+    });
+  }
+  expect(warn).toHaveBeenCalledWith(
+    "persona-v2 tool failed",
+    expect.objectContaining({ supportId: error.supportId, errorCode: code }),
+  );
+  expect(persona).toHaveBeenCalledTimes(1);
+  expect(resolve).toHaveBeenCalledTimes(code === "INVALID_PLAN" ? 1 : 2);
+  expect(JSON.stringify(payload)).not.toContain("sensitive-database");
+});
 
 it.each([false, true])(
   "correlaciona erro RPC e log pelo transporte MCP (OAuth=%s)",

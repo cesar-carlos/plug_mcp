@@ -425,6 +425,12 @@ it("expiração de access é revalidada na transação, sem depender de novo HTT
   await expect(oauth.resolve(tokens.access_token)).rejects.toThrow();
   const renewed = await oauth.token(refresh(tokens.refresh_token));
   expect(renewed.expires_in).toBe(900);
+  const renewedIdentity = await oauth.resolve(renewed.access_token);
+  expect(renewedIdentity.grant?.id).toBe(consumer.grant?.id);
+  expect(() => assertConsumer(renewedIdentity, state, new Date(clock))).not.toThrow();
+  await expect(oauth.resolve(tokens.access_token)).rejects.toMatchObject({
+    authorizationReason: "access_expired",
+  });
 });
 
 it("transação, código e concessão expiram nos prazos próprios", async () => {
@@ -773,6 +779,19 @@ it("responsável lista/revoga conexão exata, bloqueia access/refresh e conserva
     (r) => r.id === firstIdentity.grant!.id,
   )!;
   expect(row).toMatchObject({ clientId, tokenId: identity.tokenId, state: "vigente_localmente" });
+  expect(row.health).toMatchObject({
+    reason: "available",
+    lastRefreshedAt: null,
+    tokenExpiresAt: null,
+  });
+  expect(row.health?.accessExpiresAt).toBe(new Date(clock + 900000).toISOString());
+  await oauth.token(refresh(first.refresh_token));
+  const refreshed = await request(runtime.app).get(base).set(headers).expect(200);
+  const refreshedRow = (refreshed.body.items as PersonaOAuthConnection[]).find(
+    (r) => r.id === row.id,
+  )!;
+  expect(refreshedRow.health?.lastRefreshedAt).toBe(new Date(clock).toISOString());
+  expect(refreshedRow.fingerprint).toBe(row.fingerprint);
   for (const secret of [bearer, first.access_token, first.refresh_token, second.access_token])
     expect(listed.text).not.toContain(secret);
   const input = { fingerprint: row.fingerprint, confirmed: true };

@@ -40,6 +40,28 @@ Nenhuma chamada de rede ocorre dentro da transação PostgreSQL.
 
 ## Consentimento, prazos e autorização
 
+Recusa de tool por permissão insuficiente não exige reconexão. Para
+AUTHORIZATION_DENIED/STALE_AUTHORIZATION, o transporte reconfere o access atual:
+somente autenticação inválida ou contexto OAuth obsoleto produz o challenge.
+Indisponibilidade nessa conferência não é prova de token inválido. A operação
+permanece recusada, com código e supportId originais, sem retry. Prazos, refresh,
+revogação e validações de autoridade permanecem inalterados.
+
+Recusas de autenticação e tools retornam supportId e categoria segura
+authorizationReason quando conhecida: token_expired, token_revoked,
+authorization_changed, access_expired, grant_expired, grant_revoked,
+identity_invalid, permission_denied ou authentication_unavailable. Logs usam
+somente essa enumeração, nunca credenciais ou mensagens livres. permission_denied
+significa operação recusada com autenticação vigente, não identifica a permissão
+exata. Falha de infraestrutura não confirma expiração. Nenhum erro autoriza retry.
+
+O console mostra health com lastRefreshedAt (último consumo de refresh),
+accessExpiresAt (maior prazo de access registrado), tokenExpiresAt e reason local.
+Datas ausentes permanecem null; refresh não altera fingerprint de revogação.
+Access expirado isoladamente não bloqueia consentimento com refresh vigente.
+Esses metadados não revelam tokens, não renovam conexões e não comprovam atividade
+do cliente ou autoridade remota. O prazo do consentimento continua expiresAt.
+
 O navegador recebe cookie `__Host-persona_oauth_v2`, Secure/HttpOnly/SameSite=Lax.
 Host/Origin, nonce e CSRF são conferidos; CSP permite somente o próprio formulário
 e o destino de retorno previamente validado. HTML é escapado e não reflete token.

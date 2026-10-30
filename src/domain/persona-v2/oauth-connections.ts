@@ -10,6 +10,19 @@ export interface PersonaOAuthConnection {
   state: "vigente_localmente" | "revogada" | "expirada" | "bloqueada";
   permissions: Permissions;
   fingerprint: string;
+  health?: {
+    lastRefreshedAt: string | null;
+    accessExpiresAt: string | null;
+    tokenExpiresAt: string | null;
+    reason:
+      | "available"
+      | "grant_revoked"
+      | "grant_expired"
+      | "token_revoked"
+      | "token_expired"
+      | "authorization_changed"
+      | "persona_inactive";
+  };
 }
 export interface PersonaOAuthConnectionPage {
   items: readonly PersonaOAuthConnection[];

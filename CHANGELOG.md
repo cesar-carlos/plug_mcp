@@ -11,6 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: diagnóstico de autorização por categoria segura e supportId, orientações
+  de reconexão e saúde OAuth no console com prazos, última renovação e bloqueio local.
+
+- Fixed: recusa de permissão em tool v2 só indica reconexão quando a autenticação
+  OAuth também está inválida; preserva refresh, prazos, revogação e ausência de retry.
+
 - Fixed: logs de AGREGACAO_INSEGURA distinguem quatro causas locais por categoria
   enumerada e supportId, sem expor SQL/identificadores/dados nem alterar validações.
 

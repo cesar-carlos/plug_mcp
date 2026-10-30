@@ -1,11 +1,17 @@
 ---
-
 description: "Contrato MCP por runtime e isolamento das respostas"
 globs: ["src/infrastructure/mcp/**/*.ts", "src/application/**/*.ts"]
 alwaysApply: false
 ---
 
 # Protocolo MCP
+
+Na v2, recusa de permissão por tool não implica reconexão OAuth. Reconferir
+autenticação antes do challenge; falha de infraestrutura não comprova token
+inválido. Preservar erro/supportId, recusa e ausência de retry da operação.
+authorizationReason usa enumeração local fechada; não copiar mensagem, token,
+SQL ou conteúdo remoto para logs. Saúde OAuth no console é somente metadado
+local, sem renovar ou alterar autoridade/fingerprint.
 
 Diagnóstico de AGREGACAO_INSEGURA local registra somente aggregationReason
 enumerado e supportId, sem SQL, aliases, nomes físicos, valores ou detalhes livres.

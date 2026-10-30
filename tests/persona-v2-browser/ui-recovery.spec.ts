@@ -518,6 +518,12 @@ test("conexão destaca cliente e token e mantém identificadores nos detalhes", 
         items: [
           {
             id: "connection-fixture",
+            health: {
+              lastRefreshedAt: null,
+              accessExpiresAt: null,
+              tokenExpiresAt: null,
+              reason: "available",
+            },
             tokenId: "token-0",
             tokenName: "Token financeiro",
             clientId: "https://chatgpt.com/connector/client.json",
@@ -545,6 +551,12 @@ test("conexão destaca cliente e token e mantém identificadores nos detalhes", 
   await panel.getByRole("button", { name: "Atualizar conexões OAuth", exact: true }).click();
   await expect(panel.getByText("chatgpt.com", { exact: true })).toBeVisible();
   await expect(panel.getByText("Token financeiro", { exact: true })).toBeVisible();
+  await panel.getByText("Saúde da conexão", { exact: true }).click();
+  await expect(panel.getByText("Última renovação: Não registrada", { exact: true })).toBeVisible();
+  await expect(
+    panel.getByText("Token originador: Sem data de expiração", { exact: true }),
+  ).toBeVisible();
+  await expect(panel.getByText("Consentimento local disponível", { exact: true })).toBeVisible();
   await expect(panel.getByText("ID da conexão: connection-fixture", { exact: true })).toBeHidden();
   await panel.getByText("Identificação da conexão", { exact: true }).click();
   await expect(panel.getByText("ID da conexão: connection-fixture", { exact: true })).toBeVisible();

@@ -25,9 +25,13 @@ interface Row {
   token_expires: Date | null;
   active: boolean;
   now: Date;
+  last_refresh: Date | null;
+  access_expires: Date | null;
 }
 const selection = `SELECT g.*,t.nome AS token_name,t.authorization_version AS token_current,t.revoked_at AS token_revoked,
- t.expires_at AS token_expires,p.ativa AS active,clock_timestamp() AS now
+ t.expires_at AS token_expires,p.ativa AS active,clock_timestamp() AS now,
+ (SELECT max(r.consumed_at) FROM oauth_registro_v2 r WHERE r.persona_id=g.persona_id AND r.concessao_id=g.id AND r.tipo='refresh_token') AS last_refresh,
+ (SELECT max(r.expires_at) FROM oauth_registro_v2 r WHERE r.persona_id=g.persona_id AND r.concessao_id=g.id AND r.tipo='access_token') AS access_expires
  FROM oauth_concessao_v2 g JOIN persona_token t ON t.persona_id=g.persona_id AND t.id=g.token_id JOIN persona p ON p.id=g.persona_id`;
 export class PostgresPersonaOAuthConnections implements PersonaOAuthConnectionTransaction {
   constructor(
@@ -56,6 +60,24 @@ export class PostgresPersonaOAuthConnections implements PersonaOAuthConnectionTr
       clientId: row.client_id,
       permissions,
       fingerprint,
+      health: {
+        lastRefreshedAt: row.last_refresh?.toISOString() ?? null,
+        accessExpiresAt: row.access_expires?.toISOString() ?? null,
+        tokenExpiresAt: row.token_expires?.toISOString() ?? null,
+        reason: row.revoked_at
+          ? "grant_revoked"
+          : row.expires_at <= row.now
+            ? "grant_expired"
+            : row.token_revoked
+              ? "token_revoked"
+              : row.token_expires && row.token_expires <= row.now
+                ? "token_expired"
+                : row.token_current !== row.token_version
+                  ? "authorization_changed"
+                  : !row.active
+                    ? "persona_inactive"
+                    : "available",
+      },
       createdAt: row.created_at?.toISOString() ?? null,
       expiresAt: row.expires_at.toISOString(),
       revokedAt: row.revoked_at?.toISOString() ?? null,
