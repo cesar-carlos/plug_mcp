@@ -404,7 +404,10 @@ test("pendência preserva skill no grafo, JOIN composto não assume INNER", asyn
   await openSkill(page);
   await page.locator(`a[href="/app/grafo?skillId=${skillId}"]`).click();
   await expect(page.getByLabel("Destino das confirmações")).toHaveValue(skillId);
+  // A carga inicial deixa o formulário inert; fill pode terminar sem inserir texto.
+  await expect(page.locator(".page")).toHaveAttribute("aria-busy", "false");
   await page.getByLabel("Tabela origem", { exact: true }).fill("fato");
+  await expect(page.getByLabel("Tabela origem", { exact: true })).toHaveValue("fato");
   await page.getByLabel("Tabela destino", { exact: true }).fill("dimensao");
   await page.getByLabel("Coluna origem", { exact: true }).fill("empresa");
   await page.getByLabel("Coluna destino", { exact: true }).fill("empresa");
