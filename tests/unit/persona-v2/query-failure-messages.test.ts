@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import type { LoggerPort } from "../../../src/domain/ports/logger.port.js";
+import { describe, expect, it, vi } from "vitest";
 import { DomainError } from "../../../src/domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../src/domain/errors/error-codes.js";
 import { adminUnexpectedFailure } from "../../../src/infrastructure/http/admin-unexpected-error.js";
-import { personaV2ToolError } from "../../../src/infrastructure/mcp/persona-v2-tool-error.js";
+import {
+  personaV2ToolError,
+  reportPersonaV2ToolError,
+} from "../../../src/infrastructure/mcp/persona-v2-tool-error.js";
 import { PersonaV2Error } from "../../../src/domain/persona-v2/model.js";
 
 describe("falha pública da consulta", () => {
@@ -90,5 +94,78 @@ describe("falha inesperada do console", () => {
     expect(failure.code).toBe("AUTHORITY_UNAVAILABLE");
     expect(failure.log).toEqual({ name: "TypeError" });
     expect(JSON.stringify(failure)).not.toContain("skills");
+  });
+});
+
+describe("diagnóstico seguro e atendimento", () => {
+  it("preserva metadados permitidos e distingue parâmetros RPC de falha de comunicação", () => {
+    const error = new DomainError({
+      code: ERROR_CODES.PLUG_SERVER_ERROR,
+      message: "password=secret SELECT private",
+      hint: "Bearer secret",
+      source: "plug_server_http",
+      stage: "rpc",
+      details: {
+        rpcCode: -32602,
+        reason: "invalid_params",
+        sqlstate: "42703",
+        errno: "ECONNRESET",
+        engineMessage: "SELECT secret",
+        technical_message: "password=secret",
+        nested: { token: "secret" },
+      },
+    });
+    const body = personaV2ToolError(error);
+    expect(body.message).toBe("O hub recusou o JSON-RPC: parâmetros inválidos.");
+    expect(body.details).toEqual({
+      rpcCode: -32602,
+      reason: "invalid_params",
+      sqlstate: "42703",
+      errno: "ECONNRESET",
+    });
+    expect(body.retryable).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/secret|SELECT|Bearer/);
+  });
+  it.each([
+    null,
+    [],
+    { rpcCode: Infinity },
+    { rpcCode: -32602.5 },
+    {
+      reason: "password=secret",
+      errno: "SECRET",
+      sqlstate: "42703 SELECT secret",
+      nested: { rpcCode: -32602 },
+    },
+  ])("descarta detalhes desconhecidos ou malformados: %j", (details) => {
+    expect(
+      personaV2ToolError(
+        new DomainError({
+          code: ERROR_CODES.PLUG_SERVER_ERROR,
+          message: "secret",
+          hint: "secret",
+          details,
+        }),
+      ),
+    ).not.toHaveProperty("details");
+  });
+  it("gera IDs únicos e registra somente metadados correlacionáveis, inclusive exceções inesperadas", () => {
+    const warn = vi.fn();
+    const logger = { warn } as unknown as LoggerPort;
+    const first = reportPersonaV2ToolError(new Error("SELECT password=secret"), logger);
+    const second = reportPersonaV2ToolError(new Error("secret"), logger);
+    expect(first.supportId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second.supportId).not.toBe(first.supportId);
+    expect(warn.mock.calls[0]).toEqual([
+      "persona-v2 tool failed",
+      {
+        supportId: first.supportId,
+        code: "CAPABILITY_UNAVAILABLE",
+        source: undefined,
+        stage: undefined,
+        details: undefined,
+      },
+    ]);
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(/secret|SELECT/);
   });
 });

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { publicQueryFailure } from "../../domain/errors/public-query-failure.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
@@ -12,6 +14,7 @@ export interface PersonaV2ToolErrorBody {
   readonly stage?: string;
   readonly hint?: string;
   readonly retryable?: false;
+  readonly details?: Readonly<Record<string, string | number>>;
 }
 
 export function personaV2ToolError(error: unknown): PersonaV2ToolErrorBody {
@@ -35,17 +38,92 @@ export function personaV2ToolError(error: unknown): PersonaV2ToolErrorBody {
     };
   }
   if (error instanceof DomainError) {
+    const details = safeDetails(error.details);
+    const protocol =
+      error.code === "PLUG_SERVER_ERROR" && error.source === "plug_server_http"
+        ? protocolMessages[Number(details.rpcCode)]
+        : undefined;
     const published = publicQueryFailure(error.code);
     return {
       code: error.code,
       message:
+        protocol ??
         published?.message ??
         `Não foi possível concluir a consulta (${error.code}, ${error.source ?? "mcp"}).`,
       source: error.source ?? "mcp",
       ...(error.stage ? { stage: error.stage } : {}),
-      hint: published?.hint ?? TRANSPORT_HINT,
+      hint: protocol ? TRANSPORT_HINT : (published?.hint ?? TRANSPORT_HINT),
+      ...(Object.keys(details).length ? { details } : {}),
       retryable: false,
     };
   }
   return { code: "CAPABILITY_UNAVAILABLE", message: "Serviço indisponível." };
+}
+
+const protocolMessages: Partial<Record<number, string>> = {
+  [-32700]: "O hub recusou o JSON-RPC: conteúdo inválido.",
+  [-32600]: "O hub recusou o JSON-RPC: requisição inválida.",
+  [-32601]: "O hub recusou o JSON-RPC: método não encontrado.",
+  [-32602]: "O hub recusou o JSON-RPC: parâmetros inválidos.",
+  [-32603]: "O hub informou uma falha interna no processamento JSON-RPC.",
+  [-32009]: "O hub recusou o formato ou a assinatura do payload.",
+  [-32010]: "O hub não conseguiu decodificar o payload do agente.",
+  [-32011]: "O hub não conseguiu descomprimir o payload do agente.",
+  [-32012]: "Falha de rede entre o hub e o agente.",
+};
+const reasons = new Set([
+  "invalid_params",
+  "invalid_request",
+  "method_not_found",
+  "parse_error",
+  "internal_error",
+  "missing_client_token",
+  "invalid_signature",
+  "authentication_failed",
+  "invalid_payload",
+]);
+const errnos = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "CERT_HAS_EXPIRED",
+]);
+/** Positive allowlist: never copy upstream message, SQL, identifiers, payload or nested objects. */
+function safeDetails(value: unknown): Record<string, string | number> {
+  if (!value || typeof value !== "object") return {};
+  const raw = value as Record<string, unknown>;
+  const result: Record<string, string | number> = {};
+  if (
+    typeof raw.rpcCode === "number" &&
+    Number.isSafeInteger(raw.rpcCode) &&
+    raw.rpcCode >= -32768 &&
+    raw.rpcCode <= -32000
+  )
+    result.rpcCode = raw.rpcCode;
+  if (typeof raw.reason === "string" && reasons.has(raw.reason)) result.reason = raw.reason;
+  if (typeof raw.errno === "string" && errnos.has(raw.errno)) result.errno = raw.errno;
+  if (typeof raw.sqlstate === "string" && /^[0-9A-Z]{5}$/.test(raw.sqlstate))
+    result.sqlstate = raw.sqlstate;
+  return result;
+}
+
+/** Each failed tool invocation gets a server-owned ID; logs contain diagnostic metadata only. */
+export function reportPersonaV2ToolError(
+  error: unknown,
+  logger?: LoggerPort,
+): PersonaV2ToolErrorBody & { readonly supportId: string } {
+  const body = personaV2ToolError(error);
+  const supportId = randomUUID();
+  logger?.warn("persona-v2 tool failed", {
+    supportId,
+    code: body.code,
+    source: body.source,
+    stage: body.stage,
+    details: body.details,
+  });
+  return { ...body, supportId };
 }

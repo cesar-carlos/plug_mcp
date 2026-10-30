@@ -105,3 +105,8 @@ Não reescrever SQL por invalid_payload, HTTP 429/503 ou falha de transporte.
 Não transformar ausência de dados, recusa ou incompletude em sucesso equivalente.
 
 Referências: `docs/mcp/tools.md`, `docs/mcp/error-mapping.md` e contratos v2.
+
+Na v2, falhas capturadas pelo executor de tools incluem supportId UUID gerado
+pelo servidor e correlacionado com log de metadados. Preservar somente detalhes
+diagnósticos de lista permitida; nunca encaminhar texto bruto do hub, SQL,
+parâmetros ou segredos. A resposta não autoriza retry automático.

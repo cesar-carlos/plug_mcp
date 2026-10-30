@@ -8,6 +8,8 @@ import {
 
 /** Guidance has no execution authority. This version describes only implemented v2 surfaces. */
 const content = {
+  errorDiagnostics:
+    "Ao ocorrer erro de tool, informe code, message, source/stage e os details seguros disponíveis, incluindo supportId como identificador de atendimento. Não reduza toda falha PLUG_SERVER_ERROR a comunicação: rpcCode pode indicar parâmetros ou protocolo inválidos. Não invente a causa quando não houver detalhe. Não peça segredos nem repita automaticamente consultas ou operações.",
   version: "persona-v2-redis-cache-1",
   queryReuse:
     "Cache e singleflight são otimizações opt-in de consultas locais elegíveis. Cada consumidor revalida autoridade local e remota em hit/espera. Instâncias da mesma origem e controle podem reutilizar somente o mesmo recorte de consumidor, fonte, policy e publicações. Proveniência, horário e completude originais não são atualizados. A idade da entrada é conferida pelo prazo configurado na instância que lê, mesmo quando outra publicou com prazo maior. Hit não renova TTL. Revogação, revisão física e operações pendentes/desconhecidas impedem reuso; não substitua prova estrutural na conexão. Falha de Redis antes do envio reduz otimização, sem dispensar autorização. Timeout de seguidor e perda de confirmação depois do SELECT não autorizam reenviar SQL nem assumir o trabalho pendente.",

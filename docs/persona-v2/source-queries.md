@@ -274,3 +274,19 @@ Ausência dos campos preserva os tetos anteriores; snapshots antigos não são
 reescritos. Alterar limite publicado altera o contrato/hash e exige republicação
 e concessão compatível. Delegação compara os tetos efetivos por skill e nunca os
 amplia. Revalidação antes do dispatch e da entrega impede usar orçamento antigo.
+
+## Diagnóstico de erros de tools
+
+Falhas capturadas pelo executor de tools v2 retornam `isError: true` e `error` com
+`code`, `message`, `source`/`stage` quando disponíveis e `supportId` UUID gerado
+no servidor por falha. O mesmo ID aparece no evento `persona-v2 tool failed`,
+com metadados diagnósticos, sem SQL, parâmetros, resultados, stack ou texto bruto
+do hub. O ID não concede acesso nem autoriza retry.
+
+`details` é opcional: permite somente `rpcCode` inteiro de erro JSON-RPC,
+`reason` e `errno` de listas fechadas e `sqlstate` de cinco caracteres alfanuméricos
+maiúsculos. Campos e valores desconhecidos são descartados. Falhas de protocolo
+conhecidas recebem mensagens fixas específicas; mensagens livres do hub nunca
+são encaminhadas. `retryable: false` permanece para falhas de consulta.
+Identificador de atendimento não substitui as respostas HTTP de autenticação
+nem os erros de validação produzidos pelo SDK antes da execução da tool.

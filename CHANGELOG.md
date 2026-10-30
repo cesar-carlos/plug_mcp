@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: erros de tools v2 preservam diagnósticos seguros de RPC/rede/SQLSTATE
+  e incluem identificador de atendimento correlacionado com logs sem payloads.
+
 - Fixed: deploy considera mudanças acumuladas desde o último envio comprovado,
   evitando perder correções quando o commit seguinte altera apenas testes/docs.
 

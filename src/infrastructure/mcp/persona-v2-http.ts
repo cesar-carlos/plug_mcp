@@ -1,3 +1,4 @@
+import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { McpServer, ResourceTemplate, createMcpHandler } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { Request, Response } from "express";
@@ -20,7 +21,7 @@ import {
   sourceQuerySchema,
   type PersonaSourceQueries,
 } from "../../application/persona-v2/source-query.js";
-import { personaV2ToolError } from "./persona-v2-tool-error.js";
+import { reportPersonaV2ToolError } from "./persona-v2-tool-error.js";
 import type { PersonaPublishedFederation } from "../../application/persona-v2/published-federation.js";
 import { federationRequestSchema } from "../../application/persona-v2/federation-training.js";
 import {
@@ -79,6 +80,7 @@ export const createPersonaV2McpHandler = (
     knowledgeMaintenance?: PersonaKnowledgeMaintenance;
   },
   attachments?: PersonaAttachments,
+  logger?: LoggerPort,
 ) => {
   const origin = new URL(publicBaseUrl).origin;
   return async (req: Request, res: Response): Promise<void> => {
@@ -175,7 +177,7 @@ export const createPersonaV2McpHandler = (
               content: [
                 {
                   type: "text" as const,
-                  text: JSON.stringify({ error: personaV2ToolError(error) }),
+                  text: JSON.stringify({ error: reportPersonaV2ToolError(error, logger) }),
                 },
               ],
             };

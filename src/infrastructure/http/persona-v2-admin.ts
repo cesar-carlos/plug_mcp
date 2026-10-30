@@ -169,6 +169,7 @@ export const createPersonaAdministrationApp = (input: {
             }
           : undefined,
         input.attachments,
+        input.logger,
       ),
     );
   if (input.oauth && input.consumerCatalog) {
@@ -198,6 +199,7 @@ export const createPersonaAdministrationApp = (input: {
             }
           : undefined,
         input.attachments,
+        input.logger,
       ),
     );
   }
