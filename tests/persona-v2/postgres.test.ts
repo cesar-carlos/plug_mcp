@@ -1,4 +1,5 @@
 import { reviewDateFixture } from "../helpers/review-deadline.js";
+import { PERSONA_V2_TRAINING_BASE } from "../../src/application/persona-v2/training-base.js";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.adapter.js";
@@ -1044,7 +1045,11 @@ describe("treinamento, publicação e catálogo MCP persona-v2", () => {
     expect(JSON.stringify(schema)).toContain("consultar_dados");
     expect(JSON.stringify(anonymous)).not.toContain("consultar_dados");
     const guide = await rpc("resources/read", { uri: "guia://persona-v2" });
-    expect(JSON.stringify(guide)).toContain("persona-v2-redis-cache-1");
+    const contents = (guide.result as { contents: { uri: string; text: string }[] }).contents;
+    expect(contents).toHaveLength(1);
+    expect(contents[0]!.uri).toBe("guia://persona-v2");
+    expect(JSON.parse(contents[0]!.text)).toEqual(PERSONA_V2_TRAINING_BASE);
+    expect(PERSONA_V2_TRAINING_BASE.version).toBe("persona-v2-sql-summary-1");
     const invalid = await request(runtime.app)
       .post("/mcp")
       .set("Host", "127.0.0.1:3333")
