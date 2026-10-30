@@ -317,8 +317,13 @@ do hub. O ID não concede acesso nem autoriza retry.
 maiúsculos. Campos e valores desconhecidos são descartados. Falhas de protocolo
 conhecidas recebem mensagens fixas específicas; mensagens livres do hub nunca
 são encaminhadas. `retryable: false` permanece para falhas de consulta.
-Identificador de atendimento não substitui as respostas HTTP de autenticação
-nem os erros de validação produzidos pelo SDK antes da execução da tool.
+Falhas anteriores à execução também recebem `supportId`: autenticação, preparação,
+parser JSON e recusas do SDK (argumentos/tools/recursos). O evento
+`persona-v2 request failed` guarda somente ID, código fixo, origem, etapa e código
+numérico RPC permitido. JSON e SSE preservam o envelope/código do protocolo;
+mensagens e dados livres do SDK são substituídos por diagnóstico seguro. Erros
+de tools já correlacionados não geram segundo evento. O ID não substitui challenge
+OAuth, não certifica tráfego de conversas e não autoriza repetição.
 
 ## Aliases de saída e completude de rankings
 

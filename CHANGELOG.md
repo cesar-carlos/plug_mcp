@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: falhas MCP anteriores às tools recebem supportId correlacionado no log,
+  incluindo parser, autenticação, preparação e validações SDK em JSON/SSE,
+  sem registrar argumentos ou mensagens internas.
+
 - Fixed: CTEs encadeadas conservam a linhagem física em JOINs, derivadas e
   ramos de conjunto; definições duplicadas, recursivas ou futuras são recusadas.
 

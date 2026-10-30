@@ -35,6 +35,7 @@ import { permissionsSchema } from "../persistence/persona-v2/permissions-schema.
 import type { PersonaCatalog } from "../../application/persona-v2/catalog.js";
 import type { PersonaConsumerCatalog } from "../../application/persona-v2/consumer-catalog.js";
 import { createPersonaV2McpHandler } from "../mcp/persona-v2-http.js";
+import { personaMcpParserError } from "../mcp/persona-v2-protocol-error.js";
 import type { PersonaSourceQueries } from "../../application/persona-v2/source-query.js";
 import type { PersonaPublishedFederation } from "../../application/persona-v2/published-federation.js";
 import { sourceRegistrationSchema } from "../../application/persona-v2/source-registration.js";
@@ -104,6 +105,7 @@ export const createPersonaAdministrationApp = (input: {
     const parser = isTokenWritePath(req.path, req.method) ? tokenJson : defaultJson;
     parser(req, res, next);
   });
+  app.use(personaMcpParserError(input.logger));
   app.use((_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     next();

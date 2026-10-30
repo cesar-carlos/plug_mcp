@@ -23,6 +23,10 @@ import {
   type PersonaSourceQueries,
 } from "../../application/persona-v2/source-query.js";
 import { reportPersonaV2ToolError } from "./persona-v2-tool-error.js";
+import {
+  correlatePersonaProtocolResponse,
+  reportPersonaProtocolError,
+} from "./persona-v2-protocol-error.js";
 import type { PersonaPublishedFederation } from "../../application/persona-v2/published-federation.js";
 import { federationRequestSchema } from "../../application/persona-v2/federation-training.js";
 import {
@@ -84,12 +88,14 @@ export const createPersonaV2McpHandler = (
   logger?: LoggerPort,
 ) => {
   const origin = new URL(publicBaseUrl).origin;
-  return async (req: Request, res: Response): Promise<void> => {
+  const handle = async (req: Request, res: Response): Promise<void> => {
     if (
       req.get("host") !== new URL(origin).host ||
       (req.get("origin") && req.get("origin") !== origin)
     ) {
-      res.status(403).json({ error: { code: "ORIGIN_DENIED" } });
+      res
+        .status(403)
+        .json({ error: reportPersonaProtocolError(logger, "ORIGIN_DENIED", "request") });
       return;
     }
     if (req.method !== "POST") {
@@ -103,6 +109,7 @@ export const createPersonaV2McpHandler = (
       res.setHeader("WWW-Authenticate", chatGptOAuthChallenge(publicBaseUrl));
       res.status(401).json({
         error: {
+          ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
           code: "AUTHORIZATION_DENIED",
           message: "Autenticação necessária. Informe o token da persona.",
         },
@@ -112,6 +119,7 @@ export const createPersonaV2McpHandler = (
     if (req.get("authorization") && !bearer) {
       res.status(401).json({
         error: {
+          ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
           code: "AUTHORIZATION_DENIED",
           message: "O cabeçalho de autorização não contém um token utilizável.",
         },
@@ -131,10 +139,7 @@ export const createPersonaV2McpHandler = (
         res.status(denied ? 401 : 503).json({
           error: denied
             ? reportPersonaV2ToolError(error, logger)
-            : {
-                code: "AUTHORITY_UNAVAILABLE",
-                message: "Autoridade indisponível.",
-              },
+            : reportPersonaProtocolError(logger, "AUTHORITY_UNAVAILABLE", "authentication"),
         });
         return;
       }
@@ -970,6 +975,21 @@ export const createPersonaV2McpHandler = (
     res.once("close", () => {
       void handler.close();
     });
-    await toNodeHandler(handler)(req, res, req.body);
+    await toNodeHandler({
+      fetch: async (request, options) =>
+        correlatePersonaProtocolResponse(await handler.fetch(request, options), logger),
+    })(req, res, req.body);
+  };
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      await handle(req, res);
+    } catch (error) {
+      const diagnostic =
+        error instanceof PersonaV2Error
+          ? reportPersonaV2ToolError(error, logger)
+          : reportPersonaProtocolError(logger, "MCP_REQUEST_FAILED", "request");
+      if (!res.headersSent) res.status(503).json({ error: diagnostic });
+      else res.end();
+    }
   };
 };

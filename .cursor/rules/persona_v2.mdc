@@ -9,6 +9,11 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Falhas MCP antes da tool (parser, autenticação, preparação e SDK) exigem supportId
+gerado no servidor e correlação em log de metadados. Cobrir JSON/SSE com logger
+real; preservar códigos/challenge e não duplicar erros já correlacionados.
+Nunca copiar mensagens, argumentos ou URIs livres do SDK para diagnóstico.
+
 CTEs não recursivas preservam contexto lexical e linhagem física através das
 dependências, derivadas e ramos de conjunto. Nomes duplicados, recursão e
 referência futura são recusados; não relaxar JOIN composto, escopo ou finalidades
