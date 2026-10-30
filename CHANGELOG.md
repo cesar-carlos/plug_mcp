@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: ORDER BY reconhece aliases únicos da projeção em consultas agregadas
+  com JOIN/CTE sem confundi-los com campos físicos; regressões preservam escopo,
+  finalidades e sinalização de rankings com mais de 500 produtos.
+
 - Fixed: logs de falhas MCP v2 usam errorCode para preservar o diagnóstico
   associado ao supportId, mantendo códigos OAuth e demais segredos mascarados.
 

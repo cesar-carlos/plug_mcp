@@ -676,3 +676,69 @@ it("sem paginação preserva ORDER BY por expressão; NULLS LAST paginado é rec
   ).rejects.toMatchObject({ code: "INVALID_PLAN" });
   expect(f.execute).toHaveBeenCalledTimes(1);
 });
+
+it.each(["postgres", "mssql", "sybase"] as const)(
+  "agregação %s com alias novo chega ao executor sem reescrita",
+  async (dialect) => {
+    const f = fixture(dialect);
+    const sql =
+      "SELECT p.id AS product, SUM(p.amount) AS total_amount FROM orders p WHERE p.id > :minimum GROUP BY p.id ORDER BY total_amount DESC, product";
+    f.execute.mockResolvedValue({
+      columns: ["product", "total_amount"],
+      rows: [{ product: 1, total_amount: "10.25" }],
+      truncated: false,
+    });
+    await f.service.run(identity, {
+      sql,
+      params: { minimum: 0 },
+      options: { page: 2, pageSize: 500 },
+    });
+    expect(f.execute).toHaveBeenCalledTimes(1);
+    expect(f.execute.mock.calls[0]![0]).toBe(sql);
+    expect(f.execute.mock.calls[0]![2]).toMatchObject({ page: 2, pageSize: 500 });
+  },
+);
+it("ranking de 501 produtos conserva páginas explícitas e não anuncia 500 linhas como total", async () => {
+  const f = fixture();
+  const rows = Array.from({ length: 500 }, (_, index) => ({ id: index + 1, amount: "1.00" }));
+  f.execute.mockResolvedValueOnce({
+    columns: ["id", "amount"],
+    rows,
+    truncated: false,
+    pagination: { page: 1, pageSize: 500, hasNextPage: true, hasPreviousPage: false },
+  });
+  f.execute.mockResolvedValueOnce({
+    columns: ["id", "amount"],
+    rows: [{ id: 501, amount: "1.00" }],
+    truncated: false,
+    pagination: { page: 2, pageSize: 500, hasNextPage: false, hasPreviousPage: true },
+  });
+  const first = await f.service.run(identity, {
+    params: { minimum: 0 },
+    options: { page: 1, pageSize: 500 },
+  });
+  expect(first.rows).toHaveLength(500);
+  expect(first.completeness.complete).toBe(false);
+  expect(first.pagination?.hasNextPage).toBe(true);
+  expect(f.execute).toHaveBeenCalledTimes(1);
+  const last = await f.service.run(identity, {
+    params: { minimum: 0 },
+    options: { page: 2, pageSize: 500 },
+  });
+  expect(last.rows).toHaveLength(1);
+  expect(last.pagination?.hasNextPage).toBe(false);
+  expect(last.completeness.complete).toBe(false);
+  expect(f.execute.mock.calls.map((call) => call[2].page)).toEqual([1, 2]);
+});
+it("teto efetivo de 500 linhas sem paginação também não comprova ranking completo", async () => {
+  const f = fixture();
+  f.execute.mockResolvedValue({
+    columns: ["id", "amount"],
+    rows: Array.from({ length: 500 }, (_, i) => ({ id: i + 1, amount: "1.00" })),
+    effectiveMaxRows: 500,
+    truncated: false,
+  });
+  const result = await f.service.run(identity, { params: { minimum: 0 } });
+  expect(result.completeness).toEqual({ complete: false, truncated: true });
+  expect(f.execute).toHaveBeenCalledTimes(1);
+});

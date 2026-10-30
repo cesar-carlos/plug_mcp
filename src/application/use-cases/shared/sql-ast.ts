@@ -74,6 +74,8 @@ export interface SqlAstColumnRef {
 }
 
 export interface SqlAstSelect {
+  /** Physical scope refs; only standalone ORDER BY output aliases are expanded. */
+  readonly scopeRefs?: readonly SqlAstColumnRef[];
   readonly unresolvedFieldUses?: boolean;
   readonly usageRefs?: Readonly<
     Record<"projecao" | "filtro" | "join" | "agrupamento" | "ordenacao", readonly SqlAstColumnRef[]>
@@ -528,6 +530,22 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     subqueries.some((sub) => sub.temAgregacao) || setBranches.some((sub) => sub.temAgregacao);
   const groupCols = groupByColumns(ast);
   const filtroRefs = collectFiltroRefs(ast);
+  const orderScopeRefs = asArray(ast.orderby).flatMap((term): SqlAstColumnRef[] => {
+    const expr = isRecord(term) ? term.expr : undefined;
+    if (isRecord(expr) && expr.type === "column_ref" && !readString(expr.table)) {
+      const name = columnName(expr.column)?.toLowerCase();
+      const outputs = colunas.filter((column) => column.alias.toLowerCase() === name);
+      if (outputs.length > 1) {
+        throw DomainError.pacote({
+          code: ERROR_CODES.COLUNA_AMBIGUA,
+          message: "Alias de saída duplicado no ORDER BY.",
+          hint: "Use aliases distintos e ordene pelo alias único da projeção.",
+        });
+      }
+      if (outputs.length === 1) return [...outputs[0]!.refs];
+    }
+    return collectRefsFromNode(term);
+  });
   const clauseRefs = (nodes: unknown): SqlAstColumnRef[] => {
     const refs = collectRefsFromNode(nodes);
     for (const item of asArray(nodes)) {
@@ -579,6 +597,7 @@ const fromSelectAst = (ast: unknown, sql: string, database: ParserDatabase): Sql
     });
   }
   return {
+    scopeRefs: [...collectFiltroRefs({ ...ast, orderby: null }), ...orderScopeRefs],
     unresolvedFieldUses: unresolvedFieldUses || nestedUseQueries.length > 0,
     usageRefs: {
       projecao: collectRefsFromNode(ast.columns),
@@ -909,6 +928,7 @@ export const collectColumnRefs = (select: SqlAstSelect): readonly SqlAstColumnRe
 
 /** Refs desta cláusula apenas — sem subqueries nem ramos de UNION. */
 export const collectColumnRefsLocal = (select: SqlAstSelect): readonly SqlAstColumnRef[] => {
+  if (select.scopeRefs) return select.scopeRefs;
   const out: SqlAstColumnRef[] = [];
   for (const coluna of select.colunas) {
     if (coluna.column && coluna.column !== "*") {

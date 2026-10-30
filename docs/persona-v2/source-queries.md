@@ -291,3 +291,21 @@ conhecidas recebem mensagens fixas específicas; mensagens livres do hub nunca
 são encaminhadas. `retryable: false` permanece para falhas de consulta.
 Identificador de atendimento não substitui as respostas HTTP de autenticação
 nem os erros de validação produzidos pelo SDK antes da execução da tool.
+
+## Aliases de saída e completude de rankings
+
+O validador resolve referências simples e não qualificadas do ORDER BY para
+uma saída única do mesmo SELECT, inclusive agregados com GROUP BY e JOIN
+e projeções de CTEs. As referências físicas da expressão continuam sujeitas
+ao escopo e às finalidades concedidas. Aliases duplicados são recusados;
+alias de saída não torna válido um campo em WHERE, ON, GROUP BY ou dentro
+de expressões de ordenação. No GROUP BY, use as colunas/expressões físicas
+qualificadas ou uma projeção de CTE. Não há reescrita automática do SQL.
+
+Paginação gerenciada mantém a exigência de ordenação simples projetada e os
+tetos vigentes. Uma página, inclusive a última isolada, não comprova o conjunto
+completo. Atingir o teto efetivo de linhas também não comprova completude, mesmo
+com truncated:false do transporte. Curva ABC exige o conjunto completo ou
+agregação completa no banco; não calcular percentuais globais só sobre 500 linhas.
+Totais de itens e cabeçalhos exigem conciliar medidas, grão, filtros e período
+antes de declarar equivalência; correção do validador não aprova essa semântica.
