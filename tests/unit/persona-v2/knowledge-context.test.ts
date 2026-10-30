@@ -73,6 +73,26 @@ it("índice inclui significado, regras e exemplos aprovados, sem SQL, valores ou
     ),
   ).toBe(true);
 });
+it("recupera termos comerciais revisados na publicação sem indexar SQL ou inventar sinônimos", () => {
+  const publication = fixture();
+  const pkg = compileQueryTraining(
+    {
+      ...queryTraining(),
+      semantics: {
+        version: 1,
+        synonyms: ["Receita operacional", "Vendas líquidas"],
+        metrics: [],
+      },
+    },
+    trainingSource,
+    crypto,
+  );
+  const documents = publicationKnowledgeDocuments({ ...publication, package: pkg });
+  expect(documents.some((d) => d.text.includes("receita operacional"))).toBe(true);
+  expect(documents.some((d) => d.text.includes("vendas liquidas"))).toBe(true);
+  expect(documents.some((d) => d.text.includes("lucro"))).toBe(false);
+  expect(JSON.stringify(documents)).not.toContain("SELECT");
+});
 it("schema e fonte qualificam todos os nós; campo não livre não aparece", () => {
   const publication = fixture();
   const graph = queryKnowledgeGraph(publication);

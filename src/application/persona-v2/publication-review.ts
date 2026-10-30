@@ -82,6 +82,9 @@ export function publicationReview(
   };
   const labels: Readonly<Record<string, string>> = {
     training: "Treinamento",
+    semantics: "Semântica comercial",
+    metrics: "Métricas",
+    synonyms: "Sinônimos revisados",
     tables: "Tabelas",
     columns: "Campos",
     relationships: "Relacionamentos",

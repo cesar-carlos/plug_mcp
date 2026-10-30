@@ -12,6 +12,7 @@ import {
   knowledgeComparisonSchema,
 } from "../../application/persona-v2/consumer-catalog.js";
 import { PERSONA_V2_TRAINING_BASE } from "../../application/persona-v2/training-base.js";
+import { TRAINING_TOPICS, trainingTopic } from "../../application/persona-v2/training-topics.js";
 import { PersonaV2Error, type ConsumerIdentity } from "../../domain/persona-v2/model.js";
 import { DIALETOS, isDialeto } from "../../domain/entities/dialeto.js";
 import { personaDialectGuide } from "../../application/persona-v2/dialect-guide.js";
@@ -233,10 +234,10 @@ export const createPersonaV2McpHandler = (
           "obter_treinamento_base",
           {
             description: "Orientação comum SQL e plug_server; não concede autoridade.",
-            inputSchema: z.strictObject({}),
+            inputSchema: z.strictObject({ topic: z.enum(TRAINING_TOPICS).optional() }),
             annotations,
           },
-          async () => run(() => Promise.resolve(PERSONA_V2_TRAINING_BASE)),
+          async ({ topic }) => run(() => Promise.resolve(trainingTopic(topic))),
         );
         server.registerResource(
           "guia-persona-v2",

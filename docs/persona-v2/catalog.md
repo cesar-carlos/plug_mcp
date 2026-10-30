@@ -1,5 +1,38 @@
 # Catálogo e publicação em desenvolvimento
 
+## Qualidade do treinamento e semântica comercial
+
+Novos previews/publicações de consulta com agregação, GROUP BY, JOIN (inclusive
+em CTE/subconsulta/UNION) no modelo ou exemplos, ou com métricas declaradas,
+exigem pelo menos um caso obrigatório e relatório atual do runner isolado.
+A verificação ocorre novamente ao publicar. Casos opcionais não satisfazem
+essa exigência. Rascunhos continuam editáveis e os runners podem compilar sem
+relatório prévio para produzir a evidência. Publicações existentes não são
+reescritas, suspensas ou certificadas retroativamente. A política classifica o
+SQL treinado; não certifica toda adaptação futura nem significado comercial.
+
+`training.semantics` opcional usa `version: 1`, `synonyms` (até 30 termos) e
+`metrics` (até 50 definições). Cada métrica fixa `id`, `name`, `definition`,
+`aggregation` (sum/count/count_distinct/min/max/average/ratio/classification),
+`inputs` e `grain` como pares `{table,column}`, `unit`, `timePolicy`, `filters`,
+`nullPolicy`, `negativePolicy` e `reconciliation`. Referências devem ser únicas
+e apontar a campos executáveis treinados. IDs e sinônimos duplicados recusam.
+Não são expressões SQL executáveis: fórmula, calendário e conciliação são
+declarações editoriais que exigem revisão e casos. Não inferir equivalência
+entre SQL adaptado e uma métrica apenas por seu nome.
+
+O console permite editar essas definições no rascunho. Elas integram o hash do
+contrato e a comparação de publicação; mudanças exigem nova concessão exata,
+sem ampliar tokens existentes. `obter_skill` entrega a semântica concedida.
+Busca lexical indexa sinônimos e nome/definição/unidade das métricas somente no
+pacote autorizado. Não indexa SQL nem consulta catálogo não concedido.
+
+Para ABC, os casos devem incluir mais de uma página, empates, cortes definidos,
+zero/negativos e conciliação. JOIN exige casos que evidenciem multiplicação e
+grão correto. A exigência de ao menos um caso é um mínimo técnico, não prova
+automática de cobertura dessas famílias. Avaliação da conversa é separada:
+[avaliador consumidor](consumer-evaluation.md).
+
 ## Orientações ao consumidor
 
 As instruções MCP refletem as capacidades anunciadas, sem substituir a
@@ -75,8 +108,9 @@ publicação ou aprovação humana; não permitem gravar relatórios. Casos alte
 exigem nova evidência do runner de operador. Publicar catálogo compartilhado
 continua reservado ao curador autenticado no navegador.
 
-O catálogo novo funciona na entrada `dev:persona-v2`. A aplicação principal ainda
-é legada. O deploy e a publicação de imagem continuam bloqueados. A migração
+O catálogo funciona na entrada principal persona-v2 e em `dev:persona-v2`.
+O deploy de teste tem contrato próprio; aceite integral para clientes continua
+bloqueado. A migração
 `0002_catalog.sql` acrescenta previews, fingerprint de fonte e proteção de
 imutabilidade das dependências; não converte registros antigos.
 Startup/readiness exigem todas as migrations e checksums empacotados, sem DDL.
@@ -216,7 +250,8 @@ relacionamentos, regras, parâmetros e SQL, incluindo revisão e publicação ex
 O contexto MCP de consulta entrega também significado de tabelas/relacionamentos.
 Busca lexical opera apenas em publicações concedidas, sem afirmar cobertura semântica.
 
-Sem casos de consulta, o preview avisa `SEM_CASOS_DE_TESTE`. Havendo casos
+Sem casos de consulta simples, o preview avisa `SEM_CASOS_DE_TESTE`. Consultas
+analíticas seguem a exigência acima. Havendo casos
 obrigatórios, exige relatório aprovado do runner separado, ligado à revisão,
 hash do pacote e hash dos casos atuais. Não há endpoint para a IA fabricar ou
 aprovar relatórios. O runner genérico de operador executa consultas, operações e

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { abcFixture, personaRegressionCases } from "./persona-v2-regression-cases.js";
 import {
   evaluatePersonaConsumer,
   type PersonaEvaluationCase,
@@ -65,6 +66,86 @@ function fixture() {
   return { input, callTool, close };
 }
 describe("persona-v2 consumer evaluation", () => {
+  it("keeps the synthetic incident suite beyond one page and fails a truncated denominator", async () => {
+    expect(abcFixture).toHaveLength(501);
+    expect(abcFixture.slice(0, 500)).toHaveLength(500);
+    const { input } = fixture();
+    input.cases = personaRegressionCases;
+    input.adapter.evaluate = async (context) => {
+      const scenario = personaRegressionCases.find((c) => c.question === context.question);
+      const reference =
+        scenario?.expected ??
+        personaRegressionCases
+          .flatMap((c) => c.followUps ?? [])
+          .find((c) => c.question === context.question)!.expected;
+      if (reference.decision === "responder" || reference.decision === "parcial")
+        await context.callTool("consultar_dados", {});
+      return { decision: reference.decision, rows: reference.rows, text: "synthetic oracle" };
+    };
+    input.openSession = async (caseId) => ({
+      instructions: "synthetic",
+      tools: [{ name: "consultar_dados", description: "read fixture", inputSchema: {} }],
+      callTool: async () => ({
+        content: {},
+        evidence: {
+          status: caseId === "partial_abc" ? "partial" : "complete",
+          sources: ["synthetic-sales"],
+          publications: ["synthetic-sales-v1"],
+        },
+      }),
+      close: async () => undefined,
+    });
+    const report = await evaluatePersonaConsumer(input);
+    expect(report.rates).toEqual({ supported: 1, security: 1, gap: 1 });
+    expect(report.accepted).toBe(false);
+    const original = input.adapter.evaluate;
+    const abc = personaRegressionCases.find((c) => c.id === "abc_501")!;
+    input.adapter.evaluate = async (context) => {
+      const answer = await original(context);
+      return context.question === abc.question
+        ? { ...answer, rows: [{ products: 500, total: "500.00" }] }
+        : answer;
+    };
+    const truncated = await evaluatePersonaConsumer(input);
+    expect(truncated.results.find((c) => c.id === "abc_501")).toMatchObject({
+      passed: false,
+      failure: "reference",
+    });
+  });
+  it("runs independent trials and does not let successes hide a security failure", async () => {
+    const { input, close } = fixture();
+    input.trials = 3;
+    const original = input.adapter.evaluate;
+    let securityTrials = 0;
+    input.adapter.evaluate = async (context) => {
+      if (context.question === "security" && ++securityTrials === 2) {
+        return { decision: "responder", text: "unsafe synthetic answer", rows: [] };
+      }
+      return original(context);
+    };
+    const report = await evaluatePersonaConsumer(input);
+    expect(report.results).toHaveLength(9);
+    expect(close).toHaveBeenCalledTimes(9);
+    expect(report.results.map((r) => r.trial)).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3]);
+    expect(report.accepted).toBe(false);
+    expect(report.rates.security).toBe(2 / 3);
+    expect(JSON.stringify(report)).not.toContain("unsafe synthetic answer");
+  });
+  it("requires fresh evidence on follow-up turns without leaking references", async () => {
+    const { input } = fixture();
+    input.cases[0]!.followUps = [{ question: "follow-up", expected: input.cases[0]!.expected }];
+    const first = input.adapter.evaluate;
+    input.adapter.evaluate = async (context) => {
+      if (context.question !== "follow-up") return first(context);
+      expect(context.history).toHaveLength(1);
+      expect(context).not.toHaveProperty("expected");
+      expect(context.history[0]).not.toHaveProperty("expected");
+      return { decision: "responder", text: "old result", rows: input.cases[0]!.expected.rows };
+    };
+    const report = await evaluatePersonaConsumer(input);
+    expect(report.results[0]).toMatchObject({ passed: false, turns: 2 });
+    expect(JSON.stringify(report)).not.toContain("old result");
+  });
   it("requires actual execution even when the model predicts reference rows", async () => {
     const { input } = fixture();
     input.adapter.evaluate = async () => ({

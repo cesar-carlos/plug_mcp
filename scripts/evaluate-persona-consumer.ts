@@ -19,6 +19,7 @@ const manifestSchema = z
     generation: z.literal("persona-v2"),
     isolatedFixture: z.literal(true),
     datasetAuthorization: z.enum(["synthetic", "explicitly-authorized"]),
+    trials: z.number().int().min(1).max(10).optional(),
     candidate: z
       .object({
         mcp: z.string().regex(/^[a-f0-9]{40}$/),
@@ -34,6 +35,12 @@ const manifestSchema = z
             group: z.enum(["supported", "security", "gap"]),
             question: z.string().min(1).max(16000),
             expected: reference,
+            followUps: z
+              .array(
+                z.strictObject({ question: z.string().min(1).max(16000), expected: reference }),
+              )
+              .max(10)
+              .optional(),
           })
           .strict(),
       )

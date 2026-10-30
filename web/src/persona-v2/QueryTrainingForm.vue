@@ -6,6 +6,7 @@ import QueryIdentityFields from "./QueryIdentityFields.vue";
 import QueryParametersFields from "./QueryParametersFields.vue";
 import QueryRelationshipsFields from "./QueryRelationshipsFields.vue";
 import QueryTablesFields from "./QueryTablesFields.vue";
+import QuerySemanticsFields from "./QuerySemanticsFields.vue";
 
 defineProps<{
   draftId: string;
@@ -39,6 +40,7 @@ const emit = defineEmits<{
       <QueryColumnsFields v-model="training" />
       <QueryRelationshipsFields v-model="training" />
       <QueryParametersFields v-model="training" />
+      <QuerySemanticsFields v-model="training" />
       <QueryExamplesFields v-model="training" :duplicate-examples="duplicateExamples" />
       <p v-if="dirty">Há alterações não salvas.</p>
       <button>Salvar rascunho</button>

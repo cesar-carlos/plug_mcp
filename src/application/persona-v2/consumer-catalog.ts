@@ -24,6 +24,7 @@ import { authorizeOperationPublication } from "./operation-authority.js";
 import { sharedQueryKnowledgeCurrent } from "./shared-query-adoption.js";
 import { sharedOperationKnowledgeCurrent } from "./shared-operation-adoption.js";
 import { publicationKnowledgeDocuments, normalizeKnowledgeText } from "./knowledge-documents.js";
+import { knowledgeSearchTerms, matchingKnowledgeTerms } from "./knowledge-search.js";
 import {
   queryKnowledgeGraph,
   operationKnowledgeGraph,
@@ -324,9 +325,7 @@ export class PersonaConsumerCatalog {
 
   /** Lexical discovery of granted publications; a match is never execution authority. */
   async search(identity: ConsumerIdentity, question: string): Promise<unknown> {
-    const terms = [...new Set(normalizeKnowledgeText(question).match(/[\p{L}\p{N}]+/gu) ?? [])]
-      .filter((term) => term.length > 2)
-      .slice(0, KNOWLEDGE_SEARCH_MAX_TERMS);
+    const terms = knowledgeSearchTerms(question, KNOWLEDGE_SEARCH_MAX_TERMS);
     return this.authorized(identity, async (tx, state) => {
       const matches = [];
       const layers = assertConsumer(identity, state, this.services.now());
@@ -371,7 +370,7 @@ export class PersonaConsumerCatalog {
         const itemMatches = documents
           .map(({ text: content, ...item }) => ({
             ...item,
-            matchedTerms: terms.filter((term) => content.includes(term)),
+            matchedTerms: matchingKnowledgeTerms(content, terms),
           }))
           .filter((item) => item.matchedTerms.length);
         const matchedTerms = terms.filter(
@@ -1002,6 +1001,7 @@ export class PersonaConsumerCatalog {
         ...(training.attachments ? { attachments: training.attachments } : {}),
         ...(training.binaryAttachments ? { binaryAttachments: training.binaryAttachments } : {}),
         rules: training.rules,
+        ...(training.semantics ? { semantics: training.semantics } : {}),
         tables: training.tables,
         relationships: training.relationships,
         columns: training.columns.filter(

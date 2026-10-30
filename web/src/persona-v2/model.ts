@@ -39,6 +39,25 @@ export interface Source {
   rowRestrictions?: SourceRestriction[];
 }
 export interface Training {
+  semantics?: {
+    version: 1;
+    synonyms: string[];
+    metrics: {
+      id: string;
+      name: string;
+      definition: string;
+      aggregation:
+        "sum" | "count" | "count_distinct" | "min" | "max" | "average" | "ratio" | "classification";
+      inputs: { table: string; column: string }[];
+      grain: { table: string; column: string }[];
+      unit: string;
+      timePolicy: string;
+      filters: string[];
+      nullPolicy: string;
+      negativePolicy: string;
+      reconciliation: string;
+    }[];
+  };
   binaryAttachments?: {
     table: string;
     column: string;

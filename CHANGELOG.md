@@ -11,6 +11,15 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: métricas comerciais e sinônimos versionados no treinamento de consultas,
+  editor no console, contexto concedido e busca lexical sem ampliação de acesso.
+- Changed: novas publicações com agregação, JOIN ou métricas exigem casos
+  obrigatórios e relatório atual do runner isolado; snapshots anteriores são preservados.
+- Added: avaliação consumidora com múltiplas tentativas e turnos, evidência por
+  turno, diagnóstico seguro e bateria sintética de regressão. Avaliação real da IA pendente.
+- Changed: guias de treinamento por tópico e procedimentos visuais de administração
+  sob demanda, preservando segurança e compatibilidade da chamada sem argumentos.
+
 - Added: diagnóstico de autorização por categoria segura e supportId, orientações
   de reconexão e saúde OAuth no console com prazos, última renovação e bloqueio local.
 

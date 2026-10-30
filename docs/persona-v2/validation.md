@@ -11,6 +11,8 @@ nem reutilizar evidência de uma revisão para certificar outra.
 
 ## Registrar uma nova rodada
 
+[Qualidade do treinamento, semântica e avaliação sintética — 2026-10-30](validation/2026-10-30-training-quality.md).
+
 [Detecção de deploy pendente — 2026-10-30](validation/2026-10-30-pending-deployment.md).
 
 [Paginação e concorrência PostgreSQL — 2026-10-29](validation/2026-10-29-pagination-postgres-concurrency.md).

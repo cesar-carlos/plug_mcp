@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { querySemanticsSchema, assertQuerySemantics } from "./query-semantics.js";
 import {
   attachmentContractSchema,
   binaryAttachmentContractSchema,
@@ -37,6 +38,7 @@ const columnName = z
   .max(100);
 const text = z.string().trim().min(1).max(5000);
 export const queryTrainingSchema = z.strictObject({
+  semantics: querySemanticsSchema.optional(),
   binaryAttachments: binaryAttachmentContractSchema.optional(),
   attachments: attachmentContractSchema.optional(),
   limits: queryLimitsSchema.optional(),
@@ -110,6 +112,7 @@ export const compileQueryTraining = (
   crypto: CryptoPort,
 ): QueryPackage => {
   const training = queryTrainingSchema.parse(raw);
+  assertQuerySemantics(training);
   assertQueryRelationshipPaths(training);
   if (
     training.attachments &&
@@ -255,6 +258,7 @@ export const compileQueryTraining = (
     enforceSourceRestrictions(exampleAst, scope, restrictions);
   }
   const contract = {
+    ...(training.semantics ? { semantics: training.semantics } : {}),
     ...(training.sharedKnowledge ? { sharedKnowledge: training.sharedKnowledge } : {}),
     commonTrainingHash: PERSONA_V2_TRAINING_BASE.hash,
     sourceId: source.id,

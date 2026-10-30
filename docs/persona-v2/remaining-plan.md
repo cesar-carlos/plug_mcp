@@ -1181,13 +1181,13 @@ posteriores ao snapshot permanecem pendentes. Não é rollback de efeitos extern
 
 Composição de produção separada e preflight dos campos obrigatórios estão
 preparados, com imagem por digest e sem defaults de segredos. Não provisionam
-bancos nem alteram a entrada padrão; runtime v2 continua recusando produção.
+bancos nem autorizam aceite integral; production exige configuração test-server dedicada.
 Ver [preparação e limites](production-distribution.md). Aceite, supervisor,
 provisionamento, homologação instalada e corte continuam pendentes.
 
 Alvo Docker `persona-v2-candidate`, composição isolada e entrypoint v2 estão
 implementados para homologação local. Migração é explícita; servidor e worker
-recusam produção e não executam DDL no startup. O alvo padrão continua legado.
+não executam DDL no startup. O alvo padrão é v2 test-server, exclusivo de teste.
 Ver [distribuição candidata](candidate-distribution.md). Isso não conclui
 imagem de produção, homologação da cadeia instalada ou corte.
 O [ensaio local empacotado](validation/2026-10-19-candidate-distribution.md)
@@ -1214,9 +1214,9 @@ Reset de dados exclusivo de desenvolvimento está implementado em comando separa
 com alvo local marcado como descartável, nome, ambiente e geração exatos; preserva
 schema/migrations e recusa legado, recursos desconhecidos e conexões observadas.
 Ver [procedimento e limites](development-reset.md). Não realiza o corte.
-Nunca atingir hub, agente ou base de negócio. Imagem candidata com publicação
-bloqueada. No corte, a composição principal passa a ser a v2 e as migrations
-legadas saem do runner ativo, com histórico recuperável. Upgrades do hub e do
+Nunca atingir hub, agente ou base de negócio. Imagem candidata e test-server
+usam contratos separados do aceite integral. A composição principal já usa v2;
+migrations legadas ficam fora do runner ativo, com histórico recuperável. Upgrades do hub e do
 agente usam dados sintéticos preexistentes; capabilities de escrita nascem
 desligadas.
 

@@ -142,6 +142,19 @@ export function publicationKnowledgeDocuments(
   const query = { ...publication, package: pkg };
   const training = queryTrainingSchema.parse(pkg.training),
     shared = pkg.sharedKnowledge;
+  if (training.semantics) {
+    add(
+      { id: "rule:semantic-synonyms", kind: "rule", label: "Termos comerciais revisados", origin },
+      training.semantics.synonyms,
+    );
+    for (const metric of training.semantics.metrics) {
+      add({ id: `rule:metric:${metric.id}`, kind: "rule", label: metric.name, origin }, [
+        metric.name,
+        metric.definition,
+        metric.unit,
+      ]);
+    }
+  }
   const free = training.columns.filter((column) =>
     pkg.scope.colunasPorTabela[column.table]?.includes(column.name),
   );

@@ -1,3 +1,4 @@
+import { assertQueryCaseCoverage } from "./query-test-policy.js";
 import { z } from "zod";
 import {
   operationDatasetCompositionOriginSchema,
@@ -1381,6 +1382,9 @@ export class PersonaCatalog {
       throw new PersonaV2Error("AUTHORIZATION_DENIED", "Fonte indisponível nesta persona.");
     const hash = this.services.crypto.sha256Hex(canonicalJson(pkg));
     const cases = await tx.catalog.cases(personaId, skillId);
+    if (requireReports && pkg.format === "persona-query-v2") {
+      assertQueryCaseCoverage(pkg, cases);
+    }
     if (requireReports && pkg.format === "persona-sql-operation-v2")
       assertOperationCaseCoverage(pkg, cases);
     if (

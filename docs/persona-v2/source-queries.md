@@ -1,5 +1,17 @@
 # Consultas por fonte — contrato implementado
 
+`obter_treinamento_base({topic})` permite solicitar `sql`, `knowledge`,
+`operations` ou `administration`. Sem topic conserva a base completa anterior.
+Cada tópico informa `baseHash` e `contentHash` do guia retornado; não são
+fingerprints de publicação nem aprovação ou autorização.
+Guias são orientação pública, sem dados de persona ou autoridade; instruções
+essenciais de segurança permanecem no runtime. Procedimentos visuais do console
+ficam no guia de administração; detalhes de treinamento, SQL e operações são
+carregados pelos respectivos tópicos. O tópico SQL inclui completude,
+grão, resumos, finalidades e limites. Antes de calcular indicadores, consultar
+as métricas comerciais publicadas em `obter_skill.semantics`, quando presentes;
+ausência não autoriza inventar a definição. Ver [contrato](catalog.md#qualidade-do-treinamento-e-semântica-comercial).
+
 A autorização de campos/finalidades, incluindo a recusa de binários na consulta
 comum, precede a validação de paginação. Ambas permanecem obrigatórias antes
 da autorização remota e do envio de SQL; a prioridade não permite executar

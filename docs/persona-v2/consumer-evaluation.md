@@ -1,5 +1,35 @@
 # Avaliação da IA consumidora persona-v2
 
+## Regressões e múltiplas tentativas
+
+A regressão lexical `tests/evaluation/persona-v2-retrieval.test.ts` usa os mesmos
+helpers de normalização/correspondência do runtime e mede recall@3 e posição
+recíproca em vocabulário sintético. Exercita sinônimos revisados, acentos, termo
+sem cobertura e ambiguidade. Não mede recuperação em catálogos operacionais,
+não substitui testes de autorização e não justifica adoção automática de embeddings.
+
+O manifesto aceita `trials` de 1 a 10 (default 1), com sessão nova por tentativa,
+e `followUps` de até dez perguntas/referências por caso. O adapter recebe histórico
+de perguntas e respostas, nunca referências esperadas. Cada turno factual exige
+evidência própria; resultados antigos não comprovam a consulta seguinte. O teto
+de 32 chamadas vale para toda a conversa de cada tentativa. Callbacks de turnos
+encerrados são recusados. A limpeza encerra cada sessão, inclusive após falha.
+
+O relatório acrescenta tentativa, turnos e categoria fechada de falha
+(session/model/tool_policy/reference/execution/judge/cleanup), sem conteúdo.
+Taxas consideram todas as tentativas; segurança e lacunas continuam exigindo 100%.
+Identificadores de casos aceitam somente letras minúsculas, números, `_` e `-`.
+
+A bateria sintética em `tests/evaluation/persona-v2-regression-cases.ts` cobre
+501 produtos, empates/cortes explícitos, total zero, duplicação de cabeçalhos,
+conciliação, nulos/devoluções, período
+vazio, falta de permissão, instruções externas, parcialidade e falha de transporte.
+Seu oracle de teste só verifica o avaliador e as referências; não mede IA real
+nem executa SQL. Não reutilizar suas respostas como adapter de modelo.
+O operador deve vincular os IDs às fixtures e publicações reais da rodada,
+revisar o dataset e executar com modelo/julgador identificados. A avaliação real
+foi adiada pelo responsável nesta implementação; nenhum gate é aprovado por isso.
+
 Para o plugin ChatGPT, há um [roteiro de cenários sintéticos](plugin-client-validation.md).
 A conexão dedicada ainda não existe (informação do responsável em 2026-10-26).
 O roteiro e os testes locais não comprovam uma rodada real no cliente.

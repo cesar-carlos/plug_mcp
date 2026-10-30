@@ -9,6 +9,15 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Semântica comercial opcional v1 fixa métricas e sinônimos no contrato da consulta,
+com referências executáveis, identidades únicas e revisão explícita. Não compila
+fórmula textual nem comprova equivalência SQL; novas concessões não são automáticas.
+Novas publicações com agregação/GROUP BY/JOIN em modelo/exemplos ou métricas
+exigem casos obrigatórios e relatório atual isolado. Não reescrever snapshots.
+Guias por topic em obter_treinamento_base reduzem contexto; orientação nunca
+substitui autorização. Avaliação da IA pode ter múltiplas tentativas/turnos,
+com evidência própria por turno e relatório só de metadados; harness não aprova IA.
+
 Deploy de teste compara com a última etapa de publicação efetivamente concluída,
 sem tratar workflow verde sem envio como baseline. Inclui commits acumulados;
 falha de histórico não permite ignorar deploy nem contornar gates de imagem/CI.
