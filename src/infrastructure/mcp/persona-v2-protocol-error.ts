@@ -2,6 +2,36 @@ import { randomUUID } from "node:crypto";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { ErrorRequestHandler } from "express";
 
+export interface ProtocolToolContext {
+  readonly tool: string;
+  readonly fields: readonly string[];
+}
+
+interface DiagnosticMetadata {
+  readonly protocolOrigin: "http_parser" | "sdk_rpc" | "sdk_tool_result" | "sdk_tool_input";
+  readonly tool?: string;
+  readonly rejectedField?: string;
+}
+
+// The SDK formats Standard Schema issues as "path: message". Emit only a
+// top-level name declared by this registered tool, never the SDK text or path.
+function sdkMetadata(
+  origin: "sdk_rpc" | "sdk_tool_result",
+  message: unknown,
+  context?: ProtocolToolContext,
+): DiagnosticMetadata {
+  if (!context) return { protocolOrigin: origin };
+  const { tool, fields } = context;
+  const prefix = "Input validation error: Invalid arguments for tool " + tool + ": ";
+  if (typeof message !== "string" || !message.startsWith(prefix))
+    return { protocolOrigin: origin, tool };
+  const issue = message.slice(prefix.length);
+  const rejectedField = fields.find(
+    (field) => issue.startsWith(field + ": ") || issue.startsWith(field + "."),
+  );
+  return { protocolOrigin: "sdk_tool_input", tool, ...(rejectedField ? { rejectedField } : {}) };
+}
+
 export const personaMcpParserError =
   (logger?: LoggerPort): ErrorRequestHandler =>
   (error, req, res, next) => {
@@ -16,6 +46,8 @@ export const personaMcpParserError =
         logger,
         status === 413 ? "REQUEST_TOO_LARGE" : "MCP_PROTOCOL_ERROR",
         "protocol",
+        undefined,
+        { protocolOrigin: "http_parser" },
       ),
     });
   };
@@ -32,6 +64,7 @@ export function reportPersonaProtocolError(
     | "MCP_REQUEST_FAILED",
   stage: "protocol" | "authentication" | "request",
   rpcCode?: number,
+  metadata?: DiagnosticMetadata,
 ): {
   code: string;
   message: string;
@@ -46,6 +79,7 @@ export function reportPersonaProtocolError(
     errorCode: code,
     source: "mcp",
     stage,
+    ...metadata,
     ...(rpcCode !== undefined ? { rpcCode } : {}),
   });
   return {
@@ -58,7 +92,11 @@ export function reportPersonaProtocolError(
   };
 }
 
-function correlatePayload(payload: unknown, logger?: LoggerPort): unknown {
+function correlatePayload(
+  payload: unknown,
+  logger?: LoggerPort,
+  context?: ProtocolToolContext,
+): unknown {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
   const body = payload as Record<string, unknown>;
   const error = body.error;
@@ -74,6 +112,7 @@ function correlatePayload(payload: unknown, logger?: LoggerPort): unknown {
       "MCP_PROTOCOL_ERROR",
       "protocol",
       rpcCode,
+      sdkMetadata("sdk_rpc", (error as Record<string, unknown>).message, context),
     );
     body.error = { code: rpcCode ?? -32603, message: diagnostic.message, data: diagnostic };
   } else if (result?.isError === true) {
@@ -93,7 +132,16 @@ function correlatePayload(payload: unknown, logger?: LoggerPort): unknown {
       })
     )
       return payload;
-    const diagnostic = reportPersonaProtocolError(logger, "MCP_PROTOCOL_ERROR", "protocol");
+    const first = Array.isArray(content)
+      ? (content[0] as { type?: unknown; text?: unknown } | undefined)
+      : undefined;
+    const diagnostic = reportPersonaProtocolError(
+      logger,
+      "MCP_PROTOCOL_ERROR",
+      "protocol",
+      undefined,
+      sdkMetadata("sdk_tool_result", first?.type === "text" ? first.text : undefined, context),
+    );
     body.result = {
       ...result,
       content: [{ type: "text", text: JSON.stringify({ error: diagnostic }) }],
@@ -106,12 +154,13 @@ function correlatePayload(payload: unknown, logger?: LoggerPort): unknown {
 export async function correlatePersonaProtocolResponse(
   response: Response,
   logger?: LoggerPort,
+  context?: ProtocolToolContext,
 ): Promise<Response> {
   const type = response.headers.get("content-type") ?? "";
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   if (type.includes("application/json"))
-    return new Response(JSON.stringify(correlatePayload(await response.json(), logger)), {
+    return new Response(JSON.stringify(correlatePayload(await response.json(), logger, context)), {
       status: response.status,
       headers,
     });
@@ -125,7 +174,7 @@ export async function correlatePersonaProtocolResponse(
     } catch {
       return line;
     }
-    return "data: " + JSON.stringify(correlatePayload(payload, logger));
+    return "data: " + JSON.stringify(correlatePayload(payload, logger, context));
   };
   const body = response.body
     .pipeThrough(new TextDecoderStream())

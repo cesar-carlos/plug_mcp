@@ -75,6 +75,15 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
     });
     expect(events[index]).not.toHaveProperty("message");
   });
+  expect(events[0]).toMatchObject({
+    protocolOrigin: "sdk_tool_input",
+    tool: "obter_treinamento_base",
+    rejectedField: "topic",
+  });
+  expect(events[1]).not.toHaveProperty("tool");
+  expect(events[2]).toMatchObject({ protocolOrigin: "sdk_rpc" });
+  expect(events[5]).toMatchObject({ protocolOrigin: "http_parser" });
+  expect(events[6]).toMatchObject({ protocolOrigin: "http_parser" });
   expect(results.slice(3).map((result: { status: number }) => result.status)).toEqual([
     503, 503, 400, 413,
   ]);

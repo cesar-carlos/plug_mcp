@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: diagnóstico seguro de origem e campo nas falhas de protocolo MCP v2.
+
 - Added: a IA do cliente pode registrar um erro de interação com
   `reportar_erro_interacao`, enviando a pergunta, a categoria, o erro identificado
   e as tools executadas no plug_mcp. O relato não altera treinamento nem autoriza

@@ -98,6 +98,8 @@ Revisão/incorporação é humana no console e modifica apenas rascunho do perfi
 
 `registrar_feedback_conhecimento` e `obter_feedback_conhecimento` exigem item e
 publicação ainda concedidos, sem captura automática ou navegação pela fila.
+Nos logs de MCP_PROTOCOL_ERROR, protocolOrigin distingue parser HTTP, erro RPC, resultado de ferramenta e validação de entrada do SDK. Só registrar ferramenta da requisição se estiver registrada e campo de primeiro nível declarado no schema. Mensagem do SDK, argumentos e caminhos livres ficam fora dos logs.
+
 `reportar_erro_interacao` é explícita: a IA envia a pergunta, a categoria, o
 erro e as tools executadas, sem SQL, parâmetros, linhas ou segredos. O primeiro
 envio com supportId fica imutável. Não treina, não autoriza retry e não amplia

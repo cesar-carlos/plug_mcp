@@ -24,6 +24,7 @@ import {
 } from "../../application/persona-v2/source-query.js";
 import { reportPersonaV2ToolError } from "./persona-v2-tool-error.js";
 import {
+  type ProtocolToolContext,
   correlatePersonaProtocolResponse,
   reportPersonaProtocolError,
 } from "./persona-v2-protocol-error.js";
@@ -158,6 +159,9 @@ export const createPersonaV2McpHandler = (
       if (!identity) throw new PersonaV2Error("AUTHORIZATION_DENIED", "Autenticação necessária.");
       return identity;
     };
+    const envelope = req.body as
+      { method?: unknown; params?: { name?: unknown } } | null | undefined;
+    let toolContext: ProtocolToolContext | undefined;
     const handler = createMcpHandler(
       () => {
         const baseServer = new McpServer(
@@ -168,6 +172,26 @@ export const createPersonaV2McpHandler = (
           },
           { instructions: PERSONA_V2_INSTRUCTIONS },
         );
+        // Capture only names declared by this request's authorized server.
+        const register = baseServer.registerTool.bind(baseServer);
+        baseServer.registerTool = (
+          name: string,
+          config: { inputSchema?: unknown },
+          callback: unknown,
+        ) => {
+          if (envelope?.method === "tools/call" && envelope.params?.name === name) {
+            toolContext = {
+              tool: name,
+              fields:
+                config.inputSchema instanceof z.ZodObject
+                  ? Object.keys(config.inputSchema.shape)
+                  : [],
+            };
+          }
+          return Reflect.apply(register, baseServer, [name, config, callback]) as ReturnType<
+            typeof register
+          >;
+        };
         const server = oauth ? personaOAuthTools(baseServer) : baseServer;
         const resource = (uri: URL, value: unknown) => ({
           contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(value) }],
@@ -992,7 +1016,11 @@ export const createPersonaV2McpHandler = (
     });
     await toNodeHandler({
       fetch: async (request, options) =>
-        correlatePersonaProtocolResponse(await handler.fetch(request, options), logger),
+        correlatePersonaProtocolResponse(
+          await handler.fetch(request, options),
+          logger,
+          toolContext,
+        ),
     })(req, res, req.body);
   };
   return async (req: Request, res: Response): Promise<void> => {

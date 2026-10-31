@@ -334,6 +334,8 @@ Endpoint `/mcp` da aplicação nova. Sem Bearer: `obter_treinamento_base`,
 }
 ```
 
+Nos logs de MCP_PROTOCOL_ERROR, protocolOrigin distingue parser HTTP, erro RPC, resultado de ferramenta e validação de entrada do SDK. Só registrar ferramenta da requisição se estiver registrada e campo de primeiro nível declarado no schema. Mensagem do SDK, argumentos e caminhos livres ficam fora dos logs.
+
 - `listar_fontes`: somente metadados das fontes concedidas.
 - `listar_skills`: publicações concedidas e dependências vigentes.
 - `criar_anexo_consulta` executa consulta fresca com exportação concedida;

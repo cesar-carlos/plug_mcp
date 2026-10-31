@@ -63,3 +63,37 @@ it("preserva código RPC e id, substitui dados livres e correlaciona JSON", asyn
     expect.objectContaining({ supportId: payload.error.data.supportId, rpcCode: -32602 }),
   );
 });
+it.each(["application/json", "text/event-stream"])(
+  "omite campo livre na recusa SDK em %s",
+  async (type) => {
+    const warn = vi.fn();
+    const raw = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: "Input validation error: Invalid arguments for tool consultar_dados: sensitive-field: sensitive-value",
+          },
+        ],
+      },
+    });
+    const response = await correlatePersonaProtocolResponse(
+      new Response(type === "application/json" ? raw : "data: " + raw + "\n\n", {
+        headers: { "content-type": type },
+      }),
+      { warn } as unknown as LoggerPort,
+      { tool: "consultar_dados", fields: ["skillId"] },
+    );
+    const body = await response.text();
+    expect(body).not.toContain("sensitive-");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("sensitive-");
+    expect(warn.mock.calls[0]?.[1]).toMatchObject({
+      tool: "consultar_dados",
+      protocolOrigin: "sdk_tool_input",
+    });
+    expect(warn.mock.calls[0]?.[1]).not.toHaveProperty("rejectedField");
+  },
+);
