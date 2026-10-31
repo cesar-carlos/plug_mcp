@@ -562,3 +562,5 @@ Preparação SQL visual lê somente operações concedidas e confere ID/publica�
 entre listagem e leitura. Parâmetros conservam tipos exatos; adaptação por etapa
 somente no modo publicado. Preparar não aprova nem executa. Troca de contexto
 limpa o formulário; resposta perdida não repete a tentativa. Contrato: console v2.
+
+Downloads de anexos retornam 403 sem challenge quando a autenticação passou mas a leitura foi recusada. Access inválido retorna 401 e permite refresh pelo cliente.

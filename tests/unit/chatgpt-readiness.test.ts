@@ -160,7 +160,7 @@ it("desafio de tool OAuth possui descrição fixa; erro do hub não pede login",
     () => {
       const oauth = errorResult(oauthUnauthorized(), config, new SilentTestLogger());
       expect(String(oauth._meta?.["mcp/www_authenticate"])).toContain(
-        'error_description="Reconecte o Se7e para continuar."',
+        'error_description="Token de acesso invalido. Use refresh se disponivel."',
       );
       expect(
         errorResult(DomainError.unauthenticated(), config, new SilentTestLogger())._meta,

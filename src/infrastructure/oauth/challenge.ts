@@ -4,7 +4,7 @@ export const chatGptOAuthChallenge = (publicBaseUrl: string, invalidToken = fals
   const quote = (value: string): string => `"${value.replace(/["\\]/g, "\\$&")}"`;
   return `Bearer resource_metadata=${quote(metadata.toString())}${
     invalidToken
-      ? ', error="invalid_token", error_description="Reconecte o Se7e para continuar."'
+      ? ', error="invalid_token", error_description="Token de acesso invalido. Use refresh se disponivel."'
       : ""
   }`;
 };

@@ -47,6 +47,8 @@ Indisponibilidade nessa conferência não é prova de token inválido. A operaç
 permanece recusada, com código e supportId originais, sem retry. Prazos, refresh,
 revogação e validações de autoridade permanecem inalterados.
 
+Downloads de anexos retornam 403 sem challenge quando a autenticação passou mas a leitura foi recusada. Access inválido retorna 401 e permite refresh pelo cliente.
+
 Recusas de autenticação e tools retornam supportId e categoria segura
 authorizationReason quando conhecida: token_expired, token_revoked,
 authorization_changed, access_expired, grant_expired, grant_revoked,

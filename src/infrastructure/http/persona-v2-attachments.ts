@@ -40,18 +40,20 @@ export function registerPersonaAttachmentRoutes(
       const bearer = readBearer(req);
       const challenge =
         mode === "oauth"
-          ? chatGptOAuthChallenge(input.publicBaseUrl, true)
+          ? chatGptOAuthChallenge(input.publicBaseUrl, Boolean(bearer))
           : 'Bearer realm="persona-v2"';
       if (!bearer) {
         res.setHeader("WWW-Authenticate", challenge);
         res.status(401).json({ error: { code: "AUTHORIZATION_DENIED" } });
         return;
       }
+      let authenticated = false;
       try {
         const identity =
           mode === "oauth"
             ? await input.oauth!.resolve(bearer)
             : await input.catalog.authenticate(bearer);
+        authenticated = true;
         if (req.get("range")) {
           res.status(416).end();
           return;
@@ -67,23 +69,19 @@ export function registerPersonaAttachmentRoutes(
         res.type(file.descriptor.mimeType).send(Buffer.from(file.data));
       } catch (error) {
         const code = error instanceof PersonaV2Error ? error.code : "CAPABILITY_UNAVAILABLE";
-        if (
-          code === "AUTHORIZATION_DENIED" ||
-          code === "STALE_AUTHORIZATION" ||
-          code === "ADMIN_SESSION_EXPIRED"
-        ) {
+        const denied = code === "AUTHORIZATION_DENIED" || code === "STALE_AUTHORIZATION";
+        if (denied && !authenticated) {
           res.setHeader("WWW-Authenticate", challenge);
         }
-        const status =
-          code === "ATTACHMENT_UNAVAILABLE"
+        const status = denied
+          ? authenticated
+            ? 403
+            : 401
+          : code === "ATTACHMENT_UNAVAILABLE"
             ? 404
-            : code === "AUTHORIZATION_DENIED"
-              ? 401
-              : code === "STALE_AUTHORIZATION"
-                ? 403
-                : code === "BUDGET_EXCEEDED"
-                  ? 413
-                  : 503;
+            : code === "BUDGET_EXCEEDED"
+              ? 413
+              : 503;
         res.status(status).json({
           error: {
             code,

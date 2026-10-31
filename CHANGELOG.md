@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Downloads de anexos retornam 403 sem challenge quando a autenticação passou mas a leitura foi recusada. Access inválido retorna 401 e permite refresh pelo cliente.
+
 - Fixed: falhas MCP anteriores às tools recebem supportId correlacionado no log,
   incluindo parser, autenticação, preparação e validações SDK em JSON/SSE,
   sem registrar argumentos ou mensagens internas.
