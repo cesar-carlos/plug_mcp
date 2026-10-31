@@ -21,6 +21,8 @@ O [manifesto](../../contracts/persona-v2-release.json) permanece
 com ready:false e sem gates concluídos para clientes; o deploy de teste usa
 contrato próprio conforme DV2-017.
 
+Para publicar o agente 1.9.0+1, faltam o dataset revisado e o adaptador real da IA consumidora, um ambiente Windows descartável aprovado para ensaiar instalação, upgrade e restauração, e a vinculação da imagem de CI e das evidências aos treze gates. A [rodada de 31 de outubro](validation/2026-10-31-agente-1-9-0.md) separa os critérios já exercitados das pendências operacionais.
+
 ## Prioridade atual: evolução do servidor de teste
 
 O [roteiro do primeiro deploy](first-test-deploy.md) separa implementação,

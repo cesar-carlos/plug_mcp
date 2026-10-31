@@ -67,7 +67,7 @@ jobs:
         with:
           repository: cesar-carlos/plug_server
           path: plug_server_contract
-          ref: da457e05e3fd4ee407d7aefb2c58d82c7e6d92f5
+          ref: 41cc6b12501384ee41c97a281d740c3da7d2366e
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
@@ -138,7 +138,7 @@ jobs:
         with:
           repository: cesar-carlos/plug_server
           path: plug_server_contract
-          ref: da457e05e3fd4ee407d7aefb2c58d82c7e6d92f5
+          ref: 41cc6b12501384ee41c97a281d740c3da7d2366e
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:

@@ -7,12 +7,32 @@ const go = async (page: Page, area: string) => {
     .getByRole("navigation", { name: "Áreas do console" })
     .getByRole("link", { name: area, exact: true })
     .click();
-  if (area === "Tokens e conexões")
-    await page.getByRole("button", { name: "Novo token", exact: true }).click();
+  if (area === "Tokens e conexões") {
+    const discard = page.getByRole("dialog", { name: "Há alterações não salvas" });
+    await expect(
+      page.getByRole("tab", { name: "Novo token", exact: true }).or(discard).first(),
+    ).toBeVisible();
+    if (await discard.isVisible())
+      await discard.getByRole("button", { name: "Descartar alterações", exact: true }).click();
+  }
 };
+async function openConnectionTab(page: Page): Promise<void> {
+  await expect(page.getByRole("tab", { name: "Copiar e usar token", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const closed = page.locator("#access-connect > details.permission-section:not([open]) > summary");
+  if (await closed.count()) await closed.click();
+}
+
 async function finishSession(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sair", exact: true }).click();
-  await expect(page.getByLabel("E-mail", { exact: true })).toBeVisible();
+  const email = page.getByLabel("E-mail", { exact: true });
+  const discard = page.getByRole("dialog", { name: "Há alterações não salvas" });
+  await expect(email.or(discard).first()).toBeVisible();
+  if (await discard.isVisible())
+    await discard.getByRole("button", { name: "Descartar alterações", exact: true }).click();
+  await expect(email).toBeVisible();
   await expect(page.getByRole("table")).not.toBeVisible();
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 }
@@ -184,13 +204,23 @@ export async function exerciseChainBrowser(input: {
     }
     phase = "token e conexão";
     await go(page, "Tokens e conexões");
+    await page.getByRole("tab", { name: "Novo token", exact: true }).click();
     const tokens = page.getByRole("form", { name: "Emitir token", exact: true });
     await tokens
       .getByLabel("Nome do consumidor", { exact: true })
       .fill("Consumidor da fixture real");
     for (const source of input.sources)
       await tokens.getByLabel(new RegExp(`^Consulta real ${source.dialect} · revisão`)).check();
+    phase = "resposta HTTP de emissão do primeiro token";
+    const firstResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        /\/api\/admin\/personas\/[^/]+\/tokens$/.test(new URL(response.url()).pathname),
+    );
     await tokens.getByRole("button", { name: "Emitir token restrito", exact: true }).click();
+    expect((await firstResponse).status()).toBe(201);
+    phase = "exibição do primeiro token";
+    await openConnectionTab(page);
     await expect(
       page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
     ).not.toHaveValue("");
@@ -305,9 +335,21 @@ export async function exerciseChainBrowser(input: {
     };
     phase = "emissão do segundo token";
     await go(page, "Tokens e conexões");
+    phase = "abrir aba de emissão do segundo token";
+    await page.getByRole("tab", { name: "Novo token", exact: true }).click();
+    phase = "seleção da skill do segundo token";
     await tokens.getByLabel("Nome do consumidor", { exact: true }).fill("Consumidor limitado");
     await tokens.getByLabel(new RegExp(`^Consulta real ${first.dialect} · revisão`)).check();
+    phase = "resposta HTTP de emissão do segundo token";
+    const secondResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        /\/api\/admin\/personas\/[^/]+\/tokens$/.test(new URL(response.url()).pathname),
+    );
     await tokens.getByRole("button", { name: "Emitir token restrito", exact: true }).click();
+    expect((await secondResponse).status()).toBe(201);
+    phase = "exibição do segundo token";
+    await openConnectionTab(page);
     await expect(
       page.getByLabel("Token para conectar o cliente ou testar", { exact: true }),
     ).not.toHaveValue("");
@@ -339,6 +381,7 @@ export async function exerciseChainBrowser(input: {
     await expect(page.getByRole("cell", { name: /^10\.25(?:0*)?$/, exact: true })).toBeVisible();
     phase = "retirada de concessão";
     await go(page, "Tokens e conexões");
+    await page.getByRole("tab", { name: "Tokens cadastrados", exact: true }).click();
     await page.getByRole("button", { name: "Editar Consumidor limitado", exact: true }).click();
     const edit = page.getByRole("form", { name: "Editar token", exact: true });
     await edit.getByRole("button", { name: "Remover concessão", exact: true }).click();
@@ -372,9 +415,11 @@ export async function exerciseChainBrowser(input: {
     await expect(page.getByRole("cell", { name: /^10\.25(?:0*)?$/, exact: true })).toBeVisible();
     phase = "saída e descarte";
     await finishSession(page);
-  } catch {
+  } catch (error) {
     // Never print credentials, Bearer, form values, screenshots or traces on failure.
-    throw new Error(`Percurso Chromium real falhou na etapa: ${phase}`);
+    throw new Error(
+      `Percurso Chromium real falhou na etapa: ${phase} (${error instanceof Error ? error.name : "unknown"})`,
+    );
   } finally {
     await context.close();
     await browser.close();

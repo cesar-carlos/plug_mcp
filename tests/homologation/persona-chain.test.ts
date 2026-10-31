@@ -74,6 +74,7 @@ import {
   federationCase,
 } from "../helpers/persona-v2-federation.js";
 import { runFederationCases } from "../../src/application/persona-v2/federation-cases.js";
+import { verifyStructuralQuery } from "../helpers/persona-chain-structural-query.js";
 import { relationshipFixture } from "../helpers/persona-v2-relationships.js";
 import {
   compileOperationCommand,
@@ -832,6 +833,33 @@ async function publish(skillId: string, targetPersonaId = personaId) {
     capabilities: preview.body.package.requiredCapabilities as string[],
   };
 }
+async function publishStructuralQuery(skillId: string) {
+  const hubAdapter = new PlugServerRestAdapter(hub.hubUrl, new SilentTestLogger());
+  const credentials = new PostgresSourceCredentials(db);
+  await verifyStructuralQuery({
+    skillId,
+    personaId,
+    runId: manifest.runId,
+    crypto,
+    repository: repository(),
+    reads: new PersonaSourceQuery(credentials, hubAdapter, crypto),
+    operations: new PersonaSqlOperationGateway(
+      credentials,
+      hubAdapter,
+      hubAdapter,
+      crypto,
+      hub.hubUrl,
+    ),
+    addCase: async (content) => {
+      const response = await post(`/api/admin/personas/${personaId}/skills/${skillId}/casos`, {
+        required: true,
+        content,
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(201);
+    },
+  });
+  return publish(skillId);
+}
 const sql =
   'SELECT p.id AS "id", p.amount AS "amount" FROM operation_fixture p WHERE p.id > :minimum ORDER BY p.id';
 function localQueryTraining(sourceId: string, dialect: (typeof chainEngines)[number]) {
@@ -912,7 +940,9 @@ beforeAll(async () => {
     REST_RATE_LIMIT_REDIS_URL: "",
     REST_SOCKET_EVENT_IDEMPOTENCY_REDIS_URL: "",
     AGENT_EVENT_STREAM_REDIS_URL: "",
-    REST_GLOBAL_RATE_LIMIT_MAX: "10000",
+    // The three-engine structural fixtures verify their seeds and permissions
+    // before and after every analytical runner. This budget is private to this hub.
+    REST_GLOBAL_RATE_LIMIT_MAX: "20000",
     REST_AGENTS_COMMANDS_RATE_LIMIT_MAX: "10000",
     SOCKET_RATE_LIMIT_MAX: "10000",
   };
@@ -1761,7 +1791,7 @@ for (const dialect of chainEngines) {
     });
     expect(draft.status, JSON.stringify(draft.body)).toBe(201);
     const skillId = draft.body.skill.id as string;
-    const publication = await publish(skillId);
+    const publication = await publishStructuralQuery(skillId);
     const token = await issue(
       [source],
       [{ skillId, capabilities: publication.capabilities, effects: ["select"] }],
@@ -1946,7 +1976,7 @@ for (const dialect of chainEngines) {
     });
     expect(draft.status, JSON.stringify(draft.body)).toBe(201);
     const skillId = draft.body.skill.id as string;
-    const published = await publish(skillId);
+    const published = await publishStructuralQuery(skillId);
     const token = await issue(
       [source],
       [{ skillId, capabilities: published.capabilities, effects: ["select"] }],
@@ -2354,11 +2384,16 @@ for (const dialect of chainEngines) {
     expect(cloned.body.skill.training.examples[0].state).toBe("candidate");
     const clonedRoot = `/api/admin/personas/${personaId}/skills/${cloned.body.skill.id}`;
     const rejected = await post(`${clonedRoot}/preview`, {});
-    expect(rejected.status, JSON.stringify(rejected.body)).toBe(200);
-    expect(
-      (await post(`${clonedRoot}/publicar`, { confirmationHash: rejected.body.confirmationHash }))
-        .status,
-    ).toBe(409);
+    if (dialect !== "sybase") {
+      expect(rejected.status).toBe(409);
+      expect(rejected.body.error.code).toBe("INCOMPLETE_INPUT");
+    } else {
+      expect(rejected.status, JSON.stringify(rejected.body)).toBe(200);
+      expect(
+        (await post(`${clonedRoot}/publicar`, { confirmationHash: rejected.body.confirmationHash }))
+          .status,
+      ).toBe(409);
+    }
     expect(
       (
         await post(`${clonedRoot}/rascunho`, {
@@ -2374,7 +2409,9 @@ for (const dialect of chainEngines) {
         })
       ).status,
     ).toBe(200);
-    const clonedPublication = await publish(cloned.body.skill.id);
+    const clonedPublication = await (dialect === "sybase" ? publish : publishStructuralQuery)(
+      cloned.body.skill.id,
+    );
     const clonedToken = await issue(
       [source],
       [
@@ -2401,7 +2438,7 @@ for (const dialect of chainEngines) {
     expect(declared.status, JSON.stringify(declared.body)).toBe(200);
     expect(declared.body).toMatchObject({ technicalEvidence: false, semanticReview: false });
     const skillId = draft.body.skill.id;
-    const publication = await publish(skillId);
+    const publication = await (dialect === "sybase" ? publish : publishStructuralQuery)(skillId);
     const denied = await tool("consultar_dados", { fonteId: source.id, skillIds: [skillId] });
     expect(denied.isError).toBe(true);
     const token = await issue(
@@ -2540,7 +2577,7 @@ for (const dialect of chainEngines) {
     });
     expect(nextDraft.status, JSON.stringify(nextDraft.body)).toBe(201);
     const nextSkillId = nextDraft.body.skill.id as string;
-    const nextSkill = await publish(nextSkillId);
+    const nextSkill = await (dialect === "sybase" ? publish : publishStructuralQuery)(nextSkillId);
     const historyToken = await issue(
       [source],
       [
@@ -2684,7 +2721,7 @@ for (const dialect of chainEngines) {
       source: source.source,
       inspection: inspection!,
       post,
-      publish,
+      publish: dialect === "sybase" ? publish : publishStructuralQuery,
       issue: (grants) => issue([source], grants),
     });
     phase("prepared");

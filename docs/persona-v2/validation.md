@@ -9,6 +9,10 @@ O escopo atual exige PostgreSQL, SQL Server e SQL Anywhere. Menções a Firebird
 quatro motores nos registros antigos são históricas. Não somar totais sobrepostos
 nem reutilizar evidência de uma revisão para certificar outra.
 
+## Agente 1.9.0+1 — 31 de outubro de 2026
+
+A cadeia persistente passou nos 85 cenários, sem skips, com inventários estáveis. O [relatório por gate](validation/2026-10-31-agente-1-9-0.md) descreve as falhas corrigidas, o alcance das fixtures e as pendências de publicação. O [registro da rodada](validation/2026-10-31-agente-1-9-0.json) identifica as revisões, os hashes e os resultados.
+
 ## Registrar uma nova rodada
 
 [Qualidade do treinamento, semântica e avaliação sintética — 2026-10-30](validation/2026-10-30-training-quality.md).

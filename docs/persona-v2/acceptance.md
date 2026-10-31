@@ -22,6 +22,8 @@ HTTPS/ChatGPT e aceite funcional humano. Os testes técnicos continuam obrigató
 DV2-016 dispensa também teste específico do agente 1.8.6, inclusive instalado/VM,
 sem dispensar negociação de capabilities, segurança ou a cadeia nos três motores.
 
+A [homologação do agente 1.9.0+1](validation/2026-10-31-agente-1-9-0.md) registra a cadeia com três motores e a recuperação nas três janelas de commit. Os treze gates continuavam abertos na data da rodada.
+
 Uma evidência precisa identificar revisão/hash, ambiente, versões, casos,
 omissões e limpeza. Testes locais ou uma rodada aprovada não encerram
 automaticamente um gate. Critérios abaixo permanecem obrigatórios.

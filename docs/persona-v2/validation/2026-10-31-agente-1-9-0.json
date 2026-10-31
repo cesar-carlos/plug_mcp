@@ -1,0 +1,88 @@
+{
+  "date": "2026-10-31",
+  "purpose": "development-homologation",
+  "agentVersion": "1.9.0+1",
+  "authorizesRelease": false,
+  "completedGates": [],
+  "sourceInventory": {
+    "schemaVersion": 1,
+    "authorizesRelease": false,
+    "startedAt": "2026-10-31T15:43:18.148Z",
+    "before": {
+      "mcp": {
+        "revision": "8ccc96fe5d826def53154f7f8f3f75e3d58da0a7",
+        "sourceSha256": "cd6d65c10de66f2cbfd55602b738a5e1e86d9cf1d29aa7924f4914889e3a8d27",
+        "fileCount": 1498
+      },
+      "hub": {
+        "revision": "41cc6b12501384ee41c97a281d740c3da7d2366e",
+        "sourceSha256": "d26a5caeed0b1e72f323bbf6bb428fdb9bec9ed0ba054364fd49fdbc0b3f8b10",
+        "fileCount": 1141
+      },
+      "agent": {
+        "revision": "bb592cdddd56efbf682778596811db886a1e381c",
+        "sourceSha256": "be94a267308f7cf35100087fd20443164977a943f093236d0d83c5c339d60536",
+        "fileCount": 2959
+      }
+    },
+    "completedAt": "2026-10-31T15:56:33.88Z",
+    "after": {
+      "mcp": {
+        "revision": "8ccc96fe5d826def53154f7f8f3f75e3d58da0a7",
+        "sourceSha256": "cd6d65c10de66f2cbfd55602b738a5e1e86d9cf1d29aa7924f4914889e3a8d27",
+        "fileCount": 1498
+      },
+      "hub": {
+        "revision": "41cc6b12501384ee41c97a281d740c3da7d2366e",
+        "sourceSha256": "d26a5caeed0b1e72f323bbf6bb428fdb9bec9ed0ba054364fd49fdbc0b3f8b10",
+        "fileCount": 1141
+      },
+      "agent": {
+        "revision": "bb592cdddd56efbf682778596811db886a1e381c",
+        "sourceSha256": "be94a267308f7cf35100087fd20443164977a943f093236d0d83c5c339d60536",
+        "fileCount": 2959
+      }
+    },
+    "testExitCode": 0,
+    "unchanged": true,
+    "result": "passed"
+  },
+  "installerSha256": "26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f",
+  "packagingEvidence": {
+    "format": 1,
+    "installerSha256": "26fdd6cca09e3b8e326ae054bf79e216e7d6c725215db45a0982145468d5fb0f",
+    "payloads": {
+      "data/app.so": "88b960be79d646d97cdd773b6aecc8b4c151be99b56e4e8052f219f97a23963e",
+      "updater/plug_update_client.exe": "e5b264a91b583960597c7419164d31da7d437989dffc4718dc9118a612f651a7"
+    }
+  },
+  "localMcpImage": "sha256:c088b5a00f8a8dda4369192fd96f7be38f2f5e081c9ede6c8ee1f570ff4ba79f",
+  "engineVersions": {
+    "postgres": "17.11",
+    "mssql": "16.0.4236.2",
+    "sqlAnywhere": "16.0.0.2043 (64-bit)"
+  },
+  "nativeOdbcSha256": "2faf9f21fd09b6a206ce02b6ecebbc6182e8202909943a97b2f736535f08ee9a",
+  "psqlOdbc": {
+    "sha256": "452afccffb9b7ffbdb736b8ba1cba9d7b1e11b09ffaee9cf85d6d3788cace991",
+    "version": "18.00.0000"
+  },
+  "caseCounts": {
+    "finalPersistentChainPassed": 85,
+    "mcpPostgresPassed": 334,
+    "redisPassed": 8,
+    "identityAndConstraintsPassed": 9,
+    "oauthChromiumPassed": 7,
+    "syntheticConsumerHarnessPassed": 17,
+    "nativeSqlPassed": 57,
+    "personaChromiumPassed": 62,
+    "hubSelectedPassed": 91,
+    "finalPersistentChainSkipped": 0,
+    "agentSqlSkipped": 1,
+    "hubTransportAndRecoveryPassed": 10,
+    "uiChromiumPassed": 35,
+    "mcpUnitPassed": 823,
+    "agentSqlPassed": 207
+  },
+  "cleanup": "Owned ephemeral manifests removed by the guarded cleanup tool. No final fixture containers remain."
+}
