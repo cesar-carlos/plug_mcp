@@ -217,13 +217,15 @@ it("grava o relato completo, não o atualiza e limita a persona dona", async () 
     clock_timestamp()-interval '1 second' FROM removed`,
     [id],
   );
-  const expired = (
-    await get(`/api/admin/personas/${personaId}/erros-interacao`).expect(200)
-  ).body.items.find((item: { id: string }) => item.id === id);
+  const page = (await get(`/api/admin/personas/${personaId}/erros-interacao`).expect(200)).body as {
+    items: { id: string; error: object }[];
+  };
+  const expired = page.items.find((item) => item.id === id);
+  expect(expired).toBeDefined();
   expect(expired).toMatchObject({ textExpired: true, error: { supportId } });
   expect(expired).not.toHaveProperty("question");
   expect(expired).not.toHaveProperty("execution");
-  expect(expired.error).not.toHaveProperty("message");
+  expect(expired?.error).not.toHaveProperty("message");
   const worker = new PostgresPersonaEphemeralWorker(db);
   const now = new Date();
   const owner = randomUUID();
