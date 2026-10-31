@@ -93,6 +93,9 @@ export const sourceQuerySchema = z.strictObject({
       (o) => (o.page === undefined) === (o.pageSize === undefined),
       "Informe page e pageSize juntos.",
     )
+    .describe(
+      "Objeto opcional. Omita se não precisar de limites ou paginação. Para paginar, informe page e pageSize juntos.",
+    )
     .optional(),
 });
 export type SourceQueryInput = z.infer<typeof sourceQuerySchema>;

@@ -22,7 +22,7 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
     for(const mode of ['sdk','authentication','preparation']) {
       const catalog={authenticate:async()=>{if(mode==='authentication')throw new Error('sensitive-authority');return identity;}};
       const setups=mode==='preparation'?{visible:async()=>{throw new Error('sensitive-setup');}}:undefined;
-      app.post('/'+mode,createPersonaV2McpHandler(catalog,'http://fixture.test',undefined,undefined,undefined,undefined,setups,undefined,undefined,logger));
+      app.post('/'+mode,createPersonaV2McpHandler(catalog,'http://fixture.test',{run:async()=>{throw Error('fixture should not execute')}},undefined,undefined,undefined,setups,undefined,undefined,logger));
     }
     const results=[];
     for(const [mode,method,params] of [
@@ -30,7 +30,9 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
       ['sdk','tools/call',{name:'sensitive-tool',arguments:{password:'sensitive-password'}}],
       ['sdk','resources/read',{uri:'sensitive-resource'}],
       ['authentication','tools/list',{}],
-      ['preparation','tools/list',{}]
+      ['preparation','tools/list',{}],
+      ['sdk','tools/call',{name:'validar_consulta',arguments:{options:{page:1}}}],
+      ['sdk','tools/call',{name:'validar_consulta',arguments:{options:{pageSize:'sensitive-value'}}}]
     ]) {
       const response=await request(app).post('/'+mode).set('Host','fixture.test')
         .set('Authorization','Bearer sensitive-bearer').set('Accept','application/json, text/event-stream')
@@ -61,8 +63,8 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
     result?: { content: { text: string }[] };
   }
   const results = lines.find((line) => line.results).results as { status: number; body: Body }[];
-  expect(events, JSON.stringify(results)).toHaveLength(7);
-  expect(new Set(events.map((event) => event.supportId)).size).toBe(7);
+  expect(events, JSON.stringify(results)).toHaveLength(9);
+  expect(new Set(events.map((event) => event.supportId)).size).toBe(9);
   results.forEach(({ body }, index) => {
     const diagnostic =
       body.error?.data ??
@@ -82,9 +84,22 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
   });
   expect(events[1]).not.toHaveProperty("tool");
   expect(events[2]).toMatchObject({ protocolOrigin: "sdk_rpc" });
-  expect(events[5]).toMatchObject({ protocolOrigin: "http_parser" });
-  expect(events[6]).toMatchObject({ protocolOrigin: "http_parser" });
+  for (const index of [5, 6]) {
+    const diagnostic = JSON.parse(results[index]!.body.result!.content[0]!.text).error;
+    expect(diagnostic).toMatchObject({
+      rejectedField: "options",
+      retryable: false,
+      message: expect.stringContaining("page e pageSize juntos"),
+    });
+    expect(events[index]).toMatchObject({
+      supportId: diagnostic.supportId,
+      rejectedField: "options",
+      tool: "validar_consulta",
+    });
+  }
+  expect(events[7]).toMatchObject({ protocolOrigin: "http_parser" });
+  expect(events[8]).toMatchObject({ protocolOrigin: "http_parser" });
   expect(results.slice(3).map((result: { status: number }) => result.status)).toEqual([
-    503, 503, 400, 413,
+    503, 503, 200, 200, 400, 413,
   ]);
 });

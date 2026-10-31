@@ -417,6 +417,8 @@ export async function exerciseChainBrowser(input: {
     await finishSession(page);
   } catch (error) {
     // Never print credentials, Bearer, form values, screenshots or traces on failure.
+    // Playwright causes can include form values. Keep the fixture diagnostic sanitized.
+    // eslint-disable-next-line preserve-caught-error
     throw new Error(
       `Percurso Chromium real falhou na etapa: ${phase} (${error instanceof Error ? error.name : "unknown"})`,
     );

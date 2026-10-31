@@ -80,15 +80,10 @@ export async function verifyStructuralQuery(input: {
     { personaIds: [personaId], tokenIds: [] },
     async (tx) => {
       const draft = await tx.catalog.find(personaId, skillId);
-      if (!draft || draft.kind !== "consulta") throw new Error("Expected a query draft");
+      if (draft?.kind !== "consulta") throw new Error("Expected a query draft");
       const training = queryTrainingSchema.parse(draft.training);
       const source = (await tx.listSources(personaId)).find((s) => s.id === training.sourceId);
-      if (
-        !source ||
-        source.environment !== "test" ||
-        source.database !== input.runId ||
-        !source.identityHash
-      )
+      if (source?.environment !== "test" || source.database !== input.runId || !source.identityHash)
         throw new Error("Expected a bound private engine");
       return { training, source };
     },

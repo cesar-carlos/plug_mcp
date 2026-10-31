@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: o chat recebe orientação segura quando validar_consulta rejeita options.
+
 - Changed: diagnóstico seguro de origem e campo nas falhas de protocolo MCP v2.
 
 - Added: a IA do cliente pode registrar um erro de interação com

@@ -72,6 +72,7 @@ export function reportPersonaProtocolError(
   stage: string;
   supportId: string;
   retryable: false;
+  rejectedField?: "options";
 } {
   const supportId = randomUUID();
   logger?.warn("persona-v2 request failed", {
@@ -82,9 +83,16 @@ export function reportPersonaProtocolError(
     ...metadata,
     ...(rpcCode !== undefined ? { rpcCode } : {}),
   });
+  const invalidOptions =
+    metadata?.protocolOrigin === "sdk_tool_input" &&
+    metadata.tool === "validar_consulta" &&
+    metadata.rejectedField === "options";
   return {
     code,
-    message: "Não foi possível concluir a solicitação. Informe o supportId ao responsável.",
+    ...(invalidOptions ? { rejectedField: "options" as const } : {}),
+    message: invalidOptions
+      ? 'validar_consulta recusou o campo options. Omita options se não precisar de limites ou paginação. Se usar options, envie um objeto com inteiros positivos nos limites do schema. As chaves aceitas são maxRows, maxBytes, timeoutMs, page e pageSize. Para paginar, informe page e pageSize juntos, por exemplo {"options":{"page":1,"pageSize":50}}.'
+      : "Não foi possível concluir a solicitação. Informe o supportId ao responsável.",
     source: "mcp",
     stage,
     supportId,
