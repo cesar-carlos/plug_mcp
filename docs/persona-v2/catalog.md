@@ -291,6 +291,49 @@ Endpoint `/mcp` da aplicação nova. Sem Bearer: `obter_treinamento_base`,
 - `diagnosticar_permissoes`: diagnóstico local com horário, validade do token e
   concessões utilizáveis/bloqueadas; usa os portões de visibilidade existentes,
   sem SQL nem reserva de autorização remota. [Limites](console.md#conexão-e-diagnóstico-do-consumidor).
+- `reportar_erro_interacao`: a IA do cliente envia, uma vez e já completo, a
+  pergunta recebida, a categoria, o erro identificado e as tools executadas no
+  plug_mcp. Categorias: `protocolo`, `autenticacao`, `autorizacao`, `validacao`,
+  `transporte`, `consulta`, `operacao`, `conhecimento` e `outro` (`categoryDetail`
+  obrigatório). `execution.steps` pode ser vazio quando nenhuma tool executou.
+  `skillId` só é aceito se o token ainda conceder essa skill. O mesmo `supportId`
+  devolve o relato já gravado, sem completá-lo. Há teto de 20 relatos novos por
+  token na última hora. Não envia SQL, parâmetros, linhas nem segredos. Não
+  treina, não autoriza retry e não amplia concessões. A auditoria guarda só o
+  evento `interaction_error.reported`, a persona e o token; a categoria e o texto
+  ficam na tabela do relato. O responsável lista em
+  `GET /api/admin/personas/:personaId/erros-interacao`, vinte itens por página,
+  com `beforeId`/`nextCursor`. Não há tela nem estado de encerramento nesta etapa.
+  O texto fica disponível por 24 horas e o worker remove o conteúdo vencido. O comprovante conserva o supportId e a auditoria.
+
+```json docs:interaction-error-report
+{
+  "question": "Qual o total de pedidos do período sintético?",
+  "category": "consulta",
+  "skillId": "11111111-1111-4111-8111-111111111111",
+  "error": {
+    "code": "AUTHORIZATION_DENIED",
+    "message": "Concessão indisponível para esta consulta.",
+    "supportId": "22222222-2222-4222-8222-222222222222",
+    "source": "mcp",
+    "tool": "consultar_dados"
+  },
+  "execution": {
+    "summary": "Li o contexto e a consulta foi recusada antes de enviar SQL.",
+    "steps": [
+      { "tool": "obter_skill", "outcome": "sucesso", "note": "Li a skill concedida." },
+      {
+        "tool": "consultar_dados",
+        "outcome": "erro",
+        "code": "AUTHORIZATION_DENIED",
+        "supportId": "22222222-2222-4222-8222-222222222222",
+        "note": "A consulta foi recusada."
+      }
+    ]
+  }
+}
+```
+
 - `listar_fontes`: somente metadados das fontes concedidas.
 - `listar_skills`: publicações concedidas e dependências vigentes.
 - `criar_anexo_consulta` executa consulta fresca com exportação concedida;

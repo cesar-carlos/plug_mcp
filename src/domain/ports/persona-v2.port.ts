@@ -26,6 +26,7 @@ import type { PhysicalProfileTransaction } from "../persona-v2/physical-profile.
 import type { PublicationKnowledgeIndexPort } from "./publication-knowledge.port.js";
 import type { PhysicalCurationTransaction } from "../persona-v2/physical-curation.js";
 import type { KnowledgeMaintenancePort } from "../persona-v2/knowledge-maintenance.js";
+import type { InteractionErrorStore } from "../persona-v2/interaction-error-report.js";
 import type { PersonaNotificationTransaction } from "../persona-v2/notifications.js";
 import type { PersonaOAuthConnectionTransaction } from "../persona-v2/oauth-connections.js";
 
@@ -57,6 +58,7 @@ export interface PersonaTransaction {
   readonly notifications?: PersonaNotificationTransaction;
   readonly external?: PersonaExternalTransaction;
   readonly knowledgeMaintenance?: KnowledgeMaintenancePort;
+  readonly interactionErrors?: InteractionErrorStore;
   readonly physicalCuration?: PhysicalCurationTransaction;
   readonly knowledgeIndex: PublicationKnowledgeIndexPort;
   readonly profiles?: PhysicalProfileTransaction;

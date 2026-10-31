@@ -33,6 +33,7 @@ export const PLUGIN_TOOL_CATALOG: Readonly<Record<PluginRuntime, readonly string
     "obter_contexto_persona",
     "obter_treinamento_base",
     "diagnosticar_permissoes",
+    "reportar_erro_interacao",
     "listar_fontes",
     "listar_skills",
     "listar_padroes",

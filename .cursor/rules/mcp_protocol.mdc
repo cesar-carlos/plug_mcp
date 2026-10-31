@@ -98,6 +98,10 @@ Revisão/incorporação é humana no console e modifica apenas rascunho do perfi
 
 `registrar_feedback_conhecimento` e `obter_feedback_conhecimento` exigem item e
 publicação ainda concedidos, sem captura automática ou navegação pela fila.
+`reportar_erro_interacao` é explícita: a IA envia a pergunta, a categoria, o
+erro e as tools executadas, sem SQL, parâmetros, linhas ou segredos. O primeiro
+envio com supportId fica imutável. Não treina, não autoriza retry e não amplia
+concessões. A listagem administrativa não abre fila para o consumidor.
 `obter_revisoes_conhecimento` mostra somente prazos/avisos das origens expostas;
 não entrega justificativas/autores do catálogo nem reserva execução.
 Publicação v2 exige plano de revisão futuro definido pelo humano no console,

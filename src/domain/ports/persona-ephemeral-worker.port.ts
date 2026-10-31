@@ -7,6 +7,7 @@ export interface EphemeralCleanupCounts {
   knowledgeCurationPreviews: number;
   physicalCurationPreviews: number;
   reviewBindings: number;
+  interactionTexts: number;
   attachments: number;
   outboxMetadata: number;
 }

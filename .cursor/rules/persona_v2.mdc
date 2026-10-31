@@ -474,6 +474,10 @@ na mesma tabela recusam o arquivo inteiro, sem importação parcial ou execuçã
 Contrato: `docs/persona-v2/knowledge-library.md`.
 
 Feedback referencia item/publicação concedidos, sem captura automática de dados.
+O relato de erro da IA consumidora é explícito e separado: pergunta, categoria,
+erro identificado e tools executadas no plug_mcp, sem SQL, parâmetros, linhas
+ou segredos. O primeiro supportId não é completado depois. Não treina, não
+autoriza retry e não amplia concessões. O texto fica disponível por 24 horas e o worker remove o conteúdo vencido. O comprovante conserva o supportId e a auditoria.
 Calendários separados exigem prazo explícito do curador/responsável, CAS e
 histórico. Vencimento gera aviso/tarefa, sem suspensão automática; novas versões
 não herdam prazos. Worker v2 separado usa lease, tarefa e notificação interna

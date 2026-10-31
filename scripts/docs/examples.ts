@@ -1,3 +1,4 @@
+import { interactionErrorReportSchema } from "../../src/domain/persona-v2/interaction-error-report.js";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { datasetPayloadSchema } from "../../src/application/persona-v2/knowledge-library-schema.js";
@@ -107,6 +108,9 @@ const sourceFor = (training: { sourceId: string; dialect: Source["dialect"] }): 
 
 export function validateExample(kind: string, value: unknown): number {
   switch (kind) {
+    case "interaction-error-report":
+      interactionErrorReportSchema.parse(value);
+      return 1;
     case "shared-structure": {
       validateStructureContent(value, new NodeCryptoAdapter(randomBytes(32).toString("hex")));
       return 1;

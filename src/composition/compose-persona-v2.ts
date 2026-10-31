@@ -33,6 +33,7 @@ import { PersonaPhysicalProfiles } from "../application/persona-v2/physical-prof
 import { PhysicalKnowledgeAuthority } from "../application/persona-v2/physical-knowledge-authority.js";
 import { PersonaPhysicalCuration } from "../application/persona-v2/physical-curation.js";
 import { PersonaKnowledgeMaintenance } from "../application/persona-v2/knowledge-maintenance.js";
+import { PersonaInteractionErrors } from "../application/persona-v2/interaction-error-report.js";
 import { PersonaMaintenance } from "../application/persona-v2/maintenance.js";
 import { PersonaCatalog } from "../application/persona-v2/catalog.js";
 import { PersonaKnowledgeTraining } from "../application/persona-v2/knowledge-training.js";
@@ -287,6 +288,7 @@ export const composePersonaV2 = async (
           new PhysicalKnowledgeAuthority(services, administrativeAuthorization, sourceQueries),
           consumerCatalog,
         ),
+        interactionErrors: new PersonaInteractionErrors(services, administrativeAuthorization),
         knowledgeMaintenance: new PersonaKnowledgeMaintenance(
           services,
           consumerCatalog,

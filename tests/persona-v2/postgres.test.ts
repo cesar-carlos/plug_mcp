@@ -297,6 +297,8 @@ describe("baseline persona-v2 e administração em PostgreSQL real", () => {
       { filename: "0043_dataset_template_versions.sql" },
       { filename: "0044_persona_icon.sql" },
       { filename: "0045_persona_icon_revision.sql" },
+      { filename: "0046_interaction_error_report.sql" },
+      { filename: "0047_interaction_error_text.sql" },
     ]);
     await expect(applyMigrations({ databaseUrl: urlFor(freshName) })).rejects.toThrow(
       "Runner legado recusado",

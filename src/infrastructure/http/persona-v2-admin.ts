@@ -22,6 +22,8 @@ import type { PersonaPhysicalProfiles } from "../../application/persona-v2/physi
 import type { PersonaPhysicalCuration } from "../../application/persona-v2/physical-curation.js";
 import { registerPhysicalCurationRoutes } from "./persona-v2-physical-curation.js";
 import type { PersonaKnowledgeMaintenance } from "../../application/persona-v2/knowledge-maintenance.js";
+import type { PersonaInteractionErrors } from "../../application/persona-v2/interaction-error-report.js";
+import { registerInteractionErrorRoutes } from "./persona-v2-interaction-errors.js";
 import { registerKnowledgeMaintenanceRoutes } from "./persona-v2-knowledge-maintenance.js";
 import type { PersonaAdministration } from "../../application/persona-v2/administration.js";
 import type { PersonaMaintenance } from "../../application/persona-v2/maintenance.js";
@@ -83,6 +85,7 @@ export const createPersonaAdministrationApp = (input: {
   physicalProfiles?: PersonaPhysicalProfiles;
   physicalCuration?: PersonaPhysicalCuration;
   knowledgeMaintenance?: PersonaKnowledgeMaintenance;
+  interactionErrors?: PersonaInteractionErrors;
   knowledgeTraining?: PersonaKnowledgeTraining;
   crypto: CryptoPort;
   logger?: LoggerPort;
@@ -173,6 +176,7 @@ export const createPersonaAdministrationApp = (input: {
           : undefined,
         input.attachments,
         input.logger,
+        input.interactionErrors,
       ),
     );
   if (input.oauth && input.consumerCatalog) {
@@ -203,6 +207,7 @@ export const createPersonaAdministrationApp = (input: {
           : undefined,
         input.attachments,
         input.logger,
+        input.interactionErrors,
       ),
     );
   }
@@ -312,6 +317,8 @@ export const createPersonaAdministrationApp = (input: {
     }
     next();
   });
+  if (input.interactionErrors)
+    registerInteractionErrorRoutes(app, input.interactionErrors, session);
   app.get("/api/admin/personas", async (req, res) => {
     res.json({ personas: await input.administration.listPersonas(session(req.get("cookie"))) });
   });

@@ -18,6 +18,13 @@ export const pareceSegredoEmTexto = (texto: string): boolean => {
   if (/\b(?:password|passwd|senha)\s*[=:]\s*\S{6,}/i.test(texto)) {
     return true;
   }
+  if (
+    /\b(?:password|passwd|pwd|senha|(?:access|refresh|client|id)[_-]?token|client[_-]?secret|(?:x[_-]?)?api[_-]?key)["']?\s*[:=]\s*["']?[^\s"',;}]+/i.test(
+      texto,
+    )
+  ) {
+    return true;
+  }
   if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(texto)) {
     return true;
   }

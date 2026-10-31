@@ -11,6 +11,11 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: a IA do cliente pode registrar um erro de interação com
+  `reportar_erro_interacao`, enviando a pergunta, a categoria, o erro identificado
+  e as tools executadas no plug_mcp. O relato não altera treinamento nem autoriza
+  nova tentativa. O responsável consulta a lista administrativa da persona. O texto fica disponível por 24 horas e o worker remove o conteúdo vencido. O comprovante conserva o supportId e a auditoria.
+
 - Added: console persona-v2 ganha aparência clara/escura (seletor "Sistema/Claro/Escuro",
   preferência local persistida, respeita `prefers-color-scheme`); apresentação local,
   sem alterar autorização, autenticação ou dados.

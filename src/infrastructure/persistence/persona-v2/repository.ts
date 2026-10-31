@@ -9,6 +9,7 @@ import { PostgresSharedKnowledgeTransaction } from "./shared-knowledge.js";
 import { PostgresPhysicalProfiles } from "./physical-profiles.js";
 import { PostgresPhysicalCuration } from "./physical-curation.js";
 import { PostgresKnowledgeMaintenance } from "./knowledge-maintenance.js";
+import { PostgresInteractionErrors } from "./interaction-error-report.js";
 import { PostgresPublicationKnowledgeIndex } from "./publication-knowledge.js";
 import type {
   StoredStructureEvidence,
@@ -129,6 +130,7 @@ const sourceFrom = (r: SourceRow): Source => {
 
 export class PostgresPersonaTransaction implements PersonaTransaction {
   readonly knowledgeMaintenance: PostgresKnowledgeMaintenance;
+  readonly interactionErrors: PostgresInteractionErrors;
   readonly physicalCuration: PostgresPhysicalCuration;
   async structureEvidence(
     personaId: string,
@@ -217,6 +219,7 @@ export class PostgresPersonaTransaction implements PersonaTransaction {
     this.profiles = new PostgresPhysicalProfiles(client);
     this.physicalCuration = new PostgresPhysicalCuration(client);
     this.knowledgeMaintenance = new PostgresKnowledgeMaintenance(client);
+    this.interactionErrors = new PostgresInteractionErrors(client);
     this.catalog = new PostgresPersonaCatalogTransaction(client);
     this.knowledgeIndex = new PostgresPublicationKnowledgeIndex(client);
   }

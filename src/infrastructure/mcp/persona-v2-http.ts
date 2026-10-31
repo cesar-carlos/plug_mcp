@@ -56,6 +56,8 @@ import type { PersonaPhysicalCuration } from "../../application/persona-v2/physi
 import { knowledgeGraphInputSchema } from "../../domain/persona-v2/knowledge-context.js";
 import type { PersonaKnowledgeMaintenance } from "../../application/persona-v2/knowledge-maintenance.js";
 import { feedbackInputSchema } from "../../domain/persona-v2/knowledge-maintenance.js";
+import { interactionErrorReportSchema } from "../../domain/persona-v2/interaction-error-report.js";
+import type { PersonaInteractionErrors } from "../../application/persona-v2/interaction-error-report.js";
 import type { PersonaExternalActions } from "../../application/persona-v2/external-actions.js";
 import {
   createAttachmentSchema,
@@ -86,6 +88,7 @@ export const createPersonaV2McpHandler = (
   },
   attachments?: PersonaAttachments,
   logger?: LoggerPort,
+  interactionErrors?: PersonaInteractionErrors,
 ) => {
   const origin = new URL(publicBaseUrl).origin;
   const handle = async (req: Request, res: Response): Promise<void> => {
@@ -266,6 +269,18 @@ export const createPersonaV2McpHandler = (
           },
         );
         if (identity) {
+          if (interactionErrors) {
+            server.registerTool(
+              "reportar_erro_interacao",
+              {
+                description:
+                  "Registra a pergunta do cliente, a categoria, o erro identificado e as tools executadas no plug_mcp. Envio explícito e completo na primeira chamada. Não inclui SQL, parâmetros, linhas ou segredos. Não treina, não autoriza retry e não amplia concessões.",
+                inputSchema: interactionErrorReportSchema,
+                annotations: { ...annotations, readOnlyHint: false, idempotentHint: false },
+              },
+              async (value) => run(() => interactionErrors.report(requireIdentity(), value)),
+            );
+          }
           if (administration?.knowledgeMaintenance) {
             const maintenance = administration.knowledgeMaintenance;
             server.registerTool(

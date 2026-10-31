@@ -18,6 +18,7 @@ const expiryTables = [
   ["physicalPreviews", "physical_profile_preview_v2", "hash"],
   ["knowledgeCurationPreviews", "knowledge_curation_preview_v2", "hash"],
   ["physicalCurationPreviews", "physical_curation_preview_v2", "hash"],
+  ["interactionTexts", "interaction_error_text_v2", "id"],
   ["attachments", "persona_attachment_v2", "handle_hash"],
 ] as const;
 
@@ -65,6 +66,7 @@ export class PostgresPersonaEphemeralWorker implements PersonaEphemeralWorkerPor
         knowledgeCurationPreviews: 0,
         physicalCurationPreviews: 0,
         reviewBindings: 0,
+        interactionTexts: 0,
         attachments: 0,
         outboxMetadata: 0,
       };
