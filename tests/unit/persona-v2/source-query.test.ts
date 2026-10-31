@@ -1,4 +1,8 @@
 import { expect, it, vi } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import pino from "pino";
+import { PinoLoggerAdapter } from "../../../src/infrastructure/logging/pino-logger.adapter.js";
+import { reportPersonaV2ToolError } from "../../../src/infrastructure/mcp/persona-v2-tool-error.js";
 import {
   PersonaQueryReuse,
   PersonaMemoryQueryStore,
@@ -416,6 +420,18 @@ const hubFixture = () => {
     },
   };
 };
+it.each(["SELECT\n  ", "select\r\n", "SELECT\t"])(
+  "envia ranking multilinha com separador aceito pelo agente (%j)",
+  async (prefix) => {
+    const f = hubFixture();
+    const lease = await f.gateway.authorize(trainingSource, [{ name: "orders", type: "table" }]);
+    const body = "id, SUM(amount) AS total\nFROM orders\nGROUP BY id ORDER BY total DESC, id";
+    await lease.execute(prefix + body, {}, { maxRows: 5 });
+    expect(f.hub.executeSql).toHaveBeenCalledWith(
+      expect.objectContaining({ sql: prefix.slice(0, 6) + " " + body }),
+    );
+  },
+);
 it("usa Client da fonte, credenciais técnicas e database explícito; não usa identidade responsável", async () => {
   const f = hubFixture();
   const lease = await f.gateway.authorize(trainingSource, [{ name: "orders", type: "table" }]);
@@ -436,6 +452,108 @@ it("usa Client da fonte, credenciais técnicas e database explícito; não usa i
   f.rotate();
   await expect(lease.revalidate()).rejects.toMatchObject({ code: "STALE_AUTHORIZATION" });
 });
+it.each(["SELECT\n", "WITH\r\n"])(
+  "executa ranking do modelo publicado iniciado por %j",
+  async (prefix) => {
+    const f = fixture();
+    const h = hubFixture();
+    const training = queryTraining();
+    const ranking =
+      "p.id AS codigo, p.description AS descricao, SUM(p.qty) AS quantidade, SUM(p.amount) AS faturamento FROM orders p WHERE p.id > :minimum GROUP BY p.id, p.description";
+    const sqlModel = prefix.startsWith("WITH")
+      ? prefix +
+        "ranking AS (SELECT " +
+        ranking +
+        ") SELECT r.codigo, r.descricao, r.quantidade, r.faturamento FROM ranking r WHERE r.codigo > :minimum ORDER BY faturamento DESC, codigo"
+      : prefix + ranking + " ORDER BY faturamento DESC, codigo";
+    const pkg = compileQueryTraining(
+      {
+        ...training,
+        sqlModel,
+        columns: [
+          ...training.columns,
+          ...["description", "qty"].map((name) => ({
+            table: "orders",
+            name,
+            meaning: name,
+            classification: "livre" as const,
+          })),
+        ],
+      },
+      trainingSource,
+      crypto,
+    );
+    Object.assign(f.evidence.publications[0]!, {
+      package: pkg,
+      hash: crypto.sha256Hex(canonicalJson(pkg)),
+    });
+    const db = new DatabaseSync(":memory:");
+    try {
+      db.exec(
+        "CREATE TABLE orders(id INTEGER, description TEXT, qty INTEGER, amount INTEGER); INSERT INTO orders VALUES (2,'B',2,10),(1,'A',1,6),(1,'A',3,4),(3,'C',1,20),(0,'fora',99,99)",
+      );
+      vi.mocked(h.hub.executeSql).mockImplementation(async ({ sql, params }) => {
+        expect(sql).toMatch(/^(SELECT|WITH) /);
+        const stmt = db.prepare(sql);
+        const rows = stmt.all({ minimum: Number(params?.minimum) });
+        return { columns: stmt.columns().map((c) => c.name), rows, truncated: false };
+      });
+      const result = await new PersonaSourceQueries(f.catalog, h.gateway).run(identity, {
+        params: { minimum: 0 },
+      });
+      expect("rows" in result && result.rows).toEqual([
+        { codigo: 3, descricao: "C", quantidade: 1, faturamento: 20 },
+        { codigo: 1, descricao: "A", quantidade: 4, faturamento: 10 },
+        { codigo: 2, descricao: "B", quantidade: 2, faturamento: 10 },
+      ]);
+    } finally {
+      db.close();
+    }
+  },
+);
+it.each([true, false])(
+  "correlaciona origem do SQL e publicação apenas no log (modelo=%s)",
+  async (model) => {
+    const f = fixture();
+    f.execute.mockRejectedValue(
+      new DomainError({
+        code: "INVALID_SQL",
+        source: "sql_engine",
+        stage: "sql.execute",
+        message: "private-marker",
+        hint: "private-marker",
+        details: { rpcCode: -32101, sql: "private-marker" },
+      }),
+    );
+    const failure = await f.service
+      .run(identity, {
+        params: { minimum: 0 },
+        ...(model ? {} : { sql: queryTraining().sqlModel }),
+      })
+      .catch((e: unknown) => e);
+    let output = "";
+    const logger = new PinoLoggerAdapter(
+      pino(
+        {},
+        {
+          write: (line) => {
+            output += line;
+          },
+        },
+      ),
+    );
+    const response = reportPersonaV2ToolError(failure, logger);
+    expect(JSON.parse(output)).toMatchObject({
+      supportId: response.supportId,
+      errorCode: "INVALID_SQL",
+      queryOrigin: model ? "modelo_publicado" : "sql_fornecido",
+      publicationIds: [f.evidence.publications[0]!.id],
+      details: { rpcCode: -32101 },
+    });
+    expect(response).not.toHaveProperty("publicationIds");
+    expect(output).not.toContain("private-marker");
+  },
+);
 it("composição exige sourceSchema v1 vigente e recusa perda de capability sem SQL", async () => {
   const f = hubFixture();
   const resources = [{ name: "orders", type: "table" as const }];

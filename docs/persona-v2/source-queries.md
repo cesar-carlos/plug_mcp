@@ -89,6 +89,8 @@ explicitamente; integra o contrato publicado e a verificação da policy.
 
 ## Portões e execução
 
+Após validar a consulta, o transporte v2 envia um espaço após o SELECT ou WITH inicial quando o separador é espaço, tabulação ou quebra de linha. O classificador do agente exige esse prefixo. O restante da consulta e os parâmetros são preservados, inclusive em modelos publicados anteriormente.
+
 1. Recarregar persona/token/concessão e publicações ativas em transação local com
    locks estáveis; conferir versões, hashes, fonte e credencial.
 2. Validar toda a AST somente leitura, escopo, JOIN composto, fanout, recortes,
@@ -295,6 +297,8 @@ e concessão compatível. Delegação compara os tetos efetivos por skill e nunc
 amplia. Revalidação antes do dispatch e da entrega impede usar orçamento antigo.
 
 ## Diagnóstico de erros de tools
+
+Na recusa do mecanismo SQL durante a execução v2, o evento do supportId registra queryOrigin (modelo_publicado ou sql_fornecido) e publicationIds obtidos das publicações autorizadas. Esses campos são internos. SQL, parâmetros e linhas ficam fora do log.
 
 Para `AGREGACAO_INSEGURA` local (`source: sql`), o evento técnico registra
 `aggregationReason` junto ao `supportId`: `invalid_declared_grain` (chaves do

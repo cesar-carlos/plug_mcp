@@ -3,6 +3,7 @@ import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
 import { publicQueryFailure } from "../../domain/errors/public-query-failure.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
+import { SourceExecutionError } from "../../domain/persona-v2/source-execution-error.js";
 
 const TRANSPORT_HINT =
   "Confira code/source. Falha de transporte não autoriza reescrever SQL; não repita automaticamente.";
@@ -160,6 +161,9 @@ export function reportPersonaV2ToolError(
   logger?.warn("persona-v2 tool failed", {
     supportId,
     errorCode: body.code,
+    ...(error instanceof SourceExecutionError
+      ? { queryOrigin: error.queryOrigin, publicationIds: error.publicationIds }
+      : {}),
     ...(safeAuthorizationReason ? { authorizationReason: safeAuthorizationReason } : {}),
     ...(safeAggregationReason ? { aggregationReason: safeAggregationReason } : {}),
     source: body.source,

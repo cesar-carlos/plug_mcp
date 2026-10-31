@@ -16,6 +16,7 @@ vira unknown, nunca approved. Não inferir revogação ou recuperar concessões.
 - Canal do MCP é REST `POST /api/v1/agents/commands`. Socket/relay são canais
   do hub/agente, não uma nova conexão consumer deste MCP.
 - Hub valida/encaminha; não interpreta SQL nem reescreve dialeto.
+- O transporte de consulta v2 adapta somente o separador após SELECT/WITH inicial ao espaço ASCII exigido pelo agente, após as validações.
 - Treinamento v2 orienta resumos de uma fonte no banco com GROUP BY/agregações
   quando o pacote e as finalidades permitirem; o hub não agrega automaticamente.
   ABC calcula o universo completo antes de paginar, sem presumir cortes ou suporte

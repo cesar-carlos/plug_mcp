@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: o log de recusa do mecanismo SQL v2 correlaciona a origem do modelo e as publicações autorizadas com o supportId.
+
+- Fixed: consultas v2 com quebra de linha após SELECT chegam ao agente com o separador esperado, inclusive em modelos de ranking já publicados.
+
 - Fixed: Downloads de anexos retornam 403 sem challenge quando a autenticação passou mas a leitura foi recusada. Access inválido retorna 401 e permite refresh pelo cliente.
 
 - Fixed: falhas MCP anteriores às tools recebem supportId correlacionado no log,

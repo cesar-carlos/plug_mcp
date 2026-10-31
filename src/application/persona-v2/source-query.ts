@@ -11,6 +11,7 @@ import type { ParametroSkill } from "../../domain/entities/skill.js";
 import type { SourceQueryGatewayPort } from "../../domain/ports/source-query.port.js";
 import type { SqlExecuteResult } from "../../domain/ports/plug-server-gateway.port.js";
 import { assertSourcePagination, validateSourceSql } from "./source-sql.js";
+import { SourceExecutionError } from "../../domain/persona-v2/source-execution-error.js";
 import { assertFanoutSeguro } from "../use-cases/shared/assert-fanout.js";
 import {
   bindNamedParams,
@@ -590,6 +591,12 @@ export class PersonaSourceQueries {
               "Estrutura divergente; publicações utilizadas foram suspensas. Revise e republique.",
             );
           }
+          if (error instanceof DomainError && error.source === "sql_engine")
+            throw new SourceExecutionError(
+              error,
+              input.sql === undefined ? "modelo_publicado" : "sql_fornecido",
+              publications.map((publication) => publication.id),
+            );
           throw error;
         });
       const readAt = new Date().toISOString();

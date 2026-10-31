@@ -175,7 +175,8 @@ export class PersonaSourceQuery implements SourceQueryGatewayPort {
             database: source.database,
             expectedSource: expectedSourceFor(source),
             ...(expectedStructure ? { expectedStructure } : {}),
-            sql,
+            // O classificador do agente exige espaço ASCII depois da palavra inicial.
+            sql: sql.replace(/^(select|with)[ \t\r\n]+/i, "$1 "),
             params,
             options,
           });
