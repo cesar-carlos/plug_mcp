@@ -22,6 +22,7 @@ import PersonasWorkspace from "./PersonasWorkspace.vue";
 import QueriesWorkspace from "./QueriesWorkspace.vue";
 import SourcesWorkspace from "./SourcesWorkspace.vue";
 import TrainingWorkspace from "./TrainingWorkspace.vue";
+import ThemeSelect from "./ThemeSelect.vue";
 import { consoleFieldLabels } from "./console-errors";
 import type { UncertainIssuance } from "./token-permissions";
 import { useConsoleDiscard, type ConsoleDiscardBindings } from "./use-console-discard";
@@ -389,6 +390,7 @@ onBeforeUnmount(() => {
           <p>Conecte bases e ensine sua persona a consultar informações.</p>
         </div>
       </div>
+      <ThemeSelect />
     </header>
     <p v-if="error && !logged" role="alert" class="error area-error" tabindex="-1">{{ error }}</p>
     <p v-if="message" role="status" class="success">{{ message }}</p>

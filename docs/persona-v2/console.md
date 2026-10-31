@@ -69,6 +69,12 @@ concessões ou aprovação Client dos efeitos. Ver [deploy inicial](first-test-d
 sem botão duplicado no cabeçalho. Preserva o bloqueio durante solicitações e a
 confirmação para descartar edições pendentes.
 
+O seletor **Aparência** no cabeçalho (Sistema/Claro/Escuro) é apresentação local:
+alterna variáveis de cor via `data-theme`, respeita `prefers-color-scheme` no modo
+Sistema e persiste a preferência apenas no navegador (`localStorage`). Não afeta
+autenticação, dados, autorização ou qualquer snapshot publicado; disponível antes
+e depois do login.
+
 Casos SQL oferecem também **Importar sementes diretamente da biblioteca**, sem
 consulta intermediária: seleção de catálogo, paginação e versão explícita,
 prévia, aplicação e salvamento separados. Falha/troca de seleção descarta a prévia
