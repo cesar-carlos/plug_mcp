@@ -285,7 +285,7 @@ contagem. Timeout impede SQL ainda não enviado e entrega tardia; não garante o
 cancelamento de SQL já enviado. Limites do hub/agente continuam obrigatórios.
 
 Paginação informa o tamanho efetivamente enviado. Divergência na paginação
-retornada pelo transporte é recusada. Reduzir a página não prova o total.
+retornada pelo transporte é recusada. Reduzir a página não prova o total. Uma consulta paginada sem metadados de continuação não comprova completude.
 No agente, ordenar por coluna qualificada exige projeção simples comprovada:
 o wrapper usa o nome de saída, inclusive alias explícito, e o cursor procura esse
 mesmo nome. Projeções qualificadas ambíguas ou não comprováveis são recusadas,

@@ -72,6 +72,9 @@ export const sourceQuerySchema = z.strictObject({
       z.string().regex(/^[a-z_][a-z0-9_$]*$/),
       z.union([z.string().max(16384), z.number().finite(), z.boolean(), z.null()]),
     )
+    .describe(
+      "Objeto nomeado: use as chaves dos marcadores :nome sem os dois-pontos, com valores escalares do contrato publicado. Não envie chaves extras nem __scope_*.",
+    )
     .optional(),
   options: z
     .strictObject({
@@ -636,7 +639,9 @@ export class PersonaSourceQueries {
           : { columns: result.columns, rows: result.rows }),
         ...(result.pagination ? { pagination: result.pagination } : {}),
         completeness: {
-          complete: validation || (!limited && !result.pagination && result.truncated === false),
+          complete:
+            validation ||
+            (!options.page && !limited && !result.pagination && result.truncated === false),
           truncated: limited,
         },
         provenance: {

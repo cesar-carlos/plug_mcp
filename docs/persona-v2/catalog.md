@@ -334,7 +334,7 @@ Endpoint `/mcp` da aplicação nova. Sem Bearer: `obter_treinamento_base`,
 }
 ```
 
-Nos logs de MCP_PROTOCOL_ERROR, protocolOrigin distingue parser HTTP, erro RPC, resultado de ferramenta e validação de entrada do SDK. Só registrar ferramenta da requisição se estiver registrada e campo de primeiro nível declarado no schema. Mensagem do SDK, argumentos e caminhos livres ficam fora dos logs. Quando validar_consulta rejeita options, o MCP devolve rejectedField e orientação fixa para omitir o objeto ou corrigir suas chaves e paginação. Preserva supportId e retryable:false.
+Nos logs de MCP_PROTOCOL_ERROR, protocolOrigin distingue parser HTTP, erro RPC, resultado de ferramenta e validação de entrada do SDK. Só registrar ferramenta da requisição se estiver registrada e campo de primeiro nível declarado no schema. Mensagem do SDK, argumentos e caminhos livres ficam fora dos logs. Quando validar_consulta ou consultar_dados rejeita options, o MCP devolve rejectedField e motivo derivado do schema sem valores nem chaves livres e orientação para omitir o objeto ou corrigir suas chaves e paginação. Preserva supportId e retryable:false.
 
 - `listar_fontes`: somente metadados das fontes concedidas.
 - `listar_skills`: publicações concedidas e dependências vigentes.

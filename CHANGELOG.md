@@ -11,7 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
-- Changed: o chat recebe orientação segura quando validar_consulta rejeita options.
+- Fixed: Uma consulta paginada sem metadados de continuação não comprova completude.
+
+- Changed: o chat recebe orientação segura com motivo específico quando validar_consulta ou consultar_dados rejeita options.
 
 - Changed: diagnóstico seguro de origem e campo nas falhas de protocolo MCP v2.
 

@@ -4,12 +4,14 @@ import type { ErrorRequestHandler } from "express";
 
 export interface ProtocolToolContext {
   readonly tool: string;
+  readonly optionsReason?: () => string | undefined;
   readonly fields: readonly string[];
 }
 
 interface DiagnosticMetadata {
   readonly protocolOrigin: "http_parser" | "sdk_rpc" | "sdk_tool_result" | "sdk_tool_input";
   readonly tool?: string;
+  readonly optionsReason?: string;
   readonly rejectedField?: string;
 }
 
@@ -29,7 +31,13 @@ function sdkMetadata(
   const rejectedField = fields.find(
     (field) => issue.startsWith(field + ": ") || issue.startsWith(field + "."),
   );
-  return { protocolOrigin: "sdk_tool_input", tool, ...(rejectedField ? { rejectedField } : {}) };
+  const optionsReason = rejectedField === "options" ? context.optionsReason?.() : undefined;
+  return {
+    ...(optionsReason ? { optionsReason } : {}),
+    protocolOrigin: "sdk_tool_input",
+    tool,
+    ...(rejectedField ? { rejectedField } : {}),
+  };
 }
 
 export const personaMcpParserError =
@@ -85,13 +93,16 @@ export function reportPersonaProtocolError(
   });
   const invalidOptions =
     metadata?.protocolOrigin === "sdk_tool_input" &&
-    metadata.tool === "validar_consulta" &&
+    (metadata.tool === "validar_consulta" || metadata.tool === "consultar_dados") &&
     metadata.rejectedField === "options";
   return {
     code,
     ...(invalidOptions ? { rejectedField: "options" as const } : {}),
     message: invalidOptions
-      ? 'validar_consulta recusou o campo options. Omita options se não precisar de limites ou paginação. Se usar options, envie um objeto com inteiros positivos nos limites do schema. As chaves aceitas são maxRows, maxBytes, timeoutMs, page e pageSize. Para paginar, informe page e pageSize juntos, por exemplo {"options":{"page":1,"pageSize":50}}.'
+      ? metadata.tool +
+        " recusou o campo options. " +
+        (metadata.optionsReason ? metadata.optionsReason + " " : "") +
+        'Omita options se não precisar de limites ou paginação. Se usar options, envie um objeto com inteiros positivos nos limites do schema. As chaves aceitas são maxRows, maxBytes, timeoutMs, page e pageSize. Para paginar, informe page e pageSize juntos, por exemplo {"options":{"page":1,"pageSize":50}}.'
       : "Não foi possível concluir a solicitação. Informe o supportId ao responsável.",
     source: "mcp",
     stage,

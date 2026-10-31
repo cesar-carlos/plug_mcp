@@ -32,7 +32,7 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
       ['authentication','tools/list',{}],
       ['preparation','tools/list',{}],
       ['sdk','tools/call',{name:'validar_consulta',arguments:{options:{page:1}}}],
-      ['sdk','tools/call',{name:'validar_consulta',arguments:{options:{pageSize:'sensitive-value'}}}]
+      ['sdk','tools/call',{name:'consultar_dados',arguments:{options:{pageSize:'sensitive-value'}}}]
     ]) {
       const response=await request(app).post('/'+mode).set('Host','fixture.test')
         .set('Authorization','Bearer sensitive-bearer').set('Accept','application/json, text/event-stream')
@@ -91,10 +91,13 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
       retryable: false,
       message: expect.stringContaining("page e pageSize juntos"),
     });
+    expect(diagnostic.message).toContain(
+      index === 5 ? "Falta pageSize" : "pageSize deve ser um inteiro positivo",
+    );
     expect(events[index]).toMatchObject({
       supportId: diagnostic.supportId,
       rejectedField: "options",
-      tool: "validar_consulta",
+      tool: index === 5 ? "validar_consulta" : "consultar_dados",
     });
   }
   expect(events[7]).toMatchObject({ protocolOrigin: "http_parser" });

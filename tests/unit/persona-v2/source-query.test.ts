@@ -806,11 +806,12 @@ it.each(["postgres", "mssql", "sybase"] as const)(
       rows: [{ product: 1, total_amount: "10.25" }],
       truncated: false,
     });
-    await f.service.run(identity, {
+    const page = await f.service.run(identity, {
       sql,
       params: { minimum: 0 },
       options: { page: 2, pageSize: 500 },
     });
+    expect(page.completeness.complete).toBe(false);
     expect(f.execute).toHaveBeenCalledTimes(1);
     expect(f.execute.mock.calls[0]![0]).toBe(sql);
     expect(f.execute.mock.calls[0]![2]).toMatchObject({ page: 2, pageSize: 500 });

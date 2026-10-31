@@ -182,6 +182,28 @@ export const createPersonaV2McpHandler = (
           if (envelope?.method === "tools/call" && envelope.params?.name === name) {
             toolContext = {
               tool: name,
+              optionsReason: () => {
+                if (name !== "validar_consulta" && name !== "consultar_dados") return;
+                const args = (envelope.params as { arguments?: { options?: unknown } }).arguments;
+                const options = args?.options;
+                const parsed = sourceQuerySchema.shape.options.safeParse(options);
+                const issue = parsed.error?.issues[0];
+                if (!issue) return;
+                if (issue.code === "unrecognized_keys")
+                  return "Existe uma chave não permitida em options.";
+                if (issue.code === "custom" && options && typeof options === "object")
+                  return "page" in options ? "Falta pageSize." : "Falta page.";
+                const key = issue.path[0];
+                if (
+                  typeof key === "string" &&
+                  ["page", "pageSize", "maxRows", "maxBytes", "timeoutMs"].includes(key)
+                ) {
+                  if (issue.code === "too_big")
+                    return key + " ultrapassa o máximo permitido de " + String(issue.maximum) + ".";
+                  return key + " deve ser um inteiro positivo.";
+                }
+                return "options deve ser um objeto.";
+              },
               fields:
                 config.inputSchema instanceof z.ZodObject
                   ? Object.keys(config.inputSchema.shape)
