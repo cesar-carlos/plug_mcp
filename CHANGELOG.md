@@ -11,6 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Falhas OAuth e de download usam X-Support-Id com metadados seguros. Indisponibilidade temporária não pede reconexão. A listagem administrativa aceita supportId exato dentro da persona, inclusive após vencer o texto.
+
+- Fixed: O relato aceita as etapas protocol, authentication e request emitidas pelo MCP e conserva o supportId original.
+
+- Fixed: Falha técnica ao resolver o Bearer no MCP retorna 503 sem WWW-Authenticate; o cliente preserva a conexão.
+
 - Fixed: limpeza da fixture de relatos de interação aguarda as conexões PostgreSQL
   encerrarem sem terminá-las à força, evitando a corrida 57P01 no CI e preservando
   falha explícita quando houver conexão vazada.

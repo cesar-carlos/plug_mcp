@@ -98,6 +98,10 @@ Revisão/incorporação é humana no console e modifica apenas rascunho do perfi
 
 `registrar_feedback_conhecimento` e `obter_feedback_conhecimento` exigem item e
 publicação ainda concedidos, sem captura automática ou navegação pela fila.
+Falha técnica ao resolver o Bearer no MCP retorna 503 sem WWW-Authenticate; o cliente preserva a conexão.
+
+O relato aceita as etapas protocol, authentication e request emitidas pelo MCP e conserva o supportId original.
+
 Nos logs de MCP_PROTOCOL_ERROR, protocolOrigin distingue parser HTTP, erro RPC, resultado de ferramenta e validação de entrada do SDK. Só registrar ferramenta da requisição se estiver registrada e campo de primeiro nível declarado no schema. Mensagem do SDK, argumentos e caminhos livres ficam fora dos logs. Quando validar_consulta ou consultar_dados rejeita options, o MCP devolve rejectedField e motivo derivado do schema sem valores nem chaves livres e orientação para omitir o objeto ou corrigir suas chaves e paginação. Preserva supportId e retryable:false. Uma consulta paginada sem metadados de continuação não comprova completude.
 
 `reportar_erro_interacao` é explícita: a IA envia a pergunta, a categoria, o
@@ -135,3 +139,4 @@ incluindo correlação supportId e ausência de payloads e segredos.
 Validação SQL distingue alias único de saída no ORDER BY simples de referência
 física. A expressão projetada continua validada; não ampliar aliases a WHERE/ON
 ou expressões de ordenação. Rankings parciais não comprovam classificação global.
+Falhas OAuth e de download usam X-Support-Id com metadados seguros. Indisponibilidade temporária não pede reconexão. A listagem administrativa aceita supportId exato dentro da persona, inclusive após vencer o texto.

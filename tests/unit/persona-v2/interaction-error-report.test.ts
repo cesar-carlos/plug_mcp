@@ -31,6 +31,12 @@ describe("relato de erro da interação", () => {
     ).toEqual([]);
   });
 
+  it.each(["protocol", "authentication", "request"])("preserva etapa MCP %s", (stage) => {
+    expect(
+      interactionErrorReportSchema.parse({ ...report, error: { ...report.error, stage } }).error,
+    ).toMatchObject({ supportId, stage });
+  });
+
   it("exige detalhe só na categoria outro e recusa campo extra", () => {
     expect(interactionErrorReportSchema.safeParse({ ...report, category: "outro" }).success).toBe(
       false,

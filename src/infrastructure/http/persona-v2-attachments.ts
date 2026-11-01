@@ -1,3 +1,5 @@
+import type { LoggerPort } from "../../domain/ports/logger.port.js";
+import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import type { PersonaAttachments } from "../../application/persona-v2/attachments.js";
 import type { PersonaConsumerCatalog } from "../../application/persona-v2/consumer-catalog.js";
@@ -12,6 +14,7 @@ export function registerPersonaAttachmentRoutes(
     attachments: PersonaAttachments;
     catalog: PersonaConsumerCatalog;
     oauth?: PersonaOAuth;
+    logger?: LoggerPort;
     publicBaseUrl: string;
   },
 ): void {
@@ -21,6 +24,12 @@ export function registerPersonaAttachmentRoutes(
       continue;
     }
     app.all(`/api/consumer/${mode}/attachments/:handle`, async (req, res) => {
+      const reject = (status: number, code: string, message: string) => {
+        const supportId = randomUUID();
+        input.logger?.warn("persona-v2 attachment failed", { supportId, status, errorCode: code });
+        res.setHeader("X-Support-Id", supportId);
+        res.status(status).json({ error: { code, message, supportId } });
+      };
       res.setHeader("Cache-Control", "no-store, private");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Referrer-Policy", "no-referrer");
@@ -29,12 +38,12 @@ export function registerPersonaAttachmentRoutes(
         (req.get("origin") && req.get("origin") !== origin) ||
         req.get("sec-fetch-site") === "cross-site"
       ) {
-        res.status(403).json({ error: { code: "ORIGIN_DENIED" } });
+        reject(403, "ORIGIN_DENIED", "Origem não permitida.");
         return;
       }
       if (req.method !== "GET") {
         res.setHeader("Allow", "GET");
-        res.status(405).end();
+        reject(405, "METHOD_NOT_ALLOWED", "Use GET para obter o anexo.");
         return;
       }
       const bearer = readBearer(req);
@@ -44,7 +53,7 @@ export function registerPersonaAttachmentRoutes(
           : 'Bearer realm="persona-v2"';
       if (!bearer) {
         res.setHeader("WWW-Authenticate", challenge);
-        res.status(401).json({ error: { code: "AUTHORIZATION_DENIED" } });
+        reject(401, "AUTHORIZATION_DENIED", "Autenticação necessária.");
         return;
       }
       let authenticated = false;
@@ -55,7 +64,7 @@ export function registerPersonaAttachmentRoutes(
             : await input.catalog.authenticate(bearer);
         authenticated = true;
         if (req.get("range")) {
-          res.status(416).end();
+          reject(416, "RANGE_UNAVAILABLE", "Solicite o arquivo completo.");
           return;
         }
         const file = await input.attachments.read(identity, String(req.params.handle));
@@ -82,12 +91,17 @@ export function registerPersonaAttachmentRoutes(
             : code === "BUDGET_EXCEEDED"
               ? 413
               : 503;
-        res.status(status).json({
-          error: {
-            code,
-            message: "Anexo indisponível nesta conexão; confira validade e permissões.",
-          },
-        });
+        const messages = {
+          401:
+            mode === "oauth"
+              ? "O cliente deve renovar a autenticação via OAuth."
+              : "Confira a validade do token.",
+          403: "Permissão insuficiente para obter o anexo.",
+          404: "Anexo indisponível ou expirado.",
+          413: "Anexo excede o limite permitido.",
+          503: "Serviço temporariamente indisponível.",
+        };
+        reject(status, code, messages[status]);
       }
     });
   }

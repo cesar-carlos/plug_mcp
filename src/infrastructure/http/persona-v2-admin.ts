@@ -180,7 +180,13 @@ export const createPersonaAdministrationApp = (input: {
       ),
     );
   if (input.oauth && input.consumerCatalog) {
-    registerPersonaOAuthRoutes(app, input.oauth, input.consumerCatalog, input.readPersonaIcon);
+    registerPersonaOAuthRoutes(
+      app,
+      input.oauth,
+      input.consumerCatalog,
+      input.readPersonaIcon,
+      input.logger,
+    );
     app.all(
       "/mcp/chatgpt",
       createPersonaV2McpHandler(
@@ -214,6 +220,7 @@ export const createPersonaAdministrationApp = (input: {
   if (input.attachments && input.consumerCatalog) {
     registerPersonaAttachmentRoutes(app, {
       attachments: input.attachments,
+      logger: input.logger,
       catalog: input.consumerCatalog,
       oauth: input.oauth,
       publicBaseUrl: input.publicBaseUrl,

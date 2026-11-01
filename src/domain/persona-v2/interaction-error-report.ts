@@ -25,7 +25,15 @@ export const INTERACTION_ERROR_SOURCES = [
   "client_agent_access",
 ] as const;
 
-export const INTERACTION_ERROR_STAGES = ["preflight", "cache", "hub", "sanitize"] as const;
+export const INTERACTION_ERROR_STAGES = [
+  "preflight",
+  "cache",
+  "hub",
+  "sanitize",
+  "protocol",
+  "authentication",
+  "request",
+] as const;
 
 const codeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/);
 const toolNameSchema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
@@ -120,5 +128,5 @@ export interface InteractionErrorStore {
   findBySupport(personaId: string, tokenId: string, supportId: string): Promise<string | null>;
   countRecent(personaId: string, tokenId: string): Promise<number>;
   insert(report: StoredInteractionError): Promise<void>;
-  list(personaId: string, beforeId?: string): Promise<InteractionErrorPage>;
+  list(personaId: string, beforeId?: string, supportId?: string): Promise<InteractionErrorPage>;
 }

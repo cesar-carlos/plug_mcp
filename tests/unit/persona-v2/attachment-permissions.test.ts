@@ -23,6 +23,8 @@ it.each(["oauth", "bearer"])(
         .set("Host", "example.test")
         .set("Authorization", "Bearer fixture");
     const forbidden = await get().expect(403);
+    expect(forbidden.headers["x-support-id"]).toBe(forbidden.body.error.supportId);
+    expect(forbidden.body.error.message).toContain("Permissão");
     expect(forbidden.headers["www-authenticate"]).toBeUndefined();
     expect(forbidden.body.error.code).toBe("AUTHORIZATION_DENIED");
     const invalid = await get().expect(401);

@@ -110,7 +110,11 @@ export class PostgresInteractionErrors implements InteractionErrorStore {
     );
   }
 
-  async list(personaId: string, beforeId?: string): Promise<InteractionErrorPage> {
+  async list(
+    personaId: string,
+    beforeId?: string,
+    supportId?: string,
+  ): Promise<InteractionErrorPage> {
     if (
       beforeId &&
       !(
@@ -126,11 +130,11 @@ export class PostgresInteractionErrors implements InteractionErrorStore {
       `SELECT r.id,persona_id,token_id,question,category,category_detail,skill_id,
         error_code,error_message,support_id,error_source,error_stage,error_tool,execution,created_at
        FROM interaction_error_report_v2 r LEFT JOIN interaction_error_text_v2 t ON t.id=r.id AND t.expires_at>statement_timestamp()
-       WHERE persona_id=$1 AND ($2::uuid IS NULL OR (created_at,r.id) < (
+       WHERE persona_id=$1 AND ($3::uuid IS NULL OR support_id=$3) AND ($2::uuid IS NULL OR (created_at,r.id) < (
          SELECT created_at,id FROM interaction_error_report_v2 WHERE persona_id=$1 AND id=$2
        ))
        ORDER BY created_at DESC,r.id DESC LIMIT 21`,
-      [personaId, beforeId ?? null],
+      [personaId, beforeId ?? null, supportId ?? null],
     );
     const items = found.rows.slice(0, 20).map(fromRow);
     return { items, nextCursor: found.rows.length > 20 ? (items[19]?.id ?? null) : null };

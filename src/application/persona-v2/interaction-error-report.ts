@@ -101,12 +101,14 @@ export class PersonaInteractionErrors {
   }
 
   list(session: string, personaId: string, raw: unknown): Promise<InteractionErrorPage> {
-    const { beforeId } = z.strictObject({ beforeId: z.uuid().optional() }).parse(raw);
+    const { beforeId, supportId } = z
+      .strictObject({ beforeId: z.uuid().optional(), supportId: z.uuid().optional() })
+      .parse(raw);
     return this.authority.run(session, personaId, "treinar", async (tx) => {
       if (!tx.interactionErrors) {
         throw new PersonaV2Error("CAPABILITY_UNAVAILABLE", "Relato de erro indisponível.");
       }
-      return tx.interactionErrors.list(personaId, beforeId);
+      return tx.interactionErrors.list(personaId, beforeId, supportId);
     });
   }
 }

@@ -11,6 +11,7 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
       "-e",
       `
     import express from 'express';
+    import {PersonaV2Error} from './src/domain/persona-v2/model.ts';
     import request from 'supertest';
     import {createPersonaV2McpHandler} from './src/infrastructure/mcp/persona-v2-http.ts';
     import {createPino,PinoLoggerAdapter} from './src/infrastructure/logging/pino-logger.adapter.ts';
@@ -21,8 +22,9 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
     const app=express(); app.use(express.json({limit:1024})); app.use(personaMcpParserError(logger));
     for(const mode of ['sdk','authentication','preparation']) {
       const catalog={authenticate:async()=>{if(mode==='authentication')throw new Error('sensitive-authority');return identity;}};
+      const oauth=mode==='authentication'?{resolve:async()=>{throw new PersonaV2Error('CAPABILITY_UNAVAILABLE','sensitive-authority')}}:undefined;
       const setups=mode==='preparation'?{visible:async()=>{throw new Error('sensitive-setup');}}:undefined;
-      app.post('/'+mode,createPersonaV2McpHandler(catalog,'http://fixture.test',{run:async()=>{throw Error('fixture should not execute')}},undefined,undefined,undefined,setups,undefined,undefined,logger));
+      app.post('/'+mode,createPersonaV2McpHandler(catalog,'http://fixture.test',{run:async()=>{throw Error('fixture should not execute')}},undefined,undefined,oauth,setups,undefined,undefined,logger));
     }
     const results=[];
     for(const [mode,method,params] of [
@@ -37,6 +39,7 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
       const response=await request(app).post('/'+mode).set('Host','fixture.test')
         .set('Authorization','Bearer sensitive-bearer').set('Accept','application/json, text/event-stream')
         .send({jsonrpc:'2.0',id:1,method,params});
+      if(mode==='authentication' && response.headers['www-authenticate']) throw Error('unexpected challenge');
       results.push({status:response.status,body:parseMcpPayload(response)});
     }
     for (const body of ['{"secret":"sensitive-json"', JSON.stringify({secret:'sensitive-large'.repeat(100)})]) {

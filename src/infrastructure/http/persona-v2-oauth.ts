@@ -1,3 +1,5 @@
+import type { LoggerPort } from "../../domain/ports/logger.port.js";
+import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { consentScript, consentStyle } from "./persona-v2-consent-ui.js";
 import express, { type Express, type Request, type Response } from "express";
@@ -96,6 +98,7 @@ export const registerPersonaOAuthRoutes = (
   oauth: PersonaOAuth,
   catalog: PersonaConsumerCatalog,
   readPersonaIcon?: (personaId: string) => Promise<StoredPersonaIcon | null>,
+  logger?: LoggerPort,
 ): void => {
   const { issuer, resource } = oauth.policy;
   const origin = new URL(issuer).origin;
@@ -121,6 +124,21 @@ export const registerPersonaOAuthRoutes = (
           : error instanceof z.ZodError
             ? "invalid_request"
             : "temporarily_unavailable";
+        const supportId = randomUUID();
+        res.setHeader("X-Support-Id", supportId);
+        const stage = req.path.endsWith("/token")
+          ? (req.body as { grant_type?: unknown } | undefined)?.grant_type === "refresh_token"
+            ? "refresh"
+            : "token"
+          : req.path.endsWith("/revoke")
+            ? "revoke"
+            : "authorization";
+        logger?.warn("persona-v2 oauth failed", {
+          supportId,
+          stage,
+          errorCode: code,
+          status: res.statusCode,
+        });
         if (req.path.endsWith("/token") || req.path.endsWith("/revoke")) {
           res.json({ error: code });
         } else {
@@ -128,7 +146,7 @@ export const registerPersonaOAuthRoutes = (
             .type("html")
             .send(
               page(
-                '<p role="alert">Conexão não concluída. Reinicie a conexão no ChatGPT e confira o token somente no navegador.</p>',
+                `<p role="alert">${res.statusCode >= 500 ? "Serviço temporariamente indisponível. Aguarde antes de continuar." : "Conexão não concluída. Confira a solicitação no navegador."} Atendimento: ${supportId}</p>`,
               ),
             );
         }

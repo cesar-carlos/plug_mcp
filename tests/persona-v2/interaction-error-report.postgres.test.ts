@@ -190,7 +190,12 @@ it("grava o relato completo, não o atualiza e limita a persona dona", async () 
   const protocol = await call(token, {
     question: "A conexão caiu antes de qualquer tool.",
     category: "protocolo",
-    error: { code: "CAPABILITY_UNAVAILABLE", message: "Serviço indisponível." },
+    error: {
+      code: "CAPABILITY_UNAVAILABLE",
+      message: "Serviço indisponível.",
+      stage: "protocol",
+      source: "mcp",
+    },
     execution: { summary: "Nenhuma tool chegou a executar.", steps: [] },
   });
   expect(protocol.denied, JSON.stringify(protocol.value)).toBe(false);
@@ -224,6 +229,14 @@ it("grava o relato completo, não o atualiza e limita a persona dona", async () 
   };
   const expired = page.items.find((item) => item.id === id);
   expect(expired).toBeDefined();
+  const filtered = await get(
+    `/api/admin/personas/${personaId}/erros-interacao?supportId=${supportId}`,
+  ).expect(200);
+  expect(filtered.body.items).toEqual([expired]);
+  const isolated = await get(
+    `/api/admin/personas/${otherPersonaId}/erros-interacao?supportId=${supportId}`,
+  ).expect(200);
+  expect(isolated.body.items).toEqual([]);
   expect(expired).toMatchObject({ textExpired: true, error: { supportId } });
   expect(expired).not.toHaveProperty("question");
   expect(expired).not.toHaveProperty("execution");

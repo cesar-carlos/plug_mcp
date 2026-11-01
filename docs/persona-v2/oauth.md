@@ -466,3 +466,6 @@ e registros OAuth expirados sem concessão. Registros vinculados permanecem até
 vencerem tanto o próprio prazo quanto o da concessão. Código consumido conserva
 a identificação da família para detectar replay mesmo após seu prazo individual;
 a limpeza não estende validade, remove concessões ou muda revogações.
+
+Falha técnica ao resolver o Bearer no MCP retorna 503 sem WWW-Authenticate; o cliente preserva a conexão.
+Falhas OAuth e de download usam X-Support-Id com metadados seguros. Indisponibilidade temporária não pede reconexão. A listagem administrativa aceita supportId exato dentro da persona, inclusive após vencer o texto.

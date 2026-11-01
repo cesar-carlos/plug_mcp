@@ -134,7 +134,9 @@ export const createPersonaV2McpHandler = (
       try {
         identity = oauth ? await oauth.resolve(bearer) : await catalog.authenticate(bearer);
       } catch (error) {
-        const denied = error instanceof PersonaV2Error;
+        const denied =
+          error instanceof PersonaV2Error &&
+          ["AUTHORIZATION_DENIED", "STALE_AUTHORIZATION"].includes(error.code);
         if (denied)
           res.setHeader(
             "WWW-Authenticate",
