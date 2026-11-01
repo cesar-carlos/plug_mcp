@@ -1,9 +1,9 @@
 import type pg from "pg";
 import { setTimeout as delay } from "node:timers/promises";
 
-export async function dropKnowledgeContextDatabase(admin: pg.Pool, name: string): Promise<void> {
-  if (!/^knowledge_context_[a-f0-9]{32}_test$/.test(name)) {
-    throw new Error("Invalid knowledge-context fixture name");
+export async function dropPersonaFixtureDatabase(admin: pg.Pool, name: string): Promise<void> {
+  if (!/^(?:knowledge_context|interaction_error)_[a-f0-9]{32}_test$/.test(name)) {
+    throw new Error("Invalid persona fixture name");
   }
   const deadline = performance.now() + 5000;
   const observation: pg.QueryConfig & { query_timeout: number } = {

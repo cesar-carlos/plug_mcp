@@ -9,6 +9,7 @@ import { composePersonaV2 } from "../../src/composition/compose-persona-v2.js";
 import { INTERACTION_ERROR_REPORTS_PER_HOUR } from "../../src/domain/persona-v2/interaction-error-report.js";
 import { applyPersonaMigrations } from "../../src/infrastructure/persistence/persona-v2/migrate.js";
 import { parseMcpPayload } from "../helpers/mcp-rpc.js";
+import { dropPersonaFixtureDatabase } from "../helpers/persona-fixture-cleanup.js";
 
 const base = new URL(personaV2TestDatabaseUrl());
 const adminUrl = new URL(base);
@@ -139,14 +140,15 @@ beforeAll(async () => {
   ).body.persona.id;
 });
 afterAll(async () => {
-  await runtime?.close();
-  await db.end();
-  await adminDb.query(
-    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1 AND pid<>pg_backend_pid()",
-    [name],
-  );
-  await adminDb.query(`DROP DATABASE "${name}"`);
-  await adminDb.end();
+  try {
+    await runtime?.close();
+    await db.end();
+    // pool.end() can resolve before PostgreSQL observes the socket closing.
+    // Wait for graceful disconnect; never turn that race into a forced 57P01.
+    await dropPersonaFixtureDatabase(adminDb, name);
+  } finally {
+    await adminDb.end();
+  }
 });
 
 it("grava o relato completo, não o atualiza e limita a persona dona", async () => {

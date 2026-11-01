@@ -9,7 +9,7 @@ import { personaV2TestDatabaseUrl } from "../../src/config/persona-v2-test.js";
 import { testConfig } from "../../src/config/env.js";
 import { queryTraining } from "../helpers/persona-v2-training.js";
 import { parseMcpPayload } from "../helpers/mcp-rpc.js";
-import { dropKnowledgeContextDatabase } from "../helpers/knowledge-context-cleanup.js";
+import { dropPersonaFixtureDatabase } from "../helpers/persona-fixture-cleanup.js";
 
 const base = new URL(personaV2TestDatabaseUrl()),
   adminUrl = new URL(base);
@@ -172,43 +172,46 @@ beforeEach(async () => {
   ).body.persona.id;
 });
 afterAll(async () => {
-  await runtime?.close();
-  await db.end();
   try {
-    await dropKnowledgeContextDatabase(adminDb, name);
+    await runtime?.close();
+    await db.end();
+    await dropPersonaFixtureDatabase(adminDb, name);
   } finally {
     await adminDb.end();
   }
 });
-it("aguarda o backend real encerrar sem interromper sua conexão durante a limpeza", async () => {
-  const ownedName = `knowledge_context_${randomUUID().replaceAll("-", "")}_test`;
-  const ownedUrl = new URL(adminUrl);
-  ownedUrl.pathname = `/${ownedName}`;
-  await adminDb.query(`CREATE DATABASE "${ownedName}"`);
-  const held = new pg.Client({ connectionString: ownedUrl.toString() });
-  const errors: Error[] = [];
-  held.on("error", (error) => errors.push(error));
-  let observations = 0;
-  let closing: Promise<void> | undefined;
-  const observe = () => {
-    observations++;
-    if (observations === 2) closing = held.end();
-  };
-  try {
-    await held.connect();
-    adminDb.on("acquire", observe);
-    await dropKnowledgeContextDatabase(adminDb, ownedName);
-    expect(observations).toBeGreaterThanOrEqual(2);
-    expect(errors).toEqual([]);
-    const databases = await adminDb.query("SELECT 1 FROM pg_database WHERE datname = $1", [
-      ownedName,
-    ]);
-    expect(databases.rowCount).toBe(0);
-  } finally {
-    adminDb.off("acquire", observe);
-    await (closing ?? held.end());
-  }
-});
+it.each(["knowledge_context", "interaction_error"])(
+  "aguarda o backend real da fixture %s encerrar sem interromper sua conexão",
+  async (prefix) => {
+    const ownedName = `${prefix}_${randomUUID().replaceAll("-", "")}_test`;
+    const ownedUrl = new URL(adminUrl);
+    ownedUrl.pathname = `/${ownedName}`;
+    await adminDb.query(`CREATE DATABASE "${ownedName}"`);
+    const held = new pg.Client({ connectionString: ownedUrl.toString() });
+    const errors: Error[] = [];
+    held.on("error", (error) => errors.push(error));
+    let observations = 0;
+    let closing: Promise<void> | undefined;
+    const observe = () => {
+      observations++;
+      if (observations === 2) closing = held.end();
+    };
+    try {
+      await held.connect();
+      adminDb.on("acquire", observe);
+      await dropPersonaFixtureDatabase(adminDb, ownedName);
+      expect(observations).toBeGreaterThanOrEqual(2);
+      expect(errors).toEqual([]);
+      const databases = await adminDb.query("SELECT 1 FROM pg_database WHERE datname = $1", [
+        ownedName,
+      ]);
+      expect(databases.rowCount).toBe(0);
+    } finally {
+      adminDb.off("acquire", observe);
+      await (closing ?? held.end());
+    }
+  },
+);
 it("feedback exige item e publicação concedidos e não modifica treinamento ou auditoria editorial", async () => {
   const f = await fixture();
   const search = await call(f.token, "buscar_contexto", { pergunta: "mercantil" });
