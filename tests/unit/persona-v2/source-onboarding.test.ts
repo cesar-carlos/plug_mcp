@@ -9,11 +9,25 @@ import { sourceQuerySchema } from "../../../src/application/persona-v2/source-qu
 import { PERSONA_V2_INSTRUCTIONS } from "../../../src/infrastructure/mcp/server-instructions.js";
 import { queryTraining, trainingSource } from "../../helpers/persona-v2-training.js";
 
+import { trainingTopic } from "../../../src/application/persona-v2/training-topics.js";
+import { PERSONA_V2_TRAINING_BASE } from "../../../src/application/persona-v2/training-base.js";
+
+it("exemplos de paginação do tópico SQL respeitam o contrato e o tamanho efetivo", () => {
+  const contract = PERSONA_V2_TRAINING_BASE.queryContract;
+  expect(trainingTopic("sql").queryContract).toEqual(contract);
+  const { firstPage, nextPageExample } = contract.pagination;
+  expect(sourceQuerySchema.parse(firstPage).options).toEqual({ page: 1, pageSize: 50 });
+  expect(sourceQuerySchema.parse(nextPageExample).options).toEqual({ page: 2, pageSize: 20 });
+});
+
 const crypto = new NodeCryptoAdapter("a".repeat(64));
 it.each(["mssql", "postgres", "sybase"] as const)("guia %s usa contrato MCP v2", (dialect) => {
   const guide = personaDialectGuide(dialect);
   expect(guide.paginacao).toContain("options.pageSize");
   expect(guide.paginacao).toContain("pagination.hasNextPage");
+  expect(guide.paginacao).toContain("pagination.pageSize");
+  expect(guide.paginacao).toContain("completeness.truncated não indica próxima página");
+  expect(guide.paginacao).not.toContain("use TOP n");
   expect(JSON.stringify(guide)).not.toMatch(/page_size|paginacao\.hasNextPage|max_rows/);
   expect(sourceQuerySchema.safeParse({ options: { page: 1, pageSize: 10 } }).success).toBe(true);
   expect(sourceQuerySchema.safeParse({ options: { page: 1, page_size: 10 } }).success).toBe(false);

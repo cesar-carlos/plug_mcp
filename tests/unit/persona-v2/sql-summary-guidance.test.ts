@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
 import {
   SQL_SUMMARY_EXAMPLES,
@@ -11,7 +12,7 @@ import { escopoFromSqlModelo } from "../../../src/application/use-cases/shared/e
 import { parseSqlModelo } from "../../../src/application/use-cases/shared/sql-modelo.js";
 
 const scope = escopoFromSqlModelo(
-  parseSqlModelo("SELECT s.product_id, s.net_amount, s.sold_at FROM fixture_sales s"),
+  parseSqlModelo("SELECT s.branch_id, s.product_id, s.net_amount, s.sold_at FROM fixture_sales s"),
 );
 
 it("base, runtime e guia do pacote entregam a mesma orientação de resumos", () => {
@@ -57,4 +58,25 @@ it("resumo por produto aceita paginação final e HAVING físico, sem autorizar 
   expect(() =>
     validateSourceSql(sql.replace("GROUP BY s.product_id", "GROUP BY product"), "mssql", scope),
   ).toThrow();
+});
+
+it("total e ranking preservam intervalo e grão com empates entre filiais e produtos", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`CREATE TABLE fixture_sales(branch_id INTEGER, product_id INTEGER, net_amount INTEGER, sold_at TEXT);
+      INSERT INTO fixture_sales VALUES (2,1,10,'2026-11-01'), (1,2,10,'2026-11-01'),
+      (1,1,4,'2026-11-01'), (1,1,6,'2026-11-01'), (1,1,99,'2026-11-02');`);
+    const params = { start: "2026-11-01", end: "2026-11-02" };
+    const scalar = SQL_SUMMARY_EXAMPLES[2].sql;
+    expect(db.prepare(scalar).all(params)).toEqual([{ total_amount: 30 }]);
+    const ranking = SQL_SUMMARY_EXAMPLES[3].sql;
+    validateSourceSql(ranking, "mssql", scope, { page: 1, pageSize: 2 });
+    expect(db.prepare(ranking).all(params)).toEqual([
+      { branch: 1, product: 1, total_amount: 10 },
+      { branch: 1, product: 2, total_amount: 10 },
+      { branch: 2, product: 1, total_amount: 10 },
+    ]);
+  } finally {
+    db.close();
+  }
 });

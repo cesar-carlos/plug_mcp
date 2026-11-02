@@ -180,7 +180,15 @@ export function reportPersonaV2ToolError(
               ? "Conexão válida. Confira as permissões e a disponibilidade do recurso com o responsável; reconectar não concede acesso."
               : safeAuthorizationReason === "authentication_unavailable"
                 ? "Não foi possível conferir a conexão. Isso não comprova expiração; informe o supportId ao responsável."
-                : "A autenticação precisa ser renovada pelo cliente OAuth; reconecte somente se a renovação não resolver.",
+                : safeAuthorizationReason === "access_expired"
+                  ? "O cliente OAuth deve renovar o access token automaticamente com o refresh token."
+                  : ["grant_revoked", "grant_expired"].includes(safeAuthorizationReason)
+                    ? "A concessão OAuth terminou. Autorize uma nova conexão no navegador."
+                    : ["token_revoked", "token_expired", "authorization_changed"].includes(
+                          safeAuthorizationReason,
+                        )
+                      ? "Confira a validade e a autorização do token da persona com o responsável antes de autorizar nova conexão."
+                      : "Confira a credencial da conexão e informe o supportId ao responsável.",
           retryable: false as const,
         }
       : {}),

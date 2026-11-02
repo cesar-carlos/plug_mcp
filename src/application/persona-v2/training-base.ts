@@ -9,6 +9,16 @@ import {
 
 /** Guidance has no execution authority. This version describes only implemented v2 surfaces. */
 const content = {
+  queryKnowledgeWorkflow: {
+    discover:
+      "Use buscar_contexto para localizar uma skill concedida pela finalidade da pergunta. Abra obter_skill para conferir fonte, publicação, medida, grão, filtros, parâmetros e campos permitidos antes de montar a consulta.",
+    relate:
+      "Se precisar combinar recursos, consulte obter_grafo_conhecimento no escopo concedido e confira cada elo na publicação. Em N:N preserve a intermediária e os pares de colunas de cada elo. Um resultado de busca ou proximidade no grafo não autoriza JOIN.",
+    resolveGap:
+      "Se faltar regra de negócio, relacionamento ou prova estrutural, identifique a lacuna para o responsável. Não deduza vínculos pela semelhança dos nomes nem aplique um perfil mais recente por conta própria. Inspeção estrutural é uma atividade de treinamento com permissão própria.",
+    deliver:
+      "Antes de responder, confira provenance e completeness. Diferencie uma medida calculada sobre o recorte completo de uma soma obtida apenas nas linhas recebidas.",
+  },
   sqlSummaries: {
     guidance: SQL_SUMMARY_GUIDANCE,
     examples: SQL_SUMMARY_EXAMPLES,
@@ -57,8 +67,14 @@ const content = {
   results:
     "Responda fatos, valores e KPIs somente com resultados efetivamente retornados e regras publicadas. Nunca invente registros nem complete valores ausentes por suposição. Informe fonte, período, filtros relevantes e limitações. Zero linhas só descreve a consulta efetuada; erro e negação de acesso não provam ausência. Leia completeness, pagination e provenance; uma página ou resultado parcial não representa o total. Divergências entre bases exigem explicação conforme treinamento, não escolha arbitrária de um valor.",
   queryContract: {
+    pagination: {
+      firstPage: { options: { page: 1, pageSize: 50 } },
+      nextPageExample: { options: { page: 2, pageSize: 20 } },
+      instructions:
+        "Fragmentos de argumentos para consultar_dados e validar_consulta. Para um total agregado, omita options. Para uma lista, comece com firstPage e uma ordem estável. O exemplo seguinte pressupõe que a primeira resposta trouxe pagination.page = 1, pagination.pageSize = 20 e pagination.hasNextPage = true. Use sempre os valores reais da resposta: próxima page = pagination.page + 1 e pageSize = pagination.pageSize. Preserve fonte, skills, SQL, params e demais limites. Avance somente se precisar de mais linhas. Se hasNextPage for false, pare; sem pagination, não adivinhe a próxima página. Em erro, informe o supportId e a orientação recebida.",
+    },
     input:
-      "consultar_dados: fonteId, skillIds, sql opcional, params tipados separados e options com page, pageSize, maxRows, timeoutMs. Nunca use page_size/max_rows no contrato MCP v2.",
+      "consultar_dados: fonteId, skillIds, sql opcional, params tipados separados e options com page, pageSize, maxRows, maxBytes, timeoutMs. Nunca use page_size/max_rows no contrato MCP v2.",
     output:
       "columns e rows contêm os dados. pagination.hasNextPage orienta próxima página. completeness.complete informa completude e provenance identifica fonte, dialeto, publicações e readAt.",
     errors:

@@ -331,6 +331,14 @@ OAuth, não certifica tráfego de conversas e não autoriza repetição.
 
 ## Aliases de saída e completude de rankings
 
+Os guias por dialeto da persona-v2 usam o contrato MCP de paginação diretamente. Um pedido dos primeiros N termina ao reunir N linhas ordenadas. Truncamento não autoriza avançar e falha de paginação não autoriza trocar para TOP.
+
+queryContract.pagination exemplifica a primeira página e a continuação com o tamanho efetivamente retornado. Sem metadados de paginação, não inferir continuação.
+
+Os tópicos sql e knowledge de obter_treinamento_base compartilham queryKnowledgeWorkflow e relationshipPaths. Busca e grafo localizam conhecimento concedido; a execução usa o contrato da publicação.
+
+O guia SQL v2 diferencia total escalar, resumo agrupado e ranking paginado. Orienta filtros tipados sobre colunas e desempate pelo grão do grupo, sem presumir índices físicos.
+
 ### Planejamento de resumos na fonte
 
 O treinamento base `persona-v2-sql-summary-1` entrega `sqlSummaries`, com orientação

@@ -68,6 +68,14 @@ describe("query quality and semantic contracts", () => {
   });
   it("offers bounded topic guides while preserving the complete default", () => {
     expect(trainingTopic()).toBe(PERSONA_V2_TRAINING_BASE);
+    for (const topic of ["sql", "knowledge"] as const) {
+      expect(trainingTopic(topic).queryKnowledgeWorkflow).toEqual(
+        PERSONA_V2_TRAINING_BASE.queryKnowledgeWorkflow,
+      );
+      expect(trainingTopic(topic).relationshipPaths).toBe(
+        PERSONA_V2_TRAINING_BASE.relationshipPaths,
+      );
+    }
     expect(trainingTopic("sql")).toHaveProperty("sqlSummaries");
     expect(trainingTopic("sql")).not.toHaveProperty("integrationCredentials");
     expect(trainingTopic("administration")).toHaveProperty("guidance");

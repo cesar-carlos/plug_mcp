@@ -182,7 +182,32 @@ export const createPersonaV2McpHandler = (
           callback: unknown,
         ) => {
           if (envelope?.method === "tools/call" && envelope.params?.name === name) {
+            let rejectedInput: { field?: string } | undefined;
+            const schema = config.inputSchema;
+            const fields = schema instanceof z.ZodObject ? Object.keys(schema.shape) : [];
+            if (schema instanceof z.ZodObject) {
+              // Observe the validation performed by the SDK without modifying the shared schema.
+              const standard = schema["~standard"];
+              const observed = Object.create(schema) as typeof schema;
+              Object.defineProperty(observed, "~standard", {
+                value: {
+                  ...standard,
+                  validate: async (value: unknown) => {
+                    const result = await standard.validate(value);
+                    if (result.issues?.length) {
+                      const path = result.issues[0]?.path?.[0];
+                      const field = typeof path === "object" ? path.key : path;
+                      rejectedInput =
+                        typeof field === "string" && fields.includes(field) ? { field } : {};
+                    }
+                    return result;
+                  },
+                },
+              });
+              config = { ...config, inputSchema: observed };
+            }
             toolContext = {
+              rejectedInput: () => rejectedInput,
               tool: name,
               optionsReason: () => {
                 if (name !== "validar_consulta" && name !== "consultar_dados") return;
@@ -206,10 +231,7 @@ export const createPersonaV2McpHandler = (
                 }
                 return "options deve ser um objeto.";
               },
-              fields:
-                config.inputSchema instanceof z.ZodObject
-                  ? Object.keys(config.inputSchema.shape)
-                  : [],
+              fields,
             };
           }
           return Reflect.apply(register, baseServer, [name, config, callback]) as ReturnType<

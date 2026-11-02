@@ -31,7 +31,9 @@ export function trainingTopic(
     case "sql":
       return wrap({
         guidance: SQL_RUNTIME_GUIDANCE,
+        queryKnowledgeWorkflow: base.queryKnowledgeWorkflow,
         sqlSummaries: base.sqlSummaries,
+        relationshipPaths: base.relationshipPaths,
         queryContract: base.queryContract,
         executionLimits: base.executionLimits,
         fieldUses: base.fieldUses,
@@ -40,6 +42,7 @@ export function trainingTopic(
     case "knowledge":
       return wrap({
         guidance: KNOWLEDGE_RUNTIME_GUIDANCE,
+        queryKnowledgeWorkflow: base.queryKnowledgeWorkflow,
         sharedKnowledge: base.sharedKnowledge,
         library: base.library,
         relationshipPaths: base.relationshipPaths,

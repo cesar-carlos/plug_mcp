@@ -4,6 +4,7 @@ import type { ErrorRequestHandler } from "express";
 
 export interface ProtocolToolContext {
   readonly tool: string;
+  readonly rejectedInput?: () => { field?: string } | undefined;
   readonly optionsReason?: () => string | undefined;
   readonly fields: readonly string[];
 }
@@ -24,6 +25,18 @@ function sdkMetadata(
 ): DiagnosticMetadata {
   if (!context) return { protocolOrigin: origin };
   const { tool, fields } = context;
+  const observed = context.rejectedInput?.();
+  if (observed) {
+    const rejectedField = observed.field;
+    const optionsReason = rejectedField === "options" ? context.optionsReason?.() : undefined;
+    return {
+      protocolOrigin: "sdk_tool_input",
+      tool,
+      ...(rejectedField ? { rejectedField } : {}),
+      ...(optionsReason ? { optionsReason } : {}),
+    };
+  }
+  if (context.rejectedInput) return { protocolOrigin: origin, tool };
   const prefix = "Input validation error: Invalid arguments for tool " + tool + ": ";
   if (typeof message !== "string" || !message.startsWith(prefix))
     return { protocolOrigin: origin, tool };

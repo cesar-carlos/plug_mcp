@@ -42,6 +42,12 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
       if(mode==='authentication' && response.headers['www-authenticate']) throw Error('unexpected challenge');
       results.push({status:response.status,body:parseMcpPayload(response)});
     }
+    for(const tool of ['validar_consulta','consultar_dados']){
+      for(const options of [{page:0,pageSize:1},{page:1,pageSize:54321},{'sensitive-free-key':'sensitive-free-value'}]){
+        const response=await request(app).post('/sdk').set('Host','fixture.test').set('Authorization','Bearer sensitive-bearer').set('Accept','application/json, text/event-stream').send({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:tool,arguments:{options}}});
+        results.push({status:response.status,body:parseMcpPayload(response)});
+      }
+    }
     for (const body of ['{"secret":"sensitive-json"', JSON.stringify({secret:'sensitive-large'.repeat(100)})]) {
       const response=await request(app).post('/mcp').set('Content-Type','application/json').send(body);
       results.push({status:response.status,body:response.body});
@@ -66,8 +72,8 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
     result?: { content: { text: string }[] };
   }
   const results = lines.find((line) => line.results).results as { status: number; body: Body }[];
-  expect(events, JSON.stringify(results)).toHaveLength(9);
-  expect(new Set(events.map((event) => event.supportId)).size).toBe(9);
+  expect(events, JSON.stringify(results)).toHaveLength(15);
+  expect(new Set(events.map((event) => event.supportId)).size).toBe(15);
   results.forEach(({ body }, index) => {
     const diagnostic =
       body.error?.data ??
@@ -103,9 +109,31 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
       tool: index === 5 ? "validar_consulta" : "consultar_dados",
     });
   }
-  expect(events[7]).toMatchObject({ protocolOrigin: "http_parser" });
-  expect(events[8]).toMatchObject({ protocolOrigin: "http_parser" });
+  for (let i = 7; i < 13; i++) {
+    const reason = [
+      "page deve ser um inteiro positivo",
+      "pageSize ultrapassa o máximo permitido",
+      "chave não permitida",
+    ][(i - 7) % 3]!;
+    const d = JSON.parse(results[i]!.body.result!.content[0]!.text).error;
+    expect(d.message).toContain(reason);
+    expect(d.message).not.toContain("54321");
+    expect(events[i]).toMatchObject({
+      supportId: d.supportId,
+      rejectedField: "options",
+      tool: i < 10 ? "validar_consulta" : "consultar_dados",
+      optionsReason: expect.stringContaining(reason),
+    });
+  }
+  expect(events[13]).toMatchObject({ protocolOrigin: "http_parser" });
+  expect(events[14]).toMatchObject({ protocolOrigin: "http_parser" });
   expect(results.slice(3).map((result: { status: number }) => result.status)).toEqual([
-    503, 503, 200, 200, 400, 413,
+    503,
+    503,
+    200,
+    200,
+    ...Array<number>(6).fill(200),
+    400,
+    413,
   ]);
 });

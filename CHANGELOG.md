@@ -11,11 +11,19 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: o treinamento SQL exemplifica a primeira página e a continuação com os limites efetivos.
+
+- Fixed: diagnóstico de entrada usa a validação estruturada do SDK; orientação OAuth distingue refresh, revogação e indisponibilidade.
+
+- Changed: os guias SQL e de conhecimento orientam o uso de skills e relacionamentos publicados pelo mesmo roteiro.
+
 - Fixed: Falhas OAuth e de download usam X-Support-Id com metadados seguros. Indisponibilidade temporária não pede reconexão. A listagem administrativa aceita supportId exato dentro da persona, inclusive após vencer o texto.
 
 - Fixed: O relato aceita as etapas protocol, authentication e request emitidas pelo MCP e conserva o supportId original.
 
 - Fixed: Falha técnica ao resolver o Bearer no MCP retorna 503 sem WWW-Authenticate; o cliente preserva a conexão.
+
+- Changed: O guia SQL v2 diferencia total escalar, resumo agrupado e ranking paginado. Orienta filtros tipados sobre colunas e desempate pelo grão do grupo, sem presumir índices físicos.
 
 - Fixed: limpeza da fixture de relatos de interação aguarda as conexões PostgreSQL
   encerrarem sem terminá-las à força, evitando a corrida 57P01 no CI e preservando
