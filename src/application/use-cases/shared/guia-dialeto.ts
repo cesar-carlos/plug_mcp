@@ -20,7 +20,7 @@ const GUIAS: Record<Exclude<Dialeto, "firebird">, Omit<GuiaDialeto, "dialeto">> 
     paginacao: withTruncated(
       "Consulta única limitada: SELECT TOP n ... ORDER BY ... (sem options.page). Paginação de páginas: só ORDER BY no SQL + options.page e options.page_size juntos — não escreva TOP/OFFSET/FETCH. Se o hub devolver 1033, use TOP n sem options.page até o rewrite OFFSET/FETCH no agente",
     ),
-    data: "YEAR(col), MONTH(col), DATEADD, DATEDIFF, CONVERT(date, col), GETDATE()",
+    data: "YEAR(col), MONTH(col), DATEADD, DATEDIFF(day, t.emissao, t.vencimento) ou DATEDIFF_BIG com unidade temporal sem aspas e colunas publicadas qualificadas, CONVERT(date, col), GETDATE()",
     concatenacao: "col1 + col2 ou CONCAT(col1, col2)",
     cast: "CAST(x AS DECIMAL(18,2)), CONVERT(varchar, x)",
     limite:

@@ -794,6 +794,32 @@ const functionName = (value: unknown): string => {
     .toUpperCase();
 };
 
+const MSSQL_DIFF_UNITS = new Set(
+  "year yy yyyy quarter qq q month mm m dayofyear dy y day dd d weekday dw w week wk ww hour hh minute mi n second ss s millisecond ms microsecond mcs nanosecond ns".split(
+    " ",
+  ),
+);
+
+// The T-SQL parser models bare dateparts as column references. Preserve real
+// references elsewhere, including date expressions with a column named day.
+function normalizeDiffUnit(args: unknown): void {
+  if (!isRecord(args) || !Array.isArray(args.value) || args.value.length !== 3) return;
+  const unit = args.value[0];
+  if (
+    isRecord(unit) &&
+    unit.type === "column_ref" &&
+    unit.table == null &&
+    unit.db == null &&
+    unit.schema == null &&
+    unit.server == null &&
+    unit.collate == null &&
+    typeof unit.column === "string" &&
+    MSSQL_DIFF_UNITS.has(unit.column.toLowerCase())
+  ) {
+    args.value[0] = { type: "origin", value: unit.column };
+  }
+}
+
 const assertReadOnlyAst = (
   root: unknown,
   dialeto: Dialeto,
@@ -878,6 +904,9 @@ const assertReadOnlyAst = (
       }
       if (node.type === "function" || node.type === "aggr_func" || node.type === "window_func") {
         const name = functionName(node.name);
+        if (dialeto === "mssql" && (name === "DATEDIFF" || name === "DATEDIFF_BIG")) {
+          normalizeDiffUnit(node.args);
+        }
         if (
           !["NOT", "EXISTS"].includes(name) &&
           !SAFE_COMMON_FUNCTIONS.has(name) &&

@@ -221,7 +221,7 @@ const assertMeasureGrain = (
                   ? "relationship_unproven"
                   : "measure_multiplication",
               },
-              hint: "Preserve o grão com pré-agregação ou EXISTS. Não corrija com SUM(DISTINCT valor); confirme cardinalidade e origem física no rascunho e republique.",
+              hint: "Se os filtros e a medida estiverem na tabela de origem, agregue diretamente nela dentro do escopo publicado. Preserve filtros e recortes obrigatórios. Quando precisar filtrar por outra tabela, use EXISTS com a chave completa ou pré-agregação no grão comprovado. SUM(DISTINCT valor) pode eliminar valores legítimos iguais.",
             });
           }
           pending.push({ node: edge.to, path: new Set([...current.path, edge.to]) });

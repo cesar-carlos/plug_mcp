@@ -16,6 +16,17 @@ const escopo = escopoFromSqlModelo(
 );
 
 describe("validarSqlNoEscopo", () => {
+  it("validates the DATEDIFF operands in a join while treating the day unit as syntax", () => {
+    const from = "FROM titulo t JOIN baixa b ON b.id = t.id WHERE t.id > 0";
+    const allowed = escopoFromSqlModelo(parseSqlModelo("SELECT t.emissao, b.baixa " + from));
+    const query = (start: string) => "SELECT DATEDIFF(day, " + start + ", b.baixa) AS dias " + from;
+    expect(() => validarSqlNoEscopo(query("t.emissao"), "mssql", allowed)).not.toThrow();
+    expect(() => validarSqlNoEscopo(query("emissao"), "mssql", allowed)).toThrow(
+      expect.objectContaining({ code: ERROR_CODES.COLUNA_AMBIGUA }),
+    );
+    expect(() => validarSqlNoEscopo(query("t.segredo"), "mssql", allowed)).toThrow();
+  });
+
   it("aceita agregação no escopo", () => {
     const ast = validarSqlNoEscopo(
       "SELECT SUM(p.codprod) AS total FROM produto p WHERE p.codprod > 0",

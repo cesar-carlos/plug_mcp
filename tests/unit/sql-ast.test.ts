@@ -9,6 +9,19 @@ import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 
 describe("sql-ast", () => {
+  it("distinguishes a DATEDIFF datepart from identically named columns in joined tables", () => {
+    const ast = parseSelect(
+      "SELECT DATEDIFF(day, a.day, b.fim) AS dias FROM a JOIN b ON a.id = b.id WHERE DATEDIFF_BIG(dd, day, b.fim) > 0",
+      "mssql",
+    );
+    expect(ast.usageRefs?.projecao).toEqual([
+      { table: "a", column: "day" },
+      { table: "b", column: "fim" },
+    ]);
+    expect(ast.usageRefs?.filtro).toContainEqual({ table: null, column: "day" });
+    expect(ast.usageRefs?.filtro).not.toContainEqual({ table: null, column: "dd" });
+  });
+
   it("mapeia mssql, sybase e firebird para transactsql", () => {
     expect(parserDatabaseForDialeto("mssql")).toBe("transactsql");
     expect(parserDatabaseForDialeto("sybase")).toBe("transactsql");

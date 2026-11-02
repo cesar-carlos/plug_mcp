@@ -1,5 +1,7 @@
 # Consultas por fonte — contrato implementado
 
+No SQL Server, o primeiro argumento de DATEDIFF e DATEDIFF_BIG identifica a unidade temporal. Os operandos de data continuam sujeitos a escopo, linhagem e qualificação. Agregue na tabela de origem quando ela contiver todos os filtros e a medida.
+
 CTEs não recursivas são resolvidas em ordem de dependência, conservando o
 contexto nas CTEs seguintes, derivadas e ramos de conjunto. JOIN continua
 dependendo do relacionamento físico completo publicado. Definições duplicadas,
