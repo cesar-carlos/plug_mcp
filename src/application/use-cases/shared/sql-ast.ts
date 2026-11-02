@@ -804,7 +804,7 @@ const MSSQL_DIFF_UNITS = new Set(
 // references elsewhere, including date expressions with a column named day.
 function normalizeDiffUnit(args: unknown): void {
   if (!isRecord(args) || !Array.isArray(args.value) || args.value.length !== 3) return;
-  const unit = args.value[0];
+  const unit: unknown = args.value[0];
   if (
     isRecord(unit) &&
     unit.type === "column_ref" &&
