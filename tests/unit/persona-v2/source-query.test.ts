@@ -861,3 +861,39 @@ it("teto efetivo de 500 linhas sem paginação também não comprova ranking com
   expect(result.completeness).toEqual({ complete: false, truncated: true });
   expect(f.execute).toHaveBeenCalledTimes(1);
 });
+
+it.each([true, false])(
+  "compara usos efetivos entre pacotes, equivalentes=%s",
+  async (equivalent) => {
+    const f = fixture();
+    const training = queryTraining();
+    const second = compileQueryTraining(
+      {
+        ...training,
+        columns: training.columns.map((c) => ({
+          ...c,
+          uses: equivalent
+            ? ["ordenacao", "agrupamento", "join", "filtro", "projecao"]
+            : ["projecao", "filtro", "ordenacao"],
+        })),
+      },
+      trainingSource,
+      crypto,
+    );
+    f.evidence.publications.push({
+      ...f.evidence.publications[0]!,
+      id: "publication2",
+      skillId: "skill2",
+      package: second,
+      hash: crypto.sha256Hex(canonicalJson(second)),
+    });
+    const run = f.service.run(identity, { sql: training.sqlModel, params: { minimum: 0 } });
+    if (equivalent) {
+      await run;
+      expect(f.execute).toHaveBeenCalledTimes(1);
+    } else {
+      await expect(run).rejects.toMatchObject({ code: "INVALID_PLAN" });
+      expect(f.execute).not.toHaveBeenCalled();
+    }
+  },
+);

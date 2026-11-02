@@ -1,3 +1,4 @@
+import { FieldContractConflict } from "../../application/persona-v2/field-contract-index.js";
 import { randomUUID } from "node:crypto";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
@@ -161,6 +162,14 @@ export function reportPersonaV2ToolError(
   logger?.warn("persona-v2 tool failed", {
     supportId,
     errorCode: body.code,
+    ...(error instanceof FieldContractConflict
+      ? {
+          publicationIds: [error.first.id, error.second.id],
+          publicationRevisions: [error.first.revision, error.second.revision],
+          columnIndex: error.columnIndex,
+          policyAttributes: error.attributes,
+        }
+      : {}),
     ...(error instanceof SourceExecutionError
       ? { queryOrigin: error.queryOrigin, publicationIds: error.publicationIds }
       : {}),

@@ -3,6 +3,43 @@ import { describe, expect, it } from "vitest";
 
 // Capture real Pino stdout in an isolated process: no mock of LoggerPort or redaction.
 describe("diagnósticos com o logger de produção", () => {
+  it("correlaciona o conflito de campos sem revelar o contrato", () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `
+      import {createPino,PinoLoggerAdapter} from './src/infrastructure/logging/pino-logger.adapter.ts';
+      import {reportPersonaV2ToolError} from './src/infrastructure/mcp/persona-v2-tool-error.ts';
+      import {FieldContractIndex} from './src/application/persona-v2/field-contract-index.ts';
+      const fields = new FieldContractIndex();
+      const column = {table:"sensitive-table",name:"sensitive-field",classification:"livre",usePurpose:"sensitive-purpose",uses:["filtro"]};
+      fields.add([column], {id:"first",revision:4});
+      const error = fields.add([{...column, uses:["join"],usePurpose:"sensitive-other"}],{id:"second", revision:8});
+      console.log(JSON.stringify(reportPersonaV2ToolError(error,new PinoLoggerAdapter(createPino("warn",false)))));
+    `,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(output).not.toContain("sensitive-");
+    const lines = output
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line));
+    const event = lines.find((line) => line.msg);
+    const reply = lines.find((line) => line.code);
+    expect(event).toMatchObject({
+      supportId: reply.supportId,
+      publicationIds: ["first", "second"],
+      publicationRevisions: [4, 8],
+      columnIndex: 0,
+      policyAttributes: ["uses", "usePurpose"],
+    });
+    expect(reply).not.toHaveProperty("publicationIds");
+  });
   it("correlaciona causas de autorização enumeradas sem registrar mensagens ou credenciais", () => {
     const output = execFileSync(
       process.execPath,

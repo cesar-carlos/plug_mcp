@@ -27,6 +27,22 @@ const refusal = (
 ): PersonaEvaluationCase["expected"] => ({ decision, rows: [], sources: [], publications: [] });
 export const personaRegressionCases: readonly PersonaEvaluationCase[] = [
   {
+    id: "minimal_sales_skill",
+    group: "supported",
+    question: "As skills de vendas e custos estão disponíveis. Qual o faturamento da fixture?",
+    expected: answered([{ total: "100.00" }]),
+  },
+  {
+    id: "sales_and_costs",
+    group: "supported",
+    question:
+      "Qual a margem da fixture? A receita está publicada em vendas e o custo em custos, com vínculo publicado.",
+    expected: {
+      ...answered([{ margin: "25.00" }]),
+      publications: ["synthetic-sales-v1", "synthetic-costs-v1"],
+    },
+  },
+  {
     id: "abc_ties",
     group: "supported",
     question:

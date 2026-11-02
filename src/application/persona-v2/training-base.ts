@@ -10,6 +10,8 @@ import {
 /** Guidance has no execution authority. This version describes only implemented v2 surfaces. */
 const content = {
   queryKnowledgeWorkflow: {
+    adapt:
+      "Se mudar só o período ou a filial, reutilize o modelo com novos params. Se a pergunta mudar o grão de vendas por produto para vendas por filial, adapte o SELECT e o GROUP BY quando medida, coluna de filial e finalidade estiverem publicadas. Se faltar o vínculo entre venda e filial, identifique o elo para curadoria.",
     discover:
       "Use buscar_contexto para localizar uma skill concedida pela finalidade da pergunta. Abra obter_skill para conferir fonte, publicação, medida, grão, filtros, parâmetros e campos permitidos antes de montar a consulta.",
     relate:

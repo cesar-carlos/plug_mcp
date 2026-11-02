@@ -378,3 +378,7 @@ com truncated:false do transporte. Curva ABC exige o conjunto completo ou
 agregação completa no banco; não calcular percentuais globais só sobre 500 linhas.
 Totais de itens e cabeçalhos exigem conciliar medidas, grão, filtros e período
 antes de declarar equivalência; correção do validador não aprova essa semântica.
+
+Em consultar_dados, informe em skillIds somente as skills necessárias ao SELECT. Se uma skill publicada cobre a pergunta, use apenas seu ID. A combinação compara todas as colunas compartilhadas dos pacotes. Usos equivalentes em ordens diferentes são compatíveis; divergência real de classificação, usos ou finalidade exige revisão antes de combinar.
+
+Na prévia do responsável, conflitos de política de coluna com outra publicação ativa da mesma fonte geram aviso. Na execução conjunta, o conflito bloqueia antes do SQL. Pelo supportId, o operador localiza as duas publicações, suas revisões, o índice da coluna na primeira publicação (base zero) e os atributos divergentes. O evento omite os nomes físicos e os valores das políticas.

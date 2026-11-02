@@ -30,7 +30,30 @@ it("publication preview refuses absent, optional and stale evidence without crea
     findPersona: async () => ({ active: true, ownerId: "owner", authorizationVersion: 1 }),
     setAdministrativeActor: async () => undefined,
     listSources: async () => [trainingSource],
-    catalog: { find: async () => draft, cases: async () => cases, approvedReport, savePreview },
+    knowledgeMaintenance: {
+      reviewPlan: async () => ({ dueAt: "2027-01-01T00:00:00Z" }),
+      bindReviewPlan: vi.fn(),
+    },
+    catalog: {
+      list: async () => [{ ...draft, id: "other", activePublicationId: "pub-other" }],
+      publication: async () => ({
+        id: "pub-other",
+        revision: 2,
+        suspendedAt: null,
+        package: {
+          format: "persona-query-v2",
+          sourceId: trainingSource.id,
+          training: {
+            ...draft.training,
+            columns: draft.training.columns.map((c) => ({ ...c, uses: ["filtro"] })),
+          },
+        },
+      }),
+      find: async () => draft,
+      cases: async () => cases,
+      approvedReport,
+      savePreview,
+    },
   } as unknown as PersonaTransaction;
   const services = {
     crypto: new NodeCryptoAdapter("a".repeat(64)),
@@ -59,5 +82,9 @@ it("publication preview refuses absent, optional and stale evidence without crea
     expect.stringMatching(/^[a-f0-9]{64}$/),
   );
   expect(savePreview).not.toHaveBeenCalled();
+  approvedReport.mockResolvedValue(true);
+  const result = await preview();
+  expect(result.warnings).toContainEqual(expect.stringMatching(/pub-other.*uses/));
+  expect(savePreview).toHaveBeenCalledTimes(1);
   expect(draft.activePublicationId).toBeNull();
 });

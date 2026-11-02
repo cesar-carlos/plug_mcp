@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: a prévia administrativa avisa sobre políticas de coluna incompatíveis na mesma fonte. O log correlaciona as publicações, revisões e categorias divergentes ao supportId.
+
+- Fixed: consultas com múltiplas skills comparam os usos efetivos de cada coluna independentemente da ordem e orientam a seleção dos pacotes necessários.
+
 - Changed: o treinamento SQL exemplifica a primeira página e a continuação com os limites efetivos.
 
 - Fixed: diagnóstico de entrada usa a validação estruturada do SDK; orientação OAuth distingue refresh, revogação e indisponibilidade.

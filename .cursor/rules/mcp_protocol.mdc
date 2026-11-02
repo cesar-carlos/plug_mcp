@@ -150,3 +150,7 @@ ou expressões de ordenação. Rankings parciais não comprovam classificação 
 Falhas OAuth e de download usam X-Support-Id com metadados seguros. Indisponibilidade temporária não pede reconexão. A listagem administrativa aceita supportId exato dentro da persona, inclusive após vencer o texto.
 
 Use details.authorizationReason: access_expired permite refresh automático; grant_revoked ou grant_expired exige nova autorização no navegador; permission_denied exige revisar a concessão; authentication_unavailable exige aguardar. Não sugira reconexão somente pelo código genérico.
+
+Em consultar_dados, informe em skillIds somente as skills necessárias ao SELECT. Se uma skill publicada cobre a pergunta, use apenas seu ID. A combinação compara todas as colunas compartilhadas dos pacotes. Usos equivalentes em ordens diferentes são compatíveis; divergência real de classificação, usos ou finalidade exige revisão antes de combinar.
+
+Conflito entre políticas de coluna usa a mesma comparação na prévia administrativa e na execução. Correlacionar o supportId somente a IDs de publicação, revisões, índice da coluna e categorias de divergência.

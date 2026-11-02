@@ -1,3 +1,4 @@
+import { FieldContractIndex } from "./field-contract-index.js";
 import { z } from "zod";
 import { assertBinaryProjection, decodeBinaryCell, isBinaryColumn } from "./binary-attachment.js";
 import type { PersonaQueryReusePort } from "../../domain/ports/persona-query-reuse.port.js";
@@ -402,7 +403,8 @@ export class PersonaSourceQueries {
     const contracts = new Map<string, ParametroSkill>();
     const definitions = new Map<string, string>();
     const resources = new Map<string, { name: string; type: "table" | "view" }>();
-    for (const training of trainings) {
+    const fieldContracts = new FieldContractIndex();
+    for (const [index, training] of trainings.entries()) {
       if (training.sourceId !== source.id || training.dialect !== source.dialect)
         throw new PersonaV2Error("INVALID_PLAN", "Pacote incompatível com a fonte.");
       for (const table of training.tables) {
@@ -416,17 +418,8 @@ export class PersonaSourceQueries {
         definitions.set(key, definition);
         resources.set(table.name, { name: table.name, type: table.resourceType });
       }
-      for (const column of training.columns) {
-        const key = `column:${column.table}.${column.name}`;
-        const definition = canonicalJson({
-          classification: column.classification,
-          uses: column.uses,
-          usePurpose: column.usePurpose,
-        });
-        if (definitions.has(key) && definitions.get(key) !== definition)
-          throw new PersonaV2Error("INVALID_PLAN", "Classificação conflitante entre pacotes.");
-        definitions.set(key, definition);
-      }
+      const conflict = fieldContracts.add(training.columns, publications[index]!);
+      if (conflict) throw conflict;
       for (const relation of training.relationships) {
         const key = `join:${relation.from}:${relation.to}:${canonicalJson(relation.keys)}`;
         const definition = canonicalJson({

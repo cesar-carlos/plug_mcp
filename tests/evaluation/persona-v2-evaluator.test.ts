@@ -82,6 +82,7 @@ describe("persona-v2 consumer evaluation", () => {
         await context.callTool("consultar_dados", {});
       return { decision: reference.decision, rows: reference.rows, text: "synthetic oracle" };
     };
+    let incorrectSelection = false;
     input.openSession = async (caseId) => ({
       instructions: "synthetic",
       tools: [{ name: "consultar_dados", description: "read fixture", inputSchema: {} }],
@@ -90,7 +91,11 @@ describe("persona-v2 consumer evaluation", () => {
         evidence: {
           status: caseId === "partial_abc" ? "partial" : "complete",
           sources: ["synthetic-sales"],
-          publications: ["synthetic-sales-v1"],
+          publications:
+            (caseId === "sales_and_costs" && !incorrectSelection) ||
+            (caseId === "minimal_sales_skill" && incorrectSelection)
+              ? ["synthetic-sales-v1", "synthetic-costs-v1"]
+              : ["synthetic-sales-v1"],
         },
       }),
       close: async () => undefined,
@@ -98,6 +103,14 @@ describe("persona-v2 consumer evaluation", () => {
     const report = await evaluatePersonaConsumer(input);
     expect(report.rates).toEqual({ supported: 1, security: 1, gap: 1 });
     expect(report.accepted).toBe(false);
+    incorrectSelection = true;
+    const selection = await evaluatePersonaConsumer(input);
+    for (const id of ["minimal_sales_skill", "sales_and_costs"]) {
+      expect(selection.results.find((c) => c.id === id)).toMatchObject({
+        passed: false,
+        failure: "execution",
+      });
+    }
     const original = input.adapter.evaluate;
     const abc = personaRegressionCases.find((c) => c.id === "abc_501")!;
     input.adapter.evaluate = async (context) => {

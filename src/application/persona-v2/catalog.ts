@@ -1,3 +1,4 @@
+import { FieldContractIndex } from "./field-contract-index.js";
 import { assertQueryCaseCoverage } from "./query-test-policy.js";
 import { z } from "zod";
 import {
@@ -1134,6 +1135,39 @@ export class PersonaCatalog {
         };
         await tx.catalog.savePreview(preview);
         await tx.knowledgeMaintenance!.bindReviewPlan(preview.hash, reviewPlan);
+        const warnings = [...prepared.warnings];
+        if (typeof sessionId === "string" && prepared.package.format === "persona-query-v2") {
+          const candidate = queryTrainingSchema.parse(prepared.package.training);
+          for (const draft of await tx.catalog.list(personaId)) {
+            if (draft.kind !== "consulta" || draft.id === skillId || !draft.activePublicationId)
+              continue;
+            const sibling = await tx.catalog.publication(personaId, draft.activePublicationId);
+            if (
+              !sibling ||
+              sibling.suspendedAt ||
+              sibling.package.format !== "persona-query-v2" ||
+              sibling.package.sourceId !== candidate.sourceId
+            )
+              continue;
+            const other = queryTrainingSchema.safeParse(sibling.package.training);
+            if (!other.success) continue;
+            const fields = new FieldContractIndex();
+            fields.add(other.data.columns, sibling);
+            const conflict = fields.add(candidate.columns, prepared.draft);
+            if (conflict)
+              warnings.push(
+                "Uso conjunto incompatível com a publicação " +
+                  sibling.id +
+                  " (revisão " +
+                  sibling.revision +
+                  ", índice de coluna " +
+                  conflict.columnIndex +
+                  "). Atributos: " +
+                  conflict.attributes.join(", ") +
+                  ".",
+              );
+          }
+        }
         const before = previous?.package.requiredCapabilities ?? [];
         return {
           confirmationHash: preview.hash,
@@ -1142,7 +1176,7 @@ export class PersonaCatalog {
           revision: preview.revision,
           packageHash: prepared.hash,
           package: prepared.package,
-          warnings: prepared.warnings,
+          warnings,
           review: {
             previousRevision: previous?.revision ?? null,
             sections: publicationReview(previous?.package ?? null, prepared.package),
