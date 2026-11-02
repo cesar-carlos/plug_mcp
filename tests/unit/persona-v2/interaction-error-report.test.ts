@@ -1,7 +1,15 @@
+import { INTERACTION_ERROR_GUIDANCE } from "../../../src/application/persona-v2/interaction-error-guidance.js";
+import {
+  TRAINING_TOPICS,
+  trainingTopic,
+} from "../../../src/application/persona-v2/training-topics.js";
 import { describe, expect, it } from "vitest";
 import { PERSONA_V2_INSTRUCTIONS } from "../../../src/application/persona-v2/runtime-instructions.js";
 import { PERSONA_V2_TRAINING_BASE } from "../../../src/application/persona-v2/training-base.js";
-import { interactionErrorReportSchema } from "../../../src/domain/persona-v2/interaction-error-report.js";
+import {
+  interactionErrorReportSchema,
+  trainingRequestSchema,
+} from "../../../src/domain/persona-v2/interaction-error-report.js";
 
 const supportId = "22222222-2222-4222-8222-222222222222";
 const report = {
@@ -31,11 +39,14 @@ describe("relato de erro da interação", () => {
     ).toEqual([]);
   });
 
-  it.each(["protocol", "authentication", "request"])("preserva etapa MCP %s", (stage) => {
-    expect(
-      interactionErrorReportSchema.parse({ ...report, error: { ...report.error, stage } }).error,
-    ).toMatchObject({ supportId, stage });
-  });
+  it.each(["protocol", "authentication", "request", "validar_escopo", "sql.execute", "rpc"])(
+    "preserva etapa MCP %s",
+    (stage) => {
+      expect(
+        interactionErrorReportSchema.parse({ ...report, error: { ...report.error, stage } }).error,
+      ).toMatchObject({ supportId, stage });
+    },
+  );
 
   it("exige detalhe só na categoria outro e recusa campo extra", () => {
     expect(interactionErrorReportSchema.safeParse({ ...report, category: "outro" }).success).toBe(
@@ -62,8 +73,25 @@ describe("relato de erro da interação", () => {
     ).toBe(false);
   });
 
+  it.each(TRAINING_TOPICS)(
+    "entrega no tópico %s um pedido de curadoria válido sem identificador reutilizável",
+    (topic) => {
+      const guide = trainingTopic(topic);
+      const example = trainingRequestSchema.parse(guide.trainingRequestExample);
+      expect(example).toMatchObject({
+        gap: "regra",
+        intent: expect.any(String),
+        missing: expect.any(String),
+        acceptance: expect.any(String),
+      });
+      expect(example.requestId).toBeUndefined();
+      expect(example.skillId).toBeUndefined();
+      expect(guide.trainingIntake).toBe(PERSONA_V2_TRAINING_BASE.trainingIntake);
+    },
+  );
   it("orienta a IA a reportar o erro uma vez", () => {
-    expect(PERSONA_V2_INSTRUCTIONS).toContain("reportar_erro_interacao");
+    expect(PERSONA_V2_INSTRUCTIONS).toContain(INTERACTION_ERROR_GUIDANCE);
+    expect(PERSONA_V2_TRAINING_BASE.errorDiagnostics).toContain(INTERACTION_ERROR_GUIDANCE);
     expect(PERSONA_V2_TRAINING_BASE.errorDiagnostics).toContain("reportar_erro_interacao");
     expect(Buffer.byteLength(PERSONA_V2_INSTRUCTIONS, "utf8")).toBeLessThan(36000);
   });

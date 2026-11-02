@@ -1,3 +1,4 @@
+import { KNOWLEDGE_GAP_DISCOVERY } from "./interaction-error-guidance.js";
 import type { PersonaServices, PersonaTransaction } from "../../domain/ports/persona-v2.port.js";
 import type { PhysicalQueryFence } from "../../domain/ports/persona-query-reuse.port.js";
 import {
@@ -399,8 +400,7 @@ export class PersonaConsumerCatalog {
         semanticApproval: false,
         matches: matches.slice(0, KNOWLEDGE_SEARCH_MAX_RESULTS),
         complete: matches.length <= KNOWLEDGE_SEARCH_MAX_RESULTS,
-        guidance:
-          "Leia obter_skill e confirme a finalidade e as fontes antes de consultar. Correspondência lexical não comprova cobertura. Se não houver candidato, confira listar_skills; não invente estrutura ou resposta.",
+        guidance: `Leia obter_skill e confirme a finalidade e as fontes antes de consultar. Correspondência lexical não comprova cobertura. Se não houver candidato, confira listar_skills; não invente estrutura ou resposta. ${KNOWLEDGE_GAP_DISCOVERY}`,
       };
     });
   }

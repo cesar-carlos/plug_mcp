@@ -52,6 +52,10 @@ it("pacote carrega guia exato do runtime e recusa divergÃªncia mesmo com inventÃ
       outputRoot: root,
       publicBaseUrl: "https://fixture.example.test",
     });
+    const skill = await readFile(resolve(pkg, "skills/se7e-consulta/SKILL.md"), "utf8");
+    expect(skill).toContain("reportar_erro_interacao,");
+    expect(skill).toContain("error.data");
+    expect(skill).toContain("reportId");
     const guide = "skills/se7e-consulta/references/consumer-guide.md";
     expect(await readFile(resolve(pkg, guide), "utf8")).toBe(PERSONA_CONSUMER_GUIDANCE);
     expect(PERSONA_V2_INSTRUCTIONS).toContain(PERSONA_CONSUMER_GUIDANCE);

@@ -26,6 +26,7 @@ import { reportPersonaV2ToolError } from "./persona-v2-tool-error.js";
 import {
   type ProtocolToolContext,
   correlatePersonaProtocolResponse,
+  type CorrelatedToolFailure,
   reportPersonaProtocolError,
 } from "./persona-v2-protocol-error.js";
 import type { PersonaPublishedFederation } from "../../application/persona-v2/published-federation.js";
@@ -57,7 +58,10 @@ import type { PersonaPhysicalCuration } from "../../application/persona-v2/physi
 import { knowledgeGraphInputSchema } from "../../domain/persona-v2/knowledge-context.js";
 import type { PersonaKnowledgeMaintenance } from "../../application/persona-v2/knowledge-maintenance.js";
 import { feedbackInputSchema } from "../../domain/persona-v2/knowledge-maintenance.js";
-import { interactionErrorReportSchema } from "../../domain/persona-v2/interaction-error-report.js";
+import {
+  interactionErrorReportSchema,
+  trainingRequestSchema,
+} from "../../domain/persona-v2/interaction-error-report.js";
 import type { PersonaInteractionErrors } from "../../application/persona-v2/interaction-error-report.js";
 import type { PersonaExternalActions } from "../../application/persona-v2/external-actions.js";
 import {
@@ -163,6 +167,7 @@ export const createPersonaV2McpHandler = (
     };
     const envelope = req.body as
       { method?: unknown; params?: { name?: unknown } } | null | undefined;
+    let applicationFailure: CorrelatedToolFailure | undefined;
     let toolContext: ProtocolToolContext | undefined;
     const handler = createMcpHandler(
       () => {
@@ -195,10 +200,21 @@ export const createPersonaV2McpHandler = (
                   validate: async (value: unknown) => {
                     const result = await standard.validate(value);
                     if (result.issues?.length) {
-                      const path = result.issues[0]?.path?.[0];
+                      const issuePath = result.issues[0]?.path;
+                      const path = issuePath?.[0];
                       const field = typeof path === "object" ? path.key : path;
+                      const child = issuePath?.[1];
+                      const key = typeof child === "object" ? child.key : child;
                       rejectedInput =
                         typeof field === "string" && fields.includes(field) ? { field } : {};
+                      if (
+                        name === "reportar_erro_interacao" &&
+                        field === "error" &&
+                        typeof key === "string" &&
+                        ["code", "message", "supportId", "source", "stage", "tool"].includes(key)
+                      ) {
+                        rejectedInput = { field: "error." + key };
+                      }
                     }
                     return result;
                   },
@@ -271,7 +287,7 @@ export const createPersonaV2McpHandler = (
                     : "authentication_unavailable";
               }
             }
-            return {
+            applicationFailure = {
               isError: true,
               ...(reconnect
                 ? {
@@ -287,6 +303,7 @@ export const createPersonaV2McpHandler = (
                 },
               ],
             };
+            return applicationFailure;
           }
         };
         if (identity && administration)
@@ -340,6 +357,17 @@ export const createPersonaV2McpHandler = (
         );
         if (identity) {
           if (interactionErrors) {
+            server.registerTool(
+              "solicitar_melhoria_treinamento",
+              {
+                description:
+                  "Encaminha à triagem da persona uma pergunta sem cobertura em forma sintética: intenção, tipo de lacuna, conhecimento ausente e critério de aceite. Não envie pergunta literal, identificadores de clientes, SQL ou dados de negócio. Não publica treinamento.",
+                inputSchema: trainingRequestSchema,
+                annotations: { ...annotations, readOnlyHint: false, idempotentHint: false },
+              },
+              async (value) =>
+                run(() => interactionErrors.requestTraining(requireIdentity(), value)),
+            );
             server.registerTool(
               "reportar_erro_interacao",
               {
@@ -1066,6 +1094,7 @@ export const createPersonaV2McpHandler = (
           await handler.fetch(request, options),
           logger,
           toolContext,
+          () => applicationFailure,
         ),
     })(req, res, req.body);
   };

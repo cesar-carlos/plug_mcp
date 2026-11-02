@@ -30,10 +30,29 @@ export const INTERACTION_ERROR_STAGES = [
   "cache",
   "hub",
   "sanitize",
+  "validar_escopo",
+  "sql.execute",
+  "rpc",
   "protocol",
   "authentication",
   "request",
 ] as const;
+
+export const TRAINING_REQUEST_CODE = "TRAINING_REQUEST";
+export const trainingRequestSchema = z.strictObject({
+  sourceSupportId: z
+    .uuid()
+    .describe(
+      "Protocolo original de uma falha já relatada por este token que também revelou uma lacuna editorial.",
+    )
+    .optional(),
+  requestId: z.uuid().describe("UUID estável desta tentativa de encaminhamento.").optional(),
+  intent: z.string().trim().min(1).max(400),
+  gap: z.enum(["metrica", "relacionamento", "regra", "modelo", "outra"]),
+  missing: z.string().trim().min(1).max(500),
+  acceptance: z.string().trim().min(1).max(500),
+  skillId: z.uuid().optional(),
+});
 
 const codeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/);
 const toolNameSchema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
@@ -96,7 +115,11 @@ export interface InteractionErrorStep {
   readonly supportId?: string;
 }
 
+export type TrainingGap = z.infer<typeof trainingRequestSchema>["gap"];
+
 export interface StoredInteractionError {
+  readonly trainingGap?: TrainingGap;
+  readonly sourceReportId?: string;
   readonly id: string;
   readonly personaId: string;
   readonly tokenId: string;
@@ -114,6 +137,7 @@ export interface StoredInteractionError {
 
 export interface InteractionErrorPage {
   readonly items: readonly (Omit<StoredInteractionError, "question" | "error" | "execution"> & {
+    readonly trainingRequest?: { intent: string; missing: string; acceptance: string };
     readonly textExpired?: true;
     readonly question?: string;
     readonly execution?: StoredInteractionError["execution"];
@@ -124,9 +148,23 @@ export interface InteractionErrorPage {
   readonly nextCursor: string | null;
 }
 
+export const interactionErrorFilterSchema = z.strictObject({
+  kind: z.enum(["training_request", "interaction_error"]).optional(),
+  beforeId: z.uuid().optional(),
+  supportId: z.uuid().optional(),
+  reportId: z.uuid().optional(),
+});
+
+export type InteractionErrorFilter = z.infer<typeof interactionErrorFilterSchema>;
+
 export interface InteractionErrorStore {
   findBySupport(personaId: string, tokenId: string, supportId: string): Promise<string | null>;
   countRecent(personaId: string, tokenId: string): Promise<number>;
-  insert(report: StoredInteractionError): Promise<void>;
-  list(personaId: string, beforeId?: string, supportId?: string): Promise<InteractionErrorPage>;
+  findTrainingRequest(
+    personaId: string,
+    tokenId: string,
+    requestId: string,
+  ): Promise<string | null>;
+  insert(report: StoredInteractionError, requestId?: string): Promise<void>;
+  list(personaId: string, filter: InteractionErrorFilter): Promise<InteractionErrorPage>;
 }

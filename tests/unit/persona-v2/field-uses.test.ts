@@ -31,7 +31,12 @@ describe("finalidades de campos em consultas publicadas", () => {
       "SELECT p.id AS item FROM orders p WHERE p.id > :minimum UNION ALL SELECT p.amount AS other FROM orders p WHERE p.id > :minimum";
     const ast = validateSourceSql(sql, "postgres", pkg.scope);
     // This is also the contract used for cross-source keys/order, independent of export.
-    expect(() => assertQueryFieldUses(ast, raw.columns, { item: ["join"] })).toThrow();
+    expect(() => assertQueryFieldUses(ast, raw.columns, { item: ["join"] })).toThrow(
+      /finalidade solicitada não está autorizada/,
+    );
+    expect(() => assertQueryFieldUses(ast, raw.columns, { missing: ["join"] })).toThrow(
+      /comprovar a origem/,
+    );
     const permitted = raw.columns.map((c) =>
       c.name === "amount" ? { ...c, uses: ["projecao", "filtro", "join"] as FieldUse[] } : c,
     );

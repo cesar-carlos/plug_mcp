@@ -215,10 +215,12 @@ it.each(["knowledge_context", "interaction_error"])(
 it("feedback exige item e publicação concedidos e não modifica treinamento ou auditoria editorial", async () => {
   const f = await fixture();
   const search = await call(f.token, "buscar_contexto", { pergunta: "mercantil" });
-  const itemId = search.value.matches[0].items[0].id as string;
+  expect(search.value.guidance).toContain("itemsComplete");
+  const match = search.value.matches[0];
+  const itemId = match.items[0].id as string;
   const input = {
-    skillId: f.skillId,
-    publicationId: f.publicationId,
+    skillId: match.skillId,
+    publicationId: match.publicationId,
     itemId,
     type: "correcao",
     content: "Calendário exige revisão editorial sintética",

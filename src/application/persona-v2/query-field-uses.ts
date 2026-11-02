@@ -6,6 +6,17 @@ import {
 } from "../../domain/persona-v2/field-use.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 
+export class FieldUseDenied extends PersonaV2Error {
+  constructor(readonly reason: "lineage_unresolved" | "use_not_granted") {
+    super(
+      "AUTHORIZATION_DENIED",
+      reason === "lineage_unresolved"
+        ? "Campo ou finalidade de uso não concedidos: não foi possível comprovar a origem dos campos."
+        : "Campo ou finalidade de uso não concedidos: a finalidade solicitada não está autorizada no pacote publicado.",
+    );
+  }
+}
+
 /** Resolves physical lineage before checking a purpose. Aliases never grant authority. */
 export function assertQueryFieldUses(
   ast: SqlAstSelect,
@@ -14,11 +25,8 @@ export function assertQueryFieldUses(
 ): void {
   if (!fields.some((field) => field.uses !== undefined)) return;
   const policies = new Map(fields.map((field) => [`${field.table}.${field.name}`, field]));
-  const refuse = (): never => {
-    throw new PersonaV2Error(
-      "AUTHORIZATION_DENIED",
-      "Campo ou finalidade de uso não concedidos no pacote publicado.",
-    );
+  const refuse = (reason: FieldUseDenied["reason"] = "lineage_unresolved"): never => {
+    throw new FieldUseDenied(reason);
   };
   const lineage = (
     column: SqlAstColuna,
@@ -86,7 +94,7 @@ export function assertQueryFieldUses(
           0,
         );
         for (const field of resolved)
-          if (!allowedFieldUses(field).includes(use as FieldUse)) refuse();
+          if (!allowedFieldUses(field).includes(use as FieldUse)) refuse("use_not_granted");
       }
     }
     for (const child of select.subqueries) visit(child, [select, ...parents]);
@@ -106,7 +114,8 @@ export function assertQueryFieldUses(
       for (const branch of union)
         for (const column of branch.colunas)
           for (const field of lineage(column, branch, parents, 0))
-            for (const use of uses) if (!allowedFieldUses(field).includes(use)) refuse();
+            for (const use of uses)
+              if (!allowedFieldUses(field).includes(use)) refuse("use_not_granted");
     }
   };
   visit(ast, []);
@@ -118,7 +127,8 @@ export function assertQueryFieldUses(
       // Set outputs inherit names from the first SELECT, but every positional
       // branch contributes values, including when it uses a different alias.
       for (const field of lineage(branch.colunas[index] ?? refuse(), branch, [], 0))
-        for (const use of uses) if (!allowedFieldUses(field).includes(use)) refuse();
+        for (const use of uses)
+          if (!allowedFieldUses(field).includes(use)) refuse("use_not_granted");
       for (const child of branch.setBranches) checkBranch(child, depth + 1);
     };
     checkBranch(ast, 0);

@@ -341,6 +341,8 @@ O guia SQL v2 diferencia total escalar, resumo agrupado e ranking paginado. Orie
 
 ### Planejamento de resumos na fonte
 
+Para consultas de ausência, o tópico SQL parte do cadastro autorizado e verifica uma chave não nula da transação no período solicitado. O tópico SQL orienta calcular ticket médio no grão de venda e declarar o universo de participação antes da paginação. No ranking, declare a medida ordenada e diferencie exatamente N itens da inclusão de todos os empatados no limite. Para períodos relativos, fixe o dia de negócio e preserve os limites entre páginas. provenance.readAt informa o horário original da leitura, inclusive no reuso. O tópico SQL explica como parâmetros opcionais afetam o predicado e distingue recorte vazio, valores ausentes e soma zero com contagens no grão publicado. Na leitura sem paginação, o guia usa completeness.complete para descrever a cobertura. O exemplo de modelo usa parâmetros date, decimal e boolean. O guia v2 distingue slug, skillId e publicationId, separa parâmetros públicos de filtros de acesso e explica a completude do envelope de validação.
+
 O treinamento base `persona-v2-sql-summary-1` entrega `sqlSummaries`, com orientação
 compartilhada pelas instruções do runtime e pelo guia dos pacotes gerados.
 Para perguntas agregadas de uma fonte, preferir filtros e `GROUP BY` no banco,

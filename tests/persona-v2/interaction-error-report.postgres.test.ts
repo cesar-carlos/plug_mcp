@@ -42,7 +42,7 @@ const get = (path: string, auth = { cookie, csrf }) =>
     .set("Origin", "http://127.0.0.1:3333")
     .set("Cookie", auth.cookie)
     .set("X-CSRF-Token", auth.csrf);
-const call = async (token: string | undefined, args: object) => {
+const call = async (token: string | undefined, args: object, name = "reportar_erro_interacao") => {
   const response = await request(runtime.app)
     .post("/mcp")
     .set("Host", "127.0.0.1:3333")
@@ -52,7 +52,7 @@ const call = async (token: string | undefined, args: object) => {
       jsonrpc: "2.0",
       id: randomUUID(),
       method: "tools/call",
-      params: { name: "reportar_erro_interacao", arguments: args },
+      params: { name, arguments: args },
     });
   if (!token) return { status: response.status, denied: true, value: parseMcpPayload(response) };
   const payload = parseMcpPayload(response);
@@ -170,7 +170,16 @@ it("grava o relato completo, não o atualiza e limita a persona dona", async () 
   }).expect(201);
   const token = issued.body.bearer as string;
   const supportId = randomUUID();
-  const created = await call(token, report(supportId, "Pergunta original do cliente"));
+  const input = report(supportId, "Pergunta original do cliente");
+  const created = await call(token, {
+    ...input,
+    error: {
+      ...input.error,
+      code: "COLUNA_FORA_DO_ESCOPO",
+      source: "sql",
+      stage: "validar_escopo",
+    },
+  });
   expect(created.denied, JSON.stringify(created.value)).toBe(false);
   expect(created.value).toMatchObject({
     trainingChanged: false,
@@ -199,6 +208,13 @@ it("grava o relato completo, não o atualiza e limita a persona dona", async () 
     execution: { summary: "Nenhuma tool chegou a executar.", steps: [] },
   });
   expect(protocol.denied, JSON.stringify(protocol.value)).toBe(false);
+  const malformed = await call(token, {
+    ...input,
+    error: { ...input.error, stage: "sensitive-invalid-stage" },
+  });
+  expect(malformed.denied).toBe(true);
+  expect(malformed.value).toMatchObject({ error: { rejectedField: "error.stage" } });
+  expect(JSON.stringify(malformed.value)).not.toContain("sensitive-invalid-stage");
   const secret = await call(token, {
     ...report(randomUUID()),
     question: "password=segredo-colado",
@@ -233,11 +249,25 @@ it("grava o relato completo, não o atualiza e limita a persona dona", async () 
     `/api/admin/personas/${personaId}/erros-interacao?supportId=${supportId}`,
   ).expect(200);
   expect(filtered.body.items).toEqual([expired]);
+  const route = `/api/admin/personas/${personaId}/erros-interacao`;
+  const byReport = await get(`${route}?reportId=${id}`).expect(200);
+  expect(byReport.body).toEqual({ items: [expired], nextCursor: null });
+  expect(byReport.headers["cache-control"]).toContain("no-store");
+  const mismatch = await get(`${route}?reportId=${id}&supportId=${randomUUID()}`).expect(200);
+  expect(mismatch.body.items).toEqual([]);
+  await get(`${route}?beforeId=${reportIdOf(protocol.value)}&supportId=${supportId}`).expect(403);
+  const foreign = await get(
+    `/api/admin/personas/${otherPersonaId}/erros-interacao?reportId=${id}`,
+  ).expect(200);
+  expect(foreign.body.items).toEqual([]);
   const isolated = await get(
     `/api/admin/personas/${otherPersonaId}/erros-interacao?supportId=${supportId}`,
   ).expect(200);
   expect(isolated.body.items).toEqual([]);
-  expect(expired).toMatchObject({ textExpired: true, error: { supportId } });
+  expect(expired).toMatchObject({
+    textExpired: true,
+    error: { supportId, stage: "validar_escopo" },
+  });
   expect(expired).not.toHaveProperty("question");
   expect(expired).not.toHaveProperty("execution");
   expect(expired?.error).not.toHaveProperty("message");
@@ -317,3 +347,97 @@ it("recusa o relato novo acima de vinte por hora e preserva o supportId já grav
   expect(replay.denied, JSON.stringify(replay.value)).toBe(false);
   expect(replay.value).toMatchObject({ reportId: reportIdOf(created.value) });
 }, 60_000);
+
+it("encaminha lacuna sem skill, separa relatos e protege a triagem", async () => {
+  const issued = await post(`/api/admin/personas/${personaId}/tokens`, {
+    name: "Triagem",
+    expiresAt: null,
+    permissions: empty,
+    delegation: empty,
+  }).expect(201);
+  const token = issued.body.bearer as string;
+  const tool = "solicitar_melhoria_treinamento";
+  const sourceSupportId = randomUUID();
+  const source = await call(token, { ...report(sourceSupportId), skillId: undefined });
+  const sourceReportId = reportIdOf(source.value);
+  const input = {
+    requestId: randomUUID(),
+    sourceSupportId,
+    intent: "Comparar vendas líquidas",
+    gap: "regra",
+    missing: "Definição de devolução",
+    acceptance: "Descontar uma devolução uma única vez.",
+  };
+  expect((await call(token, { ...input, missing: "password=segredo-fixture" }, tool)).denied).toBe(
+    true,
+  );
+  expect((await call(token, { ...input, skillId: randomUUID() }, tool)).denied).toBe(true);
+  const [result, duplicate] = await Promise.all([
+    call(token, input, tool),
+    call(token, input, tool),
+  ]);
+  expect(duplicate.value).toEqual(result.value);
+  expect(result.value).toMatchObject({ trainingChanged: false, authorityChanged: false });
+  const id = reportIdOf(result.value);
+  const path = `/api/admin/personas/${personaId}/erros-interacao?reportId=${id}`;
+  const page = await get(path + "&kind=training_request").expect(200);
+  expect(page.body.items).toMatchObject([
+    {
+      id,
+      sourceReportId,
+      trainingGap: "regra",
+      trainingRequest: {
+        intent: input.intent,
+        missing: input.missing,
+        acceptance: input.acceptance,
+      },
+      question: input.intent,
+      error: { code: "TRAINING_REQUEST", message: input.missing },
+      execution: { summary: input.acceptance, steps: [] },
+    },
+  ]);
+  expect((await get(path + "&kind=interaction_error").expect(200)).body.items).toEqual([]);
+  expect(
+    (
+      await get(
+        `/api/admin/personas/${otherPersonaId}/erros-interacao?kind=training_request&reportId=${id}`,
+      ).expect(200)
+    ).body.items,
+  ).toEqual([]);
+  expect(
+    (
+      await db.query(
+        "SELECT evento FROM audit_v2 WHERE evento='training_request.created' AND persona_id=$1",
+        [personaId],
+      )
+    ).rowCount,
+  ).toBe(1);
+  await db.query("DELETE FROM interaction_error_text_v2 WHERE id=$1", [id]);
+  const replay = await call(token, { ...input, acceptance: "Outro critério." }, tool);
+  expect(replay.value).toEqual(result.value);
+  const afterCleanup = await get(path).expect(200);
+  expect(afterCleanup.body.items[0]).toMatchObject({ id, trainingGap: "regra", textExpired: true });
+  expect(afterCleanup.body.items[0]).not.toHaveProperty("trainingRequest");
+  const otherToken = await post(`/api/admin/personas/${personaId}/tokens`, {
+    name: "Outra triagem",
+    expiresAt: null,
+    permissions: empty,
+    delegation: empty,
+  }).expect(201);
+  const foreign = await call(otherToken.body.bearer, input, tool);
+  const unknown = await call(
+    otherToken.body.bearer,
+    { ...input, sourceSupportId: randomUUID() },
+    tool,
+  );
+  for (const refused of [foreign, unknown])
+    expect(refused.value).toMatchObject({
+      error: { code: "AUTHORIZATION_DENIED", message: "Relato de origem indisponível." },
+    });
+  const separate = await call(
+    otherToken.body.bearer,
+    { ...input, sourceSupportId: undefined },
+    tool,
+  );
+  expect(reportIdOf(separate.value)).not.toBe(id);
+});

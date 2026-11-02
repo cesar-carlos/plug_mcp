@@ -3,6 +3,10 @@ import { NodeCryptoAdapter } from "../../../src/infrastructure/crypto/node-crypt
 import { compileQueryTraining } from "../../../src/application/persona-v2/query-training.js";
 import { validateSourceSql } from "../../../src/application/persona-v2/source-sql.js";
 import { enforceSourceRestrictions } from "../../../src/application/persona-v2/source-restrictions.js";
+import {
+  bindNamedParams,
+  coerceBoundParams,
+} from "../../../src/application/use-cases/shared/sql-modelo.js";
 import { parseSelect } from "../../../src/application/use-cases/shared/sql-ast.js";
 import { personaDialectGuide } from "../../../src/application/persona-v2/dialect-guide.js";
 import { sourceQuerySchema } from "../../../src/application/persona-v2/source-query.js";
@@ -15,6 +19,27 @@ import { PERSONA_V2_TRAINING_BASE } from "../../../src/application/persona-v2/tr
 it("exemplos de paginação do tópico SQL respeitam o contrato e o tamanho efetivo", () => {
   const contract = PERSONA_V2_TRAINING_BASE.queryContract;
   expect(trainingTopic("sql").queryContract).toEqual(contract);
+  const model = sourceQuerySchema.parse(contract.publishedModelExample.arguments);
+  expect(model.skillIds).toHaveLength(1);
+  expect(model.sql).toBeUndefined();
+  const bound = bindNamedParams(
+    "SELECT id FROM fixture WHERE inicio >= :inicio AND valor >= :minimo AND ativo = :ativo",
+    model.params,
+  );
+  expect(
+    coerceBoundParams(bound, [
+      { nome: "inicio", tipo: "date", obrigatorio: true, descricao: "Início" },
+      { nome: "minimo", tipo: "decimal", obrigatorio: true, descricao: "Mínimo" },
+      { nome: "ativo", tipo: "boolean", obrigatorio: true, descricao: "Ativo" },
+    ]),
+  ).toEqual({ inicio: "2026-01-01", minimo: "10.50", ativo: true });
+  expect(sourceQuerySchema.safeParse({ params: { minimo: [10, 20] } }).success).toBe(false);
+  const optional = [
+    { nome: "minimo", tipo: "decimal" as const, obrigatorio: false, descricao: "Mínimo" },
+  ];
+  expect(bindNamedParams("SELECT id FROM fixture WHERE valor >= :minimo", {}, optional)).toEqual({
+    minimo: null,
+  });
   const { firstPage, nextPageExample } = contract.pagination;
   expect(sourceQuerySchema.parse(firstPage).options).toEqual({ page: 1, pageSize: 50 });
   expect(sourceQuerySchema.parse(nextPageExample).options).toEqual({ page: 2, pageSize: 20 });
@@ -26,6 +51,7 @@ it.each(["mssql", "postgres", "sybase"] as const)("guia %s usa contrato MCP v2",
   expect(guide.paginacao).toContain("options.pageSize");
   expect(guide.paginacao).toContain("pagination.hasNextPage");
   expect(guide.paginacao).toContain("pagination.pageSize");
+  expect(guide.paginacao).toContain("Em leitura sem pagination, confira completeness.complete");
   expect(guide.paginacao).toContain("completeness.truncated não indica próxima página");
   expect(guide.paginacao).not.toContain("use TOP n");
   expect(JSON.stringify(guide)).not.toMatch(/page_size|paginacao\.hasNextPage|max_rows/);

@@ -1,5 +1,8 @@
 import { expect, it, vi } from "vitest";
-import { correlatePersonaProtocolResponse } from "../../../src/infrastructure/mcp/persona-v2-protocol-error.js";
+import {
+  correlatePersonaProtocolResponse,
+  type CorrelatedToolFailure,
+} from "../../../src/infrastructure/mcp/persona-v2-protocol-error.js";
 import type { LoggerPort } from "../../../src/domain/ports/logger.port.js";
 
 it.each(["application/json", "text/event-stream"])(
@@ -10,6 +13,7 @@ it.each(["application/json", "text/event-stream"])(
       { content: [{ type: "text", text: "resposta sintética ç" }] },
       {
         isError: true,
+        _meta: { "mcp/www_authenticate": ["Bearer fixture"] },
         content: [
           {
             type: "text",
@@ -30,6 +34,8 @@ it.each(["application/json", "text/event-stream"])(
       const response = await correlatePersonaProtocolResponse(
         new Response(stream, { headers: { "content-type": type } }),
         { warn } as unknown as LoggerPort,
+        undefined,
+        () => (result.isError ? (result as CorrelatedToolFailure) : undefined),
       );
       expect(await response.text()).toBe(source);
     }
@@ -71,6 +77,8 @@ it.each(["application/json", "text/event-stream"])(
       jsonrpc: "2.0",
       id: 1,
       result: {
+        structuredContent: { rejected: "sensitive-value" },
+        _meta: { diagnostic: "sensitive-message" },
         isError: true,
         content: [
           {
@@ -95,5 +103,31 @@ it.each(["application/json", "text/event-stream"])(
       protocolOrigin: "sdk_tool_input",
     });
     expect(warn.mock.calls[0]?.[1]).not.toHaveProperty("rejectedField");
+  },
+);
+
+it.each(["application/json", "text/event-stream"])(
+  "substitui supportId sem origem e desafio OAuth externo em %s",
+  async (type) => {
+    const raw = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify({ error: { supportId: "sensitive-id" } }) }],
+        _meta: { "mcp/www_authenticate": ["sensitive-challenge"] },
+      },
+    });
+    const warn = vi.fn();
+    const response = await correlatePersonaProtocolResponse(
+      new Response(type === "application/json" ? raw : "data: " + raw + "\n\n", {
+        headers: { "content-type": type },
+      }),
+      { warn } as unknown as LoggerPort,
+    );
+    const body = await response.text();
+    expect(body).not.toContain("sensitive-");
+    expect(body).not.toContain("mcp/www_authenticate");
+    expect(body).toContain(warn.mock.calls[0]?.[1].supportId);
   },
 );

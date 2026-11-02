@@ -27,6 +27,9 @@ financeira operacional como substituta.
 | Resultado parcial da fixture                              | Informar incompletude; não afirmar total ou ausência de registros                  |
 | Parâmetro inválido                                        | Corrigir a entrada com o usuário, preservando o contrato anunciado                 |
 | Curadoria: caso com origem editorial                      | Encaminhar cadastro/edição ao console Client; não apagar a origem                  |
+| Busca lexical limitada ou pergunta sem exemplo idêntico | Abrir a skill concedida e conferir se o modelo ou uma adaptação autorizada cobre a intenção antes de pedir curadoria |
+| Falta uma regra de um item com origem compartilhada | Enviar um feedback com a publicação da skill e o ID do item pertinente; confirmar pelo feedbackId |
+| Usuário retoma pergunta já encaminhada no chat | Identificar a pendência, reutilizar o comprovante conhecido da mesma lacuna e evitar duplicata |
 | Operação com estado desconhecido simulado                 | Consultar estado permitido e orientar investigação; nunca reenviar efeito          |
 | Pacote com hashes divergentes                             | Informar incompatibilidade e remontar artefato; não presumir atualização instalada |
 | Revogação da conexão dedicada solicitada pelo responsável | Revogar apenas essa conexão, sem afetar outras                                     |

@@ -2,6 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type { ErrorRequestHandler } from "express";
 
+export interface CorrelatedToolFailure extends Record<string, unknown> {
+  isError: true;
+  content: [{ type: "text"; text: string }];
+  _meta?: { "mcp/www_authenticate": string[] };
+}
+
 export interface ProtocolToolContext {
   readonly tool: string;
   readonly rejectedInput?: () => { field?: string } | undefined;
@@ -93,7 +99,7 @@ export function reportPersonaProtocolError(
   stage: string;
   supportId: string;
   retryable: false;
-  rejectedField?: "options";
+  rejectedField?: string;
 } {
   const supportId = randomUUID();
   logger?.warn("persona-v2 request failed", {
@@ -108,15 +114,37 @@ export function reportPersonaProtocolError(
     metadata?.protocolOrigin === "sdk_tool_input" &&
     (metadata.tool === "validar_consulta" || metadata.tool === "consultar_dados") &&
     metadata.rejectedField === "options";
+  const reportField =
+    metadata?.protocolOrigin === "sdk_tool_input" &&
+    metadata.tool === "reportar_erro_interacao" &&
+    [
+      "error",
+      "error.code",
+      "error.message",
+      "error.supportId",
+      "error.source",
+      "error.stage",
+      "error.tool",
+    ].includes(metadata.rejectedField ?? "")
+      ? metadata.rejectedField
+      : undefined;
   return {
     code,
-    ...(invalidOptions ? { rejectedField: "options" as const } : {}),
+    ...(invalidOptions
+      ? { rejectedField: "options" }
+      : reportField
+        ? { rejectedField: reportField }
+        : {}),
     message: invalidOptions
       ? metadata.tool +
         " recusou o campo options. " +
         (metadata.optionsReason ? metadata.optionsReason + " " : "") +
         'Omita options se não precisar de limites ou paginação. Se usar options, envie um objeto com inteiros positivos nos limites do schema. As chaves aceitas são maxRows, maxBytes, timeoutMs, page e pageSize. Para paginar, informe page e pageSize juntos, por exemplo {"options":{"page":1,"pageSize":50}}.'
-      : "Não foi possível concluir a solicitação. Informe o supportId ao responsável.",
+      : reportField
+        ? "O relato foi recusado no campo " +
+          reportField +
+          ". Confira o formato desse campo no contrato da ferramenta."
+        : "Não foi possível concluir a solicitação. Informe o supportId ao responsável.",
     source: "mcp",
     stage,
     supportId,
@@ -128,6 +156,7 @@ function correlatePayload(
   payload: unknown,
   logger?: LoggerPort,
   context?: ProtocolToolContext,
+  failure?: CorrelatedToolFailure,
 ): unknown {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
   const body = payload as Record<string, unknown>;
@@ -148,25 +177,15 @@ function correlatePayload(
     );
     body.error = { code: rpcCode ?? -32603, message: diagnostic.message, data: diagnostic };
   } else if (result?.isError === true) {
-    // Application errors are already correlated by run(); SDK validation errors are not.
     const content = result.content;
-    if (
-      Array.isArray(content) &&
-      content.some((value: unknown) => {
-        const item = value as { type?: unknown; text?: unknown } | undefined;
-        if (item?.type !== "text" || typeof item.text !== "string") return false;
-        try {
-          const parsed = JSON.parse(item.text) as { error?: { supportId?: unknown } } | null;
-          return typeof parsed?.error?.supportId === "string";
-        } catch {
-          return false;
-        }
-      })
-    )
-      return payload;
     const first = Array.isArray(content)
       ? (content[0] as { type?: unknown; text?: unknown } | undefined)
       : undefined;
+    // Only the diagnostic produced by this request may preserve its OAuth challenge.
+    if (failure && first?.type === "text" && first.text === failure.content[0].text) {
+      body.result = failure;
+      return body;
+    }
     const diagnostic = reportPersonaProtocolError(
       logger,
       "MCP_PROTOCOL_ERROR",
@@ -175,7 +194,7 @@ function correlatePayload(
       sdkMetadata("sdk_tool_result", first?.type === "text" ? first.text : undefined, context),
     );
     body.result = {
-      ...result,
+      isError: true,
       content: [{ type: "text", text: JSON.stringify({ error: diagnostic }) }],
     };
   } else return payload;
@@ -187,15 +206,19 @@ export async function correlatePersonaProtocolResponse(
   response: Response,
   logger?: LoggerPort,
   context?: ProtocolToolContext,
+  getFailure?: () => CorrelatedToolFailure | undefined,
 ): Promise<Response> {
   const type = response.headers.get("content-type") ?? "";
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   if (type.includes("application/json"))
-    return new Response(JSON.stringify(correlatePayload(await response.json(), logger, context)), {
-      status: response.status,
-      headers,
-    });
+    return new Response(
+      JSON.stringify(correlatePayload(await response.json(), logger, context, getFailure?.())),
+      {
+        status: response.status,
+        headers,
+      },
+    );
   if (!type.includes("text/event-stream") || !response.body) return response;
   let pending = "";
   const rewrite = (line: string): string => {
@@ -206,7 +229,7 @@ export async function correlatePersonaProtocolResponse(
     } catch {
       return line;
     }
-    return "data: " + JSON.stringify(correlatePayload(payload, logger, context));
+    return "data: " + JSON.stringify(correlatePayload(payload, logger, context, getFailure?.()));
   };
   const body = response.body
     .pipeThrough(new TextDecoderStream())

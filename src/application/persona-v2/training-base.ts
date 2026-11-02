@@ -1,6 +1,17 @@
+import {
+  INTERACTION_ERROR_GUIDANCE,
+  KNOWLEDGE_GAP_DISCOVERY,
+} from "./interaction-error-guidance.js";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../../domain/persona-v2/catalog.js";
-import { SQL_SUMMARY_GUIDANCE, SQL_SUMMARY_EXAMPLES } from "./sql-summary-guidance.js";
+import {
+  QUERY_SKILL_SELECTION,
+  QUERY_SCOPE_PARAMS,
+  QUERY_VALIDATION_RESULT,
+  RANKING_CUTOFF_GUIDANCE,
+  SQL_SUMMARY_GUIDANCE,
+  SQL_SUMMARY_EXAMPLES,
+} from "./sql-summary-guidance.js";
 import {
   HUB_CONTRACT_HASH,
   HUB_CONTRACT_REF,
@@ -10,10 +21,8 @@ import {
 /** Guidance has no execution authority. This version describes only implemented v2 surfaces. */
 const content = {
   queryKnowledgeWorkflow: {
-    adapt:
-      "Se mudar só o período ou a filial, reutilize o modelo com novos params. Se a pergunta mudar o grão de vendas por produto para vendas por filial, adapte o SELECT e o GROUP BY quando medida, coluna de filial e finalidade estiverem publicadas. Se faltar o vínculo entre venda e filial, identifique o elo para curadoria.",
-    discover:
-      "Use buscar_contexto para localizar uma skill concedida pela finalidade da pergunta. Abra obter_skill para conferir fonte, publicação, medida, grão, filtros, parâmetros e campos permitidos antes de montar a consulta.",
+    adapt: `${QUERY_SCOPE_PARAMS} Se a pergunta mudar o grão de vendas por produto para vendas por filial, adapte o SELECT e o GROUP BY quando medida, coluna de filial e finalidade estiverem publicadas. Se faltar o vínculo entre venda e filial, identifique o elo para curadoria.`,
+    discover: `${QUERY_SKILL_SELECTION} Abra obter_skill para conferir fonte, publicação, medida, grão, filtros, parâmetros e campos permitidos antes de montar a consulta.`,
     relate:
       "Se precisar combinar recursos, consulte obter_grafo_conhecimento no escopo concedido e confira cada elo na publicação. Em N:N preserve a intermediária e os pares de colunas de cada elo. Um resultado de busca ou proximidade no grafo não autoriza JOIN.",
     resolveGap:
@@ -27,8 +36,15 @@ const content = {
     exampleScope:
       "Somente fixture sintética. Não presume schema, autorização, parâmetros ou valores reais; exige skill publicada e concessões compatíveis.",
   },
-  errorDiagnostics:
-    "Ao ocorrer erro de tool, informe code, message, source/stage e os details seguros disponíveis, incluindo supportId como identificador de atendimento. Não reduza toda falha PLUG_SERVER_ERROR a comunicação: rpcCode pode indicar parâmetros ou protocolo inválidos. Não invente a causa quando não houver detalhe. Não peça segredos nem repita automaticamente consultas ou operações. Depois, chame reportar_erro_interacao uma vez, com o relato já completo: question é a pergunta do cliente, sem segredo colado; category é protocolo, autenticacao, autorizacao, validacao, transporte, consulta, operacao, conhecimento ou outro, e outro exige categoryDetail; error copia code, message e, quando publicados, supportId, source, stage e tool; execution.summary e execution.steps descrevem as tools chamadas no plug_mcp, na ordem, com sucesso ou erro e uma nota curta. Sem tool executada, steps fica vazio. skillId só se a skill estiver concedida. Não envie SQL, parâmetros, linhas ou credenciais. O relato não treina, não autoriza retry e o mesmo supportId não completa um envio anterior.",
+  trainingIntake: `A IA cliente organiza e encaminha o pedido. Se o usuário informar uma falha, separe o que ele observou das tools realmente executadas; use o supportId apresentado quando disponível, sem inventar etapas. Sem código técnico observado, use USER_REPORTED_ERROR como classificação do relato do usuário, omita source/stage e descreva o esperado e o observado de forma segura. Se a intenção for ambígua, esclareça primeiro. Se parte da pergunta foi respondida, entregue a parte comprovada e identifique a pendência. Uma página parcial pede verificar a continuação autorizada. Uma busca lexical sem resultados pede conferir listar_skills e a publicação pertinente; só descreva lacunas no conhecimento concedido à conexão atual. ${KNOWLEDGE_GAP_DISCOVERY} Quando houver item publicado pertinente, use registrar_feedback_conhecimento se disponível, com skillId, publicationId e itemId reais de buscar_contexto. Use type lacuna para conteúdo ausente, erro para conteúdo incorreto ou correcao para uma correção específica. Sintetize em content o ponto editorial e um caso que permita verificá-lo. O comprovante é feedbackId. Se não receber esse ID, informe envio não confirmado; não reenvie automaticamente nem abra outro pedido para a mesma lacuna. Sem item adequado, use solicitar_melhoria_treinamento uma vez, quando disponível: generalize a intenção em intent, use em gap um dos valores metrica, relacionamento, regra, modelo ou outra, descreva em missing a regra, medida ou vínculo ausente e em acceptance um caso sintético verificável. Use trainingRequestExample como exemplo sintético de formato e escreva o conteúdo para a lacuna identificada. Omita nomes de clientes, valores reais, SQL, parâmetros, resultados e segredos. Falha temporária, recusa de acesso e resultado vazio por si só não justificam treinamento. Quando a mesma interação tiver uma falha já relatada e uma lacuna editorial identificada separadamente, informe em sourceSupportId o supportId original desse relato do mesmo token. Mantenha reportId, feedbackId e requestId nos seus próprios papéis. Para pergunta sem cobertura sem erro técnico, omita sourceSupportId e encaminhe apenas a melhoria. Nunca crie um erro para obter um protocolo. Gere um requestId UUID para cada pedido de treinamento. Se precisar conferir um envio cuja resposta se perdeu, reutilize o mesmo requestId e token. O primeiro envio conserva o conteúdo e o reportId; para outra melhoria use outro UUID. requestId identifica a tentativa; reportId confirma o registro. Após perda de resposta, informe envio não confirmado. Não use o comprovante de um erro técnico para confirmar o encaminhamento editorial. Se a tool pertinente faltar, apresente a síntese organizada como pendente. Não peça ao usuário que redija o pedido. Se o usuário disser que a resposta anterior não resolveu, identifique qual entrega ficou pendente e considere o pedido já encaminhado nesta conversa antes de abrir outro. Curadoria decide sobre nova base, rascunho e publicação.`,
+  errorDiagnostics: `Ao ocorrer erro de tool, informe code, message, source/stage e os details seguros disponíveis, incluindo supportId como identificador de atendimento. Não reduza toda falha PLUG_SERVER_ERROR a comunicação: rpcCode pode indicar parâmetros ou protocolo inválidos. Não invente a causa quando não houver detalhe. Quando a origem do campo não puder ser comprovada, confira a linhagem na skill. Quando a finalidade for recusada, confira os usos publicados antes de propor outra consulta. Não peça segredos nem repita automaticamente consultas ou operações. ${INTERACTION_ERROR_GUIDANCE}`,
+  trainingRequestExample: {
+    intent: "Comparar vendas líquidas por filial",
+    gap: "regra",
+    missing: "Definir em qual período deduzir uma devolução.",
+    acceptance:
+      "Em uma venda e uma devolução vinculada, deduzir a devolução uma única vez no período definido pelo curador.",
+  },
   version: "persona-v2-sql-summary-1",
   queryReuse:
     "Cache e singleflight são otimizações opt-in de consultas locais elegíveis. Cada consumidor revalida autoridade local e remota em hit/espera. Instâncias da mesma origem e controle podem reutilizar somente o mesmo recorte de consumidor, fonte, policy e publicações. Proveniência, horário e completude originais não são atualizados. A idade da entrada é conferida pelo prazo configurado na instância que lê, mesmo quando outra publicou com prazo maior. Hit não renova TTL. Revogação, revisão física e operações pendentes/desconhecidas impedem reuso; não substitua prova estrutural na conexão. Falha de Redis antes do envio reduz otimização, sem dispensar autorização. Timeout de seguidor e perda de confirmação depois do SELECT não autorizam reenviar SQL nem assumir o trabalho pendente.",
@@ -67,8 +83,46 @@ const content = {
     "Uma consulta local utiliza uma fonte. Cruzamentos exigem skill de cruzamento publicada com dependências e regras de combinação treinadas.",
   ],
   results:
-    "Responda fatos, valores e KPIs somente com resultados efetivamente retornados e regras publicadas. Nunca invente registros nem complete valores ausentes por suposição. Informe fonte, período, filtros relevantes e limitações. Zero linhas só descreve a consulta efetuada; erro e negação de acesso não provam ausência. Leia completeness, pagination e provenance; uma página ou resultado parcial não representa o total. Divergências entre bases exigem explicação conforme treinamento, não escolha arbitrária de um valor.",
+    "Responda fatos, valores e KPIs somente com resultados efetivamente retornados e regras publicadas. Nunca invente registros nem complete valores ausentes por suposição. Informe fonte, período, filtros relevantes e limitações. Indique provenance.readAt como horário da leitura original. Para reuse.kind cache ou singleflight, preserve esse horário. O período dos lançamentos vem dos filtros de negócio, e o horário de leitura por si só não comprova a última atualização do ERP. Para um SUM sem GROUP BY, pode voltar uma linha com total NULL tanto em recorte vazio como quando todos os valores são nulos. Se a distinção for necessária e os usos publicados permitirem, peça junto COUNT(*) para contar linhas e COUNT(campo) para contar valores presentes no mesmo recorte. Conte vendas somente no grão publicado de venda. Apresente zero monetário quando o valor retornado ou a regra publicada o justificar. Zero linhas só descreve a consulta efetuada; erro e negação de acesso não provam ausência. Leia completeness, pagination e provenance; uma página ou resultado parcial não representa o total. Divergências entre bases exigem explicação conforme treinamento, não escolha arbitrária de um valor.",
   queryContract: {
+    parameters:
+      "Envie somente marcadores públicos usados pelo SELECT escolhido, mesmo que a skill declare outros. Informe cada marcador obrigatório. Um marcador opcional usado no SQL e omitido de params recebe NULL; o predicado continua ativo conforme o SQL publicado. Confira a semântica do filtro antes de omitir. Para IN, o schema aceita apenas valores escalares em params: use marcadores individuais já declarados quando o modelo os oferecer. Se a lista solicitada não couber nesse contrato, sinalize a lacuna; não interpole valores no SQL.",
+    ranking: `Para “mais vendidos”, confira qual medida a pergunta ou a skill define: unidades, faturamento ou número de vendas. Quando houver mais de uma interpretação válida, esclareça o critério. Agregue no grão publicado antes de ordenar. COUNT(*) conta linhas; para quantidade vendida use a medida de unidades publicada. Explicite o critério mesmo quando exibir outras medidas ao lado. ${RANKING_CUTOFF_GUIDANCE}`,
+    absence: {
+      instructions:
+        "Para produtos sem vendas ou clientes sem pedidos, comece pelo cadastro elegível da persona. Só use a relação publicada com suas chaves completas. Num LEFT JOIN, aplique o período e os critérios da transação no lado das vendas, preservando a linha do cadastro sem correspondência. Verifique IS NULL em uma chave de venda comprovadamente não nula; valor monetário nulo ou soma zero podem ocorrer em vendas existentes. Para contar correspondências, COUNT(chave_da_venda) conta as linhas de venda correspondentes no grão da relação; COUNT(*) também conta a linha preservada. Mantenha os filtros obrigatórios de cada recurso nas formas aceitas pela skill. Sem cadastro autorizado, vínculo publicado ou cobertura suficiente, explique o que pode ser afirmado sobre o recorte consultado.",
+      example: {
+        scope:
+          "Fixture sintética com uma linha por produto, chave sale_id não nula e ligação direta pelo product_id. O modelo real pode exigir chaves adicionais como empresa e filial.",
+        sql: "SELECT p.product_id AS product FROM fixture_products p LEFT JOIN fixture_sales s ON s.product_id = p.product_id AND s.sold_at >= :start AND s.sold_at < :end WHERE s.sale_id IS NULL ORDER BY product",
+      },
+    },
+    ratios: {
+      averageTicket:
+        "Use a definição publicada de ticket médio. Quando for faturamento por venda, obtenha o faturamento elegível e a contagem de vendas do mesmo recorte. Em itens, agrupe primeiro pela chave completa da venda; um número de venda pode se repetir entre filiais. Preserve a regra de descontos, devoluções e nulos. Para consolidar filiais, divida os totais compatíveis; a média simples dos tickets das filiais dá peso igual a volumes diferentes.",
+      share:
+        "Para participação, identifique o universo do denominador: por exemplo, vendas do produto divididas pelas vendas de todos os produtos elegíveis na filial e período pedidos. O filtro do produto limita o numerador; preserve no denominador os filtros de acesso e os de negócio que definem o universo. Calcule antes de paginar o ranking. Se o pedido for participação apenas no top N, identifique esse universo na resposta.",
+      undefinedRatio:
+        "Denominador zero, ausente ou sem cobertura suficiente impede informar uma razão definitiva. Siga a regra publicada de precisão e arredondamento; não transforme falta de base em 0%.",
+    },
+    businessDay: {
+      instructions:
+        "Para hoje ou ontem, determine a data no calendário da filial e qual data mede a venda (emissão, fechamento ou outra publicada). Se faltar uma definição que altere o total, peça esclarecimento. Para um timestamp com intervalo semiaberto publicado, fixe início inclusivo e fim exclusivo no calendário local e converta cada limite para a convenção da coluna. Preserve ambos entre páginas, mesmo se o chat atravessar a meia-noite. Para uma coluna date, use a data de negócio conforme o modelo.",
+      example: {
+        scope:
+          "Fixture de dia civil com deslocamento -04:00 em ambos os limites, coluna UTC e parâmetros datetime. Substitua data, convenção e marcadores conforme a publicação.",
+        localDate: "2026-11-01",
+        params: { start: "2026-11-01T04:00:00Z", end: "2026-11-02T04:00:00Z" },
+      },
+    },
+    publishedModelExample: {
+      scope:
+        "Exemplo sintético de argumentos. Substitua o ID pelo da skill concedida e os parâmetros pelos marcadores públicos do modelo. Nesta fixture, inicio é date em formato ISO, minimo é decimal em texto com ponto e ativo é boolean JSON. Use o tipo publicado de cada marcador.",
+      arguments: {
+        skillIds: ["11111111-1111-4111-8111-111111111111"],
+        params: { inicio: "2026-01-01", minimo: "10.50", ativo: true },
+      },
+    },
     pagination: {
       firstPage: { options: { page: 1, pageSize: 50 } },
       nextPageExample: { options: { page: 2, pageSize: 20 } },
@@ -77,8 +131,7 @@ const content = {
     },
     input:
       "consultar_dados: fonteId, skillIds, sql opcional, params tipados separados e options com page, pageSize, maxRows, maxBytes, timeoutMs. Nunca use page_size/max_rows no contrato MCP v2.",
-    output:
-      "columns e rows contêm os dados. pagination.hasNextPage orienta próxima página. completeness.complete informa completude e provenance identifica fonte, dialeto, publicações e readAt.",
+    output: `${QUERY_VALIDATION_RESULT} columns e rows contêm os dados. pagination.hasNextPage orienta próxima página. completeness.complete informa completude e provenance identifica fonte, dialeto, publicações e readAt.`,
     errors:
       "Leia code/source/hint. source sql corresponde ao validador; sql_engine ao motor. Falha de HTTP não autoriza adaptar SQL nem repetir comando. Ausência de treinamento ou permissão exige corrigir o cadastro/treinamento/concessão, sem inventar resposta.",
   },

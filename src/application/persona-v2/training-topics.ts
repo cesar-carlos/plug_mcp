@@ -19,6 +19,8 @@ export function trainingTopic(
     topic,
     role: base.role,
     errorDiagnostics: base.errorDiagnostics,
+    trainingIntake: base.trainingIntake,
+    trainingRequestExample: base.trainingRequestExample,
   };
   const wrap = (content: Readonly<Record<string, unknown>>) => {
     const guide = { ...common, ...content };
