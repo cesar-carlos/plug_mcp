@@ -4,10 +4,13 @@ Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementaçã
 
 `docker-compose.persona-v2.production.yml` é uma composição separada para preparar
 o corte no servidor existente. Não substitui o compose legado nem libera deploy.
-O entrypoint, servidor e worker v2 recusam produção sem seleção test-server. A configuração
-só poderá ser utilizada após concluir os gates e preparar o runtime aprovado.
+O procedimento verifica as evidências integrais e a origem da imagem antes de selecionar `clients`. Servidor, worker e migration exigem a revisão aceita correspondente ao SHA da imagem. A imagem padrão de teste recusa esse destino no entrypoint.
 
 ## Valores obrigatórios
+
+Para gerar o manifesto da IA, execute `npx tsx scripts/homologation/new-release-manifest.ts ai saida.json ../plug_server ../plug_agente` no checkout do candidato limpo. Use na fixture duas vendas sintéticas da filial A com valores 10 e 20, período fixo, fonte vendas-fixture e publicação vendas-v1. A sessão concede apenas a filial A e não publica frete. O executor exige transporte da fixture, adaptador do modelo e juiz identificados.
+
+Para o runner externo, execute `npx tsx scripts/homologation/new-release-manifest.ts external saida.json vinculo-privado.json`. O vínculo segue o schema externalRunManifestSchema sem runId e inclui a confirmação isolated-external-effects, a revisão, hashes e IDs reais do ambiente isolado. O gerador cria uma identidade inédita e recusa sobrescrita. Use um manifesto por rodada. Em caso de efeito incerto, consulte o journal antes de qualquer nova rodada. Gerar os arquivos não executa testes.
 
 Fornecer em ambiente privado do operador, nunca no repositório ou argumentos:
 

@@ -1,4 +1,4 @@
-# Prepared distribution only: current v2 runtime still refuses production.
+# Client distribution selected by the verified operator procedure.
 name: se7e-persona-v2-production
 
 x-runtime: &runtime
@@ -14,6 +14,8 @@ x-runtime: &runtime
   stop_grace_period: 30s
   environment: &runtime-env
     NODE_ENV: production
+    PERSONA_V2_DEPLOYMENT: clients
+    PERSONA_V2_ACCEPTED_REVISION: ${PERSONA_V2_IMAGE_REVISION:?Accepted candidate revision required}
     HOST: 0.0.0.0
     PORT: "3333"
     DATABASE_URL: ${PERSONA_V2_PRODUCTION_DATABASE_URL:?Dedicated persona-v2 database required}

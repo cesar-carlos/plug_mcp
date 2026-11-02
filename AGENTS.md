@@ -29,7 +29,7 @@ preserva o bloqueio de aceite integral para clientes.
 O alvo Docker `persona-v2-candidate` e sua composição são exclusivos de
 homologação isolada. O alvo padrão é v2 test-server, com configuração explícita.
 Servidor/worker não aplicam migrations no startup; migração v2 é explícita.
-Produção sem seleção test-server continua recusada. Ver [distribuição candidata](docs/persona-v2/candidate-distribution.md).
+Clientes exigem destino explícito clients na imagem candidata homologada e procedimento de produção com todos os gates aceitos. Ver [distribuição candidata](docs/persona-v2/candidate-distribution.md).
 
 ## Ordem de leitura e precedência
 

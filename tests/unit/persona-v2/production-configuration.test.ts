@@ -92,6 +92,10 @@ describe("production distribution preparation", () => {
       expect(service.restart).toBe("no");
       expect(service.read_only).toBe(true);
       expect(service.entrypoint).toEqual(["./docker-entrypoint-persona-v2.sh"]);
+      expect(service.environment.PERSONA_V2_DEPLOYMENT).toBe("clients");
+      expect(service.environment.PERSONA_V2_ACCEPTED_REVISION).toContain(
+        "PERSONA_V2_IMAGE_REVISION:?",
+      );
       expect(service.environment.NODE_ENV).toBe("production");
       expect(service.environment.DATABASE_URL).toContain("PRODUCTION_DATABASE_URL:?");
     }

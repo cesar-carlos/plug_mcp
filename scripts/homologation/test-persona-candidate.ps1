@@ -99,8 +99,18 @@ function Invoke-BackupFixture([string] $Mode) {
 try {
     $null = Invoke-Compose -Arguments @('config', '--quiet')
     $null = Invoke-Compose -Arguments @('up', '-d', '--wait', 'database', 'redis')
+    $clientCheck = @('run', '--rm', '--no-deps', '-e', 'NODE_ENV=production', '-e', 'PERSONA_V2_DEPLOYMENT=clients')
+    if ($TestServer) {
+        Refuse-Compose -Arguments ($clientCheck + @('server', 'check')) -Expected 'imagem de teste recusa'
+    } else {
+        Refuse-Compose -Arguments ($clientCheck + @('server', 'check')) -Expected 'Configuração persona-v2 recusada'
+        $revision = ($candidate.Config.Env | Where-Object { $_ -match '^GIT_SHA=[a-f0-9]{40}$' }) -replace '^GIT_SHA=', ''
+        if ($revision) {
+            $null = Invoke-Compose -Arguments ($clientCheck + @('-e', "PERSONA_V2_ACCEPTED_REVISION=$revision", '-e', 'PUBLIC_BASE_URL=https://client.example.test', '-e', 'PLUG_SERVER_BASE_URL=https://hub.example.test', 'server', 'check'))
+        }
+    }
     foreach ($mode in @('server', 'worker', 'migrate')) {
-        Refuse-Compose -Arguments @('run', '--rm', '--no-deps', '-e', 'NODE_ENV=production', '-e', 'PERSONA_V2_DEPLOYMENT=local', 'server', $mode) -Expected 'bloqueado fora'
+        Refuse-Compose -Arguments @('run', '--rm', '--no-deps', '-e', 'NODE_ENV=production', '-e', 'PERSONA_V2_DEPLOYMENT=local', 'server', $mode) -Expected 'Destino persona-v2 inválido'
     }
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', '-e', 'MCP_ENCRYPTION_KEY=', 'server', 'server') -Expected 'banco dedicado e chave externa'
     Refuse-Compose -Arguments @('run', '--rm', '--no-deps', 'server', 'legacy') -Expected 'Comando de candidato recusado'

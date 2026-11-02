@@ -16,6 +16,23 @@ const configuration = {
   PLUG_SERVER_BASE_URL: "https://hub.example.test",
   MCP_ENCRYPTION_KEY: "f123456789abcde0".repeat(4),
 };
+it("binds the client destination to the accepted image revision", () => {
+  const client = testConfig({
+    ...configuration,
+    PERSONA_V2_DEPLOYMENT: "clients",
+    GIT_SHA: revision,
+    PERSONA_V2_ACCEPTED_REVISION: revision,
+  });
+  expect(() => assertPersonaDeployment(client)).not.toThrow();
+  for (const overrides of [
+    { GIT_SHA: undefined },
+    { PERSONA_V2_ACCEPTED_REVISION: "b".repeat(40) },
+    { NODE_ENV: "test" as const },
+    { PUBLIC_BASE_URL: "http://example.test" },
+  ]) {
+    expect(() => assertPersonaDeployment({ ...client, ...overrides })).toThrow();
+  }
+});
 const contract: unknown = JSON.parse(readFileSync("contracts/persona-v2-test-deploy.json", "utf8"));
 function originFixture() {
   return {

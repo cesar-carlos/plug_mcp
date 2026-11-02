@@ -10,6 +10,13 @@ export function assertPersonaDeployment(config: AppConfig): void {
     }
     return;
   }
+  if (
+    config.PERSONA_V2_DEPLOYMENT === "clients" &&
+    (!/^[a-f0-9]{40}$/.test(config.GIT_SHA ?? "") ||
+      config.PERSONA_V2_ACCEPTED_REVISION !== config.GIT_SHA)
+  ) {
+    throw new Error("Revisão de clientes incompatível com a imagem.");
+  }
   if (config.NODE_ENV !== "production" || config.MCP_ENCRYPTION_LEGACY_KEY) {
     throw new Error("Servidor de teste exige modo production e cofre próprio.");
   }

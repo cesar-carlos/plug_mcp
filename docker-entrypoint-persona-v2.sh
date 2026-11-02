@@ -1,11 +1,16 @@
 #!/bin/sh
 set -eu
 
-# This candidate is for isolated homologation only. Never migrate on server startup.
-if [ "${NODE_ENV:-}" != "development" ] && [ "${NODE_ENV:-}" != "test" ] && ! { [ "${NODE_ENV:-}" = "production" ] && [ "${PERSONA_V2_DEPLOYMENT:-}" = "test-server" ]; }; then
-  echo "Candidato persona-v2 bloqueado fora de desenvolvimento/homologação." >&2
-  exit 1
-fi
+# Migration is always an explicit command.
+case "${NODE_ENV:-}/${PERSONA_V2_DEPLOYMENT:-}" in
+  development/*|test/*|production/test-server) ;;
+  production/clients)
+    if [ -e /app/.test-server-only ]; then
+      echo "A imagem de teste recusa o destino de clientes." >&2
+      exit 1
+    fi ;;
+  *) echo "Destino persona-v2 inválido." >&2; exit 1 ;;
+esac
 if [ -z "${DATABASE_URL:-}" ] || [ -z "${MCP_ENCRYPTION_KEY:-}" ]; then
   echo "Candidato exige banco dedicado e chave externa." >&2
   exit 1

@@ -82,4 +82,5 @@ FROM runtime-base AS legacy-runtime
 # Default distribution: explicit test server, never client release acceptance.
 FROM persona-v2-candidate AS runtime
 ENV NODE_ENV=production
+RUN touch /app/.test-server-only
 LABEL io.se7e.runtime="persona-v2-test-server"
