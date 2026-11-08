@@ -2,6 +2,22 @@
 
 ## Persona-v2
 
+No chat e no log correlacionado por supportId, `transportReason` distingue
+`capacity`, `timeout`, `network` e `invalid_response` com frases fixas. A fase
+permanece em `stage`; texto remoto, SQL, valores e credenciais não são publicados.
+Deriva estrutural preserva `SOURCE_STRUCTURE_MISMATCH`, distinta de troca de
+identidade. `outcome_unknown: true` tem prioridade na orientação: consultar o
+journal original, sem reenvio nem inferência de rollback. Os wrappers de operação
+preservam a fase e o motivo seguro do transporte. Exceções não classificadas
+informam falha interna e causa indeterminada; não são apresentadas como sucesso,
+ausência de dados ou expiração de token.
+
+A allowlist de diagnóstico seguro é compartilhada entre o adapter REST e a
+resposta MCP. Wrappers de operação conservam código RPC, motivo enumerado,
+SQLSTATE e código de rede reconhecido, além de outcome_unknown. Falhas TCP/TLS
+preservam errno enumerado mesmo após normalização do transporte; nunca mensagem,
+endereço, URL ou cadeia de causas nativa. Códigos desconhecidos não são copiados.
+
 | Código / situação                                 | Tratamento                                                                                                                                       |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | AUTHORIZATION_DENIED                              | Administração: 403; Bearer inválido: 401. Corrigir autenticação/concessão.                                                                       |

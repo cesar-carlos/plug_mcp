@@ -6,6 +6,17 @@ alwaysApply: false
 
 # Governança
 
+## Revisões e comprovação de correções
+
+Aplicar a obrigação de evidência de `testing.mdc` em toda revisão e melhoria.
+Não concluir bug como corrigido e validado sem regressão específica executada;
+não apresentar uma melhoria funcional como comprovada apenas por inspeção ou
+por uma suíte que não exercita o comportamento alterado. A entrega identifica
+achado, cenário, teste e resultado, separando pendências de validação.
+Testes indisponíveis ou falhos permanecem pendentes, sem afrouxar validações,
+inventar aprovações ou substituir os gates existentes. Checks locais aprovados
+não comprovam CI, deploy, versão remota ou homologação com clientes.
+
 DV2-017 (2026-10-25): primeiro destino é servidor de teste, sem clientes.
 Testes e ajustes no destino estão autorizados; aceite manual prévio dispensado.
 Separar esse deploy do aceite integral para clientes. O caminho técnico separado

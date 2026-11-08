@@ -1,5 +1,9 @@
 # Consultas por fonte — contrato implementado
 
+O teto materializado mede bytes UTF-8 com uma serialização do maior envelope
+aplicável, incluindo metadados de singleflight quando há reuso habilitado.
+A otimização não altera limite, formato entregue ou revalidação na entrega.
+
 No SQL Server, o primeiro argumento de DATEDIFF e DATEDIFF_BIG identifica a unidade temporal. Os operandos de data continuam sujeitos a escopo, linhagem e qualificação. Agregue na tabela de origem quando ela contiver todos os filtros e a medida.
 
 CTEs não recursivas são resolvidas em ordem de dependência, conservando o
@@ -10,9 +14,38 @@ tabelas físicas. Esta correção de linhagem não aprova semântica, cardinalid
 ou relatórios de negócio.
 
 `obter_treinamento_base({topic})` permite solicitar `sql`, `knowledge`,
-`operations` ou `administration`. Sem topic conserva a base completa anterior.
+`operations`, `administration` ou `plug-server`. Sem topic conserva a base completa.
 Cada tópico informa `baseHash` e `contentHash` do guia retornado; não são
 fingerprints de publicação nem aprovação ou autorização.
+Os tópicos públicos estáticos são serializados e têm hash calculado uma vez por
+processo; cada resposta recebe objetos independentes, sem cache de autoridade.
+O procedimento detalhado de triagem editorial fica no tópico `knowledge` e na
+base completa. Os demais tópicos conservam um resumo com limites de segurança
+e orientam carregá-lo antes do encaminhamento. Diagnóstico de erros permanece
+integral em cada tópico. Isso reduz repetição sem remover autoridade ou etapas
+do procedimento completo; hashes de tópicos mudam e exigem remontar os pacotes.
+`npx tsx scripts/benchmark-persona-training.ts` compara bytes e mediana de tempo
+local de parsing JSON (sete lotes de mil leituras, após aquecimento) com um
+baseline reconstruído pela reposição do texto de triagem completo. Não mede
+latência de rede/modelo nem qualidade semântica. Regressões verificam preservação
+dos diagnósticos, referência ao procedimento e redução mínima de dois mil bytes
+por tópico compacto; avaliação com IA real permanece adiada.
+
+O gate local e a CI de documentação impõem tetos JSON UTF-8 por tópico:
+`sql` 33.000, `knowledge` 22.000, `operations` 12.000, `administration` 12.500
+e `plug-server` 18.000 bytes. Os limites ficam em
+`scripts/persona-training-budgets.ts`; aumento exige revisão explícita do
+orçamento, sem truncar texto ou dispensar regras de autoridade.
+`obter_capacidades.training` anuncia `version`, `baseHash` e `topics`, com
+`topic`, `contentHash` e `bytes` de cada guia. Bytes medem o JSON UTF-8 da
+orientação, sem envelope MCP/HTTP. A base completa é imutável também nos objetos
+internos. Esses hashes identificam conteúdo; não comprovam instalação de pacote.
+`npm run training:check:persona-v2` verifica localmente base, tópicos, hashes,
+schema de entrada e orçamento das instruções, sem rede ou banco. A verificação
+também integra `training:check`, que mantém a exigência do checkout upstream exato.
+O tópico `plug-server` explica transporte, autenticação por credencial de fonte,
+paginação MCP versus opções internas, diagnóstico e ausência de retry. Não usa o
+guia legado de acesso único nem disponibiliza REST, Socket ou batch ao consumidor.
 Guias são orientação pública, sem dados de persona ou autoridade; instruções
 essenciais de segurança permanecem no runtime. Procedimentos visuais do console
 ficam no guia de administração; detalhes de treinamento, SQL e operações são

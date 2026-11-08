@@ -1,5 +1,20 @@
 # Anexos JSON e binários persona-v2
 
+A identificação de MIME usa uma visão somente de leitura sobre o intervalo do
+binário, sem copiar o buffer inteiro. O contrato de treinamento é interpretado
+uma vez por publicação na criação. Base64 canônico já validado é reutilizado na
+cifra, preservando formato persistido, quotas, prazo e autorização.
+
+Falha na remoção após uma recusa não substitui o erro principal: a resposta
+conserva sua classificação, e o log registra somente `cleanupFailed: true`
+com o supportId. O marcador não persiste conteúdo da falha de limpeza. Nenhum
+handle ou byte é entregue; registros restantes mantêm validade e revalidação
+originais e continuam sujeitos à retenção normal.
+Downloads conservam diagnósticos permitidos do hub (`source`, `stage`, `details`
+e orientação fixa), com o mesmo supportId no JSON, cabeçalho e log. Falha do hub
+não vira challenge OAuth. Identidade inválida e permissão ausente permanecem
+distintas; inexistência e inacessibilidade do anexo não revelam seu conteúdo.
+
 Entrega de desenvolvimento: JSON ou bytes de uma coluna física de consulta
 local publicada, exclusivamente por MCP → plug_server → plug_agente. Não há
 upload, URL pública assinada, exportação de catálogo, conversão para CSV/PDF/
@@ -8,6 +23,14 @@ baixados pelo contrato binário abaixo. A entrada legada conserva contrato separ
 Deploy permanece bloqueado na [matriz de aceite](acceptance.md).
 
 ## Publicação e concessão
+
+Indicação reconhecida de tipo binário impede entrega por consulta comum/JSON,
+mesmo quando outros metadados são contraditórios. Isso não comprova um anexo:
+a criação binária continua exigindo metadados positivos e consistentes, namespace
+do driver, contrato e concessões. O código 7 do ODBC nativo continua numérico;
+não inferir arquivo pelo conteúdo base64. Metadados fornecidos com nomes ausentes
+ou duplicados, códigos ODBC não inteiros ou namespace de tipo malformado são
+recusados no transporte, sem remover silenciosamente as evidências.
 
 O treinamento declara `attachments` com `format: "json"`, `maxBytes` e `ttlMs`.
 Todos os campos retornados precisam de `uses: ["exportacao", ...]`, além dos

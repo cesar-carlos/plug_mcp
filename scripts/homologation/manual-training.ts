@@ -11,7 +11,7 @@ import { createManualSession, fixtureSessionDeadline } from "./manual-session-co
 import { FixtureProcesses } from "./fixture-processes.js";
 import { assertManualFixtureAccess } from "./manual-fixture-access.js";
 import { applyPersonaMigrations } from "../../src/infrastructure/persistence/persona-v2/migrate.js";
-import { fixtureTablesSchema } from "../../src/domain/persona-v2/publication-fixture.js";
+import { manualPublicationTables } from "./manual-publication-tables.js";
 
 const values = parseArgs({
   options: {
@@ -20,6 +20,7 @@ const values = parseArgs({
     agent: { type: "string" },
     flutter: { type: "string" },
     image: { type: "string" },
+    campoPrazos: { type: "boolean", default: false },
     minutes: { type: "string", default: "60" },
   },
 }).values;
@@ -30,6 +31,7 @@ const input = z
     agent: z.string().min(1),
     flutter: z.string().min(1),
     image: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    campoPrazos: z.boolean(),
     minutes: z.coerce.number().int().min(10).max(120),
   })
   .parse(values);
@@ -55,17 +57,6 @@ writeFileSync(
 const manualTraining = createManualSession(input.minutes);
 const deadline = fixtureSessionDeadline({ manualTraining }, 0);
 const sessionManifest = join(sessionRoot, "manifest.json");
-const publicationTables = fixtureTablesSchema.parse([
-  {
-    table: "publication_orders",
-    columns: [
-      { name: "id", type: "integer" },
-      { name: "marker", type: "string", nullable: true },
-      { name: "revision", type: "integer" },
-    ],
-    primaryKey: ["id"],
-  },
-]);
 writeFileSync(
   sessionManifest,
   JSON.stringify({
@@ -73,7 +64,13 @@ writeFileSync(
     sessionRoot,
     manualTraining,
     engines: Object.fromEntries(
-      chainEngines.map((dialect) => [dialect, { ...manifest.engines[dialect], publicationTables }]),
+      chainEngines.map((dialect) => [
+        dialect,
+        {
+          ...manifest.engines[dialect],
+          publicationTables: manualPublicationTables(dialect, input.campoPrazos),
+        },
+      ]),
     ),
   }),
   { flag: "wx", mode: 0o600 },

@@ -12,6 +12,8 @@ import {
 } from "../src/application/use-cases/shared/treinamento-base.js";
 import { evaluationContracts } from "./evaluation-contracts.js";
 import { verifyHistoricalHubSnapshot } from "./hub-snapshot.js";
+import { verifyPersonaTraining } from "./persona-training-check.js";
+const personaTraining = verifyPersonaTraining();
 const bundled = readFileSync("contracts/plug-mcp-rest-v1.json");
 if (
   createHash("sha256")
@@ -57,5 +59,9 @@ if (!adapter.includes("/api/v1/agents/commands") || !adapter.includes("preserve"
   throw new Error("Adapter/base diverged");
 if (!evaluationContracts().has("obter_treinamento_base")) throw new Error("Base tool missing");
 process.stdout.write(
-  JSON.stringify({ success: true, base: obterTreinamentoBase({ modulo: "plug-server" }) }) + "\n",
+  JSON.stringify({
+    success: true,
+    base: obterTreinamentoBase({ modulo: "plug-server" }),
+    personaTraining,
+  }) + "\n",
 );

@@ -15,6 +15,8 @@ A cadeia persistente passou nos 85 cenários, sem skips, com inventários estáv
 
 ## Registrar uma nova rodada
 
+[Desempenho de catálogo, grafo e anexos — 2026-11-08](validation/2026-11-08-performance.md).
+
 [Qualidade do treinamento, semântica e avaliação sintética — 2026-10-30](validation/2026-10-30-training-quality.md).
 
 [Detecção de deploy pendente — 2026-10-30](validation/2026-10-30-pending-deployment.md).

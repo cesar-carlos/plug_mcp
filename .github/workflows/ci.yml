@@ -22,6 +22,7 @@ jobs:
       - run: npm ci
       - run: npm run node:check
       - run: npm run docs:check
+      - run: npm run training:check:persona-v2
       - name: Documentation checker lint
         run: npx eslint scripts/check-docs.ts scripts/docs tests/unit/docs-check.test.ts
       - name: Documentation checker regressions

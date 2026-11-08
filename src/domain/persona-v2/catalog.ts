@@ -205,6 +205,11 @@ export interface PersonaCatalogTransaction {
     personaId: string,
     publicationId: string,
   ): Promise<CatalogPublication<PublishedPackage> | null>;
+  /** Optional for non-persistent test adapters; authorization remains with the consumer. */
+  publications?(
+    personaId: string,
+    ids: readonly string[],
+  ): Promise<ReadonlyMap<string, CatalogPublication<PublishedPackage>>>;
   suspend(personaId: string, publicationId: string, reason: string): Promise<void>;
 }
 

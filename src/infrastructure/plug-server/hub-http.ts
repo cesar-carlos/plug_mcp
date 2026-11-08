@@ -1,6 +1,69 @@
 import { request as httpRequest, Agent as HttpAgent, type IncomingMessage } from "node:http";
 import { request as httpsRequest, Agent as HttpsAgent } from "node:https";
-import { gunzipSync } from "node:zlib";
+import { gunzip } from "node:zlib";
+import { promisify } from "node:util";
+import { safeErrorDetails } from "../../domain/errors/safe-error-details.js";
+import { queryTransportContext } from "../../application/persona-v2/query-transport-context.js";
+
+export class HubTransportError extends Error {
+  readonly errno?: string;
+  constructor(
+    readonly phase: "queue" | "connection" | "response",
+    readonly reason: "capacity" | "timeout" | "network",
+    nativeError?: unknown,
+  ) {
+    super("Hub transport unavailable.");
+    this.name = reason === "timeout" ? "TimeoutError" : "HubTransportError";
+    const code =
+      nativeError && typeof nativeError === "object" && "code" in nativeError
+        ? nativeError.code
+        : undefined;
+    const { errno } = safeErrorDetails({ errno: code });
+    if (typeof errno === "string") this.errno = errno;
+  }
+}
+
+const admissions = new WeakMap<HubHttpAgentPair, Map<string, Map<string, number>>>();
+
+const admit = (agents: HubHttpAgentPair, url: URL): (() => void) => {
+  let destinations = admissions.get(agents);
+  if (!destinations) {
+    destinations = new Map();
+    admissions.set(agents, destinations);
+  }
+  let consumers = destinations.get(url.origin);
+  if (!consumers) {
+    consumers = new Map();
+    destinations.set(url.origin, consumers);
+  }
+  const persona = queryTransportContext.getStore()?.personaId ?? "unscoped";
+  const configured = (url.protocol === "https:" ? agents.https : agents.http).maxSockets;
+  const sockets = Number.isFinite(configured) ? configured : HUB_HTTP_MAX_SOCKETS;
+  const total = [...consumers.values()].reduce((sum, count) => sum + count, 0);
+  const count = consumers.get(persona) ?? 0;
+  const consumerLimit = persona === "unscoped" ? sockets * 2 : Math.max(1, Math.floor(sockets / 2));
+  if (total >= sockets * 2 || count >= consumerLimit) {
+    throw new HubTransportError("queue", "capacity");
+  }
+  consumers.set(persona, count + 1);
+  return () => {
+    const remaining = (consumers.get(persona) ?? 1) - 1;
+    if (remaining) consumers.set(persona, remaining);
+    else consumers.delete(persona);
+    if (!consumers.size) destinations.delete(url.origin);
+  };
+};
+
+const unzip = promisify(gunzip);
+/** Transport ceiling, independent of the smaller per-consumer delivery limit. */
+export const HUB_HTTP_MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
+
+export class HubResponseError extends Error {
+  constructor() {
+    super("Invalid or oversized hub response.");
+    this.name = "HubResponseError";
+  }
+}
 
 /**
  * Defaults do bridge REST (`plug_server/docs/api/api_rest_bridge.md`):
@@ -109,30 +172,44 @@ const requestUrl = (input: unknown): string => {
 const headerLine = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
 
-const decodeBody = (
+const decodeBody = async (
   raw: Buffer,
   encoding: string | undefined,
-): { readonly body: Buffer; readonly gunzipped: boolean } => {
-  if (raw.length === 0 || encoding == null || encoding === "identity") {
+  maxBytes: number,
+): Promise<{ readonly body: Buffer; readonly gunzipped: boolean }> => {
+  if (encoding == null || encoding.toLowerCase() === "identity") {
     return { body: raw, gunzipped: false };
   }
   const lower = encoding.toLowerCase();
   if (lower === "gzip" || lower === "x-gzip") {
-    return { body: gunzipSync(raw), gunzipped: true };
+    try {
+      return { body: await unzip(raw, { maxOutputLength: maxBytes }), gunzipped: true };
+    } catch {
+      throw new HubResponseError();
+    }
   }
-  return { body: raw, gunzipped: false };
+  throw new HubResponseError();
 };
 
-const collectBody = (res: IncomingMessage): Promise<Buffer> =>
+const collectBody = (res: IncomingMessage, maxBytes: number, bodyless: boolean): Promise<Buffer> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let size = 0;
     res.on("data", (chunk: Buffer | string) => {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+      size += bytes.length;
+      if (size > maxBytes) {
+        res.destroy(new HubResponseError());
+        return;
+      }
+      chunks.push(bytes);
     });
     res.on("end", () => {
       resolve(Buffer.concat(chunks));
     });
     res.on("error", reject);
+    const declaredLength = Number(headerLine(res.headers["content-length"]));
+    if (!bodyless && declaredLength > maxBytes) res.destroy(new HubResponseError());
   });
 
 const toTimeoutError = (): DOMException =>
@@ -142,7 +219,13 @@ const toTimeoutError = (): DOMException =>
  * `fetch` com `http(s).Agent` keep-alive. O `fetch` global do Node (undici)
  * não expõe o Agent empacotado; este cliente reusa TCP/TLS no hop MCP → hub.
  */
-export const createPooledFetch = (agents: HubHttpAgentPair): typeof fetch => {
+export const createPooledFetch = (
+  agents: HubHttpAgentPair,
+  maxBytes = HUB_HTTP_MAX_RESPONSE_BYTES,
+): typeof fetch => {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > HUB_HTTP_MAX_RESPONSE_BYTES) {
+    throw new Error("Invalid hub response limit.");
+  }
   const pooled = (async (input: unknown, init?: RequestInit): Promise<Response> => {
     const url = new URL(requestUrl(input));
     const isHttps = url.protocol === "https:";
@@ -164,10 +247,12 @@ export const createPooledFetch = (agents: HubHttpAgentPair): typeof fetch => {
           : undefined;
 
     if (signal?.aborted) {
-      throw toTimeoutError();
+      throw new HubTransportError("queue", "timeout");
     }
 
+    const release = admit(agents, url);
     return new Promise<Response>((resolve, reject) => {
+      let phase: "queue" | "connection" | "response" = "queue";
       const requestFn = isHttps ? httpsRequest : httpRequest;
       const req = requestFn(
         {
@@ -180,10 +265,15 @@ export const createPooledFetch = (agents: HubHttpAgentPair): typeof fetch => {
           agent: isHttps ? agents.https : agents.http,
         },
         (res) => {
-          void collectBody(res)
-            .then((raw) => {
+          phase = "response";
+          const bodyless = [204, 205, 304].includes(res.statusCode ?? 0) || method === "HEAD";
+          void collectBody(res, maxBytes, bodyless)
+            .then(async (raw) => {
               const encoding = headerLine(res.headers["content-encoding"]);
-              const { body: decoded, gunzipped } = decodeBody(raw, encoding);
+              const { body: decoded, gunzipped } = bodyless
+                ? { body: raw, gunzipped: false }
+                : await decodeBody(raw, encoding, maxBytes);
+              if (signal?.aborted) throw toTimeoutError();
               const outHeaders = new Headers();
               for (const [key, value] of Object.entries(res.headers)) {
                 const lower = key.toLowerCase();
@@ -203,47 +293,63 @@ export const createPooledFetch = (agents: HubHttpAgentPair): typeof fetch => {
                 }
               }
               resolve(
-                new Response(
-                  [204, 205, 304].includes(res.statusCode ?? 0) || method === "HEAD"
-                    ? null
-                    : decoded,
-                  {
-                    status: res.statusCode ?? 0,
-                    statusText: res.statusMessage ?? "",
-                    headers: outHeaders,
-                  },
-                ),
+                new Response(bodyless ? null : decoded, {
+                  status: res.statusCode ?? 0,
+                  statusText: res.statusMessage ?? "",
+                  headers: outHeaders,
+                }),
               );
             })
-            .catch(reject);
+            .catch((error: unknown) =>
+              reject(
+                error instanceof HubResponseError || error instanceof HubTransportError
+                  ? error
+                  : new HubTransportError(
+                      "response",
+                      signal?.aborted ? "timeout" : "network",
+                      error,
+                    ),
+              ),
+            )
+            .finally(() => {
+              signal?.removeEventListener("abort", onAbort);
+            });
         },
       );
       const onAbort = (): void => {
-        req.destroy(toTimeoutError());
+        const error = new HubTransportError(phase, "timeout");
+        req.destroy(error);
+        // Queued ClientRequests may emit error only after a socket becomes free.
+        reject(error);
       };
       if (signal) {
         signal.addEventListener("abort", onAbort, { once: true });
       }
+      req.on("socket", () => {
+        phase = "connection";
+      });
+      req.on("finish", () => {
+        phase = "response";
+      });
       req.on("error", (error: Error) => {
         if (signal) {
           signal.removeEventListener("abort", onAbort);
         }
         if (signal?.aborted || error.name === "TimeoutError" || error.name === "AbortError") {
-          reject(toTimeoutError());
+          reject(new HubTransportError(phase, "timeout"));
           return;
         }
-        reject(error);
-      });
-      req.on("close", () => {
-        if (signal) {
-          signal.removeEventListener("abort", onAbort);
-        }
+        reject(
+          error instanceof HubResponseError
+            ? error
+            : new HubTransportError(phase, "network", error),
+        );
       });
       if (body !== undefined) {
         req.write(body);
       }
       req.end();
-    });
+    }).finally(release);
   }) as typeof fetch;
   return pooled;
 };

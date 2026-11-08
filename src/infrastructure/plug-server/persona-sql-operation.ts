@@ -55,8 +55,9 @@ export class PersonaSqlOperationGateway implements SqlOperationGatewayPort {
     private readonly transport: SqlOperationTransportPort,
     private readonly crypto: CryptoPort,
     private readonly hubOrigin: string,
+    sessions?: SourceTokenManager,
   ) {
-    this.sessions = new SourceTokenManager(credentials, hub, crypto);
+    this.sessions = sessions ?? new SourceTokenManager(credentials, hub, crypto);
   }
 
   discardCredentialSession(credentialId: string): void {
@@ -67,103 +68,111 @@ export class PersonaSqlOperationGateway implements SqlOperationGatewayPort {
     if (!source.active || credential?.version !== source.credentialVersion)
       throw new PersonaV2Error("STALE_AUTHORIZATION", "Credencial da fonte alterada.");
     const accessToken = await this.sessions.getAccessToken(source);
-    const access = await this.hub.getAgentAccessStatus(accessToken, source.agentId);
-    if (access.state !== "approved") denied("ClientAgentAccess não aprovado.");
-    if (access.sourceIdentity !== 1)
-      throw new PersonaV2Error(
-        "CAPABILITY_UNAVAILABLE",
-        "Agente sem confirmação da identidade na conexão executora.",
-      );
-    const caps = access.sqlOperations;
-    if (command) validateOperationCommand(command);
-    if (
-      command?.expectedStructure &&
-      (caps?.structureGuard !== 1 ||
-        access.sourceSchema !== 1 ||
-        (command.expectedStructure.resources.some((r) => r.constraints !== undefined) &&
-          access.sourceConstraints !== 1))
-    )
-      throw new PersonaV2Error(
-        "CAPABILITY_UNAVAILABLE",
-        "Guarda estrutural de operações indisponível.",
-      );
-    if (
-      caps?.version !== 1 ||
-      (command &&
-        (operationStatementCount(command, source.dialect) > caps.maxSteps ||
-          command.maxAffectedRows > caps.maxAffectedRows ||
-          command.timeoutMs > caps.timeoutMs))
-    )
-      throw new PersonaV2Error(
-        "CAPABILITY_UNAVAILABLE",
-        "Agente sem capacidade SQL v1 ou limites incompatíveis.",
-      );
-    const clientToken = this.crypto.decrypt(credential.clientTokenEnc);
-    const policy = await this.hub.getClientTokenPolicy({
-      accessToken,
-      agentId: source.agentId,
-      clientToken,
-    });
-    const full = policy.fullPolicy;
-    if (!full) throw new PersonaV2Error("CAPABILITY_UNAVAILABLE", "Policy completa indisponível.");
-    if (full.revoked || full.database !== source.database)
-      denied("Policy revogada ou banco obrigatório incompatível.");
-    if (command) {
-      if (command.database !== source.database) denied("Banco da operação divergente.");
-      for (const dependency of command.expectedStructure?.resources ?? []) {
-        const { resource } = dependency;
-        if (
-          !policyAllowsRead(
-            policy,
-            {
-              name: [resource.schema, resource.name].filter(Boolean).join("."),
-              type: resource.type,
-            },
-            true,
-          )
-        )
-          denied("Leitura da dependência estrutural não concedida na policy da fonte.");
-      }
-      for (const step of command.steps) {
-        const table = operationTableFromSql(step.sql, step.effect);
-        quoteOperationTable(table, source.dialect);
-        const permission = upstreamPermissionFor(step.effect);
-        const allowed = policyAllowsResource(
-          policy,
-          { name: table, type: "table" },
-          permission,
-          true,
+    return this.sessions.observe(accessToken, async () => {
+      const access = await this.hub.getAgentAccessStatus(accessToken, source.agentId);
+      if (access.state !== "approved") denied("ClientAgentAccess não aprovado.");
+      if (access.sourceIdentity !== 1)
+        throw new PersonaV2Error(
+          "CAPABILITY_UNAVAILABLE",
+          "Agente sem confirmação da identidade na conexão executora.",
         );
-        if (!allowed) denied("Comando não concedido na policy da fonte.");
+      const caps = access.sqlOperations;
+      if (command) validateOperationCommand(command);
+      if (
+        command?.expectedStructure &&
+        (caps?.structureGuard !== 1 ||
+          access.sourceSchema !== 1 ||
+          (command.expectedStructure.resources.some((r) => r.constraints !== undefined) &&
+            access.sourceConstraints !== 1))
+      )
+        throw new PersonaV2Error(
+          "CAPABILITY_UNAVAILABLE",
+          "Guarda estrutural de operações indisponível.",
+        );
+      if (
+        caps?.version !== 1 ||
+        (command &&
+          (operationStatementCount(command, source.dialect) > caps.maxSteps ||
+            command.maxAffectedRows > caps.maxAffectedRows ||
+            command.timeoutMs > caps.timeoutMs))
+      )
+        throw new PersonaV2Error(
+          "CAPABILITY_UNAVAILABLE",
+          "Agente sem capacidade SQL v1 ou limites incompatíveis.",
+        );
+      const clientToken = this.crypto.decrypt(credential.clientTokenEnc);
+      const policy = await this.hub.getClientTokenPolicy({
+        accessToken,
+        agentId: source.agentId,
+        clientToken,
+      });
+      const full = policy.fullPolicy;
+      if (!full)
+        throw new PersonaV2Error("CAPABILITY_UNAVAILABLE", "Policy completa indisponível.");
+      if (full.revoked || full.database !== source.database)
+        denied("Policy revogada ou banco obrigatório incompatível.");
+      if (command) {
+        if (command.database !== source.database) denied("Banco da operação divergente.");
+        for (const dependency of command.expectedStructure?.resources ?? []) {
+          const { resource } = dependency;
+          if (
+            !policyAllowsRead(
+              policy,
+              {
+                name: [resource.schema, resource.name].filter(Boolean).join("."),
+                type: resource.type,
+              },
+              true,
+            )
+          )
+            denied("Leitura da dependência estrutural não concedida na policy da fonte.");
+        }
+        for (const step of command.steps) {
+          const table = operationTableFromSql(step.sql, step.effect);
+          quoteOperationTable(table, source.dialect);
+          const permission = upstreamPermissionFor(step.effect);
+          const allowed = policyAllowsResource(
+            policy,
+            { name: table, type: "table" },
+            permission,
+            true,
+          );
+          if (!allowed) denied("Comando não concedido na policy da fonte.");
+        }
       }
-    }
-    // Journal reads/cancellation must remain possible without opening the business database.
-    if (command)
-      await verifySourceIdentity(this.hub, this.credentials, source, { accessToken, clientToken });
-    const current = await this.credentials.find(source.personaId, source.credentialId);
-    if (current?.version !== credential.version)
-      throw new PersonaV2Error("STALE_AUTHORIZATION", "Credencial mudou durante o preflight.");
-    return {
-      accessToken,
-      clientToken,
-      agentId: source.agentId,
-      expectedSource: expectedSourceFor(source),
-      sourcePhysicalId: this.crypto.sha256Hex(
-        JSON.stringify([new URL(this.hubOrigin).origin, source.identityHash]),
-      ),
-    };
+      // Journal reads/cancellation must remain possible without opening the business database.
+      if (command)
+        await verifySourceIdentity(this.hub, this.credentials, source, {
+          accessToken,
+          clientToken,
+        });
+      const current = await this.credentials.find(source.personaId, source.credentialId);
+      if (current?.version !== credential.version)
+        throw new PersonaV2Error("STALE_AUTHORIZATION", "Credencial mudou durante o preflight.");
+      return {
+        accessToken,
+        clientToken,
+        agentId: source.agentId,
+        expectedSource: expectedSourceFor(source),
+        sourcePhysicalId: this.crypto.sha256Hex(
+          JSON.stringify([new URL(this.hubOrigin).origin, source.identityHash]),
+        ),
+      };
+    });
   }
   async verifyCapabilitiesAndPolicy(source: Source, command: SqlOperationCommand): Promise<void> {
     await this.gate(source, command);
   }
   async execute(source: Source, command: SqlOperationCommand): Promise<OperationReceipt> {
     const carrier = await this.gate(source, command);
-    const raw = await this.transport.operationRpc({
-      ...carrier,
-      method: "sql.operation.execute",
-      reference: command,
-      command,
-    });
+    const raw = await this.sessions.observe(carrier.accessToken, () =>
+      this.transport.operationRpc({
+        ...carrier,
+        method: "sql.operation.execute",
+        reference: command,
+        command,
+      }),
+    );
     const receipt = this.receipt(raw, command.operationId, command.fingerprint);
     if (!receipt)
       throw new PersonaV2Error(
@@ -179,11 +188,13 @@ export class PersonaSqlOperationGateway implements SqlOperationGatewayPort {
   ): Promise<OperationReceipt | null> {
     const carrier = await this.gate(source);
     return this.receipt(
-      await this.transport.operationRpc({
-        ...carrier,
-        method: "sql.operation.get",
-        reference: { operationId, fingerprint, database: source.database },
-      }),
+      await this.sessions.observe(carrier.accessToken, () =>
+        this.transport.operationRpc({
+          ...carrier,
+          method: "sql.operation.get",
+          reference: { operationId, fingerprint, database: source.database },
+        }),
+      ),
       operationId,
       fingerprint,
     );
@@ -191,17 +202,25 @@ export class PersonaSqlOperationGateway implements SqlOperationGatewayPort {
   async cancel(source: Source, operationId: string, fingerprint: string): Promise<void> {
     const carrier = await this.gate(source);
     this.receipt(
-      await this.transport.operationRpc({
-        ...carrier,
-        method: "sql.operation.cancel",
-        reference: { operationId, fingerprint, database: source.database },
-      }),
+      await this.sessions.observe(carrier.accessToken, () =>
+        this.transport.operationRpc({
+          ...carrier,
+          method: "sql.operation.cancel",
+          reference: { operationId, fingerprint, database: source.database },
+        }),
+      ),
       operationId,
       fingerprint,
     );
   }
   private receipt(raw: unknown, id: string, fingerprint: string): OperationReceipt | null {
-    const status = statusSchema.parse(raw);
+    const parsed = statusSchema.safeParse(raw);
+    if (!parsed.success)
+      throw new PersonaV2Error(
+        "OPERATION_CONFLICT",
+        "Comprovante do journal inválido; não repita a operação.",
+      );
+    const status = parsed.data;
     if (
       status.operationId !== id ||
       status.fingerprint !== fingerprint ||
@@ -214,7 +233,14 @@ export class PersonaSqlOperationGateway implements SqlOperationGatewayPort {
         "OPERATION_CONFLICT",
         "Identidade ou contagem do journal divergente.",
       );
-    if (status.state === "executando" || status.state === "cancelamento_solicitado") return null;
+    if (status.state === "executando" || status.state === "cancelamento_solicitado") {
+      if (status.completedAt)
+        throw new PersonaV2Error(
+          "OPERATION_CONFLICT",
+          "Journal em execução com conclusão contraditória.",
+        );
+      return null;
+    }
     if (!status.completedAt)
       throw new PersonaV2Error("OPERATION_CONFLICT", "Comprovante sem horário de conclusão.");
     return {

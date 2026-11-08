@@ -136,6 +136,11 @@ Não é JWT, não acessa agentes e não aprova operações. O hub guarda SHA-256
 guarda somente a credencial cifrada, nunca senha ou JWT. Renovação revoga a anterior
 antes da emissão. Falha de gravação local tenta compensação no hub; se falhar,
 informa revogação manual ou expiração, sem autoridade local.
+Antes de revogar no hub, a renovação reconfere na mesma leitura transacional a
+versão esperada, a persona ativa, o responsável e o prazo da sessão. A leitura
+anterior de status não reserva autoridade: uma renovação concorrente mais nova
+gera conflito sem revogar sua credencial. Rede permanece fora dos locks; o CAS
+final e a compensação da credencial recém-emitida continuam obrigatórios.
 
 O contrato aditivo 1.8.0 inclui `administrative` na emissão e na prova. A seleção
 fica persistida nos dois lados e deve coincidir; o consumidor não escolhe scopes
@@ -178,6 +183,10 @@ O hub é verificado fora da transação MCP, novamente depois da verificação d
 e antes da gravação. Dentro dela, locks/CAS e revalidação protegem permissões, prazos
 e versão local da delegação. Indisponibilidade bloqueia. Não há transação distribuída
 hub/MCP: revogação remota posterior à última prova não possui garantia atômica conjunta.
+A entrega da prova de delegação reconfere token, concessão OAuth, prazos e versões
+locais após a resposta do hub, com locks da persona e do token. Revogação ou troca
+de responsável durante a chamada impede a entrega; não dispara nova emissão,
+retry ou reconexão automática.
 Reautenticação humana permanece; administração autônoma ampla e homologação integral
 continuam pendentes.
 

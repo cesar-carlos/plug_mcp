@@ -5,6 +5,64 @@ import {
 } from "../../src/infrastructure/plug-server/map-plug-error.js";
 
 describe("mapPlugServerFailure", () => {
+  it.each([
+    [-32602, "PLUG_SERVER_ERROR", "plug_server_http"],
+    [-32001, "MISSING_CLIENT_TOKEN", "client_token_rpc"],
+    [-32002, "ACCESS_REVOKED", "client_token_rpc"],
+    [-32013, "RATE_LIMITED", "client_token_rpc"],
+    [-32014, "PLUG_SERVER_ERROR", "plug_server_http"],
+    [-32104, "AGENT_UNAVAILABLE", "plug_server_http"],
+  ] as const)("preserva RPC %s mesmo com texto SQL 1033", (rpcCode, code, source) => {
+    const error = mapPlugServerFailure({
+      status: 200,
+      body: { error: { code: rpcCode, message: "The ORDER BY clause is invalid (1033)" } },
+    });
+    expect(error.code).toBe(code);
+    expect(error.source).toBe(source);
+    expect(error.nextAction).not.toBe("consultar_dados");
+    expect(error.hint).not.toContain("OFFSET/FETCH");
+  });
+
+  it.each([
+    [400, "PLUG_SERVER_ERROR"],
+    [401, "USER_AUTH_EXPIRED"],
+    [429, "RATE_LIMITED"],
+    [503, "AGENT_UNAVAILABLE"],
+  ] as const)("texto SQL não substitui HTTP %s sem código RPC", (status, code) => {
+    const error = mapPlugServerFailure({
+      status,
+      body: { error: { message: "The ORDER BY clause is invalid (1033)" } },
+    });
+    expect(error.code).toBe(code);
+    expect(error.source).toBe("plug_server_http");
+    expect(error.nextAction).not.toBe("consultar_dados");
+  });
+
+  it.each([-32700, -32600, -32601, -32602, -32603])(
+    "protocolo %s não orienta repetição",
+    (code) => {
+      const error = mapPlugServerFailure({
+        status: 200,
+        body: { error: { code, message: "fixture" } },
+      });
+      expect(error.hint).toContain("nem repita automaticamente");
+      expect(error.hint).not.toContain("Tente de novo");
+    },
+  );
+  it.each([-32010, -32011, -32014, -32109, -32110])(
+    "não orienta replay após falha RPC %s",
+    (code) => {
+      const error = mapPlugServerFailure({
+        status: 200,
+        body: { error: { code, message: "fixture" } },
+      });
+      expect(error.retryable).toBe(false);
+      expect(error.hint).not.toMatch(
+        /tente de novo|chame a tool de novo|reenvie a consulta|ignore/i,
+      );
+      expect(error.hint).toMatch(/não .*repi|não .*reenv|não chame/i);
+    },
+  );
   it("maps JSON-RPC -32001 missing_client_token to MISSING_CLIENT_TOKEN", () => {
     const err = mapPlugServerFailure({
       status: 200,

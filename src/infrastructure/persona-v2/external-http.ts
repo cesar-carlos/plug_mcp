@@ -4,6 +4,7 @@ import type { LookupFunction } from "node:net";
 import type { ConnectionOptions } from "node:tls";
 import ipaddr from "ipaddr.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
+import { ExternalFailure } from "../../domain/persona-v2/external-failure.js";
 export interface ExternalHttpRequest {
   url: URL;
   method: string;
@@ -64,7 +65,17 @@ export const sendExternalHttps = (
         ) {
           res.destroy();
           req.destroy();
-          reject(refused());
+          reject(
+            new ExternalFailure(
+              (res.statusCode ?? 500) >= 300
+                ? "http_status"
+                : res.headers["content-encoding"]
+                  ? "response_encoding"
+                  : "response_limit",
+              "external_http",
+              res.statusCode,
+            ),
+          );
           return;
         }
         const parts: Buffer[] = [];
@@ -72,7 +83,9 @@ export const sendExternalHttps = (
         res.on("data", (part: Buffer) => {
           size += part.length;
           if (size > input.maxBytes) {
-            res.destroy(refused());
+            const error = new ExternalFailure("response_limit", "external_http");
+            reject(error);
+            res.destroy(error);
             req.destroy();
           } else parts.push(part);
         });
@@ -140,7 +153,15 @@ export class PublicExternalHttp {
             result.headers["content-encoding"] ||
             Buffer.byteLength(result.body) > input.maxBytes
           )
-            throw refused();
+            throw new ExternalFailure(
+              result.status < 200 || result.status >= 300
+                ? "http_status"
+                : result.headers["content-encoding"]
+                  ? "response_encoding"
+                  : "response_limit",
+              "external_http",
+              result.status,
+            );
           return result;
         })(),
       ]);

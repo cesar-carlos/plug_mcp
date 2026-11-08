@@ -12,6 +12,7 @@ import {
 import { resolve, sep } from "node:path";
 import { PERSONA_CONSUMER_GUIDANCE } from "../../application/persona-v2/consumer-guidance.js";
 import { personaPluginCompatibility } from "./persona-compatibility.js";
+import { trainingManifest } from "../../application/persona-v2/training-topics.js";
 import {
   readPluginManifest,
   validateConnectionId,
@@ -90,6 +91,7 @@ export const packageSe7ePlugin = async (input: PluginPackageInput): Promise<stri
       );
     }
     files.set("compatibility.json", json(personaPluginCompatibility(variant)));
+    files.set("training-manifest.json", json(trainingManifest()));
   }
   validatePluginReferences(files);
   // Only the official normal PNGs are copied. No dependency on the external brand folder.

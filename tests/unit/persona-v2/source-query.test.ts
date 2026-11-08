@@ -1,3 +1,4 @@
+import { queryTransportContext } from "../../../src/application/persona-v2/query-transport-context.js";
 import { expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import pino from "pino";
@@ -95,6 +96,36 @@ const reusableFixture = () => {
   );
   return { ...f, service: new PersonaSourceQueries(f.catalog, f.gateway, reuse), reuse };
 };
+
+it.each([
+  { name: "amount", type: "text", odbcType: -4 },
+  { name: "amount", type: "text", odbcType: 7, typeSystem: "odbc_fast" },
+  { name: "amount", type: "bytea", odbcType: 12 },
+  { name: "amount", type: "bytea", typeSystem: "unknown" },
+])("recusa consulta comum quando metadados contraditórios indicam binário", async (column) => {
+  const f = fixture();
+  f.execute.mockResolvedValue({
+    columns: ["id", "amount"],
+    rows: [{ id: 1, amount: "YQ==" }],
+    columnsMetadata: [column],
+  });
+  await expect(f.service.run(identity, { params: { minimum: 0 } })).rejects.toMatchObject({
+    code: "INCOMPLETE_INPUT",
+  });
+  expect(f.execute).toHaveBeenCalledTimes(1);
+});
+
+it("ODBC nativo 7 continua numérico, sem inferência de arquivo pelo código", async () => {
+  const f = fixture();
+  f.execute.mockResolvedValue({
+    columns: ["id", "amount"],
+    rows: [{ id: 1, amount: 1.5 }],
+    columnsMetadata: [{ name: "amount", odbcType: 7, typeSystem: "odbc" }],
+  });
+  await expect(f.service.run(identity, { params: { minimum: 0 } })).resolves.toMatchObject({
+    rows: [{ id: 1, amount: 1.5 }],
+  });
+});
 it("prova estrutural compartilhada continua na conexão executora, sem cache ou singleflight", async () => {
   const f = reusableFixture();
   f.evidence.publications[0]!.package = {
@@ -242,7 +273,10 @@ it("timeout reduzido vence durante autorização remota e impede SQL tardio", as
   const f = fixture();
   f.evidence.executionLimits.timeoutMs = 10;
   f.gateway.authorize.mockImplementation(async () => {
+    const context = queryTransportContext.getStore();
+    expect(context?.personaId).toBe(identity.personaId);
     await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(context?.signal.aborted).toBe(true);
     return { execute: f.execute, revalidate: f.revalidate };
   });
   await expect(f.service.run(identity, { params: { minimum: 0 } })).rejects.toMatchObject({
@@ -250,6 +284,25 @@ it("timeout reduzido vence durante autorização remota e impede SQL tardio", as
   });
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(f.execute).not.toHaveBeenCalled();
+});
+
+it("cancelamento do contexto MCP encerra espera sem executar SQL nem contaminar outra consulta", async () => {
+  const f = fixture(),
+    controller = new AbortController();
+  f.gateway.authorize.mockImplementationOnce(async () => {
+    const signal = queryTransportContext.getStore()!.signal;
+    controller.abort();
+    expect(signal.aborted).toBe(true);
+    throw new DOMException("synthetic cancellation", "AbortError");
+  });
+  await expect(
+    queryTransportContext.run({ personaId: identity.personaId, signal: controller.signal }, () =>
+      f.service.run(identity, { params: { minimum: 0 } }),
+    ),
+  ).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+  expect(f.execute).not.toHaveBeenCalled();
+  await expect(f.service.run(identity, { params: { minimum: 0 } })).resolves.toBeDefined();
+  expect(f.execute).toHaveBeenCalledTimes(1);
 });
 it("validar_consulta só executa envelope vazio e não aprova semântica", async () => {
   const f = fixture();

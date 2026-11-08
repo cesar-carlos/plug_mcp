@@ -11,6 +11,67 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Runner manual aceita fixtures sintéticas opcionais de prazos somente em MSSQL, com geração tipada testada; não representa homologação nativa nem usa dados operacionais.
+
+- Changed: Consultas v2 carregam publicações em lote sob os mesmos locks; grafo derivado usa cache limitado por persona/publicação/hash com revalidação por acesso. Reduzidas serializações do envelope e cópias de anexos, com regressões e medições em PostgreSQL isolado.
+
+- Fixed: Texto SQL 1033/4104 deixa de sobrescrever falhas HTTP e códigos RPC conhecidos de autenticação/protocolo/infraestrutura; regressões preservam os diagnósticos SQL legados. Orientação de protocolo não sugere retry automático.
+
+- Fixed: Diagnósticos RPC v2 distinguem replay, pool, conexão/configuração e execução ausente/cancelada; efeito incerto prevalece. Orientações legadas de decoding, compressão, replay e cancelamento deixam de sugerir reenvio; regressões cobrem ambos os caminhos.
+
+- Fixed: Diagnóstico v2 conserva status HTTP seguro do hub e distingue recusa HTTP 400 de falha SQL; HTTP 503 não atribui causa sem evidência. Mantém precedência RPC e ausência de retry.
+
+- Fixed: Base de uso do plug_server distingue Retry-After de autorização de retry, 401 do hub de OAuth MCP, 404 de revogação e IDs remotos de supportId; revisão documental preserva o contrato upstream fixado.
+
+- Added: Treinamento e regressões sintéticas cobrem continuidade de paginação, contexto obsoleto, diagnóstico sem retry e origem/completude/limites/horário da resposta; avaliação com IA real permanece adiada.
+- Fixed: Descoberta v2 anuncia somente os três dialetos suportados; exemplos SQL por dialeto passam por validação local, sem alegar execução nativa.
+
+- Fixed: Integrações externas preservam status HTTP/código RPC seguros e distinguem resposta inválida, catálogo incompleto e falha da ferramenta pelo supportId; sem texto remoto, reconexão indevida ou replay de ações.
+
+- Fixed: Falha de limpeza de anexo não mascara a recusa original; diagnóstico HTTP conserva código/etapa/detalhes seguros do hub e registra cleanupFailed pelo supportId, sem bytes ou segredos.
+
+- Added: Avaliação vincula leituras concluídas às tuplas skill/publicação/fonte efetivamente consultadas, com contrato único de schemas e ferramentas no CLI/núcleo.
+- Added: Pacotes incluem manifesto de treinamento validado e diagnóstico por tópico; CI impõe orçamento UTF-8 individual dos guias.
+
+- Fixed: Wrappers de operações preservam diagnóstico RPC/SQLSTATE e o transporte conserva errno de rede/TLS reconhecido; allowlist central mantém os mesmos campos seguros no chat e no log, sem mensagens ou causas nativas.
+
+- Fixed: Respostas de erro v2 distinguem saturação, timeout, rede e resposta inválida, preservam deriva estrutural e resultado desconhecido da operação; wrappers conservam fase/motivo seguro e logs com supportId, sem texto remoto.
+
+- Added: Avaliações conferem conclusão de pré-requisitos antes da consulta e preservam a recusa de retry entre turnos, com cenários de insistência e concorrência.
+- Changed: Tópicos compactam a triagem repetida e apontam para o procedimento completo em knowledge, preservando diagnóstico; benchmark local mede bytes e parsing.
+- Added: Comparação de pacotes informa componente divergente e ação de remontagem/validação, sem expor valores inválidos ou afirmar instalação.
+
+- Fixed: Consultas v2 propagam prazo total e cancelamento MCP ao HTTP, impedindo envio tardio de pedidos na fila.
+- Added: Admissão REST limitada por destino/pool e persona de consulta; diagnóstico de fila, conexão e resposta pelo supportId, com motivos enumerados sem conteúdo privado.
+- Added: Regressões de saturação, perda de resposta e renovação concorrente com dois pools PostgreSQL isolados, preservando ausência de replay e a credencial vencedora.
+
+- Changed: Compatibilidade dos pacotes passa ao formato v2 e exige hashes da base e de todos os tópicos; pacotes antigos exigem remontagem explícita.
+- Fixed: Avaliador de consumidores não aceita evidência de validação ou metadados como prova de dados consultados.
+- Added: Cenários e critérios comportamentais para descoberta de skill, resposta parcial e recusa de retry após falha do hub, sem certificar IA real por harness.
+
+- Fixed: Verificação da delegação reconfere token e concessão OAuth após a chamada ao hub; revogação, expiração ou troca de autoridade em andamento impedem entregar a prova, sem retry ou emissão de credenciais.
+
+- Fixed: Base completa v2 congela objetos internos, impedindo alteração acidental sem atualização do hash.
+- Added: `obter_capacidades.training` anuncia tópicos, hashes e tamanhos; `training:check:persona-v2` valida o conteúdo local e integra o gate completo sem dispensar o contrato upstream.
+
+- Fixed: Renovação de delegação revalida versão e autoridade antes de efeitos no hub, evitando revogar a credencial de uma renovação concorrente mais nova; preserva CAS final e compensação.
+
+- Fixed: Indícios binários contraditórios bloqueiam consultas comuns sem habilitar anexos; metadados de coluna malformados/duplicados são recusados. Comprovantes inválidos ou em andamento com conclusão retornam conflito seguro, sem replay.
+
+- Fixed: Treinamento v2 descreve autenticação por credencial de fonte, sem orientar uso de variáveis globais, e distingue integrações implementadas da homologação pendente.
+- Added: Tópico `plug-server` separa opções MCP/RPC, transporte, diagnóstico e ausência de retry, sem reutilizar autoridade legada.
+- Changed: Guias por tópico calculam hash uma vez por processo e devolvem objetos independentes, evitando processamento repetido e alteração compartilhada das respostas.
+
+- Fixed: Normalização SQL preserva rows vazio e recusa colunas duplicadas, linhas/células incompatíveis e metadados inválidos de paginação, truncamento ou limites efetivos; nomes especiais de coluna não alteram protótipos.
+
+- Fixed: Respostas RPC com ID divergente, flags contraditórias ou erro e resultado simultâneos são recusadas; erros nos envelopes compatíveis preservam diagnóstico. Transporte rejeita Content-Length excessivo antecipadamente e compressão incompatível/truncada, preservando HEAD e respostas sem corpo.
+
+- Fixed: Timeout HTTP interrompe pedidos na fila sem envio posterior; JWT recusado deixa o cache sem apagar sessão mais nova ou repetir a chamada. Respostas de acesso incompletas ou de outro agente não indicam aprovação.
+- Fixed: Delegações distinguem recusa de indisponibilidade do hub, limitam a leitura a 16 KiB e preservam diagnóstico seguro sem expor o corpo remoto.
+
+- Fixed: Comunicação com plug_server recusa respostas de sucesso inválidas sem simular consulta vazia ou expiração e aplica o timeout configurado na v2.
+- Changed: Transporte limita respostas e descomprime gzip de forma assíncrona; consultas e operações v2 compartilham cache JWT por credencial/versão, limitado pela expiração, preservando revalidações e ausência de retry.
+
 - Fixed: No SQL Server, a unidade de DATEDIFF e DATEDIFF_BIG não é interpretada como coluna. A proteção de multiplicação de medidas orienta agregar na tabela de origem quando ela contém todos os filtros.
 
 - Destino explícito de clientes para servidor, worker e migration, vinculado à revisão da imagem aceita pelo procedimento de produção.

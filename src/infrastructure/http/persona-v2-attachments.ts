@@ -1,5 +1,8 @@
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { randomUUID } from "node:crypto";
+import { DomainError } from "../../domain/errors/domain-error.js";
+import { hasCleanupFailure } from "../../domain/errors/cleanup-failure.js";
+import { personaV2ToolError } from "../mcp/persona-v2-tool-error.js";
 import type { Express } from "express";
 import type { PersonaAttachments } from "../../application/persona-v2/attachments.js";
 import type { PersonaConsumerCatalog } from "../../application/persona-v2/consumer-catalog.js";
@@ -24,11 +27,27 @@ export function registerPersonaAttachmentRoutes(
       continue;
     }
     app.all(`/api/consumer/${mode}/attachments/:handle`, async (req, res) => {
-      const reject = (status: number, code: string, message: string) => {
+      const reject = (status: number, code: string, message: string, failure?: unknown) => {
         const supportId = randomUUID();
-        input.logger?.warn("persona-v2 attachment failed", { supportId, status, errorCode: code });
+        const diagnostic = failure instanceof DomainError ? personaV2ToolError(failure) : undefined;
+        input.logger?.warn("persona-v2 attachment failed", {
+          supportId,
+          status,
+          errorCode: code,
+          ...(diagnostic
+            ? { source: diagnostic.source, stage: diagnostic.stage, details: diagnostic.details }
+            : {}),
+          ...(hasCleanupFailure(failure) ? { cleanupFailed: true } : {}),
+        });
         res.setHeader("X-Support-Id", supportId);
-        res.status(status).json({ error: { code, message, supportId } });
+        res.status(status).json({
+          error: {
+            ...(diagnostic ?? {}),
+            code,
+            message: diagnostic?.message ?? message,
+            supportId,
+          },
+        });
       };
       res.setHeader("Cache-Control", "no-store, private");
       res.setHeader("Pragma", "no-cache");
@@ -77,7 +96,10 @@ export function registerPersonaAttachmentRoutes(
         res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
         res.type(file.descriptor.mimeType).send(Buffer.from(file.data));
       } catch (error) {
-        const code = error instanceof PersonaV2Error ? error.code : "CAPABILITY_UNAVAILABLE";
+        const code =
+          error instanceof PersonaV2Error || error instanceof DomainError
+            ? error.code
+            : "CAPABILITY_UNAVAILABLE";
         const denied = code === "AUTHORIZATION_DENIED" || code === "STALE_AUTHORIZATION";
         if (denied && !authenticated) {
           res.setHeader("WWW-Authenticate", challenge);
@@ -101,7 +123,7 @@ export function registerPersonaAttachmentRoutes(
           413: "Anexo excede o limite permitido.",
           503: "Serviço temporariamente indisponível.",
         };
-        reject(status, code, messages[status]);
+        reject(status, code, messages[status], error);
       }
     });
   }

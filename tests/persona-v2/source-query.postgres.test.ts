@@ -1525,7 +1525,7 @@ it("capabilities são versionadas e verificar_fonte não executa SQL nem concede
     complete: false,
     authentication: "bearer",
     pluginCompatibility: {
-      format: "persona-plugin-compatibility-v1",
+      format: "persona-plugin-compatibility-v2",
       runtime: "persona-v2",
       variant: "portable",
       guidanceHash: expect.stringMatching(/^[a-f0-9]{64}$/),

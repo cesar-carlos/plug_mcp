@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { markCleanupFailure } from "../../domain/errors/cleanup-failure.js";
 import type { ConsumerIdentity } from "../../domain/persona-v2/model.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 import type { CryptoPort } from "../../domain/ports/crypto.port.js";
@@ -171,10 +172,11 @@ export class PersonaAttachments {
         : this.queries.exportJson(identity, input.query));
       reduce(response.limits?.timeoutMs ?? capture.evidence.executionLimits.timeoutMs);
       check();
-      const contracts = capture.evidence.publications.map((p) =>
-        input.format === "binary"
-          ? queryTrainingSchema.parse(p.package.training).binaryAttachments!
-          : queryTrainingSchema.parse(p.package.training).attachments!,
+      const trainings = capture.evidence.publications.map((p) =>
+        queryTrainingSchema.parse(p.package.training),
+      );
+      const contracts = trainings.map((training) =>
+        input.format === "binary" ? training.binaryAttachments! : training.attachments!,
       );
       const maxBytes = Math.min(
         ATTACHMENT_MAX_BYTES,
@@ -199,17 +201,13 @@ export class PersonaAttachments {
               limits: response.limits,
             })
           : undefined;
+      const binaryValue =
+        input.format === "binary" ? response.rows?.[0]?.[response.columns![0]!] : undefined;
       const bytes =
-        file !== undefined
-          ? Buffer.from(file, "utf8")
-          : decodeBinaryCell(response.rows?.[0]?.[response.columns![0]!], maxBytes);
+        file !== undefined ? Buffer.from(file, "utf8") : decodeBinaryCell(binaryValue, maxBytes);
       const media =
         input.format === "binary"
-          ? binaryMedia(
-              bytes,
-              queryTrainingSchema.parse(capture.evidence.publications[0]!.package.training)
-                .binaryAttachments!.mimeTypes,
-            )
+          ? binaryMedia(bytes, trainings[0]!.binaryAttachments!.mimeTypes)
           : { mimeType: "application/json" as const, extension: "json" };
       if (bytes.byteLength > maxBytes || expiresAt <= Date.now()) {
         throw new PersonaV2Error(
@@ -220,7 +218,10 @@ export class PersonaAttachments {
       const id = this.crypto.randomId();
       const record: StoredAttachment = {
         capture,
-        data: bytes.toString("base64"),
+        data:
+          input.format === "binary" && typeof binaryValue === "string"
+            ? binaryValue
+            : bytes.toString("base64"),
         descriptor: {
           id,
           format: input.format,
@@ -235,10 +236,9 @@ export class PersonaAttachments {
           complete: response.completeness.complete,
           classifications: [
             ...new Set(
-              capture.evidence.publications.flatMap((p) =>
-                queryTrainingSchema
-                  .parse(p.package.training)
-                  .columns.filter((c) => c.uses?.includes("exportacao"))
+              trainings.flatMap((training) =>
+                training.columns
+                  .filter((c) => c.uses?.includes("exportacao"))
                   .map((c) => c.classification),
               ),
             ),
@@ -276,7 +276,11 @@ export class PersonaAttachments {
         }
         return descriptor;
       } catch (error) {
-        await this.store.remove(handle, binding);
+        try {
+          await this.store.remove(handle, binding);
+        } catch {
+          throw markCleanupFailure(error);
+        }
         throw error;
       }
     });
@@ -320,7 +324,11 @@ export class PersonaAttachments {
           maxResponseBytes: record.capture.evidence.executionLimits.maxBytes,
         };
       } catch (error) {
-        await this.store.remove(handle, binding);
+        try {
+          await this.store.remove(handle, binding);
+        } catch {
+          throw markCleanupFailure(error);
+        }
         throw error;
       }
     });

@@ -7,11 +7,239 @@ import {
   AGENT_TIMEOUT_MS_LIMIT,
   hubBridgeWaitMs,
   hubHttpAbortMs,
+  HubResponseError,
+  HubTransportError,
 } from "../../src/infrastructure/plug-server/hub-http.js";
 import { SilentTestLogger } from "../helpers/silent-logger.js";
+import { queryTransportContext } from "../../src/application/persona-v2/query-transport-context.js";
+import { reportPersonaV2ToolError } from "../../src/infrastructure/mcp/persona-v2-tool-error.js";
+import { PinoLoggerAdapter } from "../../src/infrastructure/logging/pino-logger.adapter.js";
+import pino from "pino";
+
+it.each(["queue", "connection", "response"] as const)(
+  "correlaciona falha %s pelo supportId sem conteúdo privado",
+  async (phase) => {
+    const http = vi.fn<typeof fetch>(async () => {
+      throw new HubTransportError(phase, "timeout");
+    });
+    const adapter = new PlugServerRestAdapter(
+      "https://private-fixture.test",
+      new SilentTestLogger(),
+      http,
+    );
+    const error = await adapter
+      .executeSql({
+        accessToken: "private-marker",
+        clientToken: "private-marker",
+        agentId: "private-marker",
+        sql: "private-marker",
+      })
+      .catch((failure: unknown) => failure);
+    let output = "";
+    const logger = new PinoLoggerAdapter(
+      pino(
+        {},
+        {
+          write: (line) => {
+            output += line;
+          },
+        },
+      ),
+    );
+    const response = reportPersonaV2ToolError(error, logger);
+    expect(JSON.parse(output)).toMatchObject({
+      supportId: response.supportId,
+      stage: `sql.execute.${phase}`,
+      details: { transportReason: "timeout" },
+    });
+    expect(output).not.toContain("private");
+    expect(http).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("propaga o mesmo cancelamento da consulta ao HTTP sem renovar o orçamento", async () => {
+  const controller = new AbortController();
+  const http = vi.fn<typeof fetch>(async (_url, init) => {
+    expect(init?.signal?.aborted).toBe(false);
+    controller.abort();
+    expect(init?.signal?.aborted).toBe(true);
+    throw new DOMException("synthetic", "AbortError");
+  });
+  const adapter = new PlugServerRestAdapter("https://fixture.test", new SilentTestLogger(), http);
+  await expect(
+    queryTransportContext.run({ personaId: "fixture", signal: controller.signal }, () =>
+      adapter.login("fixture", "fixture"),
+    ),
+  ).rejects.toBeDefined();
+  expect(http).toHaveBeenCalledTimes(1);
+});
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+
+it.each(["wrong-id", "batch", "false-success", "conflict", "missing-id", "invalid-version"])(
+  "recusa envelope RPC inconsistente (%s) sem entregar linhas nem repetir",
+  async (variant) => {
+    const http = vi.fn<typeof fetch>(async (_url, init) => {
+      const input = asRecord(JSON.parse(String(init?.body)));
+      const id = asRecord(input?.command)?.id;
+      return Response.json({
+        response: {
+          type: variant === "batch" ? "batch" : "single",
+          success: variant !== "false-success",
+          item: {
+            ...(variant === "missing-id" ? {} : { id: variant === "wrong-id" ? "other" : id }),
+            success: variant !== "false-success",
+            ...(variant === "invalid-version" ? { jsonrpc: "1.0" } : {}),
+            result: { columns: ["value"], rows: [{ value: "private-synthetic" }] },
+            ...(variant === "conflict"
+              ? { error: { code: -32602, message: "private-synthetic" } }
+              : {}),
+          },
+        },
+      });
+    });
+    const adapter = new PlugServerRestAdapter("https://fixture.test", new SilentTestLogger(), http);
+    const result = adapter.executeSql({
+      accessToken: "fixture",
+      clientToken: "fixture",
+      agentId: "fixture",
+      sql: "SELECT 1",
+    });
+    await expect(result).rejects.toMatchObject({
+      code: "PLUG_SERVER_ERROR",
+      retryable: false,
+      stage: "sql.execute",
+    });
+    await expect(result).rejects.not.toThrow("private-synthetic");
+    expect(http).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("aceita envelope normalizado correlacionado, inclusive resultado vazio", async () => {
+  const adapter = new PlugServerRestAdapter(
+    "https://fixture.test",
+    new SilentTestLogger(),
+    async (_url, init) => {
+      const input = asRecord(JSON.parse(String(init?.body)));
+      return Response.json({
+        response: {
+          type: "single",
+          success: true,
+          item: {
+            id: asRecord(input?.command)?.id,
+            success: true,
+            result: { columns: ["value"], rows: [] },
+          },
+        },
+      });
+    },
+  );
+  await expect(
+    adapter.executeSql({
+      accessToken: "fixture",
+      clientToken: "fixture",
+      agentId: "fixture",
+      sql: "SELECT 1",
+    }),
+  ).resolves.toMatchObject({ columns: ["value"], rows: [] });
+});
+
+it.each(["root", "response", "data"])(
+  "preserva erro RPC no envelope compatível %s",
+  async (shape) => {
+    const error = { error: { code: -32602, message: "private-synthetic" } };
+    const http = vi.fn(async () => Response.json(shape === "root" ? error : { [shape]: error }));
+    const adapter = new PlugServerRestAdapter("https://fixture.test", new SilentTestLogger(), http);
+    await expect(
+      adapter.getClientTokenPolicy({
+        accessToken: "fixture",
+        clientToken: "fixture",
+        agentId: "fixture",
+      }),
+    ).rejects.toMatchObject({ code: "PLUG_SERVER_ERROR", stage: "getPolicy", retryable: false });
+    expect(http).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([
+  {},
+  { agentId: "other", hasClientToken: true, isHubConnected: true },
+  { agentId: "fixture-agent" },
+])("não aprova resposta de acesso vazia, incompleta ou de outro agente", async (agent) => {
+  const http = vi.fn(async () => Response.json({ agent }));
+  const adapter = new PlugServerRestAdapter("https://fixture.test", new SilentTestLogger(), http);
+  await expect(adapter.getAgentAccessStatus("fixture", "fixture-agent")).rejects.toMatchObject({
+    code: "PLUG_SERVER_ERROR",
+    retryable: false,
+  });
+  expect(http).toHaveBeenCalledTimes(1);
+});
+
+it("limite de transporte não sugere reconexão nem retry", async () => {
+  const fetcher = vi.fn().mockRejectedValue(new HubResponseError());
+  const adapter = new PlugServerRestAdapter("http://fixture.test", new SilentTestLogger(), fetcher);
+  await expect(adapter.login("fixture", "fixture")).rejects.toMatchObject({
+    code: "PLUG_SERVER_ERROR",
+    retryable: false,
+  });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it.each(["<html>synthetic-private-value</html>", "{}", '{"response":{"item":{"result":{}}}}'])(
+  "recusa sucesso SQL sem resultado válido, sem devolver conteúdo privado: %s",
+  async (body) => {
+    const fetcher = vi.fn(async () => new Response(body));
+    const adapter = new PlugServerRestAdapter(
+      "http://fixture.test",
+      new SilentTestLogger(),
+      fetcher,
+    );
+    const promise = adapter.executeSql({
+      accessToken: "fixture",
+      clientToken: "fixture",
+      agentId: "fixture",
+      sql: "SELECT 1",
+    });
+    await expect(promise).rejects.toMatchObject({
+      code: "PLUG_SERVER_ERROR",
+      source: "plug_server_http",
+      stage: "sql.execute",
+      retryable: false,
+    });
+    await expect(promise).rejects.not.toThrow("synthetic-private-value");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each(["invalid JSON", "{}"])(
+  "login com resposta inválida não pede reconexão: %s",
+  async (body) => {
+    const fetcher = vi.fn(async () => new Response(body));
+    const adapter = new PlugServerRestAdapter(
+      "http://fixture.test",
+      new SilentTestLogger(),
+      fetcher,
+    );
+    await expect(adapter.login("fixture", "fixture")).rejects.toMatchObject({
+      code: "PLUG_SERVER_ERROR",
+      retryable: false,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("preserva erro HTTP 503 com corpo HTML sem classificar como expiração", async () => {
+  const adapter = new PlugServerRestAdapter(
+    "http://fixture.test",
+    new SilentTestLogger(),
+    async () => new Response("private", { status: 503 }),
+  );
+  await expect(adapter.login("fixture", "fixture")).rejects.toMatchObject({
+    code: "AGENT_UNAVAILABLE",
+    source: "plug_server_http",
+  });
+});
 
 it.each(["approved", "pending", "rejected", "revoked", "expired"])(
   "não restaura acesso negado pelo histórico %s",
@@ -54,18 +282,35 @@ it("preserva tipo ODBC do wire do agente sem inferir base64 textual como binári
     }).columnsMetadata,
   ).toEqual([{ name: "file", odbcType: 7, typeSystem: "odbc_fast" }]);
   expect(
-    normalizeSqlResult({
-      rows: [{ file: "YQ==" }],
-      column_metadata: [{ name: "file", odbc_type: -4, type_system: 7 }],
-    }).columnsMetadata,
-  ).toEqual([{ name: "file", odbcType: -4, typeSystem: "unknown" }]);
+    () =>
+      normalizeSqlResult({
+        rows: [{ file: "YQ==" }],
+        column_metadata: [{ name: "file", odbc_type: -4, type_system: 7 }],
+      }).columnsMetadata,
+  ).toThrow(expect.objectContaining({ code: "PLUG_SERVER_ERROR" }));
   expect(
-    normalizeSqlResult({
-      columns: ["file"],
-      rows: [{ file: "YQ==" }],
-      column_metadata: [{ name: "file", odbc_type: "-4" }],
-    }).columnsMetadata,
-  ).toEqual([{ name: "file" }]);
+    () =>
+      normalizeSqlResult({
+        columns: ["file"],
+        rows: [{ file: "YQ==" }],
+        column_metadata: [{ name: "file", odbc_type: "-4" }],
+      }).columnsMetadata,
+  ).toThrow(expect.objectContaining({ code: "PLUG_SERVER_ERROR" }));
+});
+
+it.each([
+  null,
+  "bad",
+  [null],
+  [{}],
+  [
+    { name: "file", type: "bytea" },
+    { name: "FILE", type: "text" },
+  ],
+])("não descarta metadados inválidos/duplicados: %j", (column_metadata) => {
+  expect(() => normalizeSqlResult({ rows: [{ file: "fixture" }], column_metadata })).toThrow(
+    expect.objectContaining({ code: "PLUG_SERVER_ERROR" }),
+  );
 });
 
 const commandOptions = (body: unknown): Record<string, unknown> => {
@@ -96,6 +341,7 @@ it.each([1, 2, null])("não presume suporte estrutural para capability %s", asyn
         JSON.stringify({
           data: {
             agent: {
+              agentId: "fixture-agent",
               sourceIdentity: 1,
               sourceSchema: version,
               sourceConstraints: version,
@@ -315,6 +561,53 @@ describe("PlugServerRestAdapter HTTP pools", () => {
 });
 
 describe("normalizeSqlResult", () => {
+  it.each([
+    { columns: ["id", "id"], rows: [[1, 2]] },
+    { columns: ["id"], rows: [[1, 2]] },
+    { columns: ["id", "name"], rows: [[1]] },
+    { columns: [123], rows: [[1]] },
+    { columns: ["id"], rows: [null] },
+    { columns: ["id"], rows: [42] },
+    { columns: ["id"], rows: "bad", data: [{ id: 1 }] },
+    { columns: ["id"], rows: [], truncated: "false" },
+    { columns: ["id"], rows: [], effective_max_rows: 1.5 },
+    { columns: ["id"], rows: [], effective_max_rows: 0 },
+    { columns: ["id"], rows: [], effective_max_rows: 10, meta: { effective_max_rows: 20 } },
+  ])("recusa perda silenciosa de valores ou metadados inválidos: %j", (result) => {
+    expect(() => normalizeSqlResult(result)).toThrow(
+      expect.objectContaining({ code: "PLUG_SERVER_ERROR", retryable: false }),
+    );
+  });
+
+  it("preserva rows vazio sem adotar dados alternativos e aceita data sem rows", () => {
+    expect(normalizeSqlResult({ columns: ["id"], rows: [], data: [{ id: 99 }] }).rows).toEqual([]);
+    expect(normalizeSqlResult({ columns: ["id"], data: [[7]] }).rows).toEqual([{ id: 7 }]);
+  });
+
+  it("materializa __proto__ como coluna própria sem alterar protótipo", () => {
+    const result = normalizeSqlResult({ columns: ["__proto__", "id"], rows: [["fixture", 1]] });
+    const row = result.rows[0]!;
+    expect(Object.hasOwn(row, "__proto__")).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(row, "__proto__")).toMatchObject({ value: "fixture" });
+    expect(Object.getPrototypeOf(row)).toBe(Object.prototype);
+  });
+
+  it.each([
+    null,
+    {},
+    { page: 1, page_size: 5, has_next_page: false },
+    { page: 1, page_size: 5, has_next_page: false, has_previous_page: true },
+    {
+      page: Number.MAX_SAFE_INTEGER + 1,
+      page_size: 5,
+      has_next_page: false,
+      has_previous_page: true,
+    },
+  ])("não descarta paginação inválida para aparentar completude: %j", (pagination) => {
+    expect(() =>
+      normalizeSqlResult({ columns: ["id"], rows: [], truncated: false, pagination }),
+    ).toThrow(expect.objectContaining({ code: "PLUG_SERVER_ERROR" }));
+  });
   it("mapeia pagination.has_next_page e truncated do hub", () => {
     const result = normalizeSqlResult({
       response: {

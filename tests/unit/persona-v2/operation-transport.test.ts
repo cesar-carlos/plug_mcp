@@ -83,7 +83,9 @@ const fixture = () => {
     })),
   };
   const operationRpc = vi.fn(
-    async (input: { reference: { operationId: string; fingerprint: string } }) => ({
+    async (input: {
+      reference: { operationId: string; fingerprint: string };
+    }): Promise<Record<string, unknown>> => ({
       ...input.reference,
       executionId: randomUUID(),
       state: "resultado_desconhecido",
@@ -111,6 +113,36 @@ const fixture = () => {
   };
 };
 describe("lançamento pela credencial da fonte e transporte real REST", () => {
+  it.each(["executando", "cancelamento_solicitado"])(
+    "recusa %s com conclusão sem repetir execução",
+    async (state) => {
+      const f = fixture(),
+        cmd = command();
+      const response = await f.operationRpc({ reference: cmd });
+      f.operationRpc.mockClear();
+      f.operationRpc.mockResolvedValue({ ...response, state });
+      await expect(f.gateway.execute(trainingSource, cmd)).rejects.toMatchObject({
+        code: "OPERATION_CONFLICT",
+      });
+      expect(f.operationRpc).toHaveBeenCalledTimes(1);
+      f.operationRpc.mockResolvedValue({ ...response, state, completedAt: null });
+      await expect(
+        f.gateway.get(trainingSource, cmd.operationId, cmd.fingerprint),
+      ).resolves.toBeNull();
+    },
+  );
+
+  it("converte comprovante malformado em conflito seguro sem refletir conteúdo remoto", async () => {
+    const f = fixture(),
+      cmd = command();
+    const response = await f.operationRpc({ reference: cmd });
+    f.operationRpc.mockClear();
+    f.operationRpc.mockResolvedValue({ ...response, state: "synthetic-secret" });
+    const result = f.gateway.execute(trainingSource, cmd);
+    await expect(result).rejects.toMatchObject({ code: "OPERATION_CONFLICT" });
+    await expect(result).rejects.not.toThrow("synthetic-secret");
+    expect(f.operationRpc).toHaveBeenCalledTimes(1);
+  });
   it("homônimos de outro schema e concessão simples não autorizam alvo qualificado", async () => {
     const f = fixture(),
       t = operationTraining();

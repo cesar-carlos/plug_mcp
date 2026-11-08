@@ -9,6 +9,29 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+O tópico plug-server de obter_treinamento_base descreve somente o transporte v2:
+credencial cifrada por fonte, opções MCP distintas do RPC e falhas sem retry.
+Guias por tópico têm serialização/hash calculados uma vez e respostas isoladas;
+isso não cacheia autorização. Capacidades entregues não entram como pendências
+genéricas; separar implementação da homologação operacional ainda aberta.
+Base completa é imutável em profundidade. obter_capacidades.training anuncia
+hashes/tamanhos dos tópicos públicos, sem certificar instalação ou autoridade.
+Verificação local v2 integra training:check sem dispensar o pin upstream.
+Compatibilidade de pacote v2 exige hashes da base e do manifesto de tópicos;
+formato antigo não comprova correspondência e exige remontagem explícita.
+Avaliação comportamental não aceita validação/metadados como SELECT. Referências
+de etapas e limites ficam fora do contexto do modelo; harness nunca aprova IA.
+Pré-requisitos comportamentais exigem conclusão antes da chamada dependente;
+proteção contra retry após falha persiste entre turnos da tentativa. Contexto
+compacto conserva diagnóstico e aponta para curadoria completa em knowledge.
+Diagnóstico de pacote enumera componentes/ações sem devolver valores inválidos
+ou afirmar instalação. Avaliação com IA real permanece adiada pelo responsável.
+Contrato do avaliador é único entre CLI e núcleo. Casos com requireReadBindings
+exigem evidência confiável das tuplas skill/publicação/fonte lidas antes da
+consulta; presença genérica de obter_skill não satisfaz esse critério.
+CI limita bytes de cada tópico; não truncar orientações para caber. Manifesto
+de tópicos do pacote permite diagnóstico específico após validar seus hashes.
+
 No SQL Server, o primeiro argumento de DATEDIFF e DATEDIFF_BIG identifica a unidade temporal. Os operandos de data continuam sujeitos a escopo, linhagem e qualificação. Agregue na tabela de origem quando ela contiver todos os filtros e a medida.
 
 Para consultas de ausência, o tópico SQL parte do cadastro autorizado e verifica uma chave não nula da transação no período solicitado. O tópico SQL orienta calcular ticket médio no grão de venda e declarar o universo de participação antes da paginação. No ranking, declare a medida ordenada e diferencie exatamente N itens da inclusão de todos os empatados no limite. Para períodos relativos, fixe o dia de negócio e preserve os limites entre páginas. provenance.readAt informa o horário original da leitura, inclusive no reuso. O tópico SQL explica como parâmetros opcionais afetam o predicado e distingue recorte vazio, valores ausentes e soma zero com contagens no grão publicado. Na leitura sem paginação, o guia usa completeness.complete para descrever a cobertura. O exemplo de modelo usa parâmetros date, decimal e boolean. O guia v2 distingue slug, skillId e publicationId, separa parâmetros públicos de filtros de acesso e explica a completude do envelope de validação.

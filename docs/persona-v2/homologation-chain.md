@@ -431,6 +431,14 @@ revisão semântica humana permanecem separadas da aprovação técnica.
 
 ## Sessão contínua para treinamento manual
 
+O runner TypeScript `scripts/homologation/manual-training.ts` admite a opção
+explícita `--campoPrazos`, desativada por padrão. Ela acrescenta somente à fixture
+MSSQL as tabelas sintéticas tipadas `dbo.contareceber` e `dbo.contapagar`, com
+chaves compostas e campos de saldo/prazo. Não lê dados operacionais nem altera as
+fixtures PostgreSQL/SQL Anywhere. A regressão da geração de metadados não
+certifica a execução nativa dessa modalidade; a sessão exige os mesmos requisitos
+de isolamento e homologação descritos abaixo.
+
 O comando abaixo cria uma fixture Windows nova, privada e descartável. Exige os
 três motores/ODBC, Flutter, dependências dos três checkouts e imagem candidata
 preparados conforme este documento. Não usa fontes cadastradas pelo usuário.

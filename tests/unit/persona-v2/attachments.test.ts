@@ -1,4 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { PersonaV2Error } from "../../../src/domain/persona-v2/model.js";
+import { hasCleanupFailure } from "../../../src/domain/errors/cleanup-failure.js";
+import { reportPersonaV2ToolError } from "../../../src/infrastructure/mcp/persona-v2-tool-error.js";
+import { PinoLoggerAdapter } from "../../../src/infrastructure/logging/pino-logger.adapter.js";
+import pino from "pino";
 import { PersonaMemoryAttachments } from "../../../src/infrastructure/persona-v2/attachment-store.js";
 import { PersonaAttachments } from "../../../src/application/persona-v2/attachments.js";
 import type { PersonaConsumerCatalog } from "../../../src/application/persona-v2/consumer-catalog.js";
@@ -102,6 +107,45 @@ const fixture = () => {
   };
 };
 const input = { format: "json", query: { skillIds: [trainingSource.id], params: { minimum: 0 } } };
+
+it.each(["create", "read"])(
+  "preserva falha principal quando limpeza de anexo falha em %s",
+  async (mode) => {
+    const f = fixture();
+    const file = mode === "read" ? await f.service.create(identity, input) : undefined;
+    const original = new PersonaV2Error("AUTHORIZATION_DENIED", "Autorização revogada.");
+    f.catalog.revalidateQuery.mockImplementation(async (...args) => {
+      if (mode === "read" || args[2]?.attachment) throw original;
+    });
+    const remove = vi.spyOn(f.memory, "remove").mockImplementation(() => {
+      throw new Error("private-cleanup-secret");
+    });
+    await expect(
+      mode === "read" ? f.service.read(identity, file!.handle) : f.service.create(identity, input),
+    ).rejects.toBe(original);
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(hasCleanupFailure(original)).toBe(true);
+    let output = "";
+    const logger = new PinoLoggerAdapter(
+      pino(
+        {},
+        {
+          write: (line) => {
+            output += line;
+          },
+        },
+      ),
+    );
+    const response = reportPersonaV2ToolError(original, logger);
+    expect(JSON.parse(output)).toMatchObject({
+      supportId: response.supportId,
+      errorCode: "AUTHORIZATION_DENIED",
+      cleanupFailed: true,
+    });
+    expect(output).not.toContain("private-cleanup-secret");
+    expect(f.lease.execute).toHaveBeenCalledTimes(1);
+  },
+);
 const binaryInput = {
   ...input,
   format: "binary",
@@ -189,6 +233,8 @@ it("metadados ausentes, textuais, conflitantes e base64 não canônico não cria
     { name: "file", odbcType: -4, typeSystem: "odbc_fast" },
     { name: "file", odbcType: 99, typeSystem: "odbc_fast" },
     { name: "file", odbcType: 7, typeSystem: "odbc_fast", type: "text" },
+    { name: "file", odbcType: 12, type: "bytea" },
+    { name: "file", typeSystem: "unknown", type: "bytea" },
   ]) {
     expect(isBinaryColumn(column)).toBe(false);
   }

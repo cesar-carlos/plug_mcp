@@ -210,6 +210,66 @@ const emptyPermissions: Permissions = {
   externalOperationIds: [],
   administrative: [],
 };
+
+it("duas instâncias renovam a mesma versão sem compensar a credencial vencedora", async () => {
+  const secondPool = new pg.Pool({ connectionString: url.toString() });
+  const secondServices = {
+    ...services,
+    repository: new PostgresPersonaRepository(secondPool, crypto),
+  };
+  const issued: string[] = [],
+    revoked = new Set<string>();
+  let release!: () => void;
+  const bothCreated = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const concurrentHub: OwnerDelegationHubPort = {
+    ...hub,
+    create: async (_jwt, input) => {
+      const id = randomUUID();
+      issued.push(id);
+      if (issued.length === 2) release();
+      await bothCreated;
+      return {
+        ...input,
+        id,
+        clientId: "owner-fixture",
+        credential: `pdv2_${crypto.randomToken(32)}`,
+        expiresAt: new Date(now.getTime() + 60000).toISOString(),
+      };
+    },
+    revoke: async (_jwt, id) => {
+      revoked.add(id);
+    },
+  };
+  const first = new PersonaOwnerDelegation(services, admin, concurrentHub, origin);
+  const second = new PersonaOwnerDelegation(
+    secondServices,
+    new PersonaAdministration(secondServices),
+    concurrentHub,
+    origin,
+  );
+  try {
+    const outcomes = await Promise.allSettled([
+      first.create(session, identity.personaId, 1),
+      second.create(session, identity.personaId, 1),
+    ]);
+    expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.find((result) => result.status === "rejected")).toMatchObject({
+      reason: { code: "OPERATION_CONFLICT" },
+    });
+    const stored = await repository.transaction(
+      { personaIds: [identity.personaId], tokenIds: [] },
+      (tx) => tx.security.delegation(identity.personaId),
+    );
+    expect(stored?.version).toBe(2);
+    expect(issued).toContain(stored?.hubId);
+    expect(revoked.has(stored!.hubId)).toBe(false);
+    expect(issued.filter((id) => revoked.has(id))).toHaveLength(1);
+  } finally {
+    await secondPool.end();
+  }
+});
 const administrator = async (
   permissions: readonly AdministrativePermission[] = ["treinar", "publicar", "gerenciar_tokens"],
 ) => {

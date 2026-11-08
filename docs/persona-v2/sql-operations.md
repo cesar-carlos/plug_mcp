@@ -77,6 +77,11 @@ compartilhada naquela rodada histórica. Evidências novas ficam no índice de v
 
 ## Motivo durável no comprovante
 
+Comprovante malformado retorna OPERATION_CONFLICT com mensagem fixa, sem expor
+o payload recebido ou repetir a execução. Estado em andamento não pode conter
+completedAt; apenas um journal coerente sem conclusão retorna pendente. A recusa
+de um comprovante não prova rollback nem autoriza reenvio da operação.
+
 `failureCode` é opcional e enumerado no contrato 1.15.0. Agente persiste somente
 a categoria segura no journal Drift v3, sem mensagem nativa, SQL, parâmetros,
 nomes de recursos ou dados. Execute, get e duplicatas preservam o mesmo código;

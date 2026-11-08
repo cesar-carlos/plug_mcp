@@ -65,6 +65,7 @@ import { PersonaSqlOperations } from "../application/persona-v2/sql-operations.j
 import { PublishedSqlOperationAuthority } from "../application/persona-v2/operation-authority.js";
 import { PostgresSqlOperationStore } from "../infrastructure/persistence/persona-v2/sql-operations.js";
 import { PersonaSqlOperationGateway } from "../infrastructure/plug-server/persona-sql-operation.js";
+import { SourceTokenManager } from "../infrastructure/plug-server/source-token-manager.js";
 import { SharedKnowledge } from "../application/persona-v2/shared-knowledge.js";
 import { PostgresSharedKnowledgeRepository } from "../infrastructure/persistence/persona-v2/shared-knowledge.js";
 import { PersonaOAuth } from "../application/persona-v2/oauth.js";
@@ -74,7 +75,10 @@ import type { PersonaOAuthClient } from "../domain/ports/persona-oauth.port.js";
 import { createHash } from "node:crypto";
 import { PersonaOwnerDelegation } from "../application/persona-v2/owner-delegation.js";
 import { PersonaTemporarySetups } from "../application/persona-v2/setup.js";
-import { PersonaOwnerDelegationHub } from "../infrastructure/plug-server/persona-owner-delegation.js";
+import {
+  PersonaOwnerDelegationHub,
+  DELEGATION_RESPONSE_MAX_BYTES,
+} from "../infrastructure/plug-server/persona-owner-delegation.js";
 import type { OwnerDelegationHubPort } from "../domain/ports/persona-security.port.js";
 import { PersonaV2Error } from "../domain/persona-v2/model.js";
 
@@ -121,6 +125,7 @@ export const composePersonaV2 = async (
         auth: createPooledFetch(agents.auth),
         sql: createPooledFetch(agents.sql),
       },
+      config.PLUG_SERVER_HTTP_TIMEOUT_MS,
     );
     const hub = overrides.hub ?? restHub;
     const services = {
@@ -135,7 +140,8 @@ export const composePersonaV2 = async (
     const administration = new PersonaAdministration(services);
     const consumerCatalog = new PersonaConsumerCatalog(services);
     const credentials = new PostgresSourceCredentials(pool);
-    const sourceQueries = new PersonaSourceQuery(credentials, hub, crypto);
+    const sourceSessions = new SourceTokenManager(credentials, hub, crypto);
+    const sourceQueries = new PersonaSourceQuery(credentials, hub, crypto, sourceSessions);
     let queryReuse: PersonaQueryReuse | undefined;
     if (config.PERSONA_V2_QUERY_CACHE_TTL_MS > 0) {
       let store: PersonaQueryReuseStore = new PersonaMemoryQueryStore();
@@ -184,6 +190,7 @@ export const composePersonaV2 = async (
       overrides.operationTransport ?? restHub,
       crypto,
       config.PLUG_SERVER_BASE_URL,
+      sourceSessions,
     );
     const maintenance = new PersonaMaintenance(services, administration, {
       verifyIdentity: async (source) => {
@@ -209,7 +216,10 @@ export const composePersonaV2 = async (
       services,
       administration,
       overrides.delegationHub ??
-        new PersonaOwnerDelegationHub(config.PLUG_SERVER_BASE_URL, createPooledFetch(agents.auth)),
+        new PersonaOwnerDelegationHub(
+          config.PLUG_SERVER_BASE_URL,
+          createPooledFetch(agents.auth, DELEGATION_RESPONSE_MAX_BYTES),
+        ),
       new URL(config.PUBLIC_BASE_URL).origin,
     );
     const administrativeAuthorization = new PersonaAdministrativeAuthorization(

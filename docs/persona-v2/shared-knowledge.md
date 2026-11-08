@@ -393,6 +393,16 @@ revisão obsoleta, SQL inválido ou fonte fora das concessões são recusados.
 
 ## Busca lexical e grafo concedidos
 
+Listagem, busca e seleção de consultas carregam publicações concedidas em lote
+no PostgreSQL, conservando locks e validações dos vínculos. Adaptadores sem lote
+permanecem sequenciais; não há comandos concorrentes na mesma conexão.
+O grafo derivado tem cache local de metadados por persona/publicação/hash,
+limitado a 64 entradas e 8 MiB serializados (não um limite do heap total).
+Cada leitura revalida autoridade e snapshot antes do reuso; o cache não guarda
+concessões nem resultados SQL. Objetos devolvidos são independentes. Nós e arestas
+ficam ordenados no derivado; a paginação intercala as listas preservando filtros,
+cursor e verificações de revogação. Evicção/reinício só exigem reconstrução.
+
 A migration aditiva 0017 acrescenta `publication_knowledge_index_v2`, projeção
 derivada por persona, publicação/hash e versão do indexador, com FK composta para
 o snapshot exato. Não altera publicações/hashes anteriores nem importa domínio

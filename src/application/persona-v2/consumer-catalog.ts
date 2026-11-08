@@ -1,4 +1,5 @@
 import { KNOWLEDGE_GAP_DISCOVERY } from "./interaction-error-guidance.js";
+import { KnowledgeGraphCache, orderedGraphItems } from "./knowledge-graph-cache.js";
 import type { PersonaServices, PersonaTransaction } from "../../domain/ports/persona-v2.port.js";
 import type { PhysicalQueryFence } from "../../domain/ports/persona-query-reuse.port.js";
 import {
@@ -15,7 +16,6 @@ import {
   type QueryPackage,
   type PublishedPackage,
   type FederationPackage,
-  type SkillDraft,
 } from "../../domain/persona-v2/catalog.js";
 import { queryTrainingSchema, sourceFingerprint, type QueryTraining } from "./query-training.js";
 import { parseSourceRestrictions } from "./source-restrictions.js";
@@ -130,7 +130,37 @@ export interface AuthorizedSourceQuery {
 }
 
 export class PersonaConsumerCatalog {
+  private readonly graphCache = new KnowledgeGraphCache();
   constructor(private readonly services: PersonaServices) {}
+
+  private async activeCandidates(
+    tx: PersonaTransaction,
+    identity: ConsumerIdentity,
+    state: AuthorizationSnapshot,
+    selected?: ReadonlySet<string>,
+  ) {
+    const layers = assertConsumer(identity, state, this.services.now());
+    const skills = (await tx.catalog.list(identity.personaId)).filter(
+      (skill) =>
+        skill.activePublicationId &&
+        (!selected?.size || selected.has(skill.id)) &&
+        layers.every((p) => p.skills.some((grant) => grant.skillId === skill.id)),
+    );
+    const ids = skills.map((skill) => skill.activePublicationId!);
+    const fallback = new Map<string, CatalogPublication<PublishedPackage>>();
+    if (!tx.catalog.publications)
+      for (const id of ids) {
+        const publication = await tx.catalog.publication(identity.personaId, id);
+        if (publication) fallback.set(id, publication);
+      }
+    const publications = tx.catalog.publications
+      ? await tx.catalog.publications(identity.personaId, ids)
+      : fallback;
+    return skills.flatMap((skill) => {
+      const publication = publications.get(skill.activePublicationId!);
+      return publication ? [{ skill, publication }] : [];
+    });
+  }
 
   /** Feedback binds to an exact visible item; editorial writes reuse read authorization. */
   withKnowledge<T>(
@@ -329,21 +359,7 @@ export class PersonaConsumerCatalog {
     const terms = knowledgeSearchTerms(question, KNOWLEDGE_SEARCH_MAX_TERMS);
     return this.authorized(identity, async (tx, state) => {
       const matches = [];
-      const layers = assertConsumer(identity, state, this.services.now());
-      const candidates: { skill: SkillDraft; publication: CatalogPublication<PublishedPackage> }[] =
-        [];
-      for (const skill of await tx.catalog.list(identity.personaId)) {
-        if (
-          !skill.activePublicationId ||
-          !layers.every((p) => p.skills.some((g) => g.skillId === skill.id))
-        )
-          continue;
-        const publication = await tx.catalog.publication(
-          identity.personaId,
-          skill.activePublicationId,
-        );
-        if (publication) candidates.push({ skill, publication });
-      }
+      const candidates = await this.activeCandidates(tx, identity, state);
       await this.lockPublishedKnowledge(
         tx,
         state.persona.ownerId,
@@ -524,10 +540,7 @@ export class PersonaConsumerCatalog {
           (e) => nodeIds.has(e.from) && nodeIds.has(e.to) && e.via.every((id) => nodeIds.has(id)),
         ),
       );
-      const items = [
-        ...nodes.map((value) => ({ type: "node" as const, value })),
-        ...edges.map((value) => ({ type: "edge" as const, value })),
-      ].sort((a, b) => (a.value.id < b.value.id ? -1 : a.value.id > b.value.id ? 1 : 0));
+      const items = orderedGraphItems(nodes, edges);
       const binding = this.services.crypto.sha256Hex(
         canonicalJson({
           personaId: identity.personaId,
@@ -599,13 +612,17 @@ export class PersonaConsumerCatalog {
   ): Promise<KnowledgeGraph> {
     const pkg = publication.package;
     if (pkg.format === "persona-query-v2") {
-      return queryKnowledgeGraph(
-        { ...publication, package: pkg },
-        await this.knowledgeBase(tx, publication),
+      const knowledge = await this.knowledgeBase(tx, publication);
+      return this.graphCache.get(
+        `${publication.personaId}:${publication.id}:${publication.hash}`,
+        () => queryKnowledgeGraph({ ...publication, package: pkg }, knowledge),
       );
     }
     if (pkg.format === "persona-sql-operation-v2") {
-      return operationKnowledgeGraph({ ...publication, package: pkg });
+      return this.graphCache.get(
+        `${publication.personaId}:${publication.id}:${publication.hash}`,
+        () => operationKnowledgeGraph({ ...publication, package: pkg }),
+      );
     }
     const nodes: KnowledgeGraph["nodes"][number][] = [],
       edges: KnowledgeGraph["edges"][number][] = [];
@@ -615,10 +632,7 @@ export class PersonaConsumerCatalog {
       if (current?.package.format !== "persona-query-v2" || current.hash !== dependency.hash) {
         throw new PersonaV2Error("AUTHORIZATION_DENIED", "Dependência do grafo indisponível.");
       }
-      const part = queryKnowledgeGraph(
-        { ...current, package: current.package },
-        await this.knowledgeBase(tx, current),
-      );
+      const part = await this.graphForPublication(tx, current);
       // Independent publications stay distinct even when they describe the same physical table.
       const qualify = (id: string) => `${current.id}/${id}`;
       nodes.push(...part.nodes.map((node) => ({ ...node, id: qualify(node.id) })));
@@ -634,7 +648,9 @@ export class PersonaConsumerCatalog {
       );
       omittedRelationships += part.omittedRelationships;
     }
-    return { nodes, edges, omittedRelationships };
+    const compare = (a: { id: string }, b: { id: string }) =>
+      a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    return { nodes: nodes.sort(compare), edges: edges.sort(compare), omittedRelationships };
   }
 
   async sourceForVerification(identity: ConsumerIdentity, sourceId: string): Promise<Source> {
@@ -651,12 +667,7 @@ export class PersonaConsumerCatalog {
   async list(identity: ConsumerIdentity): Promise<readonly PublishedSkillSummary[]> {
     return this.authorized(identity, async (tx, state) => {
       const visible = [];
-      for (const skill of await tx.catalog.list(identity.personaId)) {
-        if (!skill.activePublicationId) continue;
-        const publication = await tx.catalog.publication(
-          identity.personaId,
-          skill.activePublicationId,
-        );
+      for (const { skill, publication } of await this.activeCandidates(tx, identity, state)) {
         if (!publication || !(await this.visibleAll(tx, identity, state, publication))) continue;
         visible.push({
           id: skill.id,
@@ -1024,11 +1035,7 @@ export class PersonaConsumerCatalog {
     return this.authorized(identity, async (tx, state) => {
       const selected = new Set(input.skillIds);
       const publications: CatalogPublication[] = [];
-      for (const skill of await tx.catalog.list(identity.personaId)) {
-        if (selected.size && !selected.has(skill.id)) continue;
-        const publication = skill.activePublicationId
-          ? await tx.catalog.publication(identity.personaId, skill.activePublicationId)
-          : null;
+      for (const { publication } of await this.activeCandidates(tx, identity, state, selected)) {
         if (
           publication &&
           this.visible(identity, state, publication) &&

@@ -1,3 +1,6 @@
+import { safeErrorDetails } from "../../domain/errors/safe-error-details.js";
+import { hasCleanupFailure } from "../../domain/errors/cleanup-failure.js";
+import { ExternalFailure } from "../../domain/persona-v2/external-failure.js";
 import { FieldUseDenied } from "../../application/persona-v2/query-field-uses.js";
 import { FieldContractConflict } from "../../application/persona-v2/field-contract-index.js";
 import { randomUUID } from "node:crypto";
@@ -17,7 +20,7 @@ export interface PersonaV2ToolErrorBody {
   readonly stage?: string;
   readonly hint?: string;
   readonly retryable?: false;
-  readonly details?: Readonly<Record<string, string | number>>;
+  readonly details?: Readonly<Record<string, string | number | boolean>>;
 }
 
 export function personaV2ToolError(error: unknown): PersonaV2ToolErrorBody {
@@ -25,6 +28,7 @@ export function personaV2ToolError(error: unknown): PersonaV2ToolErrorBody {
     return {
       code: error.code,
       message: error.message,
+      ...(error instanceof ExternalFailure ? { stage: error.stage, details: error.details } : {}),
       ...(error.source
         ? { source: error.source, hint: error.hint, retryable: false as const }
         : {}),
@@ -41,26 +45,88 @@ export function personaV2ToolError(error: unknown): PersonaV2ToolErrorBody {
     };
   }
   if (error instanceof DomainError) {
-    const details = safeDetails(error.details);
+    const details = safeErrorDetails(error.details);
     const protocol =
       error.code === "PLUG_SERVER_ERROR" && error.source === "plug_server_http"
         ? protocolMessages[Number(details.rpcCode)]
         : undefined;
     const published = publicQueryFailure(error.code);
+    const diagnostic = safeDiagnostic(error, details);
     return {
       code: error.code,
       message:
+        diagnostic?.message ??
         protocol ??
         published?.message ??
         `Não foi possível concluir a consulta (${error.code}, ${error.source ?? "mcp"}).`,
       source: error.source ?? "mcp",
       ...(error.stage ? { stage: error.stage } : {}),
-      hint: protocol ? TRANSPORT_HINT : (published?.hint ?? TRANSPORT_HINT),
+      hint: diagnostic?.hint ?? (protocol ? TRANSPORT_HINT : (published?.hint ?? TRANSPORT_HINT)),
       ...(Object.keys(details).length ? { details } : {}),
       retryable: false,
     };
   }
-  return { code: "CAPABILITY_UNAVAILABLE", message: "Serviço indisponível." };
+  return {
+    code: "CAPABILITY_UNAVAILABLE",
+    message: "Uma falha interna impediu concluir a solicitação.",
+    hint: "Informe o supportId ao responsável. Não foi possível determinar a causa; não presuma expiração, ausência de dados ou sucesso da operação.",
+    retryable: false,
+  };
+}
+
+/** Select only fixed diagnostics; upstream text and arbitrary detail fields never become guidance. */
+function safeDiagnostic(error: DomainError, details: Record<string, string | number | boolean>) {
+  if (details.outcome_unknown === true)
+    return {
+      message: "Não foi possível confirmar o resultado da operação.",
+      hint: "Não execute novamente. Consulte o journal pelo identificador original; ausência de confirmação não comprova rollback. Informe o supportId ao responsável.",
+    };
+  if (error.code === "CREDENTIAL_STALE" && details.failureCode === "SOURCE_STRUCTURE_MISMATCH")
+    return {
+      message: "A estrutura da fonte divergiu do contrato esperado na conexão executora.",
+      hint: "Peça revisão da estrutura e da publicação ao responsável. Não contorne a guarda nem repita automaticamente; informe o supportId.",
+    };
+  if (error.source === "plug_server_http") {
+    const message: string | undefined = {
+      [-32014]: "O hub detectou repetição do identificador do comando.",
+      [-32104]: "O pool de conexões do agente está esgotado.",
+      [-32106]: "O agente não conseguiu conectar ao banco.",
+      [-32108]: "A configuração de banco do agente foi recusada.",
+      [-32109]: "A execução consultada não foi encontrada no agente.",
+      [-32110]: "O agente informou cancelamento da execução.",
+    }[Number(details.rpcCode)];
+    if (message)
+      return {
+        message,
+        hint: "Informe o supportId ao responsável. Não altere SQL, credenciais ou identificadores para reenviar. Ausência ou cancelamento não comprovam rollback; para operações, consulte o estado original e a conciliação autorizada.",
+      };
+  }
+  if (error.source === "plug_server_http" && details.rpcCode === undefined) {
+    if (error.code === "AGENT_UNAVAILABLE" && details.httpStatus === 503)
+      return {
+        message: "O hub respondeu HTTP 503; não foi possível concluir a solicitação.",
+        hint: "O status isolado não distingue saturação, proxy ou indisponibilidade do agente. Informe o supportId ao responsável; não altere SQL, peça reconexão ou repita automaticamente.",
+      };
+    if (error.code === "PLUG_SERVER_ERROR" && details.httpStatus === 400)
+      return {
+        message: "O hub recusou o pedido HTTP 400; isso não comprova erro do motor SQL.",
+        hint: "Peça revisão do contrato da requisição ao responsável e informe o supportId. Não altere SQL nem repita automaticamente.",
+      };
+  }
+  if (error.code !== "PLUG_SERVER_ERROR" || error.source !== "plug_server_http") return undefined;
+  const message = {
+    capacity: "O limite de chamadas simultâneas ao hub foi atingido; este pedido não foi enviado.",
+    timeout: "O prazo de comunicação com o hub terminou antes da conclusão da resposta.",
+    network: "A conexão com o hub falhou antes da conclusão da resposta.",
+    invalid_response:
+      "O hub devolveu uma resposta inválida ou incompleta; ela não foi aceita como resultado.",
+  }[String(details.transportReason)];
+  return message
+    ? {
+        message,
+        hint: "Informe o supportId e a etapa ao responsável. Não peça reconexão, altere o SQL ou repita automaticamente. Se houve envio, a execução pode continuar no agente.",
+      }
+    : undefined;
 }
 
 const protocolMessages: Partial<Record<number, string>> = {
@@ -74,46 +140,6 @@ const protocolMessages: Partial<Record<number, string>> = {
   [-32011]: "O hub não conseguiu descomprimir o payload do agente.",
   [-32012]: "Falha de rede entre o hub e o agente.",
 };
-const reasons = new Set([
-  "invalid_params",
-  "invalid_request",
-  "method_not_found",
-  "parse_error",
-  "internal_error",
-  "missing_client_token",
-  "invalid_signature",
-  "authentication_failed",
-  "invalid_payload",
-]);
-const errnos = new Set([
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ETIMEDOUT",
-  "ENOTFOUND",
-  "EAI_AGAIN",
-  "UND_ERR_CONNECT_TIMEOUT",
-  "UND_ERR_SOCKET",
-  "CERT_HAS_EXPIRED",
-]);
-/** Positive allowlist: never copy upstream message, SQL, identifiers, payload or nested objects. */
-function safeDetails(value: unknown): Record<string, string | number> {
-  if (!value || typeof value !== "object") return {};
-  const raw = value as Record<string, unknown>;
-  const result: Record<string, string | number> = {};
-  if (
-    typeof raw.rpcCode === "number" &&
-    Number.isSafeInteger(raw.rpcCode) &&
-    raw.rpcCode >= -32768 &&
-    raw.rpcCode <= -32000
-  )
-    result.rpcCode = raw.rpcCode;
-  if (typeof raw.reason === "string" && reasons.has(raw.reason)) result.reason = raw.reason;
-  if (typeof raw.errno === "string" && errnos.has(raw.errno)) result.errno = raw.errno;
-  if (typeof raw.sqlstate === "string" && /^[0-9A-Z]{5}$/.test(raw.sqlstate))
-    result.sqlstate = raw.sqlstate;
-  return result;
-}
-
 /** Each failed tool invocation gets a server-owned ID; logs contain diagnostic metadata only. */
 export function reportPersonaV2ToolError(
   error: unknown,
@@ -163,6 +189,7 @@ export function reportPersonaV2ToolError(
   logger?.warn("persona-v2 tool failed", {
     supportId,
     errorCode: body.code,
+    ...(hasCleanupFailure(error) ? { cleanupFailed: true } : {}),
     ...(error instanceof FieldUseDenied ? { fieldUseReason: error.reason } : {}),
     ...(error instanceof FieldContractConflict
       ? {

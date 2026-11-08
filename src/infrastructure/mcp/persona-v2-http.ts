@@ -1,3 +1,4 @@
+import { queryTransportContext } from "../../application/persona-v2/query-transport-context.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { McpServer, ResourceTemplate, createMcpHandler } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
@@ -12,9 +13,14 @@ import {
   knowledgeComparisonSchema,
 } from "../../application/persona-v2/consumer-catalog.js";
 import { PERSONA_V2_TRAINING_BASE } from "../../application/persona-v2/training-base.js";
-import { TRAINING_TOPICS, trainingTopic } from "../../application/persona-v2/training-topics.js";
+import {
+  trainingTopicInputSchema,
+  trainingTopic,
+  trainingManifest,
+} from "../../application/persona-v2/training-topics.js";
 import { PersonaV2Error, type ConsumerIdentity } from "../../domain/persona-v2/model.js";
-import { DIALETOS, isDialeto } from "../../domain/entities/dialeto.js";
+import { isDialeto } from "../../domain/entities/dialeto.js";
+import { PERSONA_DIALECTS } from "../../application/persona-v2/dialect-examples.js";
 import { personaDialectGuide } from "../../application/persona-v2/dialect-guide.js";
 import { readBearer } from "./mcp-auth.js";
 import { PERSONA_V2_INSTRUCTIONS } from "../../application/persona-v2/runtime-instructions.js";
@@ -329,7 +335,7 @@ export const createPersonaV2McpHandler = (
           "obter_treinamento_base",
           {
             description: "Orientação comum SQL e plug_server; não concede autoridade.",
-            inputSchema: z.strictObject({ topic: z.enum(TRAINING_TOPICS).optional() }),
+            inputSchema: trainingTopicInputSchema,
             annotations,
           },
           async ({ topic }) => run(() => Promise.resolve(trainingTopic(topic))),
@@ -344,7 +350,10 @@ export const createPersonaV2McpHandler = (
           "guia-dialeto",
           new ResourceTemplate("guia://dialeto/{dialeto}", {
             list: () => ({
-              resources: DIALETOS.map((d) => ({ uri: `guia://dialeto/${d}`, name: `Guia ${d}` })),
+              resources: PERSONA_DIALECTS.map((d) => ({
+                uri: `guia://dialeto/${d}`,
+                name: `Guia ${d}`,
+              })),
             }),
           }),
           { mimeType: "application/json" },
@@ -873,14 +882,15 @@ export const createPersonaV2McpHandler = (
               async () =>
                 run(() => {
                   requireIdentity();
+                  const capabilities = queries.capabilities();
+                  const build = buildInfo();
                   return Promise.resolve({
-                    ...queries.capabilities(),
+                    ...capabilities,
+                    training: trainingManifest(),
                     pluginCompatibility: personaPluginCompatibility(oauth ? "chatgpt" : "portable"),
                     serverBuild: {
-                      version: buildInfo().version,
-                      revision: /^[a-f0-9]{40}$/.test(buildInfo().sha)
-                        ? buildInfo().sha
-                        : "unknown",
+                      version: build.version,
+                      revision: /^[a-f0-9]{40}$/.test(build.sha) ? build.sha : "unknown",
                     },
                     authentication: oauth ? "oauth2" : "bearer",
                     oauth: oauth
@@ -907,11 +917,11 @@ export const createPersonaV2McpHandler = (
                         }
                       : false,
                     localQuery: {
-                      ...(queries.capabilities().localQuery as Record<string, unknown>),
+                      ...(capabilities.localQuery as Record<string, unknown>),
                       attachments: attachments ? attachments.capabilities() : false,
                       fieldUses: {
                         ...(
-                          queries.capabilities().localQuery as {
+                          capabilities.localQuery as {
                             fieldUses: Record<string, unknown>;
                           }
                         ).fieldUses,
@@ -953,7 +963,14 @@ export const createPersonaV2McpHandler = (
                   inputSchema: sourceQuerySchema,
                   annotations: { ...annotations, openWorldHint: true },
                 },
-                async (input) => run(() => queries.run(requireIdentity(), input, validation)),
+                async (input, extra) =>
+                  run(() => {
+                    const identity = requireIdentity();
+                    return queryTransportContext.run(
+                      { personaId: identity.personaId, signal: extra.mcpReq.signal },
+                      () => queries.run(identity, input, validation),
+                    );
+                  }),
               );
           }
           server.registerTool(

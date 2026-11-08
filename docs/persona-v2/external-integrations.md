@@ -1,5 +1,14 @@
 # Integrações externas com contratos publicados
 
+Erros de protocolo conservam categorias locais (`externalReason`) e etapa
+`external_http`/`external_mcp`, vinculadas ao supportId. HTTP conserva somente
+status numérico válido; erro JSON-RPC conserva código seguro, sem mensagem/data
+remotos. Resposta incompatível, catálogo incompleto e `isError` da ferramenta
+são distintos. Conteúdo de erro textual nunca vira resultado ou instrução.
+Não seguir redirects, repetir efeitos ou interpretar HTTP 401/403 externo como
+expiração da conexão OAuth do MCP. Ações mantêm journal/resultado desconhecido
+e conciliação; diagnóstico não comprova rollback nem habilita reenvio.
+
 ## Escopo da gestão delegada em implementação
 
 Permissões v2 aceitam `managedIntegrationIds` opcional: IDs explicitamente

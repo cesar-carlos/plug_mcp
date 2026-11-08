@@ -158,6 +158,7 @@ it("MCP fixa schemas, negociação, sessão e tool; ignora conteúdo como instru
       outputSchema: output,
     },
   };
+  let toolFails = false;
   const methods: string[] = [],
     authorize = vi.fn(() => Promise.resolve());
   const send: ExternalNetwork["send"] = vi.fn(async (r): Promise<ExternalHttpResponse> => {
@@ -174,6 +175,12 @@ it("MCP fixa schemas, negociação, sessão e tool; ignora conteúdo como instru
       };
     expect(r.headers["Mcp-Session-Id"]).toBe("fixture-session");
     if (rpc.method === "notifications/initialized") return { status: 202, headers: {}, body: "" };
+    if (rpc.method === "tools/call" && toolFails)
+      return response({
+        jsonrpc: "2.0",
+        id: rpc.id,
+        result: { isError: true, content: [{ type: "text", text: "private-marker" }] },
+      });
     const result =
       rpc.method === "tools/list"
         ? {
@@ -232,6 +239,12 @@ it("MCP fixa schemas, negociação, sessão e tool; ignora conteúdo como instru
   );
   expect(methods).toEqual(["initialize", "notifications/initialized", "tools/list", "tools/call"]);
   expect(claim).toHaveBeenCalledTimes(1);
+  toolFails = true;
+  methods.length = 0;
+  await expect(
+    adapter.invoke(connection, c, { id: "1" }, new AbortController().signal, authorize),
+  ).rejects.toMatchObject({ reason: "tool_error", stage: "external_mcp" });
+  expect(methods.filter((method) => method === "tools/call")).toHaveLength(1);
 });
 it("não envia ações ou chamadas após expirar o orçamento DNS", async () => {
   const send = vi.fn(async () => response({ name: "fixture" }));

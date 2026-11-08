@@ -1,9 +1,11 @@
+import { queryTransportContext } from "../../application/persona-v2/query-transport-context.js";
 import type { ExpectedSource } from "../../domain/persona-v2/source-discovery.js";
 import type { ExpectedStructure } from "../../domain/persona-v2/source-schema.js";
 import { randomUUID } from "node:crypto";
 import type { SqlOperationTransportPort } from "../../domain/ports/sql-operation-transport.port.js";
 import { parseFullClientPolicy } from "./full-policy.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
+import { safeErrorDetails } from "../../domain/errors/safe-error-details.js";
 import { ERROR_CODES } from "../../domain/errors/error-codes.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import type {
@@ -28,6 +30,8 @@ import {
   createPooledFetch,
   hubBridgeWaitMs,
   hubHttpAbortMs,
+  HubResponseError,
+  HubTransportError,
 } from "./hub-http.js";
 
 export interface PlugServerHttpClients {
@@ -46,9 +50,20 @@ const defaultHubHttpClients = (): PlugServerHttpClients => {
 type HubHttpPool = "auth" | "sql";
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
-  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 
-const asUnknownArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const invalidHubResponse = (stage: string): DomainError =>
+  new DomainError({
+    code: ERROR_CODES.PLUG_SERVER_ERROR,
+    message: "O plug-server devolveu uma resposta inválida ou incompleta.",
+    hint: "Informe o supportId ao responsável. Não reconecte, altere o SQL ou repita a operação automaticamente.",
+    source: "plug_server_http",
+    stage,
+    retryable: false,
+    details: { transportReason: "invalid_response" },
+  });
 
 const asStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
@@ -116,6 +131,13 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
       const json = await this.request(accessToken, "GET", `/api/v1/client/me/agents/${agentId}`);
       const root = asRecord(asRecord(json)?.data) ?? asRecord(json) ?? {};
       const rec = asRecord(root.agent) ?? root;
+      if (
+        rec.agentId !== agentId ||
+        typeof rec.hasClientToken !== "boolean" ||
+        typeof rec.isHubConnected !== "boolean"
+      ) {
+        throw invalidHubResponse("rpc");
+      }
       const caps = asRecord(rec.sqlOperations);
       return {
         agentId,
@@ -241,14 +263,20 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
         "sql",
       );
     } catch (error) {
+      const diagnostics = safeErrorDetails(
+        error instanceof DomainError ? error.details : undefined,
+      );
       throw new DomainError({
         code: error instanceof DomainError ? error.code : ERROR_CODES.PLUG_SERVER_ERROR,
         message: "Transporte da operação indisponível ou recusado.",
         hint: "Não reenvie o lançamento. Consulte o estado pelo mesmo operationId/fingerprint e faça conciliação quando necessário.",
         source: error instanceof DomainError ? error.source : "plug_server_http",
-        stage: input.method,
+        stage: error instanceof DomainError ? (error.stage ?? input.method) : input.method,
         retryable: false,
-        details: { outcome_unknown: input.method === "sql.operation.execute" },
+        details: {
+          ...diagnostics,
+          outcome_unknown: input.method === "sql.operation.execute",
+        },
       });
     }
     return unwrapRpcResult(body);
@@ -354,6 +382,10 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
       hubHttpAbortMs(this.httpTimeoutMs, bridgeWaitMs),
       "sql",
     );
+    const result = unwrapRpcResult(json);
+    if (!Array.isArray(result.rows) && !Array.isArray(result.data)) {
+      throw invalidHubResponse("sql.execute");
+    }
     return normalizeSqlResult(json);
   }
 
@@ -401,11 +433,7 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
       "";
     const refreshToken = typeof data.refreshToken === "string" ? data.refreshToken : "";
     if (!accessToken) {
-      throw new DomainError({
-        code: ERROR_CODES.USER_AUTH_EXPIRED,
-        message: "Login no plug-server não devolveu accessToken.",
-        hint: "Confira e-mail e senha do Client. Se o Client estiver pendente/bloqueado, peça ativação ao dono do ERP.",
-      });
+      throw invalidHubResponse("rpc");
     }
     return { accessToken, refreshToken };
   }
@@ -424,7 +452,10 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
         ? "getPolicy"
         : commandMethod === "sql.execute" ||
             commandMethod === "sql.describeSchema" ||
-            commandMethod === "sql.describeSource"
+            commandMethod === "sql.describeSource" ||
+            commandMethod === "sql.operation.execute" ||
+            commandMethod === "sql.operation.get" ||
+            commandMethod === "sql.operation.cancel"
           ? commandMethod
           : "rpc";
     let response: Response;
@@ -438,16 +469,43 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
           ...(body !== undefined ? { "content-type": "application/json" } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(abortMs),
+        signal: queryTransportContext.getStore()
+          ? AbortSignal.any([
+              AbortSignal.timeout(abortMs),
+              queryTransportContext.getStore()!.signal,
+            ])
+          : AbortSignal.timeout(abortMs),
       });
     } catch (error) {
+      if (error instanceof HubTransportError) {
+        throw new DomainError({
+          code: "PLUG_SERVER_ERROR",
+          source: "plug_server_http",
+          stage: `${stage}.${error.phase}`,
+          category: `transport_${error.reason}`,
+          details: { transportReason: error.reason, ...safeErrorDetails({ errno: error.errno }) },
+          message: "Comunicação com o hub não concluída.",
+          hint: "Consulte o supportId. Não peça reconexão nem repita automaticamente; uma chamada enviada pode continuar no agente.",
+          retryable: false,
+        });
+      }
+      if (error instanceof HubResponseError) {
+        throw invalidHubResponse(stage);
+      }
       if (isAbortError(error)) {
         throw mapPlugServerAbort(stage);
       }
       throw mapPlugServerNetworkError(error, stage);
     }
 
-    const json: unknown = await response.json().catch(() => ({}));
+    let json: unknown;
+    try {
+      json = [204, 205].includes(response.status) ? {} : await response.json();
+    } catch {
+      // Preserve HTTP status on failures (e.g. a proxy's HTML 503), not its body.
+      if (response.ok) throw invalidHubResponse(stage);
+      json = {};
+    }
     const retryAfterMs = parseRetryAfterMs(
       response.headers.get("retry-after"),
       response.headers.get("ratelimit-reset"),
@@ -460,7 +518,30 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
         stage,
       );
     }
-    const rpc = asRecord(asRecord(asRecord(json)?.response)?.item)?.error;
+    const root = asRecord(json);
+    const envelope = asRecord(root?.response) ?? asRecord(root?.data) ?? root;
+    const item = asRecord(envelope?.item) ?? envelope;
+    const rpc = item?.error;
+    const command = asRecord(asRecord(body)?.command);
+    if (command) {
+      // Older result-only envelopes remain readable; explicit correlation cannot be ignored.
+      if (
+        (item && Object.hasOwn(item, "id") && item.id !== command.id) ||
+        (item?.jsonrpc !== undefined && item.jsonrpc !== "2.0") ||
+        (item && Object.hasOwn(item, "result") && Object.hasOwn(item, "error")) ||
+        (item?.success === false && !rpc) ||
+        (item?.success === true && rpc) ||
+        (envelope?.success === false && !rpc) ||
+        (envelope?.success === true && rpc) ||
+        (envelope?.type !== undefined &&
+          (envelope.type !== "single" ||
+            !asRecord(envelope.item) ||
+            typeof envelope.success !== "boolean" ||
+            typeof item?.success !== "boolean" ||
+            item.id !== command.id))
+      )
+        throw invalidHubResponse(stage);
+    }
     if (asRecord(asRecord(rpc)?.data)?.failure_code === "SOURCE_IDENTITY_MISMATCH") {
       throw new DomainError({
         code: ERROR_CODES.CREDENTIAL_STALE,
@@ -497,17 +578,24 @@ const unwrapRpcResult = (body: unknown): Record<string, unknown> => {
 };
 
 const asPositiveInt = (value: unknown): number | undefined =>
-  typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 
 const readPagination = (result: Record<string, unknown>): SqlExecuteResult["pagination"] => {
+  if (result.pagination === undefined) return undefined;
   const pag = asRecord(result.pagination);
   if (!pag) {
-    return undefined;
+    throw invalidHubResponse("sql.execute");
   }
   const page = asPositiveInt(pag.page);
   const pageSize = asPositiveInt(pag.page_size);
-  if (page === undefined || pageSize === undefined || typeof pag.has_next_page !== "boolean") {
-    return undefined;
+  if (
+    page === undefined ||
+    pageSize === undefined ||
+    typeof pag.has_next_page !== "boolean" ||
+    typeof pag.has_previous_page !== "boolean" ||
+    pag.has_previous_page !== page > 1
+  ) {
+    throw invalidHubResponse("sql.execute");
   }
   return {
     page,
@@ -518,26 +606,23 @@ const readPagination = (result: Record<string, unknown>): SqlExecuteResult["pagi
 };
 
 const readColumnsMetadata = (result: Record<string, unknown>): SqlColumnMetadata[] => {
-  const raw = Array.isArray(result.column_metadata)
-    ? result.column_metadata
-    : Array.isArray(result.columns_metadata)
-      ? result.columns_metadata
-      : [];
+  const raw =
+    result.column_metadata !== undefined ? result.column_metadata : result.columns_metadata;
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw invalidHubResponse("sql.execute");
   const out: SqlColumnMetadata[] = [];
+  const names = new Set<string>();
   for (const item of raw) {
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-    const rec = item as Record<string, unknown>;
+    const rec = asRecord(item);
+    if (!rec) throw invalidHubResponse("sql.execute");
     const name =
       typeof rec.name === "string"
         ? rec.name
         : typeof rec.column_name === "string"
           ? rec.column_name
           : "";
-    if (!name) {
-      continue;
-    }
+    if (!name || names.has(name.toLowerCase())) throw invalidHubResponse("sql.execute");
+    names.add(name.toLowerCase());
     const type =
       typeof rec.type === "string"
         ? rec.type
@@ -553,6 +638,12 @@ const readColumnsMetadata = (result: Record<string, unknown>): SqlColumnMetadata
             ? false
             : undefined;
     const odbcType = rec.odbc_type ?? rec.odbcType;
+    if (
+      (odbcType !== undefined &&
+        (typeof odbcType !== "number" || !Number.isSafeInteger(odbcType))) ||
+      (rec.type_system !== undefined && typeof rec.type_system !== "string")
+    )
+      throw invalidHubResponse("sql.execute");
     out.push({
       name,
       ...(type ? { type } : {}),
@@ -582,26 +673,29 @@ export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
     asRecord(resultMeta?.server_timings)?.phases_ms;
   const serverTimings = asRecord(timingsRaw);
   const executionMeta = resultMeta ?? envelopeMeta;
+  if (result.columns !== undefined && !Array.isArray(result.columns))
+    throw invalidHubResponse("sql.execute");
   let columns = Array.isArray(result.columns)
-    ? result.columns.map((col) => (typeof col === "string" ? col : String(col)))
+    ? result.columns.map((col) => {
+        if (typeof col !== "string" || !col) throw invalidHubResponse("sql.execute");
+        return col;
+      })
     : [];
-  const rawRows =
-    asUnknownArray(result.rows).length > 0
-      ? asUnknownArray(result.rows)
-      : asUnknownArray(result.data);
-  const firstRaw = rawRows[0];
+  if (new Set(columns).size !== columns.length) throw invalidHubResponse("sql.execute");
+  const rawRows = result.rows !== undefined ? result.rows : result.data;
+  if (!Array.isArray(rawRows)) throw invalidHubResponse("sql.execute");
+  const firstRaw: unknown = rawRows[0];
   if (columns.length === 0 && Array.isArray(firstRaw)) {
     columns = firstRaw.map((_cell, index) => `col_${index}`);
   }
   const rows = rawRows.map((row) => {
     if (Array.isArray(row)) {
-      const obj: Record<string, unknown> = {};
-      columns.forEach((col, index) => {
-        obj[col] = row[index];
-      });
-      return obj;
+      if (row.length !== columns.length) throw invalidHubResponse("sql.execute");
+      return Object.fromEntries(columns.map((col, index) => [col, row[index]]));
     }
-    return asRecord(row) ?? {};
+    const record = asRecord(row);
+    if (!record) throw invalidHubResponse("sql.execute");
+    return record;
   });
   const metadata = readColumnsMetadata(result);
   const inferred =
@@ -613,6 +707,17 @@ export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
           ? Object.keys(rows[0])
           : [];
   const pagination = readPagination(result);
+  if (result.truncated !== undefined && typeof result.truncated !== "boolean")
+    throw invalidHubResponse("sql.execute");
+  const rowLimits = [
+    result.effective_max_rows,
+    result.effectiveMaxRows,
+    executionMeta?.effective_max_rows,
+    executionMeta?.effectiveMaxRows,
+  ].filter((value) => value !== undefined);
+  if (rowLimits.some((value) => asPositiveInt(value) === undefined) || new Set(rowLimits).size > 1)
+    throw invalidHubResponse("sql.execute");
+  const effectiveMaxRows = asPositiveInt(rowLimits[0]);
   return {
     columns: inferred,
     rows,
@@ -658,20 +763,6 @@ export const normalizeSqlResult = (body: unknown): SqlExecuteResult => {
                   : (executionMeta?.maxRowsHandling as string),
         }
       : {}),
-    ...(typeof resultRecord?.effective_max_rows === "number" ||
-    typeof resultRecord?.effectiveMaxRows === "number" ||
-    typeof executionMeta?.effective_max_rows === "number" ||
-    typeof executionMeta?.effectiveMaxRows === "number"
-      ? {
-          effectiveMaxRows:
-            typeof resultRecord?.effective_max_rows === "number"
-              ? resultRecord.effective_max_rows
-              : typeof resultRecord?.effectiveMaxRows === "number"
-                ? resultRecord.effectiveMaxRows
-                : typeof executionMeta?.effective_max_rows === "number"
-                  ? executionMeta.effective_max_rows
-                  : (executionMeta?.effectiveMaxRows as number),
-        }
-      : {}),
+    ...(effectiveMaxRows !== undefined ? { effectiveMaxRows } : {}),
   };
 };

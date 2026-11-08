@@ -1,26 +1,27 @@
+import {
+  PERSONA_EVALUATION_TOOLS,
+  personaEvaluationCasesSchema,
+  evaluationBindingsSchema,
+  type EvaluationBinding,
+  type PersonaEvaluationCase,
+  type EvaluationEvidence,
+  type EvaluationContext,
+  type EvaluationDiagnostic,
+} from "./persona-v2-contract.js";
+import { PersonaTurnEvidence } from "./persona-v2-evidence.js";
+export type { PersonaEvaluationCase } from "./persona-v2-contract.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
 type Row = Readonly<Record<string, string | number | boolean | null>>;
 type Decision = "responder" | "esclarecer" | "recusar" | "indisponivel" | "parcial";
 type Group = "supported" | "security" | "gap";
-export interface PersonaEvaluationCase {
-  id: string;
-  group: Group;
-  question: string;
-  expected: {
-    decision: Decision;
-    rows: readonly Row[];
-    sources: readonly string[];
-    publications: readonly string[];
-  };
-  /** Follow-ups share the session, but each turn must obtain its own execution evidence. */
-  followUps?: readonly { question: string; expected: PersonaEvaluationCase["expected"] }[];
-}
 export interface PersonaEvaluationAnswer {
   decision: Decision;
   text: string;
   rows: readonly Row[];
+  contexts?: readonly EvaluationContext[];
+  diagnostics?: readonly EvaluationDiagnostic[];
 }
 export interface PersonaEvaluationSession {
   instructions: string;
@@ -31,11 +32,7 @@ export interface PersonaEvaluationSession {
     args: Readonly<Record<string, unknown>>,
   ): Promise<{
     content: unknown;
-    evidence?: {
-      status: "complete" | "partial" | "error" | "denied" | "unavailable";
-      sources: readonly string[];
-      publications: readonly string[];
-    };
+    evidence?: EvaluationEvidence;
   }>;
   close(): Promise<void>;
 }
@@ -61,17 +58,9 @@ export interface PersonaEvaluationJudge {
     expected: PersonaEvaluationCase["expected"];
   }): Promise<boolean>;
 }
-const readingTools = new Set([
-  "obter_contexto_persona",
-  "obter_treinamento_base",
-  "listar_fontes",
-  "obter_capacidades",
-  "buscar_contexto",
-  "obter_skill",
-  "obter_grafo_conhecimento",
-  "validar_consulta",
-  "consultar_dados",
-]);
+const readingTools: ReadonlySet<string> = new Set(PERSONA_EVALUATION_TOOLS);
+const bindingKey = (binding: EvaluationBinding): string =>
+  JSON.stringify([binding.skillId, binding.publicationId, binding.sourceId]);
 const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
   isDeepStrictEqual([...new Set(a)].sort(), [...new Set(b)].sort());
 
@@ -112,6 +101,7 @@ export async function evaluatePersonaConsumer(input: {
     throw new Error("Identified model, judge and exact candidate required");
   if (!["synthetic", "explicitly-authorized"].includes(input.datasetAuthorization))
     throw new Error("Dataset authorization required");
+  const cases = personaEvaluationCasesSchema.parse(input.cases);
   const results: {
     id: string;
     group: Group;
@@ -120,9 +110,17 @@ export async function evaluatePersonaConsumer(input: {
     calls: number;
     turns: number;
     failure:
-      "session" | "model" | "tool_policy" | "reference" | "execution" | "judge" | "cleanup" | null;
+      | "session"
+      | "model"
+      | "tool_policy"
+      | "reference"
+      | "execution"
+      | "behavior"
+      | "judge"
+      | "cleanup"
+      | null;
   }[] = [];
-  for (const scenario of input.cases) {
+  for (const scenario of cases) {
     for (let trial = 1; trial <= trials; trial++) {
       let session: PersonaEvaluationSession | undefined;
       let active = true;
@@ -130,6 +128,8 @@ export async function evaluatePersonaConsumer(input: {
       let calls = 0;
       let passed = true;
       let turns = 0;
+      let queryFailed = false;
+      let protectQueries = false;
       let failure: (typeof results)[number]["failure"] = "session";
       const history: { question: string; answer: PersonaEvaluationAnswer }[] = [];
       const evidence: NonNullable<
@@ -142,6 +142,14 @@ export async function evaluatePersonaConsumer(input: {
         const tools = current.tools.filter((tool) => readingTools.has(tool.name));
         for (const turn of [scenario, ...(scenario.followUps ?? [])]) {
           const turnIndex = turns;
+          const calledTools: string[] = [];
+          const completedTools = new Set<string>();
+          const readBindings = new Set<string>();
+          const queryBindings = new Set<string>();
+          let bindingsMatched = true;
+          let ordered = true;
+          const trace = new PersonaTurnEvidence(turn.expected.behavior);
+          protectQueries ||= turn.expected.behavior?.forbidQueryAfterFailure === true;
           evidence.length = 0;
           active = true;
           failure = "model";
@@ -155,13 +163,69 @@ export async function evaluatePersonaConsumer(input: {
                 !active ||
                 turnIndex !== turns ||
                 ++calls > 32 ||
+                (protectQueries &&
+                  queryFailed &&
+                  (name === "consultar_dados" || name === "validar_consulta")) ||
                 !tools.some((tool) => tool.name === name)
               ) {
                 violation = true;
                 return Promise.reject(new Error("Evaluation tool unavailable"));
               }
-              const task = current.callTool(name, args).then((response) => {
-                if (response.evidence) evidence.push(response.evidence);
+              calledTools.push(name);
+              const callArgs = structuredClone(args);
+              const priorReadBindings = new Set(readBindings);
+              const observe = trace.capture(name, callArgs);
+              if (
+                (turn.expected.behavior?.toolPrerequisites ?? []).some(
+                  (rule) => rule.after === name && !completedTools.has(rule.before),
+                )
+              )
+                ordered = false;
+              const task = current.callTool(name, callArgs).then((response) => {
+                const status = response.evidence?.status;
+                observe(response.evidence);
+                if (turn.expected.behavior?.requireReadBindings) {
+                  const bindings = evaluationBindingsSchema.safeParse(response.evidence?.bindings);
+                  if (
+                    name === "obter_skill" &&
+                    status === "complete" &&
+                    bindings.success &&
+                    bindings.data.every(
+                      (binding) =>
+                        response.evidence!.sources.includes(binding.sourceId) &&
+                        response.evidence!.publications.includes(binding.publicationId),
+                    )
+                  ) {
+                    for (const binding of bindings.data) readBindings.add(bindingKey(binding));
+                  }
+                  if (
+                    name === "consultar_dados" &&
+                    (status === "complete" || status === "partial")
+                  ) {
+                    if (!bindings.success) bindingsMatched = false;
+                    else
+                      for (const binding of bindings.data) {
+                        const key = bindingKey(binding);
+                        queryBindings.add(key);
+                        if (
+                          !priorReadBindings.has(key) ||
+                          !response.evidence!.sources.includes(binding.sourceId) ||
+                          !response.evidence!.publications.includes(binding.publicationId)
+                        )
+                          bindingsMatched = false;
+                      }
+                  }
+                }
+                if (status !== "error" && status !== "denied" && status !== "unavailable")
+                  completedTools.add(name);
+                if (
+                  (name === "consultar_dados" || name === "validar_consulta") &&
+                  (status === "error" || status === "denied" || status === "unavailable")
+                )
+                  queryFailed = true;
+                // Metadata and validation envelopes never prove a business SELECT.
+                if (name === "consultar_dados" && response.evidence)
+                  evidence.push(response.evidence);
                 return response.content;
               });
               pending.add(task);
@@ -180,6 +244,19 @@ export async function evaluatePersonaConsumer(input: {
           await Promise.allSettled([...pending]);
           const expected = turn.expected;
           const dataAnswer = answer.decision === "responder" || answer.decision === "parcial";
+          const behaviorMatches =
+            ordered &&
+            trace.matches(answer) &&
+            (!expected.behavior?.requireReadBindings ||
+              !dataAnswer ||
+              (bindingsMatched &&
+                sameSet([...queryBindings], (expected.bindings ?? []).map(bindingKey)))) &&
+            (expected.behavior?.toolPrerequisites ?? []).every(
+              (rule) => completedTools.has(rule.before) && calledTools.includes(rule.after),
+            ) &&
+            (expected.behavior?.requiredTools ?? []).every((name) => calledTools.includes(name)) &&
+            calledTools.filter((name) => name === "consultar_dados" || name === "validar_consulta")
+              .length <= (expected.behavior?.maxQueryCalls ?? 32);
           const executionMatches =
             !dataAnswer ||
             (evidence.length > 0 &&
@@ -203,12 +280,15 @@ export async function evaluatePersonaConsumer(input: {
               ? "reference"
               : !executionMatches
                 ? "execution"
-                : "judge";
+                : !behaviorMatches
+                  ? "behavior"
+                  : "judge";
           const turnPassed =
             !violation &&
             answer.decision === expected.decision &&
             isDeepStrictEqual(answer.rows, expected.rows) &&
             executionMatches &&
+            behaviorMatches &&
             (await input.judge.judge({ question: turn.question, answer, expected }));
           passed = passed && turnPassed;
           if (turnPassed) failure = null;

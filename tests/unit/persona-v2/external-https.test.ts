@@ -21,7 +21,13 @@ it("TLS nativo valida certificado e recusa redirect/tamanho sem seguir outro des
       return;
     }
     res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ name: req.url === "/large" ? "x".repeat(1000) : "fixture" }));
+    if (req.url === "/large") {
+      res.writeHead(200);
+      res.write(JSON.stringify({ name: "x".repeat(1000) }));
+      res.end();
+      return;
+    }
+    res.end(JSON.stringify({ name: "fixture" }));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const url = new URL(`https://localhost:${(server.address() as AddressInfo).port}/ok`);
@@ -41,7 +47,7 @@ it("TLS nativo valida certificado e recusa redirect/tamanho sem seguir outro des
     ).rejects.toThrow();
     await expect(
       sendExternalHttps({ ...input, url: new URL("/large", url) }, address, cert),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ reason: "response_limit", stage: "external_http" });
     expect(hits).toEqual(["/ok", "/redirect", "/large"]);
   } finally {
     server.closeAllConnections();

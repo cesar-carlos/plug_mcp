@@ -300,7 +300,7 @@ const mappingInvalidPayload: RpcMapping = {
 const mappingJsonRpcProtocol = (label: string, retryable = false): RpcMapping => ({
   code: ERROR_CODES.PLUG_SERVER_ERROR,
   message: `O hub recusou o JSON-RPC (${label}), não o SQL.`,
-  hint: "Não reescreva o SQL. Erro de protocolo/params no hop hub↔agente, não do motor nem do pacote MCP. Tente de novo; se persistir, reporte details.rpcCode.",
+  hint: "Não reescreva o SQL nem repita automaticamente. Erro de protocolo/params no hop hub↔agente exige revisão da requisição pelo responsável; reporte details.rpcCode.",
   retryable,
   source: HUB_ERROR_SOURCE.http,
 });
@@ -358,14 +358,14 @@ const rpcMap: Record<number, RpcMapping> = {
   [-32010]: {
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "O hub não conseguiu decodificar o payload do agente.",
-    hint: "Falha de transporte (decoding), não de SQL. Não altere o SELECT. Tente de novo; se persistir, reporte ao suporte com o code.",
+    hint: "Falha de transporte (decoding), não de SQL. Não altere o SELECT nem repita automaticamente. Informe o diagnóstico ao responsável.",
     retryable: false,
     source: HUB_ERROR_SOURCE.http,
   },
   [-32011]: {
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "O hub não conseguiu descomprimir o payload do agente.",
-    hint: "Falha de transporte (compressão), não de SQL. Não altere o SELECT. Tente de novo; se persistir, reporte ao suporte.",
+    hint: "Falha de transporte (compressão), não de SQL. Não altere o SELECT nem repita automaticamente. Informe o diagnóstico ao responsável.",
     retryable: false,
     source: HUB_ERROR_SOURCE.http,
   },
@@ -386,7 +386,7 @@ const rpcMap: Record<number, RpcMapping> = {
   [-32014]: {
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "O hub detectou replay do mesmo JSON-RPC id.",
-    hint: "replay_detected (~2 min no mesmo agentId). O MCP já gera UUID novo a cada sql.execute. Chame a tool de novo uma vez; não reutilize command.id e não altere o SQL.",
+    hint: "replay_detected: não chame a tool novamente nem troque command.id para contornar a recusa. O comando anterior pode ter sido executado. Informe o diagnóstico ao responsável; operações exigem conferir o estado original.",
     retryable: false,
     source: HUB_ERROR_SOURCE.http,
   },
@@ -460,14 +460,14 @@ const rpcMap: Record<number, RpcMapping> = {
   [-32109]: {
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "Execução não encontrada no agente.",
-    hint: "execution_not_found (sql.cancel órfão). O MCP não cancela sql.execute. Ignore e não altere o SELECT.",
+    hint: "execution_not_found não comprova ausência de efeito nem rollback. Confira a referência original com o responsável; não altere identificadores nem reenvie o comando.",
     retryable: false,
     source: HUB_ERROR_SOURCE.http,
   },
   [-32110]: {
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "A execução foi cancelada no agente.",
-    hint: "execution_cancelled no plug_agente, não cancelar_operacao do MCP. Reenvie a consulta se ainda fizer sentido; não persista SQL falho.",
+    hint: "execution_cancelled no plug_agente não comprova rollback de operação. Não reenvie automaticamente nem persista SQL falho; confira o estado original quando aplicável.",
     retryable: false,
     source: HUB_ERROR_SOURCE.http,
   },
@@ -498,7 +498,7 @@ const rpcDetails = (
   ...extra,
 });
 
-export const mapPlugServerFailure = (
+const classifyPlugServerFailure = (
   failure: PlugHttpFailure,
   logger?: LoggerPort,
   stage = "rpc",
@@ -507,7 +507,15 @@ export const mapPlugServerFailure = (
   const rpcHaystack = rpcHaystackOf(rpc);
   const reason = (rpc.reason ?? "").toLowerCase();
   const isInvalidPayload = rpc.code === -32009 && reason === "invalid_payload";
-  if (!isInvalidPayload && isSqlServerOrderByWrap(rpcHaystack)) {
+  // Textual legacy SQL diagnostics cannot override an explicit non-SQL RPC or HTTP failure.
+  const mappedRpc = typeof rpc.code === "number" ? rpcMap[rpc.code] : undefined;
+  const mayDiagnoseSql = !mappedRpc || mappedRpc.sqlEngine === true || rpc.code === -32009;
+  if (
+    failure.status === 200 &&
+    mayDiagnoseSql &&
+    !isInvalidPayload &&
+    isSqlServerOrderByWrap(rpcHaystack)
+  ) {
     logPlugDetail(logger, failure, rpc);
     return new DomainError({
       code: ERROR_CODES.INVALID_SQL,
@@ -717,6 +725,19 @@ export const mapPlugServerFailure = (
     stage,
     ...(engine ? { nextAction: nextActionFromEngine(fallbackHaystack) } : {}),
     details: rpcDetails(rpc, engine?.details),
+  });
+};
+
+export const mapPlugServerFailure = (
+  failure: PlugHttpFailure,
+  logger?: LoggerPort,
+  stage = "rpc",
+): DomainError => {
+  const mapped = classifyPlugServerFailure(failure, logger, stage);
+  return new DomainError({
+    ...mapped,
+    message: mapped.message,
+    details: { ...asRecord(mapped.details), httpStatus: failure.status },
   });
 };
 

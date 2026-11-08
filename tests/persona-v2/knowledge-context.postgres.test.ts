@@ -1,8 +1,10 @@
 import { withReviewDeadline } from "../helpers/review-deadline.js";
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
 import pg from "pg";
 import request from "supertest";
-import { beforeAll, afterAll, beforeEach, expect, it } from "vitest";
+import { beforeAll, afterAll, beforeEach, expect, it, vi } from "vitest";
+import { PostgresPersonaCatalogTransaction } from "../../src/infrastructure/persistence/persona-v2/catalog.js";
 import { composePersonaV2 } from "../../src/composition/compose-persona-v2.js";
 import { applyPersonaMigrations } from "../../src/infrastructure/persistence/persona-v2/migrate.js";
 import { personaV2TestDatabaseUrl } from "../../src/config/persona-v2-test.js";
@@ -135,6 +137,67 @@ const fixture = async (slug = "visible") => {
     training,
   };
 };
+
+it("lote reduz consultas e tempo sob lock preservando publicações e isolamento", async () => {
+  const ids: string[] = [];
+  for (let i = 0; i < 8; i++) ids.push((await fixture(`perf-${i}`)).publicationId);
+  const client = await db.connect();
+  const contender = await db.connect();
+  const catalog = new PostgresPersonaCatalogTransaction(client);
+  const spy = vi.spyOn(client, "query");
+  try {
+    const expected = new Map();
+    for (const id of ids) expected.set(id, await catalog.publication(personaId, id));
+    expect(await catalog.publications(personaId, [...ids, ids[0]!])).toEqual(expected);
+    expect((await catalog.publications(randomUUID(), ids)).size).toBe(0);
+    expect((await catalog.publications(personaId, [randomUUID()])).size).toBe(0);
+    const samples = { individual: [] as number[], batch: [] as number[] };
+    for (let round = 0; round < 12; round++)
+      for (const mode of round % 2 ? ["batch", "individual"] : ["individual", "batch"]) {
+        await client.query("BEGIN");
+        await client.query("SELECT id FROM persona WHERE id=$1 FOR UPDATE", [personaId]);
+        await contender.query("BEGIN");
+        const started = performance.now();
+        const waiting = contender.query("SELECT id FROM persona WHERE id=$1 FOR UPDATE", [
+          personaId,
+        ]);
+        spy.mockClear();
+        if (mode === "batch") await catalog.publications(personaId, ids);
+        else for (const id of ids) await catalog.publication(personaId, id);
+        expect(spy.mock.calls).toHaveLength(mode === "batch" ? 1 : ids.length);
+        await client.query("COMMIT");
+        await waiting;
+        samples[mode === "batch" ? "batch" : "individual"].push(performance.now() - started);
+        await contender.query("ROLLBACK");
+      }
+    const median = (values: number[]) =>
+      [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
+    await mkdir("test-results", { recursive: true });
+    await writeFile(
+      "test-results/performance-catalog.json",
+      JSON.stringify(
+        {
+          benchmark: "catalog-locked-read",
+          node: process.version,
+          publications: ids.length,
+          rounds: 12,
+          queriesBefore: 8,
+          queriesAfter: 1,
+          waitMedianMsBefore: median(samples.individual),
+          waitMedianMsAfter: median(samples.batch),
+        },
+        null,
+        2,
+      ),
+    );
+  } finally {
+    spy.mockRestore();
+    await client.query("ROLLBACK");
+    await contender.query("ROLLBACK");
+    client.release();
+    contender.release();
+  }
+}, 60000);
 beforeAll(async () => {
   await adminDb.query(`CREATE DATABASE "${name}"`);
   await applyPersonaMigrations(base.toString());

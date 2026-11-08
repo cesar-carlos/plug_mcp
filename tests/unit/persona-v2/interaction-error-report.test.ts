@@ -86,7 +86,13 @@ describe("relato de erro da interação", () => {
       });
       expect(example.requestId).toBeUndefined();
       expect(example.skillId).toBeUndefined();
-      expect(guide.trainingIntake).toBe(PERSONA_V2_TRAINING_BASE.trainingIntake);
+      if (topic === "knowledge")
+        expect(guide.trainingIntake).toBe(PERSONA_V2_TRAINING_BASE.trainingIntake);
+      else {
+        expect(guide.trainingIntake).toContain('topic:"knowledge"');
+        expect(guide.trainingIntake).toContain("não envie SQL");
+        expect(guide.trainingIntake).toContain("Não reenvie automaticamente");
+      }
     },
   );
   it("orienta a IA a reportar o erro uma vez", () => {

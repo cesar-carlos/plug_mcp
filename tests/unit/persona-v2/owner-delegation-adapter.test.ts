@@ -10,6 +10,38 @@ describe("dedicated hub delegation adapter", () => {
     clientId: "owner-fixture",
     expiresAt: new Date(Date.now() + 100000).toISOString(),
   };
+  it.each([401, 403, 429, 500, 502, 503])(
+    "distingue recusa de indisponibilidade HTTP %s sem retry",
+    async (status) => {
+      const http = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response("synthetic-secret", { status }));
+      const hub = new PersonaOwnerDelegationHub("https://hub.fixture.test", http);
+      const result = hub.verify("fixture", binding);
+      await expect(result).rejects.toMatchObject({
+        code: [401, 403].includes(status) ? "AUTHORIZATION_DENIED" : "PLUG_SERVER_ERROR",
+      });
+      await expect(result).rejects.not.toThrow("synthetic-secret");
+      expect(http).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("sanitiza falha de rede e corpo JSON inválido sem inferir revogação", async () => {
+    for (const http of [
+      vi.fn<typeof fetch>().mockRejectedValue(new Error("synthetic-secret")),
+      vi.fn<typeof fetch>().mockResolvedValue(new Response("synthetic-secret")),
+    ]) {
+      const result = new PersonaOwnerDelegationHub("https://hub.fixture.test", http).verify(
+        "fixture",
+        binding,
+      );
+      await expect(result).rejects.toMatchObject({
+        code: "PLUG_SERVER_ERROR",
+        source: "plug_server_http",
+      });
+      await expect(result).rejects.not.toThrow("synthetic-secret");
+      expect(http).toHaveBeenCalledTimes(1);
+    }
+  });
   it("uses separate opaque verification credentials, no redirects and no retries", async () => {
     const http = vi
       .fn<typeof fetch>()

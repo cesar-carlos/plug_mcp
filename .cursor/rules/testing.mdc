@@ -6,6 +6,52 @@ alwaysApply: false
 
 # Testes
 
+## Obrigação de evidência em revisões e melhorias
+
+- Toda revisão registra o escopo examinado, os achados confirmados e a validação
+  executada. Distinguir suspeita, bug reproduzido, correção implementada e correção
+  validada. Revisão sem alteração não exige inventar teste ou afirmar ausência
+  absoluta de bugs; informar limites e cobertura efetivamente examinados.
+- Toda melhoria funcional ou mudança de comportamento exige teste automatizado
+  novo ou ampliado que comprove o resultado esperado na mesma entrega. Cada bug
+  encontrado e corrigido exige teste de regressão específico, identificado pelo
+  cenário que o provocava. Uma suíte verde sem esse cenário não comprova a correção.
+- Para bugs, reproduzir a falha antes de corrigir sempre que possível. O teste
+  precisa distinguir o comportamento defeituoso do correto: falhar pela causa
+  esperada no código anterior e passar na versão corrigida. Se o teste for criado
+  depois da correção, conferir essa distinção em cópia/fixture isolada ou registrar
+  por que a execução anterior não foi possível. Não reverter trabalho alheio nem
+  adulterar o teste, o contrato ou a fixture para fabricar essa evidência.
+- Testar comportamento observável e invariantes, não apenas chamadas internas ou
+  duplicações da implementação. Cobrir o caso corrigido e casos relacionados de
+  sucesso/recusa relevantes; não remover assertions, aumentar timeouts sem causa,
+  aceitar respostas vagas ou trocar teste real por mock para fazer a suíte passar.
+- Escolher a camada que reproduz a causa: unidade para regra pura, integração
+  para persistência/transporte, concorrência com coordenação determinística e
+  múltiplas conexões/instâncias quando aplicável. Testes de SQL usam fixtures do
+  motor afetado; mocks não comprovam dialeto, transação ou comportamento do driver.
+- Erros e segurança exigem verificar código, etapa, orientação, correlação por
+  supportId e ausência de conteúdo sensível, conforme o contrato afetado. Alteração
+  de logs usa o logger real; efeitos externos conferem ausência de replay e
+  preservação do estado desconhecido, sem concluir rollback pela falha de rede.
+- Otimização exige evidência reproduzível do benefício alegado (por exemplo,
+  contagem de chamadas, limite de memória/fila ou benchmark isolado) e regressões
+  das garantias funcionais. Não anunciar ganho percentual sem medição comparável.
+- Executar os testes novos/alterados e as regressões afetadas na versão final;
+  ampliar a suíte conforme impacto e gates existentes. Mudanças posteriores à
+  rodada exigem repetir os checks afetados, sem reaproveitar evidência incompatível.
+- Registrar cenário, teste/arquivo, comando, resultado e limitações no relato da
+  entrega; evidência formal de release segue os documentos próprios. Separar
+  testes aprovados, falhos, não executados e não selecionados. Contagem sozinha
+  não é evidência de cobertura nem libera publicação.
+- Ambiente indisponível não dispensa teste nem autoriza produção. Manter a
+  validação pendente, explicar o impedimento e preservar os gates; nunca executar
+  a reprodução em banco operacional para compensar a ausência de fixture.
+- Mudança somente textual em rules/documentação usa `docs:check` e formatação,
+  sem teste artificial de runtime. Instruções de treinamento que mudam a conduta
+  da IA exigem validação offline de contratos/exemplos e regressão relevante;
+  isso não equivale a avaliação com IA real.
+
 Na fixture persistente de cruzamento, remover o ClientAgentAccess da primeira
 fonte após o segundo SELECT deve recusar a entrega por AUTHORIZATION_DENIED.
 O transporte continua real; o hook só controla o instante da alteração na
@@ -427,6 +473,9 @@ vigente no commit, duplicata concorrente, UUID reaproveitado com outro conteúdo
 auditoria atômica e ausência de ativação/publicação. Chromium perde a confirmação
 após commit real, confere a lista sem reenviar e verifica descarte dos segredos.
 Não copiar totais de testes para AGENTS/rules nem marcar gates por contagem.
+Avaliação sintética de consumidores confere continuidade de páginas/autoridade e
+contexto/diagnóstico estruturados quando exigidos pelo caso. Não comprova prosa
+de IA real nem execução nativa dos exemplos SQL; preservar essa distinção.
 `contracts/persona-v2-release.json` bloqueia aceite integral para clientes;
 o deploy de teste usa contrato próprio.
 

@@ -206,6 +206,14 @@ sessão humana de aprovação de lançamentos. Alcance no onboarding v2.
 
 ## Mudanças e validação
 
+Toda melhoria funcional exige teste automatizado novo ou ampliado que comprove
+o comportamento esperado. Todo bug corrigido exige teste de regressão específico
+para o cenário causador, na mesma entrega, preservando as validações existentes.
+Revisões informam escopo, evidências e pendências; correção implementada não é
+correção validada sem execução dos testes aplicáveis. Seguir o procedimento de
+[evidência e regressão](.cursor/rules/testing.mdc#obrigação-de-evidência-em-revisões-e-melhorias).
+Mudanças apenas textuais usam checks documentais; não inventar testes de runtime.
+
 Cadastro direto de integrações no console exige sessão Client, CSRF e
 reautenticação do mesmo responsável. UUID estável da tentativa impede replay;
 segredos são cifrados e descartados após envio. Conferir confirmação perdida

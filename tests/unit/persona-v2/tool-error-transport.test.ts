@@ -159,7 +159,7 @@ it.each([false, true])(
       expect.objectContaining({
         supportId: error.supportId,
         errorCode: "PLUG_SERVER_ERROR",
-        details: { rpcCode: -32602, reason: "invalid_params" },
+        details: { rpcCode: -32602, reason: "invalid_params", httpStatus: 200 },
       }),
     );
     expect(JSON.stringify([payload, warn.mock.calls])).not.toMatch(

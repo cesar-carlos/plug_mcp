@@ -22,6 +22,24 @@ Não misturar os contratos de mesmo nome entre as duas entradas.
 
 ## Persona-v2
 
+- Integrações externas distinguem status HTTP, erro RPC, falha da ferramenta e
+  resposta/catálogo incompatível por categoria local e supportId. Nunca copiar
+  message/data remotos nem interpretar 401 externo como reconexão OAuth do MCP.
+
+- Anexos preservam a falha principal quando a limpeza também falha; registrar
+  somente cleanupFailed e supportId, sem payload secundário. Download conserva
+  diagnóstico seguro do hub, sem transformar falha remota em reconexão OAuth.
+
+- Wrappers usam a allowlist central de diagnóstico para preservar RPC, SQLSTATE
+  e errno reconhecidos até a resposta/log. Não apagar categorias seguras nem
+  repassar mensagem, endereço ou cause nativa ao consumidor.
+
+- Tratamento de erro preserva fase, motivo de transporte enumerado, deriva de
+  identidade/estrutura e outcome_unknown booleano verdadeiro. Mensagens fixas
+  distinguem saturação, timeout, rede e resposta inválida; nunca usar texto remoto
+  como orientação. Resultado desconhecido exige journal, sem reenvio. Exceção não
+  classificada informa causa indeterminada e supportId, sem inventar expiração ou sucesso.
+
 - Pacote v2 documenta ferramentas de treinamento delegado como condicionais;
   ausência por falta de permissão não invalida o catálogo básico. Validação do
   pacote continua recusando ferramentas desconhecidas. Prazo humano, runner e

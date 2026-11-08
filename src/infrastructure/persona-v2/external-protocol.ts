@@ -1,10 +1,9 @@
 import { z } from "zod";
+import { ExternalFailure } from "../../domain/persona-v2/external-failure.js";
 import { integrationCredentialSchema } from "../../domain/persona-v2/integration-credential.js";
 import type { ExternalConnection } from "../../domain/persona-v2/external-contract.js";
-import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 import type { ExternalHttpResponse } from "./external-http.js";
-const denied = () =>
-  new PersonaV2Error("CAPABILITY_UNAVAILABLE", "Contrato externo mudou ou resposta inválida.");
+const denied = () => new ExternalFailure("invalid_response", "external_mcp");
 const toolPage = z.object({
   tools: z
     .array(
@@ -28,18 +27,22 @@ export async function listExternalTools(
     cursors = new Set<string>();
   let cursor: string | undefined;
   for (let page = 0; page < 4; page++) {
-    const result = toolPage.parse(await send("tools/list", cursor ? { cursor } : {}));
+    const parsed = toolPage.safeParse(await send("tools/list", cursor ? { cursor } : {}));
+    if (!parsed.success) throw denied();
+    const result = parsed.data;
     for (const tool of result.tools) {
-      if (names.has(tool.name) || tools.length >= 256) throw denied();
+      if (names.has(tool.name) || tools.length >= 256)
+        throw new ExternalFailure("listing_incomplete", "external_mcp");
       names.add(tool.name);
       tools.push(tool);
     }
     if (!result.nextCursor) return tools;
-    if (cursors.has(result.nextCursor)) throw denied();
+    if (cursors.has(result.nextCursor))
+      throw new ExternalFailure("listing_incomplete", "external_mcp");
     cursors.add(result.nextCursor);
     cursor = result.nextCursor;
   }
-  throw denied();
+  throw new ExternalFailure("listing_incomplete", "external_mcp");
 }
 export const externalHeaders = (connection: ExternalConnection): Record<string, string> => {
   const c = integrationCredentialSchema.parse(connection.credential);
@@ -50,36 +53,50 @@ export const externalHeaders = (connection: ExternalConnection): Record<string, 
       : { [c.header]: c.apiKey };
 };
 export const externalRpcResult = (response: ExternalHttpResponse, id: string): unknown => {
+  const parse = (text: string): unknown => {
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw denied();
+    }
+  };
   const type = response.headers["content-type"]?.split(";")[0]?.trim();
   const messages =
     type === "application/json"
-      ? [JSON.parse(response.body) as unknown]
+      ? [parse(response.body)]
       : type === "text/event-stream"
         ? response.body
             .replaceAll("\r\n", "\n")
             .split("\n\n")
             .filter((s) => s.split("\n").some((l) => l.startsWith("data:")))
-            .map(
-              (s) =>
-                JSON.parse(
-                  s
-                    .split("\n")
-                    .filter((l) => l.startsWith("data:"))
-                    .map((l) => l.slice(5).trimStart())
-                    .join("\n"),
-                ) as unknown,
+            .map((s) =>
+              parse(
+                s
+                  .split("\n")
+                  .filter((l) => l.startsWith("data:"))
+                  .map((l) => l.slice(5).trimStart())
+                  .join("\n"),
+              ),
             )
         : [];
   const replies = messages.filter((m) => !!m && typeof m === "object" && "id" in m && m.id === id);
   if (replies.length !== 1) throw denied();
-  const reply = z
+  const parsed = z
     .object({
       jsonrpc: z.literal("2.0"),
       id: z.literal(id),
-      result: z.unknown(),
+      result: z.unknown().optional(),
       error: z.unknown().optional(),
     })
-    .parse(replies[0]);
-  if (reply.error || reply.result === undefined) throw denied();
+    .safeParse(replies[0]);
+  if (!parsed.success) throw denied();
+  const reply = parsed.data;
+  if (reply.error !== undefined) {
+    if (reply.result !== undefined) throw denied();
+    const remote = z.object({ code: z.number().int(), message: z.string() }).safeParse(reply.error);
+    if (!remote.success) throw denied();
+    throw new ExternalFailure("rpc_error", "external_mcp", remote.data.code);
+  }
+  if (reply.result === undefined) throw denied();
   return reply.result;
 };

@@ -297,6 +297,13 @@ export class PostgresPersonaCatalogTransaction implements PersonaCatalogTransact
     personaId: string,
     publicationId: string,
   ): Promise<CatalogPublication<PublishedPackage> | null> {
+    return (await this.publications(personaId, [publicationId])).get(publicationId) ?? null;
+  }
+  async publications(
+    personaId: string,
+    publicationIds: readonly string[],
+  ): Promise<ReadonlyMap<string, CatalogPublication<PublishedPackage>>> {
+    if (!publicationIds.length) return new Map();
     const r = await this.client.query<{
       id: string;
       persona_id: string;
@@ -312,53 +319,75 @@ export class PostgresPersonaCatalogTransaction implements PersonaCatalogTransact
       `SELECT p.*,f.fonte_id,f.fonte_version,f.source_fingerprint,s.suspended_at FROM publicacao p
       JOIN publicacao_fonte f ON f.persona_id=p.persona_id AND f.publicacao_id=p.id
       LEFT JOIN publicacao_suspensao s ON s.persona_id=p.persona_id AND s.publicacao_id=p.id
-      WHERE p.persona_id=$1 AND p.id=$2`,
-      [personaId, publicationId],
+      WHERE p.persona_id=$1 AND p.id=ANY($2::uuid[])`,
+      [personaId, [...new Set(publicationIds)]],
     );
-    const p = r.rows[0];
-    if (p?.pacote.format === "persona-federation-v2") {
-      const deps = await this.client.query<{ dependencia_id: string }>(
-        "SELECT dependencia_id FROM publicacao_dependencia WHERE persona_id=$1 AND publicacao_id=$2",
-        [personaId, publicationId],
-      );
-      const sources = [...new Map(p.pacote.dependencies.map((d) => [d.sourceId, d])).values()];
-      if (
-        sources.length !== r.rows.length ||
-        sources.some(
-          (d) =>
-            !r.rows.some(
-              (row) =>
-                row.fonte_id === d.sourceId &&
-                row.fonte_version === d.sourceVersion &&
-                row.source_fingerprint === d.sourceFingerprint,
-            ),
-        ) ||
-        deps.rows.length !== p.pacote.dependencies.length ||
-        p.pacote.dependencies.some(
-          (d) => !deps.rows.some((row) => row.dependencia_id === d.publicationId),
-        )
-      )
-        throw new PersonaV2Error(
-          "STALE_AUTHORIZATION",
-          "Vínculos da publicação incompatíveis com pacote imutável.",
-        );
+    const grouped = new Map<string, typeof r.rows>();
+    for (const row of r.rows) {
+      const group = grouped.get(row.id) ?? [];
+      group.push(row);
+      grouped.set(row.id, group);
     }
-    return p
-      ? {
-          id: p.id,
-          personaId: p.persona_id,
-          skillId: p.skill_id,
-          revision: p.revisao,
-          package: p.pacote,
-          hash: p.pacote_hash,
-          sourceVersion: p.fonte_version,
-          sourceFingerprint:
-            p.pacote.format === "persona-federation-v2"
-              ? createHash("sha256").update(canonicalJson(p.pacote.dependencies)).digest("hex")
-              : p.source_fingerprint,
-          suspendedAt: p.suspended_at,
-        }
-      : null;
+    const federationIds = [...grouped.values()]
+      .filter((rows) => rows[0]!.pacote.format === "persona-federation-v2")
+      .map((rows) => rows[0]!.id);
+    const allDeps = federationIds.length
+      ? (
+          await this.client.query<{ publicacao_id: string; dependencia_id: string }>(
+            "SELECT publicacao_id,dependencia_id FROM publicacao_dependencia WHERE persona_id=$1 AND publicacao_id=ANY($2::uuid[])",
+            [personaId, federationIds],
+          )
+        ).rows
+      : [];
+    const dependencies = new Map<string, typeof allDeps>();
+    for (const dep of allDeps) {
+      const group = dependencies.get(dep.publicacao_id) ?? [];
+      group.push(dep);
+      dependencies.set(dep.publicacao_id, group);
+    }
+    const result = new Map<string, CatalogPublication<PublishedPackage>>();
+    for (const rows of grouped.values()) {
+      const p = rows[0]!;
+      if (p?.pacote.format === "persona-federation-v2") {
+        const deps = { rows: dependencies.get(p.id) ?? [] };
+        const sources = [...new Map(p.pacote.dependencies.map((d) => [d.sourceId, d])).values()];
+        if (
+          sources.length !== rows.length ||
+          sources.some(
+            (d) =>
+              !rows.some(
+                (row) =>
+                  row.fonte_id === d.sourceId &&
+                  row.fonte_version === d.sourceVersion &&
+                  row.source_fingerprint === d.sourceFingerprint,
+              ),
+          ) ||
+          deps.rows.length !== p.pacote.dependencies.length ||
+          p.pacote.dependencies.some(
+            (d) => !deps.rows.some((row) => row.dependencia_id === d.publicationId),
+          )
+        )
+          throw new PersonaV2Error(
+            "STALE_AUTHORIZATION",
+            "Vínculos da publicação incompatíveis com pacote imutável.",
+          );
+      }
+      result.set(p.id, {
+        id: p.id,
+        personaId: p.persona_id,
+        skillId: p.skill_id,
+        revision: p.revisao,
+        package: p.pacote,
+        hash: p.pacote_hash,
+        sourceVersion: p.fonte_version,
+        sourceFingerprint:
+          p.pacote.format === "persona-federation-v2"
+            ? createHash("sha256").update(canonicalJson(p.pacote.dependencies)).digest("hex")
+            : p.source_fingerprint,
+        suspendedAt: p.suspended_at,
+      });
+    }
+    return result;
   }
   async suspend(personaId: string, publicationId: string, reason: string): Promise<void> {
     await this.client.query(

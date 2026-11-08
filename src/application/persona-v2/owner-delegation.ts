@@ -52,7 +52,20 @@ export class PersonaOwnerDelegation {
     // Revoke old authority first, so renewal never creates an overlap.
     const old = await this.s.repository.transaction(
       { personaIds: [personaId], tokenIds: [] },
-      (tx) => tx.security.delegation(personaId),
+      async (tx) => {
+        const persona = await tx.findPersona(personaId);
+        if (
+          !persona?.active ||
+          persona.ownerId !== session.owner.id ||
+          session.expiresAt <= this.s.now()
+        )
+          this.denied();
+        const delegation = await tx.security.delegation(personaId);
+        // The status read does not reserve authority. Never revoke a newer renewal.
+        if ((delegation?.version ?? 0) !== expectedVersion)
+          throw new PersonaV2Error("OPERATION_CONFLICT", "Delegação mudou.");
+        return delegation;
+      },
     );
     if (old && !old.revokedAt) await this.hub.revoke(session.accessToken, old.hubId);
     const remote = await this.hub.create(session.accessToken, {
@@ -158,12 +171,16 @@ export class PersonaOwnerDelegation {
       personaId: identity.personaId,
     });
     const owner = await this.s.repository.transaction(
-      { personaIds: [identity.personaId], tokenIds: [] },
+      { personaIds: [identity.personaId], tokenIds: [identity.tokenId] },
       async (tx) => {
-        const p = await tx.findPersona(identity.personaId);
+        const state = await tx.authorization(identity);
+        if (!state) this.denied();
+        assertConsumer(identity, state, this.s.now());
+        const p = state.persona;
         const d = await tx.security.delegation(identity.personaId);
         if (
           !p?.active ||
+          p.ownerId !== local.ownerId ||
           d?.version !== local.version ||
           d.revokedAt ||
           d.expiresAt <= this.s.now()

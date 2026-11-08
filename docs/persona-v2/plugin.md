@@ -12,7 +12,13 @@ mesmo guia usado no runtime. A validação confere conteúdo e referência, mesm
 se o inventário for recalculado. O guia cobre recuperação de erros e exemplos
 sintéticos; não comprova comportamento real do modelo.
 
-`compatibility.json` registra variante e hashes das instruções, guia e catálogo.
+`compatibility.json`, no formato `persona-plugin-compatibility-v2`, registra
+variante e hashes das instruções, guia e catálogo, além de `trainingBaseHash`
+e `trainingTopicsHash`. O primeiro corresponde a `training.baseHash`; o segundo
+é SHA-256 do JSON canônico de `training.topics`, incluindo nomes, hashes e bytes.
+Alterar só um tópico também invalida a compatibilidade. Formato v1 ou campos
+ausentes são recusados; é necessário remontar o pacote e obter capacidades do
+servidor atualizado. Não há promoção automática de pacotes antigos.
 `obter_capacidades` autenticado retorna `pluginCompatibility` e `serverBuild`;
 a revisão declarada fica `unknown` quando não há SHA válido. Não inferir revisão
 instalada nem integridade do deploy apenas desse metadado.
@@ -28,6 +34,22 @@ A comparação recusa pacote inválido/obsoleto e retorna falha quando os contra
 divergem. `installedPackageVerified:false` permanece explícito: pacote local e
 snapshot da resposta não comprovam instalação no ChatGPT. O roteiro de
 [validação sintética no cliente](plugin-client-validation.md) registra a pendência.
+
+O relatório inclui `diagnostics` por componente, com `reason` e `action`:
+formato/campo inválido, variante ou hash divergente indicam o que revisar e os
+comandos `plugin:package`, `plugin:check` e `plugin:compare` para remontar,
+validar e comparar. `packageValidation` informa recusa da validação local sem
+expor mensagens internas. Falhas de leitura/argumentos informam a etapa fixa
+em stderr. Nenhum diagnóstico devolve valores inválidos, nomes de campos livres
+ou credenciais, corrige inventários ou afirma atualizar uma instalação.
+
+O pacote inclui `training-manifest.json` com os tópicos e hashes gerados.
+Sua validação local confere o conteúdo exato. Quando `training` acompanha as
+capacidades do servidor, a comparação confere primeiro os hashes agregados e
+depois identifica divergências como `trainingTopics.sql`, incluindo tópicos
+ausentes. Manifesto incoerente gera `trainingManifest`, sem confiar em nomes
+livres. Servidor sem manifesto conserva apenas o diagnóstico agregado; a falta
+de detalhe nunca transforma divergência em compatibilidade.
 
 | Geração      | Fonte                     | Portátil                                   | ChatGPT                                   |
 | ------------ | ------------------------- | ------------------------------------------ | ----------------------------------------- |

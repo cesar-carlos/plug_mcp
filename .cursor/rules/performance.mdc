@@ -10,6 +10,17 @@ Otimização nunca substitui autorização, completude ou isolamento.
 
 ## Persona-v2
 
+- Carregamento em lote de publicações filtra concessões antes da leitura e conserva
+  validações de vínculos, hashes e suspensão. Reduzir trabalho sob lock sem retirar
+  locks de autoridade; não paralelizar comandos na mesma conexão PostgreSQL.
+- Cache de grafo derivado guarda somente metadados reconstruíveis, limitado por
+  bytes/entradas e chave persona/publicação/hash. Revalidar autoridade e snapshot
+  antes de cada uso; devolver objetos independentes. Não guardar decisões de acesso.
+- Medir bytes UTF-8 do maior envelope de resposta aplicável. Otimizar cópias de
+  binários somente preservando offset, comprimento, formato e validação canônica.
+- Ganhos exigem baseline comparável e fixture isolada. Testes verificam invariantes
+  e trabalho evitado; tempos sintéticos não certificam latência de produção.
+
 - SELECT por fonte: limites/paginação no banco; prazo inclui autorização e entrega.
   Contrato e tetos em `docs/persona-v2/source-queries.md`.
 - Cruzamentos: fontes, etapas, memória, linhas e tempo só podem ser reduzidos por

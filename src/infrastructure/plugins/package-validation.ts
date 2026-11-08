@@ -19,6 +19,8 @@ import {
 import { pluginTools, pluginResource, pluginToolCatalogHash } from "./tool-catalog.js";
 import { PERSONA_CONSUMER_GUIDANCE } from "../../application/persona-v2/consumer-guidance.js";
 import { personaPluginCompatibility } from "./persona-compatibility.js";
+import { trainingManifest } from "../../application/persona-v2/training-topics.js";
+import { canonicalJson } from "../../domain/persona-v2/catalog.js";
 
 export const validateConnectionId = (connection: string | undefined): string => {
   if (
@@ -142,6 +144,8 @@ export const validateSe7ePackage = async (
   }
   validatePluginSkills(files, input.runtime);
   if (input.runtime === "persona-v2") {
+    if (canonicalJson(json("training-manifest.json")) !== canonicalJson(trainingManifest()))
+      throw new Error("Manifesto de tópicos do pacote diverge do runtime atual.");
     if (
       JSON.stringify(json("compatibility.json")) !==
       JSON.stringify(personaPluginCompatibility(input.variant))
@@ -167,7 +171,7 @@ export const validateSe7ePackage = async (
     "plugin.json",
     "se7e-package.json",
     "tool-catalog.json",
-    ...(input.runtime === "persona-v2" ? ["compatibility.json"] : []),
+    ...(input.runtime === "persona-v2" ? ["compatibility.json", "training-manifest.json"] : []),
     input.variant === "chatgpt" ? ".app.json" : "mcp.json",
     extension.interface.logo,
     extension.interface.composerIcon,

@@ -1,5 +1,6 @@
 import { externalHeaders, externalRpcResult, listExternalTools } from "./external-protocol.js";
 import { randomUUID } from "node:crypto";
+import { ExternalFailure } from "../../domain/persona-v2/external-failure.js";
 import { z } from "zod";
 import { canonicalJson } from "../../domain/persona-v2/catalog.js";
 import { integrationRegistrationSchema } from "../../domain/persona-v2/integration-credential.js";
@@ -174,9 +175,9 @@ export class PersonaExternalAdapters implements ExternalTransport, ExternalActio
       )
         throw denied();
       const result = z
-        .object({ isError: z.boolean().optional(), structuredContent: z.unknown() })
+        .object({ isError: z.boolean().optional(), structuredContent: z.unknown().optional() })
         .parse(await send("tools/call", { name: contract.transport.tool, arguments: input }));
-      if (result.isError) throw denied();
+      if (result.isError) throw new ExternalFailure("tool_error", "external_mcp");
       return validateExternalValues(contract.output, result.structuredContent);
     } catch (error) {
       if (error instanceof PersonaV2Error) throw error;

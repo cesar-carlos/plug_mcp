@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { gzipSync } from "node:zlib";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AGENT_TIMEOUT_MS_LIMIT,
   createHubHttpAgents,
@@ -81,6 +81,119 @@ describe("hubBridgeWaitMs / hubHttpAbortMs", () => {
 describe("createPooledFetch", () => {
   let agents: HubHttpAgents | undefined;
   let server: Server | undefined;
+
+  it("recusa Content-Length excessivo antes de aguardar o corpo", async () => {
+    server = createServer((_req, res) => {
+      res.writeHead(200, { "content-length": "4096" });
+      res.flushHeaders();
+    });
+    const port = await listen(server);
+    agents = createHubHttpAgents();
+    await expect(
+      createPooledFetch(agents.sql, 128)(`http://127.0.0.1:${port}/`, {
+        signal: AbortSignal.timeout(500),
+      }),
+    ).rejects.toMatchObject({ name: "HubResponseError" });
+  });
+
+  it.each(["br", "gzip, gzip", "truncated-gzip"])(
+    "recusa codificação incompatível/truncada: %s",
+    async (encoding) => {
+      let requests = 0;
+      server = createServer((_req, res) => {
+        requests += 1;
+        res.writeHead(200, {
+          "content-encoding": encoding === "truncated-gzip" ? "gzip" : encoding,
+        });
+        res.end(
+          encoding === "truncated-gzip" ? gzipSync('{"ok":true}').subarray(0, 12) : '{"ok":true}',
+        );
+      });
+      const port = await listen(server);
+      agents = createHubHttpAgents();
+      await expect(
+        createPooledFetch(agents.sql)(`http://127.0.0.1:${port}/`),
+      ).rejects.toMatchObject({ name: "HubResponseError" });
+      expect(requests).toBe(1);
+    },
+  );
+
+  it("HEAD preserva ausência de corpo mesmo com tamanho e gzip do recurso", async () => {
+    server = createServer((_req, res) => {
+      res.writeHead(200, { "content-encoding": "gzip", "content-length": "4096" });
+      res.end();
+    });
+    const port = await listen(server);
+    agents = createHubHttpAgents();
+    const result = await createPooledFetch(agents.sql, 128)(`http://127.0.0.1:${port}/`, {
+      method: "HEAD",
+    });
+    expect(result.status).toBe(200);
+    expect(result.body).toBeNull();
+  });
+
+  it("cancela pedido ainda na fila do pool sem enviá-lo depois", async () => {
+    let requests = 0;
+    server = createServer((req, res) => {
+      requests += 1;
+      res.writeHead(200);
+      if (req.url === "/ok") {
+        res.end("ok");
+        return;
+      }
+      res.write("waiting");
+    });
+    const port = await listen(server);
+    agents = createHubHttpAgents();
+    agents.sql.http.maxSockets = 1;
+    const fetcher = createPooledFetch(agents.sql);
+    const active = new AbortController();
+    const first = fetcher(`http://127.0.0.1:${port}/`, { signal: active.signal });
+    const firstFailure = expect(first).rejects.toMatchObject({ name: "TimeoutError" });
+    await vi.waitFor(() => expect(requests).toBe(1));
+    const queued = fetcher(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(30) });
+    const queuedFailure = expect(queued).rejects.toMatchObject({ name: "TimeoutError" });
+    await queuedFailure;
+    active.abort();
+    await firstFailure;
+    expect(requests).toBe(1);
+    expect((await fetcher(`http://127.0.0.1:${port}/ok`)).ok).toBe(true);
+    expect(requests).toBe(2);
+  });
+
+  it("interrompe corpo parcial no prazo sem aguardar o fim da resposta", async () => {
+    let requests = 0;
+    server = createServer((_req, res) => {
+      requests += 1;
+      res.writeHead(200);
+      res.write('{"partial":');
+    });
+    const port = await listen(server);
+    agents = createHubHttpAgents();
+    await expect(
+      createPooledFetch(agents.sql)(`http://127.0.0.1:${port}/`, {
+        signal: AbortSignal.timeout(50),
+      }),
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+    expect(requests).toBe(1);
+  });
+
+  it.each([false, true])("recusa resposta acima do limite (gzip=%s), sem retry", async (gzip) => {
+    let requests = 0;
+    server = createServer((_req, res) => {
+      requests += 1;
+      const payload = Buffer.from("x".repeat(4096));
+      res.writeHead(200, gzip ? { "content-encoding": "gzip" } : {});
+      res.end(gzip ? gzipSync(payload) : payload);
+    });
+    const port = await listen(server);
+    agents = createHubHttpAgents();
+    await expect(createPooledFetch(agents.sql, 128)(`http://127.0.0.1:${port}/`)).rejects.toThrow();
+    expect(requests).toBe(1);
+    // A failed response must not poison the pool for the next explicit request.
+    expect((await createPooledFetch(agents.sql, 8192)(`http://127.0.0.1:${port}/`)).ok).toBe(true);
+    expect(requests).toBe(2);
+  });
 
   afterEach(async () => {
     if (agents) {

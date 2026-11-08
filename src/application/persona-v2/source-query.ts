@@ -1,6 +1,13 @@
+import { queryTransportContext } from "./query-transport-context.js";
+import { queryResponseBytes } from "./query-response-size.js";
 import { FieldContractIndex } from "./field-contract-index.js";
 import { z } from "zod";
-import { assertBinaryProjection, decodeBinaryCell, isBinaryColumn } from "./binary-attachment.js";
+import {
+  assertBinaryProjection,
+  decodeBinaryCell,
+  isBinaryColumn,
+  hasBinaryIndication,
+} from "./binary-attachment.js";
 import type { PersonaQueryReusePort } from "../../domain/ports/persona-query-reuse.port.js";
 import type { AuthorizedSourceQuery } from "./consumer-catalog.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
@@ -220,26 +227,44 @@ export class PersonaSourceQueries {
   ): Promise<SourceQueryResponse> {
     const started = Date.now();
     const input = sourceQuerySchema.parse(raw);
+    const transport = new AbortController();
+    const parentSignal = queryTransportContext.getStore()?.signal;
+    const signal = AbortSignal.any([
+      transport.signal,
+      ...(internal?.signal ? [internal.signal] : []),
+      ...(parentSignal ? [parentSignal] : []),
+    ]);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let expire!: (error: PersonaV2Error) => void;
     const expired = new Promise<never>((_resolve, reject) => {
       expire = reject;
     });
+    const onCancel = () => expire(new PersonaV2Error("BUDGET_EXCEEDED", "Consulta interrompida."));
+    signal.addEventListener("abort", onCancel, { once: true });
+    if (signal.aborted) onCancel();
     const armDeadline = (timeoutMs: number) => {
       clearTimeout(timer);
+      if (signal.aborted) return;
       timer = setTimeout(
-        () => expire(new PersonaV2Error("BUDGET_EXCEEDED", "Prazo da consulta excedido.")),
+        () => {
+          expire(new PersonaV2Error("BUDGET_EXCEEDED", "Prazo da consulta excedido."));
+          transport.abort();
+        },
         Math.max(0, started + timeoutMs - Date.now()),
       );
     };
     armDeadline(input.options?.timeoutMs ?? QUERY_LIMITS.timeoutMs);
     try {
       return await Promise.race([
-        this.execute(identity, input, validation, started, armDeadline, internal, attachment),
+        queryTransportContext.run({ personaId: identity.personaId, signal }, () =>
+          this.execute(identity, input, validation, started, armDeadline, internal, attachment),
+        ),
         expired,
       ]);
     } finally {
       clearTimeout(timer);
+      signal.removeEventListener("abort", onCancel);
+      transport.abort();
     }
   }
 
@@ -667,16 +692,9 @@ export class PersonaSourceQueries {
             : {}),
         },
       };
-      if (Buffer.byteLength(JSON.stringify(response), "utf8") > limits.maxBytes)
+      if (queryResponseBytes(response, reusable) > limits.maxBytes)
         throw new PersonaV2Error("BUDGET_EXCEEDED", "Resposta excede o limite de bytes vigente.");
       if (reusable) {
-        if (
-          Buffer.byteLength(
-            JSON.stringify({ ...response, reuse: { kind: "singleflight" } }),
-            "utf8",
-          ) > limits.maxBytes
-        )
-          throw new PersonaV2Error("BUDGET_EXCEEDED", "Resposta excede o limite de bytes vigente.");
         await this.catalog.revalidateQuery(identity, evidence);
         assertDeadline();
       }
@@ -741,7 +759,7 @@ export class PersonaSourceQueries {
           result.columnsMetadata?.length === 1 &&
           result.columnsMetadata[0]!.name.toLowerCase() === result.columns[0]!.toLowerCase() &&
           isBinaryColumn(result.columnsMetadata[0]!)
-        : !result.columnsMetadata?.some(isBinaryColumn)) &&
+        : !result.columnsMetadata?.some(hasBinaryIndication)) &&
       result.rows.every(
         (row) =>
           Object.keys(row).length === result.columns.length &&

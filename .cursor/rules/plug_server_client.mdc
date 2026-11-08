@@ -33,7 +33,41 @@ vira unknown, nunca approved. Não inferir revogação ou recuperar concessões.
 
 ## Persona-v2
 
+- Consulta propaga prazo total e cancelamento MCP ao transporte. Limitar admissão
+  por pool/destino e por persona no contexto de consulta; saturação não autoriza
+  retry/reconexão. Cancelamento antes do envio remove a espera; depois do envio
+  não comprova cancelamento SQL. Diagnóstico usa apenas fases/motivos enumerados.
+
+- Prova remota de delegação não reserva autorização: revalidar consumidor,
+  concessão OAuth, prazos, versões e responsável antes da entrega, sob locks de
+  persona/token. Recusa local não repete a chamada remota nem emite credencial.
+
+- Renovação de delegação reconfere versão/CAS, persona ativa, responsável e prazo
+  da sessão antes de revogar a credencial anterior no hub; status não reserva
+  autoridade. Rede fora dos locks, CAS final e compensação continuam obrigatórios.
+
 JWT por persona/credencial/versão; policy completa e banco explícito.
+Consultas/operações podem compartilhar somente o cache JWT da mesma credencial,
+nunca a autorização. Validade respeita exp e teto local; invalidação descarta
+login em voo. Transporte limita bytes antes/depois de gzip assíncrono. JSON
+inválido em sucesso não vira linhas vazias nem expiração; preservar erro seguro,
+etapa e supportId sem corpo recebido. Não repetir SQL por falha de transporte.
+401 explícito invalida somente o JWT recusado, sem replay; erro tardio não remove
+sessão nova. Timeout inclui fila e descompressão. Acesso exige agente exato e
+envelope válido. Indisponibilidade de delegação não significa recusa/revogação;
+seu teto de resposta deve valer antes de materializar o corpo no adapter.
+Envelope RPC normalizado exige single, flags coerentes e ID do comando exato;
+erro e resultado não coexistem. Não ignorar ID explícito em formato compatível.
+Não interpretar compressão desconhecida/truncada como resultado nem baixar
+corpo cujo Content-Length já excede o teto; preservar respostas sem corpo.
+Normalização não descarta células/linhas, sobrescreve colunas duplicadas ou troca
+rows vazio por data. Paginação/truncamento/limites explícitos inválidos devem
+falhar, nunca desaparecer para produzir completude aparente. Colunas viram
+propriedades próprias, sem alterar protótipos.
+Indicação binária contraditória bloqueia consulta comum, mas não prova anexo.
+Metadados fornecidos malformados/duplicados não são descartados silenciosamente.
+Journal em execução com completedAt ou comprovante malformado gera conflito
+seguro, sem payload remoto, presunção de rollback ou replay.
 Anexo binário usa sql.execute já contratado: agente serializa bytes em base64,
 adapter preserva odbc_type inteiro e type_system. Discriminante 7 somente com
 type_system=odbc_fast comprova bytes; código nativo ODBC 7 não é binário.
@@ -79,6 +113,24 @@ Timeout/bridge, pools HTTP e keep-alive: `docs/plug-server/rest-integration.md`.
 Não adicionar retry genérico de SQL nem agrupar policy+SQL em batch.
 
 ## Falhas
+
+Heurística textual de SQL 1033/4104 não substitui código RPC conhecido de
+autenticação, protocolo, rate limit ou infraestrutura, nem falha HTTP explícita.
+Preservar compatibilidade dos diagnósticos SQL legados sem ampliar sua precedência.
+
+Replay não autoriza trocar ID ou repetir tool. Pool, conexão/configuração de
+banco, execução ausente e cancelamento têm diagnóstico fixo por código RPC.
+Ausência/cancelamento não comprovam rollback; outcome_unknown prevalece.
+
+Status HTTP observado é metadado seguro (inteiro 100–599), preservado em
+details.httpStatus inclusive em erro RPC com HTTP 200. Não inferir causa de 503
+ou erro de motor a partir de 400; código RPC específico conserva precedência.
+
+Retry-After, inclusive com HTTP 200/RPC rate_limited, não autoriza retry pela IA.
+401 do hub não prova expiração OAuth do MCP; 404 do bridge não prova revogação.
+requestId/correlation_id remotos não substituem o supportId emitido pelo MCP.
+Treinamento expõe somente diagnóstico seguro entregue pelas tools, sem mensagem
+técnica livre do agente. Documentação upstream não amplia capacidades locais.
 
 Preservar distinção entre JWT, ClientAgentAccess, policy, validador e GDBR.
 `invalid_payload` continua transporte mesmo se a mensagem parecer erro SQL;

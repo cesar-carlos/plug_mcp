@@ -28,8 +28,9 @@ export class PersonaSourceQuery implements SourceQueryGatewayPort {
     private readonly credentials: SourceCredentialPort,
     private readonly hub: PlugServerGatewayPort,
     private readonly crypto: CryptoPort,
+    sessions?: SourceTokenManager,
   ) {
-    this.sessions = new SourceTokenManager(credentials, hub, crypto);
+    this.sessions = sessions ?? new SourceTokenManager(credentials, hub, crypto);
   }
 
   discardCredentialSession(credentialId: string): void {
@@ -52,7 +53,7 @@ export class PersonaSourceQuery implements SourceQueryGatewayPort {
     }
     const clientToken = this.crypto.decrypt(credential.clientTokenEnc);
     const accessToken = await this.sessions.getAccessToken(source);
-    const check = async (): Promise<string> => {
+    const checkAuthority = async (): Promise<string> => {
       const current = await this.credentials.find(source.personaId, source.credentialId);
       if (current?.version !== credential.version) {
         throw new PersonaV2Error("STALE_AUTHORIZATION", "Credencial da fonte alterada.");
@@ -115,6 +116,7 @@ export class PersonaSourceQuery implements SourceQueryGatewayPort {
       await verifySourceIdentity(this.hub, this.credentials, source, { accessToken, clientToken });
       return this.crypto.sha256Hex(canonicalJson(policy));
     };
+    const check = () => this.sessions.observe(accessToken, checkAuthority);
     const fingerprint = await check();
     const revalidate = async (): Promise<void> => {
       if ((await check()) !== fingerprint) {
@@ -133,18 +135,18 @@ export class PersonaSourceQuery implements SourceQueryGatewayPort {
             "CAPABILITY_UNAVAILABLE",
             "Inspeção estrutural indisponível no hub/agente.",
           );
+        const describeSchema = this.hub.describeSchema.bind(this.hub);
         await revalidate();
         const result = sourceSchemaResultSchema.parse(
-          await this.hub
-            .describeSchema({
+          await this.sessions.observe(accessToken, () =>
+            describeSchema({
               accessToken,
               agentId: source.agentId,
               clientToken,
               database: source.database,
               expectedSource: expectedSourceFor(source),
               inspection,
-            })
-            .catch(async (error: unknown) => {
+            }).catch(async (error: unknown) => {
               if (identityMismatch(error)) {
                 await this.credentials.invalidateIdentity?.(source);
                 throw new PersonaV2Error(
@@ -154,6 +156,7 @@ export class PersonaSourceQuery implements SourceQueryGatewayPort {
               }
               throw error;
             }),
+          ),
         );
         if (!sourceIdentityMatches(source, result.identity)) {
           await this.credentials.invalidateIdentity?.(source);
@@ -168,18 +171,20 @@ export class PersonaSourceQuery implements SourceQueryGatewayPort {
       execute: async (sql, params, options, expectedStructure) => {
         await revalidate();
         try {
-          return await this.hub.executeSql({
-            accessToken,
-            agentId: source.agentId,
-            clientToken,
-            database: source.database,
-            expectedSource: expectedSourceFor(source),
-            ...(expectedStructure ? { expectedStructure } : {}),
-            // O classificador do agente exige espaço ASCII depois da palavra inicial.
-            sql: sql.replace(/^(select|with)[ \t\r\n]+/i, "$1 "),
-            params,
-            options,
-          });
+          return await this.sessions.observe(accessToken, () =>
+            this.hub.executeSql({
+              accessToken,
+              agentId: source.agentId,
+              clientToken,
+              database: source.database,
+              expectedSource: expectedSourceFor(source),
+              ...(expectedStructure ? { expectedStructure } : {}),
+              // O classificador do agente exige espaço ASCII depois da palavra inicial.
+              sql: sql.replace(/^(select|with)[ \t\r\n]+/i, "$1 "),
+              params,
+              options,
+            }),
+          );
         } catch (error) {
           if (identityMismatch(error)) {
             await this.credentials.invalidateIdentity?.(source);
