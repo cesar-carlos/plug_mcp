@@ -1,9 +1,16 @@
 # Cache e singleflight persona-v2
 
 Otimização opt-in de consultas locais publicadas, independente do runtime legado.
-Nunca concede autoridade, licencia SQL ou substitui hub/agente. Deploy continua
-bloqueado. Anexos têm armazenamento compartilhado próprio; cache de consultas
+Nunca concede autoridade, licencia SQL ou substitui hub/agente. O deploy de teste
+segue o [contrato próprio](first-test-deploy.md); o aceite integral para clientes
+continua separado e bloqueado pelo manifesto de release. Anexos têm armazenamento compartilhado próprio; cache de consultas
 com prova estrutural continua pendente.
+
+Este contrato trata do reuso de **resultados SQL**. O cache local de metadados do
+[grafo concedido](shared-knowledge.md#busca-lexical-e-grafo-concedidos) é distinto:
+não armazena linhas, usa persona/publicação/hash e reconfere autoridade e snapshot
+em cada acesso. Ele não depende de Redis nem é controlado pelo TTL de consultas
+abaixo. Nenhum dos caches reserva autorização ou dispensa revogação.
 
 ## Configuração e alcance
 

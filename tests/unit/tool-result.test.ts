@@ -56,12 +56,14 @@ describe("tool-result", () => {
 });
 
 describe("mapPlugServerAbort", () => {
-  it("mapeia AbortError para PLUG_SERVER_TIMEOUT retryable", () => {
+  it("mapeia AbortError para PLUG_SERVER_TIMEOUT sem autorizar repetição", () => {
     const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
     expect(isAbortError(abort)).toBe(true);
     const err = mapPlugServerAbort("sql.execute");
     expect(err.code).toBe(ERROR_CODES.PLUG_SERVER_TIMEOUT);
-    expect(err.retryable).toBe(true);
+    expect(err.retryable).toBe(false);
+    expect(err.retryAfterMs).toBeNull();
+    expect(err.hint).toContain("não comprova cancelamento no banco");
     expect(err.source).toBe("plug_server_http");
     expect(err.stage).toBe("sql.execute");
   });

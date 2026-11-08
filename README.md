@@ -57,18 +57,20 @@ separada. Ver [onboarding](docs/persona-v2/onboarding.md) e
 
 ## Scripts
 
-| Script                                             | Finalidade                                      |
-| -------------------------------------------------- | ----------------------------------------------- |
-| `npm run dev` / `npm start`                        | Servidor v2 por fonte / build                   |
-| `npm run worker`                                   | Worker v2                                       |
-| `npm run db:migrate`                               | Migrações explícitas `migrations/persona-v2`    |
-| `npm run release:check`                            | Checks gerais, contrato do hub, testes e builds |
-| `npm run test:persona-v2:postgres`                 | Persistência v2 em bases descartáveis           |
-| `npm run test:persona-v2:cache`                    | Redis v2 isolado                                |
-| `npm run test:persona-v2:browser`                  | Jornadas v2 no navegador                        |
-| `npm run docs:check`                               | Links, schemas e cobertura documental           |
-| `npm run persona:release-check`                    | Aceite integral para clientes; ainda bloqueado  |
-| `npm run dev:legacy` / `npm run db:migrate:legacy` | Somente regressões legadas, com banco separado  |
+| Script                                             | Finalidade                                             |
+| -------------------------------------------------- | ------------------------------------------------------ |
+| `npm run dev` / `npm start`                        | Servidor v2 por fonte / build                          |
+| `npm run worker`                                   | Worker v2                                              |
+| `npm run db:migrate`                               | Migrações explícitas `migrations/persona-v2`           |
+| `npm run release:check`                            | Checks gerais, contrato do hub, testes e builds        |
+| `npm run test:persona-v2:postgres`                 | Persistência v2 em bases descartáveis                  |
+| `npm run test:persona-v2:cache`                    | Redis v2 isolado                                       |
+| `npm run test:persona-v2:browser`                  | Jornadas v2 no navegador                               |
+| `npm run docs:check`                               | Links, schemas e cobertura documental                  |
+| `npm run training:check:persona-v2`                | Hashes, schemas e orçamento do treinamento v2, offline |
+| `npm run training:check`                           | Treinamento local e contrato upstream fixado do hub    |
+| `npm run persona:release-check`                    | Aceite integral para clientes; ainda bloqueado         |
+| `npm run dev:legacy` / `npm run db:migrate:legacy` | Somente regressões legadas, com banco separado         |
 
 `runtime:check`, `worker:operacoes`, avaliador legado e alvo Docker `legacy-runtime`
 continuam explícitos para regressões. Não fazem parte do deploy padrão.

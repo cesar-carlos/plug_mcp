@@ -11,35 +11,36 @@ Precedência e índice das rules: [AGENTS.md](../AGENTS.md).
 
 ## Persona-v2
 
-| Tema                                                   | Referência                                                      |
-| ------------------------------------------------------ | --------------------------------------------------------------- |
-| Capacidades implementadas e pendências                 | [Estado da refatoração](persona-v2/README.md)                   |
-| Decisões aprovadas e regras substituídas               | [Registro de decisões](persona-v2/decisions.md)                 |
-| Pendências e evidência exigida por gate                | [Matriz de aceite](persona-v2/acceptance.md)                    |
-| Implementação e homologação ainda abertas              | [Trabalho restante](persona-v2/remaining-plan.md)               |
-| Integridade das evidências de liberação                | [Contrato do verificador](persona-v2/release-evidence.md)       |
-| Empacotamento isolado para homologação                 | [Distribuição candidata](persona-v2/candidate-distribution.md)  |
-| Limpeza explícita de controle descartável local        | [Reset de desenvolvimento](persona-v2/development-reset.md)     |
-| Configuração separada para o futuro corte              | [Preparação de produção](persona-v2/production-distribution.md) |
-| Interface, navegação, tokens e identidade Se7e         | [Console v2](persona-v2/console.md)                             |
-| Pacotes privados, validador e integração pendente      | [Plugin Se7e](persona-v2/plugin.md)                             |
-| Consentimento, conexão ChatGPT e autorização derivada  | [OAuth persona-v2](persona-v2/oauth.md)                         |
-| Criar persona, conectar fontes, treinar e emitir token | [Fluxo inicial](persona-v2/onboarding.md)                       |
-| Motor, identidade física e suspensão de vínculos       | [Identidade da fonte](persona-v2/source-identity.md)            |
-| Rascunho, casos, preview e publicação                  | [Catálogo](persona-v2/catalog.md)                               |
-| SELECT, validação, recortes e paginação                | [Consultas por fonte](persona-v2/source-queries.md)             |
-| Conhecimento compartilhado e perfis físicos            | [Catálogos estruturais](persona-v2/shared-knowledge.md)         |
-| Contratos e ações REST/MCP remoto                      | [Integrações externas](persona-v2/external-integrations.md)     |
-| Cache isolado, singleflight e invalidação              | [Cache v2](persona-v2/query-cache.md)                           |
-| Combinação tipada de fontes                            | [Cruzamentos](persona-v2/federation.md)                         |
-| Preparação, aprovação, execução e conciliação          | [Operações SQL](persona-v2/sql-operations.md)                   |
-| Rodadas executadas e alcance das evidências            | [Validação](persona-v2/validation.md)                           |
-| Prazo obrigatório, tarefas e notificações internas     | [Worker de revisão v2](persona-v2/review-worker.md)             |
-| Simulação, lock e retomada de chaves do cofre          | [Rotação do cofre v2](persona-v2/vault-rotation.md)             |
-| Assinatura, claims e retomada de notificações externas | [Outbox v2](persona-v2/outbox.md)                               |
-| Anexos JSON/binários, handles e download autorizado    | [Anexos v2](persona-v2/attachments.md)                          |
-| Templates, datasets e importação estrutural de DDL     | [Biblioteca editorial v2](persona-v2/knowledge-library.md)      |
-| Fixture e cadeia real MCP/hub/agente nos três motores  | [Homologação isolada](persona-v2/homologation-chain.md)         |
+| Tema                                                          | Referência                                                      |
+| ------------------------------------------------------------- | --------------------------------------------------------------- |
+| Capacidades implementadas e pendências                        | [Estado da refatoração](persona-v2/README.md)                   |
+| Decisões aprovadas e regras substituídas                      | [Registro de decisões](persona-v2/decisions.md)                 |
+| Pendências e evidência exigida por gate                       | [Matriz de aceite](persona-v2/acceptance.md)                    |
+| Implementação e homologação ainda abertas                     | [Trabalho restante](persona-v2/remaining-plan.md)               |
+| Integridade das evidências de liberação                       | [Contrato do verificador](persona-v2/release-evidence.md)       |
+| Empacotamento isolado para homologação                        | [Distribuição candidata](persona-v2/candidate-distribution.md)  |
+| Limpeza explícita de controle descartável local               | [Reset de desenvolvimento](persona-v2/development-reset.md)     |
+| Configuração separada para o futuro corte                     | [Preparação de produção](persona-v2/production-distribution.md) |
+| Interface, navegação, tokens e identidade Se7e                | [Console v2](persona-v2/console.md)                             |
+| Pacotes privados, validador e integração pendente             | [Plugin Se7e](persona-v2/plugin.md)                             |
+| Consentimento, conexão ChatGPT e autorização derivada         | [OAuth persona-v2](persona-v2/oauth.md)                         |
+| Criar persona, conectar fontes, treinar e emitir token        | [Fluxo inicial](persona-v2/onboarding.md)                       |
+| Motor, identidade física e suspensão de vínculos              | [Identidade da fonte](persona-v2/source-identity.md)            |
+| Rascunho, casos, preview e publicação                         | [Catálogo](persona-v2/catalog.md)                               |
+| SELECT, validação, recortes e paginação                       | [Consultas por fonte](persona-v2/source-queries.md)             |
+| Conhecimento compartilhado e perfis físicos                   | [Catálogos estruturais](persona-v2/shared-knowledge.md)         |
+| Contratos e ações REST/MCP remoto                             | [Integrações externas](persona-v2/external-integrations.md)     |
+| Cache isolado, singleflight e invalidação                     | [Cache v2](persona-v2/query-cache.md)                           |
+| Combinação tipada de fontes                                   | [Cruzamentos](persona-v2/federation.md)                         |
+| Preparação, aprovação, execução e conciliação                 | [Operações SQL](persona-v2/sql-operations.md)                   |
+| Rodadas executadas e alcance das evidências                   | [Validação](persona-v2/validation.md)                           |
+| Prazo obrigatório, tarefas e notificações internas            | [Worker de revisão v2](persona-v2/review-worker.md)             |
+| Simulação, lock e retomada de chaves do cofre                 | [Rotação do cofre v2](persona-v2/vault-rotation.md)             |
+| Assinatura, claims e retomada de notificações externas        | [Outbox v2](persona-v2/outbox.md)                               |
+| Anexos JSON/binários, handles e download autorizado           | [Anexos v2](persona-v2/attachments.md)                          |
+| Templates, datasets e importação estrutural de DDL            | [Biblioteca editorial v2](persona-v2/knowledge-library.md)      |
+| Fixture e cadeia real MCP/hub/agente nos três motores         | [Homologação isolada](persona-v2/homologation-chain.md)         |
+| Avaliação da IA, referências e limites dos ensaios sintéticos | [Avaliador do consumidor](persona-v2/consumer-evaluation.md)    |
 
 ## Referências da entrada legada
 

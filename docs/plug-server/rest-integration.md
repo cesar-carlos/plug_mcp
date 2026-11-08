@@ -29,6 +29,13 @@ Cada `sql.execute` usa `command.id` UUID novo (replay no hub ~2 min). HTTP 200 c
 
 ### Orientação compartilhada de falhas
 
+Prazos RPC/HTTP de espera são aceitos somente como milissegundos inteiros,
+seguros e não negativos. `Retry-After` numérico usa segundos inteiros; datas
+HTTP válidas e `reset_at` são convertidos para o tempo restante, com zero para
+prazo vencido. Valor inválido permite consultar o próximo metadado válido;
+não propaga NaN/Infinity. Timeout local não inventa espera de três segundos nem
+autoriza retry: parar de aguardar não comprova cancelamento no banco.
+
 Texto semelhante a SQL Server 1033/4104 não prevalece sobre código RPC conhecido
 de autenticação, protocolo, rate limit ou infraestrutura, nem sobre falha HTTP.
 A compatibilidade com erros SQL legados sem código continua restrita ao sucesso

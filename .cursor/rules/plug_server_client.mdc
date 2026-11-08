@@ -114,6 +114,10 @@ Não adicionar retry genérico de SQL nem agrupar policy+SQL em batch.
 
 ## Falhas
 
+Metadados de espera exigem milissegundos inteiros, seguros e não negativos.
+Prazo/data inválidos são ignorados, sem NaN/Infinity ou reenvio implícito.
+Timeout não inventa prazo de retry nem comprova cancelamento do SQL.
+
 Heurística textual de SQL 1033/4104 não substitui código RPC conhecido de
 autenticação, protocolo, rate limit ou infraestrutura, nem falha HTTP explícita.
 Preservar compatibilidade dos diagnósticos SQL legados sem ampliar sua precedência.

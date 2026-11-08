@@ -1,4 +1,5 @@
 import { DomainError, ERROR_SOURCE } from "../../domain/errors/domain-error.js";
+import { z } from "zod";
 import { ERROR_CODES, type ErrorCode } from "../../domain/errors/error-codes.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { hintSqlNaoClassificavel } from "../../application/use-cases/shared/sql-classification-hint.js";
@@ -32,6 +33,14 @@ const readString = (...values: unknown[]): string | undefined => {
 const readNumber = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
+const readDelay = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+
+const delayUntil = (timestamp: number): number | undefined =>
+  Number.isSafeInteger(timestamp) ? readDelay(Math.max(0, timestamp - Date.now())) : undefined;
+
+const resetTimestampSchema = z.iso.datetime({ offset: true });
+
 export const isAbortError = (error: unknown): boolean =>
   typeof error === "object" &&
   error !== null &&
@@ -43,9 +52,8 @@ export const mapPlugServerAbort = (stage = "rpc"): DomainError =>
   new DomainError({
     code: ERROR_CODES.PLUG_SERVER_TIMEOUT,
     message: "A chamada HTTP ao plug-server excedeu o tempo limite.",
-    hint: "Tente de novo após retryAfterMs. Não aumente o SQL nem trate como recusa do pacote até o hub responder.",
-    retryable: true,
-    retryAfterMs: 3000,
+    hint: "Não repita automaticamente. A interrupção da espera não comprova cancelamento no banco; informe o diagnóstico ao responsável e confira o estado original de operações.",
+    retryable: false,
     source: HUB_ERROR_SOURCE.http,
     stage,
   });
@@ -79,9 +87,9 @@ export const extractRpcError = (
   const hubCategory = readString(data?.category);
   const sqlstate = readString(data?.sqlstate, data?.sql_state, data?.sqlState);
   const retryAfterMs =
-    readNumber(data?.retry_after_ms) ??
-    (typeof data?.reset_at === "string"
-      ? Math.max(0, Date.parse(data.reset_at) - Date.now())
+    readDelay(data?.retry_after_ms) ??
+    (typeof data?.reset_at === "string" && resetTimestampSchema.safeParse(data.reset_at).success
+      ? delayUntil(Date.parse(data.reset_at))
       : undefined);
   return {
     code,
@@ -733,7 +741,11 @@ export const mapPlugServerFailure = (
   logger?: LoggerPort,
   stage = "rpc",
 ): DomainError => {
-  const mapped = classifyPlugServerFailure(failure, logger, stage);
+  const mapped = classifyPlugServerFailure(
+    { ...failure, retryAfterMs: readDelay(failure.retryAfterMs) },
+    logger,
+    stage,
+  );
   return new DomainError({
     ...mapped,
     message: mapped.message,
@@ -745,21 +757,21 @@ export const parseRetryAfterMs = (
   header: string | null,
   rateLimitReset: string | null,
 ): number | null => {
-  if (header) {
-    const seconds = Number(header);
-    if (Number.isFinite(seconds)) {
-      return Math.max(0, seconds * 1000);
-    }
-    const date = Date.parse(header);
-    if (Number.isFinite(date)) {
-      return Math.max(0, date - Date.now());
-    }
+  const value = header?.trim();
+  if (value) {
+    const delay = /^\d+$/.test(value)
+      ? readDelay(Number(value) * 1000)
+      : /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i.test(value)
+        ? delayUntil(Date.parse(value))
+        : undefined;
+    if (delay !== undefined) return delay;
   }
-  if (rateLimitReset) {
-    const unix = Number(rateLimitReset);
-    if (Number.isFinite(unix)) {
+  const reset = rateLimitReset?.trim();
+  if (reset && /^\d+$/.test(reset)) {
+    const unix = Number(reset);
+    if (Number.isSafeInteger(unix)) {
       const ms = unix > 1_000_000_000_000 ? unix : unix * 1000;
-      return Math.max(0, ms - Date.now());
+      return delayUntil(ms) ?? null;
     }
   }
   return null;

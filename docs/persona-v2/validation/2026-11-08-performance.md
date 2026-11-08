@@ -1,6 +1,7 @@
 # Desempenho v2 — 8 de novembro de 2026
 
-Rodada local sobre alterações ainda não publicadas. Node 24.21.0, Windows,
+Rodada local sobre alterações ainda não publicadas no momento da medição,
+posteriormente incorporadas ao commit `711aa21`. Node 24.21.0, Windows,
 PostgreSQL 17 em container descartável, exposto somente em loopback. Nenhuma
 consulta operacional ou teste em produção. Não certifica outros motores, aceite
 integral para clientes ou release.

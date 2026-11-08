@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Fixture persistente de publicação de operações devolve a identidade exata do agente consultado, compatível com a guarda do adapter; mantém recusa de respostas sem identidade ou de outro agente.
+
+- Fixed: Prazos Retry-After/RPC rejeitam valores inválidos, negativos e inseguros sem propagar NaN/Infinity; timeout local deixa de inventar prazo ou orientar retry. Regressões cobrem unidades, datas e fallback.
+
 - Added: Runner manual aceita fixtures sintéticas opcionais de prazos somente em MSSQL, com geração tipada testada; não representa homologação nativa nem usa dados operacionais.
 
 - Changed: Consultas v2 carregam publicações em lote sob os mesmos locks; grafo derivado usa cache limitado por persona/publicação/hash com revalidação por acesso. Reduzidas serializações do envelope e cópias de anexos, com regressões e medições em PostgreSQL isolado.

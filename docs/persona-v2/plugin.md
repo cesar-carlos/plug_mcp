@@ -7,6 +7,15 @@ por DV2-017; isso não comprova conexão ChatGPT nem libera o aceite integral.
 
 ## Gerações e variantes
 
+Antes de montar um pacote, `npm run training:check:persona-v2` verifica offline
+os hashes da base/tópicos, os schemas de entrada, o manifesto e os orçamentos
+de tamanho. Esse comando é executado pelo job documental do CI em Windows e
+Linux. `npm run training:check` inclui essa verificação e também exige o checkout
+do hub no commit/contrato fixados; o gate `release:check` mantém ambos os escopos.
+Nenhum desses comandos comprova qualidade de respostas de uma IA real.
+As jornadas, referências e limites dessa avaliação estão no
+[contrato do avaliador](consumer-evaluation.md).
+
 O empacotador v2 gera `references/consumer-guide.md` em cada skill a partir do
 mesmo guia usado no runtime. A validação confere conteúdo e referência, mesmo
 se o inventário for recalculado. O guia cobre recuperação de erros e exemplos
