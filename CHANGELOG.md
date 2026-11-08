@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Diagnóstico HTTP seguro com categorias de rota, motivo e supportId correlacionado; métricas v2 amostradas por etapa, desligadas por padrão; conferência automática de SHA/imagem/saúde/ciclos e logs após deploy sem repetir efeitos.
+- Changed: Fixture HTTP compartilhada valida identidade do agente pelo adapter real, com regressões para respostas incompletas ou de outro agente.
+
 - Fixed: Fixture persistente de publicação de operações devolve a identidade exata do agente consultado, compatível com a guarda do adapter; mantém recusa de respostas sem identidade ou de outro agente.
 
 - Fixed: Prazos Retry-After/RPC rejeitam valores inválidos, negativos e inseguros sem propagar NaN/Infinity; timeout local deixa de inventar prazo ou orientar retry. Regressões cobrem unidades, datas e fallback.

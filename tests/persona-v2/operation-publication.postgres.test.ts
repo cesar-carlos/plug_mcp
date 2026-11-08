@@ -1,4 +1,5 @@
 import { withReviewDeadline } from "../helpers/review-deadline.js";
+import { hubAgentResponse } from "../helpers/hub-agent-response.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -130,22 +131,7 @@ beforeAll(async () => {
       if (req.method === "GET") {
         const agentId = req.url?.match(/^\/api\/v1\/client\/me\/agents\/([0-9a-f-]{36})$/)?.[1];
         expect(agentId).toBeDefined();
-        res.end(
-          JSON.stringify({
-            agent: {
-              agentId,
-              isHubConnected: true,
-              hasClientToken: true,
-              sourceIdentity: 1,
-              sqlOperations: {
-                version: 1,
-                maxSteps: 32,
-                maxAffectedRows: 100000,
-                timeoutMs: 300000,
-              },
-            },
-          }),
-        );
+        res.end(JSON.stringify(hubAgentResponse(agentId!)));
         return;
       }
       const input = JSON.parse(body) as {

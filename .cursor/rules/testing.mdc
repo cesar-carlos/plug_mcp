@@ -60,6 +60,14 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Isolamento e gates
 
+- Fixtures HTTP do hub reutilizam contratos tipados quando disponíveis e passam
+  pelo adapter real. A resposta positiva deve fixar a identidade pedida; regressões
+  negativas mantêm recusa de identidade ausente/trocada. Não afrouxar o adapter
+  para acomodar fixture desatualizada.
+- Pós-deploy observa imagem/SHA, saúde, reinícios e ciclos do worker com orçamento
+  limitado, sem repetir efeitos. Logs resumidos não certificam ausência de erros
+  fora da janela; avisos ou formatos desconhecidos exigem revisão explícita.
+
 - Nunca usar credenciais/fontes cadastradas ou bancos operacionais em ensaios.
   Fixtures têm nomes aleatórios próprios e URL explícita; remover só alvos criados.
 - Não tratar parser, mocks, harness de referência ou uma suíte PostgreSQL como

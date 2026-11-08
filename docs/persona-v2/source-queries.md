@@ -1,5 +1,24 @@
 # Consultas por fonte — contrato implementado
 
+## Medição de etapas
+
+`PERSONA_V2_QUERY_TIMINGS_SAMPLE_PERCENT` aceita 0–100 e fica em 0 por padrão.
+No compose de teste, configurar `PERSONA_V2_TEST_QUERY_TIMINGS_SAMPLE_PERCENT`.
+Quando habilitada, a amostragem registra `persona query timing` com tempo total,
+sucesso/falha e duração/contagem das fases catalog, authorization, hub e
+serialization. Usa relógio monotônico e contexto independente por chamada.
+Catalog inclui leituras/revalidações locais; authorization mede autorização do
+gateway; hub mede a espera da execução; serialization mede o cálculo do envelope.
+Essas fases não representam tempo exclusivo de SQL no banco, e sua soma não
+substitui a duração total. Cache hit pode ter zero chamadas na fase hub.
+
+Não registra SQL, valores, resultados, nomes de recursos ou identidades. Falha
+do logger não substitui resultado/erro da consulta. Timeout continua sem prometer
+cancelamento: trabalho remoto tardio pode não constar na amostra já emitida.
+Métricas não alteram limites, concessões, revalidações ou autorização de retry.
+
+## Contrato SQL e resposta
+
 O teto materializado mede bytes UTF-8 com uma serialização do maior envelope
 aplicável, incluindo metadados de singleflight quando há reuso habilitado.
 A otimização não altera limite, formato entregue ou revalidação na entrega.

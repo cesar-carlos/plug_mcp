@@ -46,6 +46,7 @@ import { verifyPersonaMigrations } from "../infrastructure/persistence/persona-v
 import { PersonaOwnerAuthentication } from "../infrastructure/plug-server/persona-owner-auth.js";
 import { PlugServerRestAdapter } from "../infrastructure/plug-server/plug-server-rest.adapter.js";
 import { createPino, PinoLoggerAdapter } from "../infrastructure/logging/pino-logger.adapter.js";
+import { QueryTimings } from "../application/persona-v2/query-timings.js";
 import { createPersonaAdministrationApp } from "../infrastructure/http/persona-v2-admin.js";
 import {
   createHubHttpAgents,
@@ -175,7 +176,15 @@ export const composePersonaV2 = async (
         config.PERSONA_V2_QUERY_CACHE_TTL_MS,
       );
     }
-    const queries = new PersonaSourceQueries(consumerCatalog, sourceQueries, queryReuse);
+    const timingLogger = new PinoLoggerAdapter(createPino(config.LOG_LEVEL, false));
+    const queries = new PersonaSourceQueries(
+      consumerCatalog,
+      sourceQueries,
+      queryReuse,
+      new QueryTimings(config.PERSONA_V2_QUERY_TIMINGS_SAMPLE_PERCENT, (report) =>
+        timingLogger.info("persona query timing", { ...report }),
+      ),
+    );
     attachmentStore = new PostgresPersonaAttachments(pool, crypto, config.PUBLIC_BASE_URL);
     const attachments = new PersonaAttachments(
       consumerCatalog,

@@ -10,6 +10,10 @@ Otimização nunca substitui autorização, completude ou isolamento.
 
 ## Persona-v2
 
+- Telemetria de consultas é opt-in, amostrada e limitada a fases fixas e contagens,
+  com relógio monotônico e isolamento por chamada. Não capturar SQL, parâmetros,
+  resultados ou identidade; falha do observador não altera resultado ou autorização.
+
 - Carregamento em lote de publicações filtra concessões antes da leitura e conserva
   validações de vínculos, hashes e suspensão. Reduzir trabalho sob lock sem retirar
   locks de autoridade; não paralelizar comandos na mesma conexão PostgreSQL.

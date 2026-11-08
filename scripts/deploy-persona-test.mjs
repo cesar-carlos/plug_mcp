@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 import { createReadStream, lstatSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { verifyLoadedIdentity } from "./tested-image-identity.mjs";
+import {
+  verifyPersonaDeployment,
+  dockerRead,
+  observationFailure,
+} from "./verify-persona-deployment.mjs";
 
 export function runTestDeployment({ revision, imageId, envFile, run }) {
   if (
@@ -133,8 +138,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     );
     env.PERSONA_V2_TEST_IMAGE = loaded.Id;
     runTestDeployment({ revision, imageId: loaded.Id, envFile, run });
+    console.log(
+      JSON.stringify(
+        await verifyPersonaDeployment({ revision, imageId: loaded.Id, run: dockerRead }),
+      ),
+    );
     console.log(`Persona-v2 test server ready at revision ${revision}; no client release granted.`);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify(observationFailure(error)));
     console.error(
       "Test deployment interrupted. Inspect service state and private configuration; no retry or rollback was attempted.",
     );

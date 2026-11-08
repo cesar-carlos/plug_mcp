@@ -1,5 +1,21 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+## Diagnóstico HTTP seguro
+
+Respostas HTTP de falha recebem `X-Support-Id`, vinculado ao `X-Request-ID`
+gerado no servidor. Erros JSON administrativos também recebem `error.supportId`;
+códigos, status e mensagens existentes permanecem. Identificadores enviados pelo
+cliente não são adotados, e o identificador já atribuído por OAuth/anexos/MCP é
+preservado. Sucessos não recebem corpo ou identificador de erro adicional.
+
+O log de recusa registra somente método fechado, categoria de rota, status,
+limite de bytes e motivo: `unmatched_route`, `resource_unavailable`,
+`access_rejected` ou `request_failed`. URL livre, query string, cabeçalhos e
+corpo não entram nesse diagnóstico. `unmatched_route` significa que não houve
+registro de handler de rota Express; não identifica versão do cliente ou atacante.
+Recurso inexistente e inacessível continuam indistinguíveis na resposta. Não
+inferir expiração OAuth ou necessidade de reconexão a partir de um 404.
+
 O diagnóstico de progresso lê publicações sequencialmente na conexão da mesma
 transação PostgreSQL; falha interrompe a leitura e preserva o rollback, sem
 consultas sobrepostas ou mudança de autoridade.

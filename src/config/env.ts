@@ -180,6 +180,7 @@ const envSchema = z.object({
     .max(305_000)
     .default(300_000),
   PLUG_SERVER_TIMINGS_SAMPLE_PERCENT: z.coerce.number().int().min(0).max(100).default(10),
+  PERSONA_V2_QUERY_TIMINGS_SAMPLE_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
   OPERATIONS_WORKER_INTERVAL_MS: z.coerce.number().int().min(10_000).max(3_600_000).default(60_000),
   OPERATIONS_SLO_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1_440).default(15),
   OPERATIONS_SLO_MIN_OBSERVATIONS: z.coerce.number().int().min(1).max(10_000).default(20),

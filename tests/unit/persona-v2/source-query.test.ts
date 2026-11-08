@@ -1,4 +1,5 @@
 import { queryTransportContext } from "../../../src/application/persona-v2/query-transport-context.js";
+import { QueryTimings } from "../../../src/application/persona-v2/query-timings.js";
 import { expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import pino from "pino";
@@ -84,6 +85,37 @@ const fixture = (dialect: typeof trainingSource.dialect = "postgres") => {
     service: new PersonaSourceQueries(catalog, gateway),
   };
 };
+
+it("telemetria real registra fases e preserva revalidação sem SQL ou identidade", async () => {
+  const f = fixture();
+  let output = "";
+  const logger = new PinoLoggerAdapter(
+    pino(
+      {},
+      {
+        write: (line) => {
+          output += line;
+        },
+      },
+    ),
+  );
+  const service = new PersonaSourceQueries(
+    f.catalog,
+    f.gateway,
+    undefined,
+    new QueryTimings(100, (report) => logger.info("persona query timing", { ...report })),
+  );
+  const result = await service.run(identity, { params: { minimum: 0 } });
+  expect(result.rows).toHaveLength(1);
+  expect(f.execute).toHaveBeenCalledTimes(1);
+  const report = JSON.parse(output) as { phases: Record<string, { calls: number }> };
+  expect(report.phases.catalog!.calls).toBeGreaterThanOrEqual(3);
+  expect(report.phases.authorization!.calls).toBeGreaterThanOrEqual(1);
+  expect(report.phases.hub!.calls).toBe(1);
+  expect(report.phases.serialization!.calls).toBe(1);
+  expect(output).not.toMatch(/SELECT|minimum|10\.25|personaId|tokenId|params/);
+  expect(f.catalog.revalidateQuery).toHaveBeenCalled();
+});
 
 const reusableFixture = () => {
   const f = fixture();

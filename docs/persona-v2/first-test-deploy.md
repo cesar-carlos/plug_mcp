@@ -28,6 +28,31 @@ alterações; essas etapas exigem evidência da revisão efetivamente publicada.
 
 ## Implementado
 
+Após subir os serviços, o receptor executa `scripts/verify-persona-deployment.mjs`.
+Ele reconfere SHA e imagem exatos, modo test-server, saúde, ausência de reinícios
+e OOM, além de um ciclo concluído de review/ephemeral/retention/outbox. A espera
+padrão tem até 20 observações com intervalo de três segundos; cada comando Docker
+tem timeout próprio de dez segundos. Não repete migração, deploy ou SQL.
+Falha exige inspeção; não aciona rollback ou reinício automático.
+
+Recusas emitem código fechado para identidade/ciclo/saúde, falha de observação
+Docker ou erros de runtime. Quando houver erros JSON, o diagnóstico inclui o
+resumo seguro e os supportIds da janela, sem copiar mensagens ou stderr bruto.
+
+O resumo dos logs considera até mil linhas por serviço desde sua subida,
+incluindo stdout/stderr. Emite contagens e até vinte supportIds válidos, nunca
+mensagem livre, URL, SQL, parâmetros ou credenciais. Erro de nível 50+ reprova a
+conferência; avisos, linhas não JSON e janela possivelmente truncada ativam `logReviewRequired`. Um 404 isolado
+não comprova falha funcional nem aprova ausência de erros fora dessa janela.
+Operadores podem repetir somente essa observação com:
+
+```sh
+node scripts/verify-persona-deployment.mjs SHA_COMPLETO sha256:ID_DA_IMAGEM
+```
+
+Usar a revisão e a identidade Docker verificadas no host, sem reconstruir imagem
+ou usar tag mutável. A conferência não executa consultas nas fontes operacionais.
+
 | Frente             | Entrega                                                                                                                                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Liberação de teste | `contracts/persona-v2-test-deploy.json` e `scripts/check-persona-test-deploy.mjs`: rodada CI exata, todos os jobs obrigatórios, artefato único e não expirado, SHA/ID/hash vinculados. Aceite integral permanece separado. |

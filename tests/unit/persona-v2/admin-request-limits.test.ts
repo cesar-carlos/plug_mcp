@@ -74,7 +74,15 @@ describe("limites HTTP administrativos de tokens", () => {
       },
       {
         message: "admin request rejected",
-        fields: { requestId, route: "token.issue", status: 413, limitBytes: TOKEN_JSON_BYTES },
+        fields: {
+          requestId,
+          supportId: requestId,
+          route: "token.issue",
+          method: "POST",
+          reason: "request_failed",
+          status: 413,
+          limitBytes: TOKEN_JSON_BYTES,
+        },
       },
     ]);
     expect(JSON.stringify(f.logger.warnings)).not.toMatch(/private|secret|capabilities/);

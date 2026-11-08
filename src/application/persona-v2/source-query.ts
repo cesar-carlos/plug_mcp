@@ -1,5 +1,6 @@
 import { queryTransportContext } from "./query-transport-context.js";
 import { queryResponseBytes } from "./query-response-size.js";
+import { QueryTimings } from "./query-timings.js";
 import { FieldContractIndex } from "./field-contract-index.js";
 import { z } from "zod";
 import {
@@ -145,6 +146,7 @@ export class PersonaSourceQueries {
     >,
     private readonly gateway: SourceQueryGatewayPort,
     private readonly reuse?: PersonaQueryReusePort,
+    private readonly timings = new QueryTimings(0, () => undefined),
   ) {}
 
   async verify(
@@ -219,6 +221,16 @@ export class PersonaSourceQueries {
   }
 
   async run(
+    identity: ConsumerIdentity,
+    raw: SourceQueryInput,
+    validation = false,
+    internal?: FederationQueryContext,
+    attachment?: AttachmentQueryContext,
+  ): Promise<SourceQueryResponse> {
+    return this.timings.run(() => this.runTimed(identity, raw, validation, internal, attachment));
+  }
+
+  private async runTimed(
     identity: ConsumerIdentity,
     raw: SourceQueryInput,
     validation = false,
@@ -334,10 +346,12 @@ export class PersonaSourceQueries {
     internal?: FederationQueryContext,
     attachment?: AttachmentQueryContext,
   ): Promise<SourceQueryResponse> {
-    const evidence = await this.catalog.query(identity, {
-      ...input,
-      cacheFence: !!attachment || (!!this.reuse && !validation && !internal),
-    });
+    const evidence = await this.timings.measure("catalog", () =>
+      this.catalog.query(identity, {
+        ...input,
+        cacheFence: !!attachment || (!!this.reuse && !validation && !internal),
+      }),
+    );
     const { source, publications } = evidence;
     const limits = queryLimits(evidence.executionLimits, input.options ?? {});
     if (attachment?.format === "binary" && limits.maxRows < 2) {
@@ -558,10 +572,12 @@ export class PersonaSourceQueries {
         throw new PersonaV2Error("BUDGET_EXCEEDED", "Prazo da consulta excedido.");
     };
     assertDeadline();
-    const lease = await this.gateway.authorize(source, [...resources.values()], {
-      exactResources: true,
-      requireDatabase: true,
-    });
+    const lease = await this.timings.measure("authorization", () =>
+      this.gateway.authorize(source, [...resources.values()], {
+        exactResources: true,
+        requireDatabase: true,
+      }),
+    );
     if (attachment && !lease.policyFingerprint) {
       throw new PersonaV2Error(
         "CAPABILITY_UNAVAILABLE",
@@ -569,11 +585,11 @@ export class PersonaSourceQueries {
       );
     }
     internal?.retainRevalidation(async () => {
-      await lease.revalidate();
-      await this.catalog.revalidateQuery(identity, evidence);
+      await this.timings.measure("authorization", () => lease.revalidate());
+      await this.timings.measure("catalog", () => this.catalog.revalidateQuery(identity, evidence));
       assertDeadline();
     });
-    await this.catalog.revalidateQuery(identity, evidence);
+    await this.timings.measure("catalog", () => this.catalog.revalidateQuery(identity, evidence));
     assertDeadline();
     // Structural proofs still execute on the agent connection; never replace that guard
     // with a cache hit. Volatile SQL, validation and federation also keep fresh execution.
@@ -591,14 +607,16 @@ export class PersonaSourceQueries {
       )
     );
     const readFresh = async (): Promise<SourceQueryResponse> => {
-      const result = await lease
-        .execute(
-          sqlParaOdbc(validation ? sqlValidacaoVazia(source.dialect, sql) : sql),
-          params,
-          validation
-            ? { maxRows: 1, timeoutMs: Math.max(1, deadline - Date.now()) }
-            : { ...options, timeoutMs: Math.max(1, deadline - Date.now()) },
-          expectedStructure,
+      const result = await this.timings
+        .measure("hub", () =>
+          lease.execute(
+            sqlParaOdbc(validation ? sqlValidacaoVazia(source.dialect, sql) : sql),
+            params,
+            validation
+              ? { maxRows: 1, timeoutMs: Math.max(1, deadline - Date.now()) }
+              : { ...options, timeoutMs: Math.max(1, deadline - Date.now()) },
+            expectedStructure,
+          ),
         )
         .catch(async (error: unknown) => {
           if (
@@ -692,10 +710,15 @@ export class PersonaSourceQueries {
             : {}),
         },
       };
-      if (queryResponseBytes(response, reusable) > limits.maxBytes)
+      if (
+        this.timings.sync("serialization", () => queryResponseBytes(response, reusable)) >
+        limits.maxBytes
+      )
         throw new PersonaV2Error("BUDGET_EXCEEDED", "Resposta excede o limite de bytes vigente.");
       if (reusable) {
-        await this.catalog.revalidateQuery(identity, evidence);
+        await this.timings.measure("catalog", () =>
+          this.catalog.revalidateQuery(identity, evidence),
+        );
         assertDeadline();
       }
       return response;
@@ -724,15 +747,17 @@ export class PersonaSourceQueries {
     if (reusable) {
       response.reuse = { kind: reused.kind };
       // Each waiter/hit has its own live hub lease and local consumer transaction.
-      await lease.revalidate();
+      await this.timings.measure("authorization", () => lease.revalidate());
       assertDeadline();
     }
-    await this.catalog.revalidateQuery(identity, evidence, {
-      validation,
-      durationMs: Date.now() - started,
-      rows: response.rows?.length ?? 0,
-      ...(reusable ? { reuseKind: reused.kind } : {}),
-    });
+    await this.timings.measure("catalog", () =>
+      this.catalog.revalidateQuery(identity, evidence, {
+        validation,
+        durationMs: Date.now() - started,
+        rows: response.rows?.length ?? 0,
+        ...(reusable ? { reuseKind: reused.kind } : {}),
+      }),
+    );
     assertDeadline();
     if (attachment)
       attachment.capture({

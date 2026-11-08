@@ -15,6 +15,8 @@ A cadeia persistente passou nos 85 cenários, sem skips, com inventários estáv
 
 ## Registrar uma nova rodada
 
+[Diagnóstico HTTP e observabilidade — 2026-11-08](validation/2026-11-08-observability.md).
+
 [Consolidação de treinamento, diagnóstico e desempenho — 2026-11-08](validation/2026-11-08-consolidation.md).
 
 [Desempenho de catálogo, grafo e anexos — 2026-11-08](validation/2026-11-08-performance.md).
