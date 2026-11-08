@@ -1,10 +1,11 @@
 # Persona-v2 — estado da refatoração
 
-Continuação local de 2026-10-26: guia compartilhado e comparação de compatibilidade
-do plugin, combinação explícita de datasets e importação direta para cruzamentos.
-Ver [evidência e limites](validation/2026-10-26-plugin-improvements.md).
-A validação no ChatGPT aguarda conexão sintética dedicada; não há novo deploy
-ou aceite integral decorrente desta rodada.
+As rodadas locais e publicações remotas estão no [índice de evidências](validation.md).
+A [rodada de observabilidade](validation/2026-11-08-observability.md) separa os
+testes isolados da conferência do servidor e worker após o deploy. A
+[rodada do plugin](validation/2026-10-26-plugin-improvements.md) conserva seus
+limites históricos; publicação no servidor não comprova instalação ou conversa
+real no ChatGPT, nem aceite integral para clientes.
 
 Primeiro servidor de teste: [escopo, lacunas concretas e ordem de implementação](first-test-deploy.md). DV2-017 permite validar e ajustar no destino, sem aceite manual prévio. O caminho separado de liberação de teste está implementado com contrato e imagem próprios; o manifesto integral continua bloqueado e não representa aceite fictício.
 

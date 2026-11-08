@@ -53,6 +53,32 @@ node scripts/verify-persona-deployment.mjs SHA_COMPLETO sha256:ID_DA_IMAGEM
 Usar a revisão e a identidade Docker verificadas no host, sem reconstruir imagem
 ou usar tag mutável. A conferência não executa consultas nas fontes operacionais.
 
+| Código de observação                       | Ação do operador                                                                                |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `INVALID_EXPECTED_IDENTITY`                | Conferir os argumentos: SHA completo e ID Docker imutável da imagem publicada.                  |
+| `CONTAINER_IDENTITY_UNAVAILABLE`           | Conferir se os containers esperados existem no Docker local.                                    |
+| `CONTAINER_IDENTITY_OR_LIFECYCLE_MISMATCH` | Comparar SHA, imagem, modo e estado; investigar reinício/OOM antes de qualquer nova publicação. |
+| `HEALTH_OR_WORKER_CYCLE_UNCONFIRMED`       | Examinar healthchecks e os quatro ciclos; o código não afirma qual deles faltou.                |
+| `RUNTIME_ERRORS_OBSERVED`                  | Usar os supportIds do resumo seguro para investigar os eventos na janela observada.             |
+| `DOCKER_OBSERVATION_FAILED`                | Conferir acesso ao daemon, timeout e limite de saída; não implica falha da consulta SQL.        |
+| `OBSERVATION_FAILED`                       | Investigar a própria observação; uma exceção não classificada não autoriza repetir efeitos.     |
+
+`logReviewRequired: true` exige revisão mesmo quando o comando termina com
+sucesso. O resumo reconhece níveis numéricos Pino (40 para warning, 50+ para
+erro); não substitui inspeção de formatos desconhecidos nem cobertura de todo
+o histórico. Os ciclos procurados ficam na mesma janela de até mil linhas:
+em um serviço antigo, ausência nessa janela não prova que nunca ocorreram.
+
+### Checkout remoto e serviço publicado
+
+Um `git pull` atualiza arquivos, não os containers. Quando solicitado pelo
+operador, conferir branch e alterações locais em `/root/plug_mcp` e atualizar
+com `git pull --ff-only origin main`, sem reset ou stash automático. A publicação
+continua usando o artefato imutável aprovado pelo CI e o receptor SSH.
+Comparar checkout, GitHub, SHA e imagem de **ambos** os containers; o checkout
+sozinho não comprova a versão em execução. A rodada de observabilidade tem
+[evidência de publicação e conferência remota](validation/2026-11-08-observability.md#publicação-e-observação-remota).
+
 | Frente             | Entrega                                                                                                                                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Liberação de teste | `contracts/persona-v2-test-deploy.json` e `scripts/check-persona-test-deploy.mjs`: rodada CI exata, todos os jobs obrigatórios, artefato único e não expirado, SHA/ID/hash vinculados. Aceite integral permanece separado. |
@@ -102,6 +128,13 @@ Opcionais: `PERSONA_V2_TEST_PREVIOUS_KEYS`, `PERSONA_V2_TEST_TRUST_PROXY`,
 `PERSONA_V2_TEST_OAUTH_ENABLED` e `PERSONA_V2_TEST_OAUTH_CLIENTS`.
 OAuth/cache ficam desligados sem opção explícita. Habilitar exige configuração
 própria; não amplia concessões existentes. Não publicar banco/Redis na internet.
+
+`PERSONA_V2_TEST_QUERY_TIMINGS_SAMPLE_PERCENT` controla a amostragem de métricas
+de consulta na composição: inteiro de 0 a 100, padrão 0 (desativado), convertido
+em `PERSONA_V2_QUERY_TIMINGS_SAMPLE_PERCENT` no runtime. Ver
+[alcance das métricas](source-queries.md). A publicação do código não habilita
+a coleta automaticamente; uma alteração de configuração exige aplicar a
+composição pelo procedimento de operação, preservando a identidade da imagem.
 
 ## Envio e verificação no destino
 

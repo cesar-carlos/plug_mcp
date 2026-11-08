@@ -1,6 +1,7 @@
 # Diagnóstico HTTP e observabilidade — 8 de novembro de 2026
 
-Implementação local posterior a `a35e8c5`; não comprova publicação ou deploy.
+Rodada local posterior a `a35e8c5`; sua evidência técnica é separada da
+publicação de `37829b5`, registrada ao final deste relatório.
 Node 24.21.0 e TypeScript 7.0.2, com fixtures HTTP e PostgreSQL 17 descartáveis.
 Não foram executadas consultas em bancos operacionais.
 
@@ -20,6 +21,9 @@ o diagnóstico de próximas ocorrências sem deduzir versão do cliente ou ataca
 O verificador foi testado com respostas Docker controladas; isso não representa
 um deploy desta revisão ou homologação integral para clientes.
 
+A observação remota posterior está registrada abaixo; não altera o alcance
+dos testes sintéticos nem aprova gates integrais.
+
 ## Rodadas
 
 `vitest run tests/unit tests/contract`: 1.965 testes aprovados. Após os ajustes
@@ -38,3 +42,31 @@ Logs locais ignorados pelo Git: `test-results/observability-unit.log` e
 padrão; a instrumentação não alega redução de latência. A conferência pós-deploy
 trata warnings, linhas desconhecidas e truncamento como necessidade de revisão,
 sem ocultar falhas nem repetir efeitos.
+
+## Publicação e observação remota
+
+Revisão publicada: `37829b5612fc29bb3e7cd0b0d3ef17a7e456fc09`.
+[CI 42534304688](https://github.com/cesar-carlos/plug_mcp/actions/runs/42534304688)
+e [deploy 42535629396](https://github.com/cesar-carlos/plug_mcp/actions/runs/42535629396)
+concluídos com sucesso. O checkout limpo em `/root/plug_mcp` recebeu
+`git pull --ff-only origin main`; a substituição dos serviços ocorreu pelo
+workflow, com a imagem validada pelo CI, não por build nesse checkout.
+
+Imagem carregada em ambos os serviços:
+`sha256:b56cd574a1756b7d30f6b6d48b995df63cd51bd52d4e9b416fd1d32cf6526372`.
+Servidor e worker iniciaram em **2026-11-08 às 23:33:20 UTC**
+(19:33:20 em America/Cuiaba), com SHA exato, saúde positiva, zero reinícios
+e sem OOM. O worker concluiu os ciclos review, ephemeral, retention e outbox.
+
+A observação SSH posterior executou o verificador e GETs locais em `/health`
+e `/ready`: `status: ok` e `ready: true`, ambos com `complete: false`.
+O resumo desde a subida registrou zero warnings, erros e linhas não JSON,
+sem truncamento, sem supportIds e com `logReviewRequired: false`.
+A janela é limitada à observação pós-deploy, não é monitoramento contínuo
+nem demonstra ausência de falhas futuras nas conversas.
+
+Local, origin/main, checkout remoto e serviços coincidiam nessa revisão.
+Bancos e volumes operacionais foram preservados; não foram executados testes
+PostgreSQL ou SQL Anywhere nas fontes operacionais. O destino continua
+`test-server`, conforme DV2-017; essa publicação não libera o aceite integral
+para clientes nem certifica conversa real no ChatGPT.
