@@ -11,14 +11,14 @@ function table(name: string, keys: string[], fields: Field[]) {
   };
 }
 export function campoSalesTables(
-  profile: "vendas-resumo" | "vendas-vendedor" | "vendas-municipio",
+  profile: "vendas-resumo" | "vendas-vendedor" | "vendas-municipio" | "vendas-descontos",
 ): PublicationFixtureTable[] {
-  const dimension =
-    profile === "vendas-vendedor"
-      ? "codvendedor"
-      : profile === "vendas-municipio"
-        ? "codmunicipio"
-        : undefined;
+  const seller = profile === "vendas-vendedor" || profile === "vendas-descontos";
+  const dimension = seller
+    ? "codvendedor"
+    : profile === "vendas-municipio"
+      ? "codmunicipio"
+      : undefined;
   const fields: Field[] = [
     ["codempresa", "integer"],
     ["codfilial", "integer"],
@@ -26,8 +26,12 @@ export function campoSalesTables(
     ["codtipooperacaosaida", "integer"],
     ["datavenda", "date"],
     ["prevenda", "string"],
-    ["valorliquido", "decimal"],
   ];
+  if (profile === "vendas-descontos") {
+    fields.push(["valorbruto", "decimal"], ["valordesconto", "decimal"]);
+  } else {
+    fields.push(["valorliquido", "decimal"]);
+  }
   if (dimension) fields.push([dimension, "integer"]);
   const tables = [
     table("dbo.produtovendido", ["codempresa", "codprodutovendido"], fields),
@@ -41,7 +45,7 @@ export function campoSalesTables(
       ],
     ),
   ];
-  if (profile === "vendas-vendedor")
+  if (seller)
     tables.push(
       table(
         "dbo.vendedor",

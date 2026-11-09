@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Perfil separado `vendas-descontos` usa `valorbruto` e `valordesconto` decimal nullable no lugar de `valorliquido`, preservando os perfis e sementes anteriores de vendedor, resumo e município.
+
+- Added: Perfil isolado `agenda-receber-pagar` para testar vencimentos diários das duas carteiras, com somente campos curados e chaves próprias, sem ampliar guardas, fontes operacionais ou permissões.
+
 - Added: Casos de consulta podem declarar ranking limitado por TOP inteiro em SQL Server; runner exige limite exato, ordem e transporte íntegro, comparando todas as linhas esperadas. Console edita e relê a declaração sem converter casos antigos. Resposta pública permanece parcial e cruzamentos não herdam a exceção; alterações exigem nova rodada isolada, sem aprovação automática.
 
 - Fixed: O wrapper SSH preserva a recusa `AGREGACAO_INSEGURA` sem convertê-la em falha de comunicação inconclusiva; mantém reprovação, ausência de retry e descarte de mensagens/dados remotos. Regressão exercita o wrapper com canal simulado e conteúdo sensível sintético.

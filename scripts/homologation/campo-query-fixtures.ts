@@ -6,6 +6,7 @@ import {
 } from "../../src/domain/persona-v2/publication-fixture.js";
 
 export const campoQueryProfileSchema = z.enum([
+  "agenda-receber-pagar",
   "titulos-receber",
   "titulos-pagar",
   "vencidos-pagar",
@@ -17,6 +18,7 @@ export const campoQueryProfileSchema = z.enum([
   "cobranca-cliente",
   "vendas-resumo",
   "vendas-vendedor",
+  "vendas-descontos",
   "vendas-municipio",
 ]);
 export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
@@ -24,9 +26,13 @@ export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
 /** Fixed synthetic schemas matching the curated cases, never inferred from an ERP. */
 export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
   const profile = campoQueryProfileSchema.parse(input);
+  if (profile === "agenda-receber-pagar") {
+    return [...campoQueryTables("horizonte-receber"), ...campoQueryTables("horizonte-pagar")];
+  }
   if (
     profile === "vendas-resumo" ||
     profile === "vendas-vendedor" ||
+    profile === "vendas-descontos" ||
     profile === "vendas-municipio"
   )
     return campoSalesTables(profile);

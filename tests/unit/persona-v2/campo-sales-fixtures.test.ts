@@ -4,17 +4,16 @@ import {
   campoQueryProfileSchema,
 } from "../../../scripts/homologation/campo-query-fixtures.js";
 import { manualPublicationTables } from "../../../scripts/homologation/manual-publication-tables.js";
-it.each(["vendas-resumo", "vendas-vendedor", "vendas-municipio"])(
+it.each(["vendas-resumo", "vendas-vendedor", "vendas-municipio", "vendas-descontos"])(
   "perfil %s limita campos e preserva isolamento",
   (input) => {
+    const seller = input === "vendas-vendedor" || input === "vendas-descontos";
     const profile = campoQueryProfileSchema.parse(input);
     const tables = campoQueryTables(profile);
     expect(tables.map((t) => t.table)).toEqual([
       "dbo.produtovendido",
       "dbo.tipooperacaosaida",
-      ...(input === "vendas-resumo"
-        ? []
-        : [input === "vendas-vendedor" ? "dbo.vendedor" : "dbo.municipio"]),
+      ...(input === "vendas-resumo" ? [] : [seller ? "dbo.vendedor" : "dbo.municipio"]),
     ]);
     expect(tables[0]!.primaryKey).toEqual(["codempresa", "codprodutovendido"]);
     expect(tables[1]!.primaryKey).toEqual(["codempresa", "codtipooperacaosaida"]);
@@ -25,12 +24,20 @@ it.each(["vendas-resumo", "vendas-vendedor", "vendas-municipio"])(
       "codtipooperacaosaida",
       "datavenda",
       "prevenda",
-      "valorliquido",
-      ...(input === "vendas-resumo"
-        ? []
-        : [input === "vendas-vendedor" ? "codvendedor" : "codmunicipio"]),
+      ...(input === "vendas-descontos" ? ["valorbruto", "valordesconto"] : ["valorliquido"]),
+      ...(input === "vendas-resumo" ? [] : [seller ? "codvendedor" : "codmunicipio"]),
     ]);
-    expect(tables[0]!.columns.find((c) => c.name === "valorliquido")?.type).toBe("decimal");
+    for (const name of ["valorbruto", "valordesconto"]) {
+      const column = tables[0]!.columns.find((c) => c.name === name);
+      if (input === "vendas-descontos") {
+        expect(column).toMatchObject({ type: "decimal", nullable: true, generated: false });
+      } else {
+        expect(column).toBeUndefined();
+      }
+    }
+    expect(tables[0]!.columns.find((c) => c.name === "valorliquido")?.type).toBe(
+      input === "vendas-descontos" ? undefined : "decimal",
+    );
     expect(tables[0]!.columns.find((c) => c.name === "datavenda")?.type).toBe("date");
     for (const table of tables) {
       expect(table.foreignKeys).toEqual([]);

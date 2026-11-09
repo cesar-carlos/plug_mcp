@@ -59,6 +59,39 @@ it("recusa perfil fora do contrato fechado", () => {
   expect(campoQueryProfileSchema.safeParse("erp").success).toBe(false);
 });
 
+it("agenda-receber-pagar combina somente as duas carteiras com chaves próprias", () => {
+  const profile = campoQueryProfileSchema.parse("agenda-receber-pagar");
+  const tables = campoQueryTables(profile);
+  expect(tables.map((t) => t.table)).toEqual(["dbo.contareceber", "dbo.contapagar"]);
+  for (const [index, side] of ["receber", "pagar"].entries()) {
+    const table = tables[index]!;
+    expect(Object.fromEntries(table.columns.map((c) => [c.name, c.type]))).toEqual({
+      codempresa: "integer",
+      ["codconta" + side]: "integer",
+      codfilial: "integer",
+      moeda: "string",
+      datavencimento: "date",
+      status: "string",
+      ["saldo" + side]: "decimal",
+    });
+    expect(table.primaryKey).toEqual(["codempresa", "codconta" + side]);
+    expect(table.columns.filter((c) => !c.nullable).map((c) => c.name)).toEqual(table.primaryKey);
+    expect(table.foreignKeys).toEqual([]);
+    expect(table.uniqueKeys).toEqual([]);
+    expect(table.columns.some((c) => c.generated)).toBe(false);
+  }
+  expect(manualPublicationTables("mssql", false, undefined, profile)).toEqual(tables);
+  for (const engine of ["postgres", "sybase"]) {
+    expect(manualPublicationTables(engine, false, undefined, profile)).toEqual(
+      manualPublicationTables(engine),
+    );
+  }
+  expect(() => manualPublicationTables("mssql", true, undefined, profile)).toThrow();
+  for (const side of ["pagar", "receber"] as const) {
+    expect(() => manualPublicationTables("mssql", false, side, profile)).toThrow();
+  }
+});
+
 it.each([
   { profile: "horizonte-pagar", side: "pagar", supplier: false },
   { profile: "horizonte-receber", side: "receber", supplier: false },

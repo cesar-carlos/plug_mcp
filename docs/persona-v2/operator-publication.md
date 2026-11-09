@@ -229,6 +229,14 @@ do novo validador e rodada nativa própria; estes três relatórios não o aprov
 
 ## Perfis financeiros por filial
 
+`agenda-receber-pagar` combina somente as duas carteiras de vencimentos:
+`dbo.contareceber` e `dbo.contapagar`. Cada tabela conserva chave composta
+empresa/título e os campos filial, moeda, vencimento, status e saldo residual.
+Campos fora da chave aceitam nulos; não há cadastro, FK, chave gerada ou coluna
+adicional. O perfil é exclusivo de MSSQL e não se combina com outros perfis.
+As sementes de cada caso devem incluir as duas tabelas e suas chaves, mesmo
+quando uma carteira estiver vazia. O teste nativo e a publicação são separados.
+
 Os perfis locais `horizonte-pagar`, `horizonte-receber` e `atraso-fornecedor` declaram somente a tabela de carteira correspondente aos casos. Horizontes incluem chave composta empresa/título, filial, moeda, saldo residual, status e vencimento. Atraso acrescenta código do fornecedor, sem tabela cadastral ou FK inferida. Colunas fora da chave admitem nulos para testar exclusões e cobertura. São alternativas exclusivas aos perfis anteriores e preservam o isolamento MSSQL; não ampliam tabelas no ERP nem concessões. Cada revisão exige inspect, sessão nova e relatório próprio. A existência desses perfis não comprova execução nativa ou aprovação das consultas.
 
 O perfil `cobranca-cliente` usa dbo.contareceber com os sete campos de carteira e codcliente, sem cadastro ou FK inferida. Aging pode usar horizonte-receber quando suas sementes tiverem exatamente o mesmo contrato físico; isso exige sessão e relatório próprios, sem herdar aprovação.
@@ -240,5 +248,16 @@ fontes operacionais. O companion precisa da allowlist MSSQL revisada para essa
 tabela, mantendo a restrição à base descartável e os testes de isolamento.
 
 ## Perfis de vendas
+
+O perfil separado `vendas-descontos` usa as mesmas três tabelas do vendedor,
+mas contém `valorbruto` e `valordesconto` decimal nullable no lugar de
+`valorliquido` em ProdutoVendido. Preserva chaves, empresa, filial, operação,
+data, pré-venda e vendedor. `vendas-vendedor`, resumo e município não mudam;
+suas sementes anteriores não precisam receber campos de desconto. As sementes
+do perfil novo declaram valores tipados, com nulo explícito quando desconhecido,
+sem substituir por zero.
+Testar percentuais exige definir denominador, tratamento de bruto zero/nulo e
+desempate nos casos curados. Acrescentar campos não aprova essas derivações nem
+altera guardas, runtime, concessões ou modelos publicados.
 
 `vendas-resumo`, `vendas-vendedor` e `vendas-municipio` usam ProdutoVendido e TipoOperacaoSaida das amostras autorizadas. Cada dimensão acrescenta somente código/nome (município inclui UF); sem FKs inferidas. Casos devem cobrir períodos sobrepostos, cancelamento, pré-venda, operação sem financeiro e ausência de dimensão. Os perfis não autorizam dados operacionais nem outras tabelas; exigem nova sessão por revisão.

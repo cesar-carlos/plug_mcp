@@ -8,6 +8,7 @@ it.each([
   "pagar",
   "receber",
   "titulos-receber",
+  "agenda-receber-pagar",
   "titulos-pagar",
   "vencidos-pagar",
   "agenda-pagar",
@@ -18,6 +19,7 @@ it.each([
   "cobranca-cliente",
   "vendas-resumo",
   "vendas-vendedor",
+  "vendas-descontos",
   "vendas-municipio",
 ])("wrapper emite argumentos isolados e campoPrazos explícito: %s", (enabled) => {
   const manifest = "fixture folder/manifest.json";

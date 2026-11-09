@@ -79,6 +79,8 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
   Horizontes por filial e atraso por fornecedor usam seus perfis locais próprios, com moeda, nulos e fronteiras declarados nos casos; não reutilizar o perfil de prazo emissão–vencimento.
   Perfis Campo de consulta são fechados por caso; não inferir colunas, FKs ou
   constraints a partir de nomes, nem reusar a sessão de outro rascunho.
+  Agenda receber/pagar combina somente as duas carteiras declaradas, com suas
+  chaves e sementes explícitas; não acrescentar cadastros nem inferir FKs.
 
 - Fixtures HTTP do hub reutilizam contratos tipados quando disponíveis e passam
   pelo adapter real. A resposta positiva deve fixar a identidade pedida; regressões
