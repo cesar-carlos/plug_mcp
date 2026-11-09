@@ -167,6 +167,7 @@ com sessão, Host/Origin e CSRF:
 | POST   | `/fontes/:sourceId/editar`     | `expectedVersion`, `name`, `purpose`, `environment`, `rowRestrictions`  |
 | POST   | `/fontes/:sourceId/credencial` | `expectedVersion`, `email`, `password`, `clientToken`                   |
 | POST   | `/fontes/:sourceId/suspender`  | `expectedVersion`                                                       |
+| POST   | `/fontes/:sourceId/excluir`    | `expectedVersion`, `confirmedSourceId` igual ao ID da rota              |
 | POST   | `/fontes/:sourceId/recuperar`  | `expectedVersion`, `credentials` opcional                               |
 | POST   | `/fontes/:sourceId/substituir` | `expectedVersion`, `source` com o cadastro completo da nova base        |
 
@@ -199,6 +200,11 @@ Exemplo de alteração de fonte existente:
 O console avisa sobre alterações pendentes ao trocar de persona e descarta
 resultados/previews ao salvar. Credenciais antigas nunca são devolvidas para
 preencher o formulário; os campos novos são limpos após a tentativa.
+
+Exclusão é somente administrativa: remove cadastro e credencial local elegíveis,
+sem chamar hub/agente/ERP, e conserva a auditoria por identidade histórica mínima.
+Depende de migração `0054` e recusa dependências em vez de apagá-las em cascata.
+Ver [limites da exclusão no console](console.md#identificação-de-bases-e-cadastros-com-o-mesmo-nome).
 Conflito de edição preserva os campos locais e a versão originalmente editada.
 Use **Recarregar base** para revisar o cadastro atual, com confirmação antes de
 descartar alterações pendentes; o console não reaplica a edição automaticamente.

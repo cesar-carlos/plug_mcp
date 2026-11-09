@@ -37,6 +37,7 @@ const emit = defineEmits<{
   reload: [sourceId: string];
   state: [sourceId: string, active: boolean, input: unknown];
   replace: [source: Source];
+  delete: [sourceId: string, input: unknown];
   submit: [];
   cancel: [];
   knowledgeDirty: [value: boolean];
@@ -45,6 +46,11 @@ const emit = defineEmits<{
 </script>
 <template>
   <section>
+    <h2>Bases conectadas</h2>
+    <p>
+      Busque por nome, banco, ambiente, finalidade ou identificador. O e-mail de acesso não faz
+      parte da busca.
+    </p>
     <ListSearch
       v-if="sources.length"
       v-model="sourceSearch"
@@ -56,9 +62,20 @@ const emit = defineEmits<{
       Nenhuma base conectada. Abra “Adicionar uma base” para cadastrar a conexão e conferir sua
       identidade.
     </p>
-    <h2>Bases conectadas</h2>
+    <details class="source-help">
+      <summary>Cadastrei uma base duplicada. Como remover?</summary>
+      <p>
+        Compare o banco, o ambiente e o identificador dos cadastros. Nomes iguais não comprovam
+        duplicação. Você pode editar o nome para diferenciá-los.
+      </p>
+      <p>
+        Use “Excluir cadastro” para remover somente a configuração e sua credencial no plug_mcp. O
+        banco externo não será apagado. Cadastros com dependências não podem ser excluídos; nesse
+        caso, revise a suspensão. A auditoria é preservada.
+      </p>
+    </details>
     <p v-if="!sources.length">Cadastre a primeira base desta persona.</p>
-    <ul>
+    <ul class="source-list">
       <li
         v-for="s in sources"
         v-show="matchingSources.includes(s)"
@@ -68,12 +85,27 @@ const emit = defineEmits<{
         tabindex="-1"
       >
         <strong>{{ s.name }}</strong> — {{ s.purpose }} ({{ s.dialect }})
+        <p
+          v-if="
+            sources.filter(
+              (other) =>
+                other.name.trim().toLocaleLowerCase('pt-BR') ===
+                s.name.trim().toLocaleLowerCase('pt-BR'),
+            ).length > 1
+          "
+          class="notice"
+        >
+          Há outros cadastros com este nome. Compare os dados abaixo antes de alterar o vínculo.
+        </p>
         <p>
           {{ sourceLinkStatus(s) }}
           · Banco: {{ s.database }}
           <span v-if="s.identityVerifiedAt"
             >· Identidade conferida em {{ new Date(s.identityVerifiedAt).toLocaleString() }}</span
           >
+        </p>
+        <p>
+          Ambiente: {{ s.environment }} · Identificador: <code>{{ s.id }}</code>
         </p>
         <SourceSettings
           :key="`${s.id}:${sourceFormVersions[s.id] ?? 0}`"
@@ -96,6 +128,7 @@ const emit = defineEmits<{
           @lock="emit('lock', $event)"
           @state="(active, input) => emit('state', s.id, active, input)"
           @replace="emit('replace', s)"
+          @delete="emit('delete', s.id, $event)"
           @reload="emit('reload', s.id)"
           @dirty="emit('lifecycleDirty', s.id, $event)"
         />
@@ -130,3 +163,20 @@ const emit = defineEmits<{
     />
   </section>
 </template>
+
+<style scoped>
+.source-list {
+  list-style: none;
+  padding: 0;
+}
+.source-list > li {
+  border: 1px solid currentColor;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-block: 1rem;
+  overflow-wrap: anywhere;
+}
+.source-help {
+  margin-block: 1rem;
+}
+</style>

@@ -858,6 +858,15 @@ export const createPersonaAdministrationApp = (input: {
         ),
       });
     });
+    app.post(`${path}/fontes/:sourceId/excluir`, async (req, res) => {
+      await maintenance.deleteSource(
+        session(req.get("cookie")),
+        z.uuid().parse(req.params.personaId),
+        z.uuid().parse(req.params.sourceId),
+        req.body,
+      );
+      res.json({ deleted: true });
+    });
     app.post(`${path}/fontes/:sourceId/credencial`, async (req, res) => {
       res.json({
         fonte: await maintenance.rotateSourceCredential(

@@ -302,6 +302,7 @@ const {
   changeSourceState,
   saveSource,
   reloadSource,
+  deleteSource,
 } = useConsoleSources(sources, api, run, confirmDiscard, load, path, message, () => {
   preview.value = undefined;
   confirmed.value = false;
@@ -539,6 +540,7 @@ onBeforeUnmount(() => {
             @reload="reloadSource"
             @state="(id, active, input) => changeSourceState(id, active, input)"
             @replace="beginSourceReplacement"
+            @delete="deleteSource"
             @submit="addSource"
             @cancel="cancelSourceReplacement"
             @knowledge-dirty="sourceKnowledgeDirty = $event"

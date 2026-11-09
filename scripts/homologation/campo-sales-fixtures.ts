@@ -11,14 +11,23 @@ function table(name: string, keys: string[], fields: Field[]) {
   };
 }
 export function campoSalesTables(
-  profile: "vendas-resumo" | "vendas-vendedor" | "vendas-municipio" | "vendas-descontos",
+  profile:
+    | "vendas-resumo"
+    | "vendas-vendedor"
+    | "vendas-municipio"
+    | "vendas-descontos"
+    | "vendas-clientes"
+    | "vendas-distribuicoes"
+    | "itens-cestas",
 ): PublicationFixtureTable[] {
   const seller = profile === "vendas-vendedor" || profile === "vendas-descontos";
   const dimension = seller
     ? "codvendedor"
-    : profile === "vendas-municipio"
-      ? "codmunicipio"
-      : undefined;
+    : profile === "vendas-clientes"
+      ? "codcliente"
+      : profile === "vendas-municipio"
+        ? "codmunicipio"
+        : undefined;
   const fields: Field[] = [
     ["codempresa", "integer"],
     ["codfilial", "integer"],
@@ -29,10 +38,18 @@ export function campoSalesTables(
   ];
   if (profile === "vendas-descontos") {
     fields.push(["valorbruto", "decimal"], ["valordesconto", "decimal"]);
-  } else {
+  } else if (profile !== "itens-cestas") {
     fields.push(["valorliquido", "decimal"]);
   }
   if (dimension) fields.push([dimension, "integer"]);
+  if (profile === "vendas-distribuicoes")
+    fields.push(
+      ["codcondicaopagamento", "integer"],
+      ["codfornecedor", "integer"],
+      ["valorfrete", "decimal"],
+      ["codvendedor", "integer"],
+      ["codcliente", "integer"],
+    );
   const tables = [
     table("dbo.produtovendido", ["codempresa", "codprodutovendido"], fields),
     table(
@@ -65,6 +82,23 @@ export function campoSalesTables(
           ["codmunicipio", "integer"],
           ["nome", "string"],
           ["uf", "string"],
+        ],
+      ),
+    );
+  if (profile === "itens-cestas")
+    tables.push(
+      table(
+        "dbo.itemprodutovendido",
+        ["codempresa", "codprodutovendido", "itemprodutovendido"],
+        [
+          ["codempresa", "integer"],
+          ["codprodutovendido", "integer"],
+          ["itemprodutovendido", "integer"],
+          ["codproduto", "integer"],
+          ["codunidademedida", "string"],
+          ["quantidade", "decimal"],
+          ["valorunitarioliquido", "decimal"],
+          ["valoritem", "decimal"],
         ],
       ),
     );

@@ -9,6 +9,17 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Bases homônimas devem ser distinguíveis por banco, ambiente e ID no console e
+no seletor de conhecimento. Nome repetido não comprova identidade duplicada.
+Busca não inclui credenciais; suspensão exige revisão de impacto e confirmação,
+preservando cadastro, histórico e banco externo, sem exclusão automática.
+Exclusão explícita de cadastro elegível no console exige responsável/Client, CSRF,
+ID confirmado e CAS. Remove fonte e credencial local na mesma transação, sem RPC.
+Recusa dependências relacionais/JSON e memória cifrada sem índice de origem;
+preserva identidade mínima da auditoria e fonte física compartilhada. Não fazer
+cascade, transferir treinamento ou reutilizar ID excluído. Confirmação perdida
+exige releitura, sem retry automático. Contrato: docs/persona-v2/console.md.
+
 Recorte herdado usa somente a CTE/derivada que dirige o FROM, com todos os ramos
 delimitados. Dimensões exigem INNER/LEFT, chaves diretas e relação completa
 N:1/1:1 na direção consumida; CTE não utilizada, chave transformada e expansão

@@ -147,6 +147,7 @@ export interface PersonaTransaction {
     credentials?: { emailEnc: string; passwordEnc: string; clientTokenEnc: string },
   ): Promise<void>;
   replaceSource(source: Source, replacementId: string, expectedVersion: number): Promise<void>;
+  deleteSource(source: Source, expectedVersion: number): Promise<void>;
   issueToken(token: PersonaToken, name: string): Promise<void>;
   listTokens(personaId: string): Promise<readonly ManagedPersonaToken[]>;
   changeToken(

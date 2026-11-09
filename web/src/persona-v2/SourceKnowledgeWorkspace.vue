@@ -114,7 +114,8 @@ async function reload(): Promise<void> {
       >
         <option value="">Selecione uma base</option>
         <option v-for="s in sources" :key="s.id" :value="s.id" :disabled="!s.active">
-          {{ s.name }} — {{ s.dialect }}{{ s.active ? "" : " (suspensa)" }}
+          {{ s.name }} — {{ s.database }} · {{ s.environment }} · {{ s.dialect }} · ID: {{ s.id
+          }}{{ s.active ? "" : " (suspensa)" }}
         </option>
       </select></label
     >

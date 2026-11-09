@@ -1,7 +1,9 @@
+import { DomainError } from "../../../src/domain/errors/domain-error.js";
 import { PassThrough } from "node:stream";
 import { afterEach, expect, it, vi } from "vitest";
 import { OperatorChannel } from "../../../src/infrastructure/persistence/persona-v2/operator-channel.js";
 import {
+  createOperatorCasePacer,
   LocalOperatorFixture,
   RemoteOperatorFixture,
 } from "../../../src/infrastructure/persistence/persona-v2/operator-fixture-bridge.js";
@@ -161,4 +163,94 @@ it("replay após sucesso inutiliza a sessão inteira", async () => {
   await expect(f.handler.handle(call)).rejects.toThrow();
   await expect(f.handler.handle({ ...call, id: 2 })).rejects.toThrow();
   expect(f.control.clear).toHaveBeenCalledOnce();
+});
+
+it("diagnóstico local conserva cota enumerada sem dados privados nem replay", async () => {
+  const f = fixture();
+  f.reads.authorize.mockRejectedValueOnce(
+    new DomainError({
+      code: "RATE_LIMITED",
+      source: "plug_server_http",
+      retryAfterMs: 45000,
+      message: "private SQL token",
+      hint: "private",
+      details: { password: "private" },
+    }),
+  );
+  const request = {
+    kind: "request",
+    id: 1,
+    call: { op: "authorize", resources: [{ name: "publication_orders", type: "table" }] },
+  };
+  expect(await f.handler.handle(request)).toEqual({ kind: "response", id: 1, ok: false });
+  expect(f.handler.failure).toEqual({
+    operation: "authorize",
+    code: "RATE_LIMITED",
+    source: "plug_server_http",
+    retryAfterMs: 45000,
+  });
+  expect(JSON.stringify(f.handler.failure)).not.toContain("private");
+  const copy = f.handler.failure!;
+  copy.code = "changed";
+  expect(f.handler.failure?.code).toBe("RATE_LIMITED");
+  await expect(f.handler.handle({ ...request, id: 2 })).rejects.toThrow();
+  expect(f.reads.authorize).toHaveBeenCalledOnce();
+});
+it("diagnóstico local não publica erro livre ou origem desconhecida", async () => {
+  const f = fixture();
+  f.control.clear.mockRejectedValueOnce(new Error("private secret"));
+  expect(await f.handler.handle({ kind: "request", id: 1, call: { op: "clear" } })).toMatchObject({
+    ok: false,
+  });
+  expect(f.handler.failure).toEqual({ operation: "clear", code: "RUNNER_FAILED" });
+});
+it("diagnóstico local omite prazo inválido e origem não enumerada", async () => {
+  const f = fixture();
+  f.control.clear.mockRejectedValueOnce(
+    new DomainError({
+      code: "RATE_LIMITED",
+      source: "private secret",
+      retryAfterMs: Infinity,
+      message: "private",
+      hint: "private",
+    }),
+  );
+  await f.handler.handle({ kind: "request", id: 1, call: { op: "clear" } });
+  expect(f.handler.failure).toEqual({ operation: "clear", code: "RATE_LIMITED" });
+});
+
+it("espaça preparações sem atrasar limpeza nem repetir chamadas", async () => {
+  let clock = 0;
+  const sleep = vi.fn(async (ms: number) => {
+    clock += ms;
+  });
+  const pace = createOperatorCasePacer(() => clock, sleep);
+  const prepare = {
+    kind: "request",
+    id: 1,
+    call: { op: "prepare", seeds: [{ table: "publication_orders", rows: [] }] },
+  };
+  await pace(prepare);
+  expect(sleep).not.toHaveBeenCalled();
+  clock = 2000;
+  await pace({ ...prepare, id: 2 });
+  expect(sleep).toHaveBeenCalledExactlyOnceWith(8000);
+  await pace({ kind: "request", id: 3, call: { op: "clear" } });
+  clock = 25000;
+  await pace({ ...prepare, id: 4 });
+  expect(sleep).toHaveBeenCalledTimes(1);
+});
+it("falha no espaçamento propaga sem retry", async () => {
+  const sleep = vi.fn(async () => {
+    throw Error("interrupted");
+  });
+  const pace = createOperatorCasePacer(() => 0, sleep);
+  const request = {
+    kind: "request",
+    id: 1,
+    call: { op: "prepare", seeds: [{ table: "publication_orders", rows: [] }] },
+  };
+  await pace(request);
+  await expect(pace({ ...request, id: 2 })).rejects.toThrow("interrupted");
+  expect(sleep).toHaveBeenCalledTimes(1);
 });

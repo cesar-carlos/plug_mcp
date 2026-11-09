@@ -10,6 +10,8 @@ import {
 import { openOperatorFixture } from "./homologation/operator-local-fixture.js";
 import { fixtureEnvironment } from "./homologation/fixture-environment.js";
 
+import { createOperatorCasePacer } from "../src/infrastructure/persistence/persona-v2/operator-fixture-bridge.js";
+
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: { host: { type: "string" }, request: { type: "string" }, session: { type: "string" } },
@@ -53,6 +55,7 @@ async function main(): Promise<void> {
     ssh.once("exit", resolve);
   });
   let completed = false;
+  const paceCase = createOperatorCasePacer();
   try {
     await channel.send(
       operatorStartSchema.parse({ ...request, ...(local ? { fixture: local.descriptor } : {}) }),
@@ -94,7 +97,15 @@ async function main(): Promise<void> {
         message.kind === "request"
       ) {
         if (!local) throw Error("Read-only inspection attempted fixture work.");
-        await channel.send(await local.handler.handle(message));
+        await paceCase(message);
+        const response = await local.handler.handle(message);
+        const diagnostic = local.handler.failure;
+        if (diagnostic)
+          process.stderr.write(
+            JSON.stringify({ kind: "fixture-diagnostic", ...diagnostic, repeatAllowed: false }) +
+              "\n",
+          );
+        await channel.send(response);
         continue;
       }
       const result = z

@@ -693,6 +693,51 @@ export class PostgresPersonaTransaction implements PersonaTransaction {
     );
   }
 
+  async deleteSource(s: Source, expectedVersion: number): Promise<void> {
+    const conflict = () =>
+      new PersonaV2Error(
+        "OPERATION_CONFLICT",
+        "Cadastro possui vínculos ou histórico dependente. Revise treinamentos e permissões; use suspensão quando precisar preservar os vínculos.",
+      );
+    // JSON references do not have foreign keys. Keep revoked grants and encrypted memories safe too.
+    const dependencies = await this.client.query<{ blocked: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM skill_v2 WHERE persona_id=$1 AND
+        jsonb_path_exists(rascunho,'$.** ? (@ == $source)',jsonb_build_object('source',$2::text)))
+       OR EXISTS(SELECT 1 FROM persona_token WHERE persona_id=$1 AND
+        ((permissoes->'sourceIds') ? $2 OR (delegacao->'sourceIds') ? $2))
+       OR EXISTS(SELECT 1 FROM oauth_concessao_v2 WHERE persona_id=$1 AND (permissoes->'sourceIds') ? $2)
+       OR EXISTS(SELECT 1 FROM persona_saved_query_v2 WHERE persona_id=$1)
+       AS blocked`,
+      [s.personaId, s.id],
+    );
+    if (dependencies.rows[0]?.blocked || s.replacedBySourceId) throw conflict();
+    try {
+      // All relational dependencies remain RESTRICT; no cascade and no external connection.
+      const deleted = await this.client.query(
+        `DELETE FROM fonte WHERE persona_id=$1 AND id=$2 AND authorization_version=$3 RETURNING id`,
+        [s.personaId, s.id, expectedVersion],
+      );
+      if (deleted.rowCount !== 1)
+        throw new PersonaV2Error(
+          "OPERATION_CONFLICT",
+          "Cadastro mudou; recarregue antes de excluir.",
+        );
+      await this.client.query(`DELETE FROM fonte_credencial WHERE persona_id=$1 AND id=$2`, [
+        s.personaId,
+        s.credentialId,
+      ]);
+      await this.client.query(
+        `INSERT INTO audit_v2(id,persona_id,fonte_id,evento,origem,sucesso,previous_version,resource_version)
+         VALUES($1,$2,$3,'source.deleted','admin',true,$4,$5)`,
+        [randomUUID(), s.personaId, s.id, expectedVersion, expectedVersion + 1],
+      );
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "23503")
+        throw conflict();
+      throw error;
+    }
+  }
+
   private async validateTokenResources(
     t: Pick<PersonaToken, "personaId" | "permissions" | "delegation">,
   ): Promise<void> {

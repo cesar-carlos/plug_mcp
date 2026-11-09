@@ -33,6 +33,7 @@ export function useConsoleSources(
   changeSourceState: (sourceId: string, active: boolean, input: unknown) => Promise<void>;
   saveSource: (sourceId: string, input: unknown, rotate?: boolean) => Promise<void>;
   reloadSource: (sourceId: string) => Promise<void>;
+  deleteSource: (sourceId: string, input: unknown) => Promise<void>;
 } {
   const sourceForm = reactive(emptySourceForm());
   const sourceReplacement = ref<{ id: string; version: number; name: string }>();
@@ -45,7 +46,15 @@ export function useConsoleSources(
   const sourceLifecycleDirty = reactive<Record<string, boolean>>({});
   const matchingSources = computed(() =>
     sources.value.filter((source) =>
-      matchesSearch(sourceSearch.value, source.name, source.dialect),
+      matchesSearch(
+        sourceSearch.value,
+        source.name,
+        source.dialect,
+        source.database,
+        source.environment,
+        source.purpose,
+        source.id,
+      ),
     ),
   );
   const sourceDirty = computed(() => isSourceFormDirty(sourceForm, !!sourceReplacement.value));
@@ -199,6 +208,26 @@ export function useConsoleSources(
     });
   }
 
+  async function deleteSource(sourceId: string, input: unknown): Promise<void> {
+    if ((sourcesDirty[sourceId] || sourceDirty.value) && !(await confirmDiscard())) return;
+    sourceLifecycleDirty[sourceId] = false;
+    await run(async () => {
+      clearDependentEditors();
+      // A lost response must be reconciled by reloading, never by automatic retry.
+      try {
+        await api(`${path()}/fontes/${sourceId}/excluir`, input);
+      } catch (cause) {
+        await load().catch(() => undefined);
+        throw cause;
+      }
+      await load();
+      delete sourcesDirty[sourceId];
+      sourceFormVersions[sourceId] = (sourceFormVersions[sourceId] ?? 0) + 1;
+      message.value =
+        "Cadastro e credencial excluídos do plug_mcp. Banco externo e auditoria preservados.";
+    });
+  }
+
   async function reloadSource(sourceId: string): Promise<void> {
     if ((sourcesDirty[sourceId] || sourceLifecycleDirty[sourceId]) && !(await confirmDiscard())) {
       return;
@@ -232,5 +261,6 @@ export function useConsoleSources(
     changeSourceState,
     saveSource,
     reloadSource,
+    deleteSource,
   };
 }

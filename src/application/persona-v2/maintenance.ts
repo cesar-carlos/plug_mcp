@@ -66,6 +66,10 @@ export const sourceCredentialUpdateSchema = z.strictObject({
   clientToken: z.string().min(1).max(8192),
 });
 export const sourceStateSchema = z.strictObject({ expectedVersion: version });
+export const sourceDeletionSchema = z.strictObject({
+  expectedVersion: version,
+  confirmedSourceId: z.uuid(),
+});
 export const sourceRecoverySchema = sourceStateSchema.extend({
   credentials: sourceCredentialUpdateSchema.omit({ expectedVersion: true }).optional(),
 });
@@ -400,6 +404,28 @@ export class PersonaMaintenance {
     });
     this.connections.discardSession(source.credentialId);
     return source;
+  }
+
+  async deleteSource(
+    sessionId: string,
+    personaId: string,
+    sourceId: string,
+    raw: unknown,
+  ): Promise<void> {
+    z.uuid().parse(personaId);
+    z.uuid().parse(sourceId);
+    const input = sourceDeletionSchema.parse(raw);
+    if (input.confirmedSourceId !== sourceId)
+      throw new PersonaV2Error("INVALID_PLAN", "Confirme o identificador do cadastro a excluir.");
+    const deleted = await this.owned(sessionId, personaId, async (tx) => {
+      const source = (await tx.listSources(personaId)).find((s) => s.id === sourceId);
+      if (!source)
+        throw new PersonaV2Error("AUTHORIZATION_DENIED", "Fonte indisponível nesta persona.");
+      this.assertVersion(source.authorizationVersion, input.expectedVersion);
+      await tx.deleteSource(source, input.expectedVersion);
+      return source;
+    });
+    this.connections.discardSession(deleted.credentialId);
   }
 
   async changeSourceState(

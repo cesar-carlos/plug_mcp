@@ -1,5 +1,26 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+## Identificação de bases e cadastros com o mesmo nome
+
+A tela Bases permite buscar por nome, dialeto, banco, ambiente, finalidade e ID;
+o e-mail da credencial não integra a busca. Os cartões mostram ambiente e ID,
+e o seletor de conhecimento inclui banco, ambiente e ID para distinguir nomes
+iguais. O aviso de nomes repetidos não comprova duplicação da identidade física.
+
+**Excluir cadastro** abre revisão com nome, banco, ambiente e ID. Confirmar remove
+somente o cadastro e sua credencial do plug_mcp, nunca o banco externo. Exige sessão
+Client do responsável, CSRF, ID confirmado e versão vigente; não há retry automático.
+Confirmação perdida exige recarregar a lista. Nomes iguais nunca autorizam exclusão
+automática. Auditoria preserva IDs, ator e versões, sem credenciais.
+
+A exclusão recusa vínculos relacionais, publicações, rascunhos, permissões e delegações
+de tokens (inclusive revogados), concessões OAuth e substituições. Enquanto a memória
+cifrada não tiver índice de dependências por fonte, qualquer memória salva na persona
+bloqueia a exclusão preventivamente. Não apaga dependências em cascata. Use suspensão
+quando precisar conservar vínculos. A identidade física compartilhada permanece.
+Renomear não transfere treinamento nem permissões. Migração explícita `0054` preserva
+as referências históricas da auditoria; servidor/worker não a aplicam no startup.
+
 ## Diagnóstico HTTP seguro
 
 Respostas HTTP de falha recebem `X-Support-Id`, vinculado ao `X-Request-ID`

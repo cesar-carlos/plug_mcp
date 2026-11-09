@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { DomainError, ERROR_SOURCE } from "../../../domain/errors/domain-error.js";
+import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import { z } from "zod";
 import type {
   SourceQueryGatewayPort,
@@ -109,8 +111,36 @@ export class RemoteOperatorFixture
   }
 }
 
+/** Space new cases before any fixture action; never retries a failed call. */
+export function createOperatorCasePacer(
+  now: () => number = () => performance.now(),
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): (raw: unknown) => Promise<void> {
+  let previous: number | undefined;
+  return async (raw) => {
+    const request = operatorRequestSchema.parse(raw);
+    if (request.call.op !== "prepare") return;
+    if (previous !== undefined) {
+      const remaining = 10000 - (now() - previous);
+      if (remaining > 0) await sleep(remaining);
+    }
+    previous = now();
+  };
+}
+
+export interface LocalFixtureDiagnostic {
+  operation: z.infer<typeof operatorCallSchema>["op"];
+  code: string;
+  source?: string;
+  retryAfterMs?: number;
+}
+
 /** Local fixture only. Does not receive reports, approval flags, DB URLs or credentials. */
 export class LocalOperatorFixture {
+  private failureMetadata?: LocalFixtureDiagnostic;
+  get failure(): LocalFixtureDiagnostic | undefined {
+    return this.failureMetadata ? { ...this.failureMetadata } : undefined;
+  }
   private sequence = 0;
   private poisoned = false;
   private busy = false;
@@ -187,7 +217,25 @@ export class LocalOperatorFixture {
       }
       if (this.poisoned) throw Error("Fixture session invalidated.");
       return { kind: "response", id: request.id, ok: true, value };
-    } catch {
+    } catch (error) {
+      const domain = error instanceof DomainError ? error : undefined;
+      this.failureMetadata = {
+        operation: call.op,
+        code:
+          domain && Object.values(ERROR_CODES).includes(domain.code)
+            ? domain.code
+            : "RUNNER_FAILED",
+        ...(domain?.source && Object.values(ERROR_SOURCE).some((value) => value === domain.source)
+          ? { source: domain.source }
+          : {}),
+        ...(domain?.code === "RATE_LIMITED" &&
+        typeof domain.retryAfterMs === "number" &&
+        Number.isFinite(domain.retryAfterMs) &&
+        domain.retryAfterMs >= 0 &&
+        domain.retryAfterMs <= 86_400_000
+          ? { retryAfterMs: domain.retryAfterMs }
+          : {}),
+      };
       this.poisoned = true;
       this.leases.clear();
       return { kind: "response", id: request.id, ok: false };

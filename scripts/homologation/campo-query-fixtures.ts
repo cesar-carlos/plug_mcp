@@ -16,6 +16,10 @@ export const campoQueryProfileSchema = z.enum([
   "horizonte-receber",
   "atraso-fornecedor",
   "cobranca-cliente",
+  "custo-atual",
+  "itens-cestas",
+  "vendas-distribuicoes",
+  "vendas-clientes",
   "vendas-resumo",
   "vendas-vendedor",
   "vendas-descontos",
@@ -26,10 +30,75 @@ export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
 /** Fixed synthetic schemas matching the curated cases, never inferred from an ERP. */
 export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
   const profile = campoQueryProfileSchema.parse(input);
+  if (profile === "custo-atual") {
+    const specs: [string, string[], [string, "integer" | "string" | "decimal"][]][] = [
+      [
+        "dbo.custoproduto",
+        ["codempresa", "codfilial", "codproduto"],
+        [
+          ["codempresa", "integer"],
+          ["codfilial", "integer"],
+          ["codproduto", "integer"],
+          ["custocompra", "decimal"],
+          ["customedioponderado", "decimal"],
+          ["ultimoprecocompra", "decimal"],
+        ],
+      ],
+      [
+        "dbo.produto",
+        ["codproduto"],
+        [
+          ["codproduto", "integer"],
+          ["nome", "string"],
+          ["codunidademedida", "string"],
+          ["codgrupoproduto", "integer"],
+          ["codmarca", "integer"],
+        ],
+      ],
+      [
+        "dbo.unidademedida",
+        ["codunidademedida"],
+        [
+          ["codunidademedida", "string"],
+          ["descricao", "string"],
+        ],
+      ],
+      [
+        "dbo.grupoproduto",
+        ["codgrupoproduto"],
+        [
+          ["codgrupoproduto", "integer"],
+          ["nome", "string"],
+        ],
+      ],
+      [
+        "dbo.marca",
+        ["codmarca"],
+        [
+          ["codmarca", "integer"],
+          ["nome", "string"],
+        ],
+      ],
+    ];
+    return fixtureTablesSchema.parse(
+      specs.map(([table, primaryKey, fields]) => ({
+        table,
+        primaryKey,
+        columns: fields.map(([name, type]) => ({
+          name,
+          type,
+          nullable: !primaryKey.includes(name),
+        })),
+      })),
+    );
+  }
   if (profile === "agenda-receber-pagar") {
     return [...campoQueryTables("horizonte-receber"), ...campoQueryTables("horizonte-pagar")];
   }
   if (
+    profile === "itens-cestas" ||
+    profile === "vendas-distribuicoes" ||
+    profile === "vendas-clientes" ||
     profile === "vendas-resumo" ||
     profile === "vendas-vendedor" ||
     profile === "vendas-descontos" ||

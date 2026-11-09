@@ -12,11 +12,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   state: [active: boolean, input: unknown];
   replace: [];
+  delete: [input: unknown];
   reload: [];
   dirty: [value: boolean];
   lock: [value: boolean];
 }>();
-type Action = "suspender" | "recuperar" | "substituir";
+type Action = "suspender" | "recuperar" | "substituir" | "excluir";
 const expectedVersion = props.source.authorizationVersion;
 const pending = ref<Action>();
 const reviewing = ref(false);
@@ -88,6 +89,7 @@ function confirm() {
   confirmed.value = false;
   clearCredentials();
   if (action === "substituir") emit("replace");
+  else if (action === "excluir") emit("delete", { ...input, confirmedSourceId: props.source.id });
   else emit("state", action === "recuperar", input);
 }
 </script>
@@ -115,6 +117,7 @@ function confirm() {
         <button type="button" :disabled="busy" @click="review('substituir')">
           Revisar substituição
         </button>
+        <button type="button" :disabled="busy" @click="review('excluir')">Excluir cadastro</button>
       </div>
       <div v-if="pending || error" ref="summary" tabindex="-1">
         <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -132,6 +135,12 @@ function confirm() {
             Recuperar exige confirmação da mesma base pelo plug_server e plug_agente. Publicações
             continuam suspensas; revise e publique novamente. Operações incertas não serão
             reenviadas.
+          </p>
+          <p v-else-if="pending === 'excluir'">
+            Remove somente o cadastro e sua credencial no plug_mcp. Não apaga o banco externo. A
+            exclusão é definitiva e será recusada se houver dependências; o histórico de auditoria é
+            preservado. Cadastro: {{ source.name }} · Banco: {{ source.database }} · Ambiente:
+            {{ source.environment }} · ID: {{ source.id }}.
           </p>
           <p v-else>
             Substituir cria um novo vínculo após verificar a nova base. O vínculo anterior fica no
@@ -190,11 +199,13 @@ function confirm() {
             >
             <button type="submit" :disabled="!confirmed">
               {{
-                pending === "substituir"
-                  ? "Preencher nova base substituta"
-                  : pending === "recuperar"
-                    ? "Confirmar recuperação"
-                    : "Confirmar suspensão"
+                pending === "excluir"
+                  ? "Excluir definitivamente este cadastro"
+                  : pending === "substituir"
+                    ? "Preencher nova base substituta"
+                    : pending === "recuperar"
+                      ? "Confirmar recuperação"
+                      : "Confirmar suspensão"
               }}
             </button>
             <button

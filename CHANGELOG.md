@@ -11,6 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Perfis isolados de clientes, distribuições, itens/cestas e custo atual usam somente amostras curadas. Runner informa diagnóstico enumerado sem segredos e espaça preparação de casos, sem retry nem alteração das cotas ou guardas.
+
+- Added: Exclusão administrativa de cadastro de base sem dependências, com confirmação de ID/versão, sessão Client e CSRF. Remove somente configuração e credencial locais; migração 0054 preserva identidade histórica da auditoria, sem cascata ou comandos no banco externo. Testes PostgreSQL isolados e navegador cobrem proteção e confirmação.
+
+- Fixed: Console distingue bases homônimas por banco, ambiente e ID, amplia busca aos metadados visíveis e orienta revisar suspensão de cadastro duplicado sem apagar banco ou histórico. Regressão de navegador cobre busca, seleção e ausência de mutação automática.
+
 - Added: Perfil separado `vendas-descontos` usa `valorbruto` e `valordesconto` decimal nullable no lugar de `valorliquido`, preservando os perfis e sementes anteriores de vendedor, resumo e município.
 
 - Added: Perfil isolado `agenda-receber-pagar` para testar vencimentos diários das duas carteiras, com somente campos curados e chaves próprias, sem ampliar guardas, fontes operacionais ou permissões.

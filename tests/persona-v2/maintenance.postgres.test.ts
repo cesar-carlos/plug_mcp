@@ -151,6 +151,109 @@ beforeEach(async () => {
   verify.mockClear();
   await login();
 });
+
+it("exclui somente cadastro sem vínculos e credencial, preservando auditoria e a outra fonte", async () => {
+  const p = await persona(),
+    s = await source(p),
+    other = await source(p);
+  const credentialId = (await db.query("SELECT credencial_id FROM fonte WHERE id=$1", [s.id]))
+    .rows[0].credencial_id;
+  const physical = (await db.query("SELECT fonte_fisica_id FROM fonte WHERE id=$1", [s.id])).rows[0]
+    .fonte_fisica_id;
+  verify.mockClear();
+  const path = `/api/admin/personas/${p.id}/fontes/${s.id}/excluir`;
+  const body = { expectedVersion: s.authorizationVersion, confirmedSourceId: s.id };
+  const wrongConfirmation = await api("post", path).send({ ...body, confirmedSourceId: other.id });
+  expect(wrongConfirmation.status).toBe(409);
+  expect(wrongConfirmation.body.error.code).toBe("INVALID_PLAN");
+  expect((await api("post", path).send({ ...body, expectedVersion: 99 })).status).toBe(409);
+  const responses = await Promise.all([api("post", path).send(body), api("post", path).send(body)]);
+  expect(responses.map((r) => r.status).sort()).toEqual([200, 403]);
+  expect((await db.query("SELECT id FROM fonte WHERE id=$1", [s.id])).rowCount).toBe(0);
+  expect(
+    (await db.query("SELECT id FROM fonte_credencial WHERE id=$1", [credentialId])).rowCount,
+  ).toBe(0);
+  expect((await db.query("SELECT id FROM fonte WHERE id=$1", [other.id])).rowCount).toBe(1);
+  expect((await db.query("SELECT id FROM fonte_fisica WHERE id=$1", [physical])).rowCount).toBe(1);
+  expect(
+    (
+      await db.query("SELECT evento FROM audit_v2 WHERE fonte_id=$1 ORDER BY created_at", [s.id])
+    ).rows.map((r) => r.evento),
+  ).toEqual(["source.created", "source.deleted"]);
+  expect(
+    (await db.query("SELECT * FROM fonte_audit_identity_v2 WHERE id=$1", [s.id])).rows,
+  ).toEqual([{ id: s.id, persona_id: p.id }]);
+  expect(
+    ((await api("get", `/api/admin/personas/${p.id}/fontes`)).body.fontes as Source[]).map(
+      (item: Source) => item.id,
+    ),
+  ).toEqual([other.id]);
+  expect(verify).not.toHaveBeenCalled();
+});
+
+it("exclusão recusa dependências JSON e relacionais sem remover credenciais ou auditoria", async () => {
+  const p = await persona(),
+    s = await source(p);
+  const published = await publish(p, s);
+  const path = `/api/admin/personas/${p.id}/fontes/${s.id}/excluir`;
+  const body = { expectedVersion: s.authorizationVersion, confirmedSourceId: s.id };
+  expect((await api("post", path).send(body)).status).toBe(409);
+  // Remove only the draft reference to prove that immutable relational history still blocks deletion.
+  await db.query("UPDATE skill_v2 SET rascunho='{}'::jsonb WHERE id=$1", [published.id]);
+  expect((await api("post", path).send(body)).status).toBe(409);
+  expect(
+    (
+      await db.query(
+        "SELECT c.id FROM fonte f JOIN fonte_credencial c ON c.id=f.credencial_id WHERE f.id=$1",
+        [s.id],
+      )
+    ).rowCount,
+  ).toBe(1);
+  expect(
+    (
+      await db.query("SELECT id FROM audit_v2 WHERE fonte_id=$1 AND evento='source.deleted'", [
+        s.id,
+      ])
+    ).rowCount,
+  ).toBe(0);
+});
+
+it("exclusão exige responsável, CSRF e confirmação exata, inclusive com fonte de outra persona", async () => {
+  const p = await persona(),
+    s = await source(p),
+    another = await persona();
+  const path = `/api/admin/personas/${p.id}/fontes/${s.id}/excluir`;
+  const body = { expectedVersion: s.authorizationVersion, confirmedSourceId: s.id };
+  expect((await api("post", path).unset("X-CSRF-Token").send(body)).status).toBe(403);
+  expect((await api("post", path).send({ expectedVersion: 1 })).status).toBe(400);
+  expect(
+    (await api("post", `/api/admin/personas/${another.id}/fontes/${s.id}/excluir`).send(body))
+      .status,
+  ).toBe(403);
+  owner = "other-owner";
+  await login();
+  expect((await api("post", path).send(body)).status).toBe(403);
+  expect((await db.query("SELECT id FROM fonte WHERE id=$1", [s.id])).rowCount).toBe(1);
+});
+
+it("permissão em token impede exclusão mesmo sem treinamento", async () => {
+  const p = await persona(),
+    s = await source(p);
+  const empty = { sourceIds: [], skills: [], externalOperationIds: [], administrative: [] };
+  const token = await api("post", `/api/admin/personas/${p.id}/tokens`).send({
+    name: "Fixture",
+    expiresAt: null,
+    delegation: empty,
+    permissions: { ...empty, sourceIds: [s.id] },
+  });
+  expect(token.status).toBe(201);
+  const r = await api("post", `/api/admin/personas/${p.id}/fontes/${s.id}/excluir`).send({
+    expectedVersion: 1,
+    confirmedSourceId: s.id,
+  });
+  expect(r.status).toBe(409);
+  expect(r.body.error.supportId).toBeTruthy();
+});
 afterAll(async () => {
   await runtime?.close();
   await db.end();

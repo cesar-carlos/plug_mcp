@@ -119,6 +119,10 @@ dos casos curados, sem campos extras ou FKs inferidas. Não combinar esses perfi
 com `-CampoPrazo` ou `-CampoPrazos`. A existência do perfil não aprova o caso:
 inspecionar a revisão atual e usar uma sessão nova continuam obrigatórios.
 
+## Diagnóstico local e ritmo dos casos
+
+A ponte local registra apenas operação, código e origem enumerados e, para RATE_LIMITED, prazo numérico limitado. Não copia mensagem, SQL, credenciais ou detalhes do erro. O resultado continua não aprovado, sem retry. O wrapper espaça inícios de preparação de casos em pelo menos dez segundos para reduzir rajadas ao hub; preserva cotas, autorização por chamada, timeout e expiração. Esse intervalo não promete evitar qualquer cota personalizada. Se houver recusa, investigar e usar nova sessão conforme o procedimento abaixo.
+
 ## Interrupção, limites e reexecução
 
 Cada sessão local aceita uma única tentativa de operador, marcada por arquivo
@@ -261,3 +265,11 @@ desempate nos casos curados. Acrescentar campos não aprova essas derivações n
 altera guardas, runtime, concessões ou modelos publicados.
 
 `vendas-resumo`, `vendas-vendedor` e `vendas-municipio` usam ProdutoVendido e TipoOperacaoSaida das amostras autorizadas. Cada dimensão acrescenta somente código/nome (município inclui UF); sem FKs inferidas. Casos devem cobrir períodos sobrepostos, cancelamento, pré-venda, operação sem financeiro e ausência de dimensão. Os perfis não autorizam dados operacionais nem outras tabelas; exigem nova sessão por revisão.
+
+O perfil `vendas-clientes` acrescenta somente `codcliente` ao recorte de ProdutoVendido do resumo; usa apenas cabeçalho e TipoOperacaoSaida. Não inclui nomes, contatos ou cadastro de clientes. Empresa e período são parâmetros do caso, e o ranking deve ser recalculado após consolidar filiais, com desempate explícito. As chaves e cotas do operador permanecem iguais.
+
+O perfil `vendas-distribuicoes` usa somente `dbo.produtovendido` e `dbo.tipooperacaosaida` na fixture SQL Server isolada. Acrescenta os códigos de condição, transportadora, vendedor e cliente e o frete do cabeçalho presentes na amostra fornecida; não importa cadastros nem infere FKs. Cobre distribuições por condição, frete por transportadora e líquido por vendedor/cliente, preservando nulos e grupos distintos. Não equivale a recebimentos, pagamentos ou comissão. A aprovação continua vinculada aos casos e à revisão exata; usar nova sessão por rodada.
+
+O perfil `itens-cestas` usa somente cabeçalhos elegíveis, operações e oito campos da amostra `dbo.itemprodutovendido`. Chave empresa/venda/item; unidade textual, quantidades e valores decimais anuláveis. Não importa notas, tabelas de preço, promoções ou custos. O agente de fixture aceita esse nome apenas no MSSQL descartável, sem ampliar RPC/autorização de produção. Casos conferem composição, ausência de itens, produto repetido e média ponderada por unidade. Cada rodada exige sessão nova e fonte do agente estável.
+
+O perfil `custo-atual` limita a fixture MSSQL às cinco tabelas e 17 campos da amostra CustoProduto/Produto/UnidadeMedida/GrupoProduto/Marca. Empresa/filial/produto formam a chave de custo; custos são decimais anuláveis e unidade é textual. Não inclui histórico de custo nem saldo de estoque. Os nomes adicionais do agente só são aceitos no banco descartável, sem ampliar RPC/autorização de produção.
