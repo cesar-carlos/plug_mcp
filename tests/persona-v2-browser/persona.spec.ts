@@ -2614,7 +2614,7 @@ async function selectKnowledgeSource(knowledge: Locator, account: "a" | "b") {
   const id = await option.getAttribute("value");
   expect(id).toMatch(/^[a-f0-9-]{36}$/);
   await expect(option).toContainText(`ID: ${id}`);
-  await select.selectOption(id!);
+  await select.selectOption(id);
   await expect(select).toHaveValue(id!);
 }
 
