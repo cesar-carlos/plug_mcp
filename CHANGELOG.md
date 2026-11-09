@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: Atualiza as ferramentas de desenvolvimento ESLint para 10.14.0 e Vitest para 5.1.0, mantendo as regras de lint e os gates de regressão existentes.
+
 - Fixed: Consulta reconhece recorte/agregação na CTE ou derivada que dirige o FROM, preservando UNION, chaves diretas e cardinalidade de dimensões; rejeita recortes sem vínculo, expansão de grão e self JOIN sem direção inequívoca. Treinamento e regressões cobrem o padrão de pré-agregação.
 - Added: Perfis isolados explícitos para títulos, vencidos, agenda e saldo por fornecedor, com somente tabelas/colunas dos casos curados, sem inferir FKs ou alterar fontes operacionais.
 
