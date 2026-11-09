@@ -1,5 +1,5 @@
 import { pluginRuntimeSchema } from "./package-schemas.js";
-import { validateConnectionId, validatePublicPluginUrl } from "./package-validation.js";
+import { validatePluginConfiguration } from "./package-validation.js";
 import type { PluginPackageInput } from "./package-plugin.js";
 
 export const parsePluginPackageArgs = (
@@ -20,19 +20,16 @@ export const parsePluginPackageArgs = (
     values.set(match[1]!, match[2]!);
   }
   const runtime = pluginRuntimeSchema.parse(values.get("runtime"));
-  const origin = validatePublicPluginUrl(
-    values.get("public-base-url") ?? publicBaseUrl ?? "",
-  ).origin;
   const connectionId = values.get("connection-id");
-  if (portable && connectionId) {
-    throw new Error("Variante portátil não recebe conexão ChatGPT.");
-  }
-  if (!portable) {
-    validateConnectionId(connectionId);
-  }
+  const { url } = validatePluginConfiguration({
+    runtime,
+    variant: portable ? "portable" : "chatgpt",
+    publicBaseUrl: values.get("public-base-url") ?? publicBaseUrl ?? "",
+    connectionId,
+  });
   return {
     runtime,
-    publicBaseUrl: origin,
+    publicBaseUrl: url.origin,
     portable,
     connectionId,
     outputRoot: values.get("output"),

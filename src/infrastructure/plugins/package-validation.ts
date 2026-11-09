@@ -1,9 +1,12 @@
-import { lstat, readFile } from "node:fs/promises";
+import { readStablePluginFile } from "./package-read.js";
+import { PluginFailure } from "./package-diagnostics.js";
 import { basename, resolve } from "node:path";
 import { z } from "zod";
 import {
   pluginManifestSchema,
   pluginRecordSchema,
+  pluginRuntimeSchema,
+  pluginVariantSchema,
   type PluginManifest,
   type PluginRuntime,
   type PluginVariant,
@@ -28,14 +31,20 @@ export const validateConnectionId = (connection: string | undefined): string => 
     !/^(?:asdk_app_|connector_|templated_apps_)[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connection) ||
     /placeholder|example|replace|teste/i.test(connection)
   ) {
-    throw new Error(
+    throw new PluginFailure(
+      "INVALID_CONFIGURATION",
       "Informe o identificador real do aplicativo --connection-id=asdk_app_..., connector_... ou templated_apps_... do ChatGPT.",
     );
   }
   return connection;
 };
 export const validatePublicPluginUrl = (base: string): URL => {
-  const url = new URL(base);
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    throw new PluginFailure("INVALID_CONFIGURATION");
+  }
   if (
     url.protocol !== "https:" ||
     url.username ||
@@ -44,17 +53,15 @@ export const validatePublicPluginUrl = (base: string): URL => {
     url.hash ||
     url.pathname !== "/"
   ) {
-    throw new Error("PUBLIC_BASE_URL deve ser HTTPS canônica.");
+    throw new PluginFailure("INVALID_CONFIGURATION", "PUBLIC_BASE_URL deve ser HTTPS canônica.");
   }
   return url;
 };
 export const readPluginManifest = async (root: string): Promise<PluginManifest> => {
   const path = resolve(root, "plugin.json");
-  const stat = await lstat(path);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 512 * 1024) {
-    throw new Error("Manifesto de origem inválido.");
-  }
-  return pluginManifestSchema.parse(JSON.parse(await readFile(path, "utf8")));
+  return pluginManifestSchema.parse(
+    JSON.parse((await readStablePluginFile(path, 512 * 1024)).toString("utf8")),
+  );
 };
 
 export interface PluginValidationInput {
@@ -64,10 +71,33 @@ export interface PluginValidationInput {
   readonly connectionId?: string;
 }
 
+export function validatePluginConfiguration(input: PluginValidationInput): {
+  url: URL;
+  connection: string | undefined;
+} {
+  if (
+    !pluginRuntimeSchema.safeParse(input.runtime).success ||
+    !pluginVariantSchema.safeParse(input.variant).success
+  ) {
+    throw new PluginFailure("INVALID_CONFIGURATION");
+  }
+  if (input.variant === "portable" && input.connectionId !== undefined) {
+    throw new PluginFailure(
+      "INVALID_CONFIGURATION",
+      "Variante portátil não recebe conexão ChatGPT.",
+    );
+  }
+  return {
+    url: validatePublicPluginUrl(input.publicBaseUrl),
+    connection: input.variant === "chatgpt" ? validateConnectionId(input.connectionId) : undefined,
+  };
+}
+
 export const validateSe7ePackage = async (
   root: string,
   input: PluginValidationInput,
 ): Promise<void> => {
+  const { url, connection } = validatePluginConfiguration(input);
   if (basename(root) !== "se7e") {
     throw new Error("Diretório raiz deve corresponder ao nome se7e.");
   }
@@ -76,9 +106,6 @@ export const validateSe7ePackage = async (
     JSON.parse(files.get(name)?.toString("utf8") ?? "null") as unknown;
   const manifest = pluginManifestSchema.parse(json("plugin.json"));
   const record = pluginRecordSchema.parse(json("se7e-package.json"));
-  const url = validatePublicPluginUrl(input.publicBaseUrl);
-  const connection =
-    input.variant === "chatgpt" ? validateConnectionId(input.connectionId) : undefined;
   if (
     record.runtime !== input.runtime ||
     record.variant !== input.variant ||
@@ -88,7 +115,10 @@ export const validateSe7ePackage = async (
     record.connectionId !== connection ||
     record.toolCatalogHash !== pluginToolCatalogHash(input.runtime, input.variant)
   ) {
-    throw new Error("Pacote pertence a outra geração, conexão ou ambiente.");
+    throw new PluginFailure(
+      "CONTRACT_MISMATCH",
+      "Pacote pertence a outra geração, conexão ou ambiente.",
+    );
   }
   const extension = manifest.extensions?.["com.openai"];
   if (!extension) {
@@ -121,10 +151,10 @@ export const validateSe7ePackage = async (
     }).parse(json("mcp.json"));
   }
   if (
-    JSON.stringify(json("tool-catalog.json")) !==
-    JSON.stringify({ runtime: input.runtime, tools: pluginTools(input.runtime, input.variant) })
+    canonicalJson(json("tool-catalog.json")) !==
+    canonicalJson({ runtime: input.runtime, tools: pluginTools(input.runtime, input.variant) })
   ) {
-    throw new Error("Catálogo do pacote foi alterado.");
+    throw new PluginFailure("CONTRACT_MISMATCH", "Catálogo do pacote foi alterado.");
   }
   for (const icon of [extension.interface.logo, extension.interface.composerIcon]) {
     const data = files.get(icon);
@@ -145,12 +175,18 @@ export const validateSe7ePackage = async (
   validatePluginSkills(files, input.runtime);
   if (input.runtime === "persona-v2") {
     if (canonicalJson(json("training-manifest.json")) !== canonicalJson(trainingManifest()))
-      throw new Error("Manifesto de tópicos do pacote diverge do runtime atual.");
+      throw new PluginFailure(
+        "CONTRACT_MISMATCH",
+        "Manifesto de tópicos do pacote diverge do runtime atual.",
+      );
     if (
-      JSON.stringify(json("compatibility.json")) !==
-      JSON.stringify(personaPluginCompatibility(input.variant))
+      canonicalJson(json("compatibility.json")) !==
+      canonicalJson(personaPluginCompatibility(input.variant))
     )
-      throw new Error("Contrato de instruções do pacote diverge do runtime atual.");
+      throw new PluginFailure(
+        "CONTRACT_MISMATCH",
+        "Contrato de instruções do pacote diverge do runtime atual.",
+      );
     for (const [path, content] of files) {
       if (!path.endsWith("/SKILL.md")) continue;
       if (
@@ -160,12 +196,12 @@ export const validateSe7ePackage = async (
         files.get(path.replace("SKILL.md", "references/consumer-guide.md"))?.toString("utf8") !==
           PERSONA_CONSUMER_GUIDANCE
       )
-        throw new Error("Guia compartilhado ausente ou divergente.");
+        throw new PluginFailure("CONTRACT_MISMATCH", "Guia compartilhado ausente ou divergente.");
     }
   }
   validatePluginReferences(files);
-  if (JSON.stringify(pluginInventory(files)) !== JSON.stringify(record.files)) {
-    throw new Error("Inventário ou hashes do pacote divergem.");
+  if (canonicalJson(pluginInventory(files)) !== canonicalJson(record.files)) {
+    throw new PluginFailure("INTEGRITY_MISMATCH", "Inventário ou hashes do pacote divergem.");
   }
   const allowed = new Set([
     "plugin.json",

@@ -39,6 +39,22 @@ arquivo local sem credenciais e executar:
 npm run plugin:compare -- --package=CAMINHO_DO_PACOTE --capabilities=capacidades.json
 ```
 
+Após um deploy, capture novamente a resposta autenticada de `obter_capacidades`
+da conexão desejada, sem credenciais, e exija também o SHA completo publicado:
+
+```sh
+npm run plugin:compare -- --package=CAMINHO_DO_PACOTE --capabilities=capacidades.json --expected-revision=SHA_COMPLETO_DO_DEPLOY
+```
+
+O argumento exige 40 caracteres hexadecimais minúsculos. SHA ausente, `unknown`
+ou divergente reprova a comparação, mesmo com hashes de treinamento iguais.
+`deployment.revisionMatches` registra essa comparação; `liveServerVerified:false`
+e `installedPackageVerified:false` deixam explícito que o arquivo é um snapshot.
+O comando não autentica nem consulta a rede. Não substitui a verificação do SHA,
+imagem, saúde e logs do servidor/worker descrita no
+[procedimento de deploy](first-test-deploy.md). Um snapshot antigo não prova o
+estado atual e nunca deve ser reutilizado como confirmação de outro deploy.
+
 A comparação recusa pacote inválido/obsoleto e retorna falha quando os contratos
 divergem. `installedPackageVerified:false` permanece explícito: pacote local e
 snapshot da resposta não comprovam instalação no ChatGPT. O roteiro de
@@ -51,6 +67,9 @@ validar e comparar. `packageValidation` informa recusa da validação local sem
 expor mensagens internas. Falhas de leitura/argumentos informam a etapa fixa
 em stderr. Nenhum diagnóstico devolve valores inválidos, nomes de campos livres
 ou credenciais, corrige inventários ou afirma atualizar uma instalação.
+O relatório não ecoa URL de recurso nem versão livre extraídas do inventário,
+inclusive quando a validação do pacote falha. Dados rejeitados nunca são usados
+como metadados públicos do diagnóstico.
 
 O pacote inclui `training-manifest.json` com os tópicos e hashes gerados.
 Sua validação local confere o conteúdo exato. Quando `training` acompanha as
@@ -59,6 +78,11 @@ depois identifica divergências como `trainingTopics.sql`, incluindo tópicos
 ausentes. Manifesto incoerente gera `trainingManifest`, sem confiar em nomes
 livres. Servidor sem manifesto conserva apenas o diagnóstico agregado; a falta
 de detalhe nunca transforma divergência em compatibilidade.
+Cada manifesto fornecido é validado mesmo quando o outro lado não o fornece.
+Ele deve incluir todos os tópicos conhecidos, sem duplicatas, e corresponder aos
+hashes agregados daquele lado. Dois manifestos com a mesma lacuna não comprovam
+compatibilidade. Manifesto opcional ausente mantém apenas a comparação agregada;
+manifesto presente e inválido reprova o diagnóstico, sem expor campos livres.
 
 | Geração      | Fonte                     | Portátil                                   | ChatGPT                                   |
 | ------------ | ------------------------- | ------------------------------------------ | ----------------------------------------- |
@@ -99,6 +123,12 @@ npm run plugin:check -- --runtime=persona-v2 --portable --public-base-url=https:
 O domínio acima é ilustrativo; não comprova ambiente provisionado. Substituir
 pelo endpoint autorizado. O Bearer não é argumento nem arquivo do pacote.
 Configurar autenticação somente na interface segura do cliente.
+Montagem e validação recusam `connectionId` na variante portátil, inclusive nas
+APIs internas, sem descartar silenciosamente a conexão informada.
+Comparações de objetos JSON ignoram somente a ordem das chaves; valores, campos
+adicionais e ordem dos arrays continuam sendo conferidos. O inventário mantém
+SHA-256 dos bytes reais: editar a formatação de um arquivo ainda exige remontagem
+ou inventário correspondente, sem constituir assinatura de autoria.
 
 Legado ChatGPT exige `--runtime=legacy --connection-id=ID_REAL`, sem `--portable`.
 O ID deve ser o identificador do aplicativo da conexão privada existente,
@@ -110,6 +140,25 @@ as duas gerações. A validação sintática não comprova existência remota. `
 pode substituir o argumento de URL. `plugin:check` não carrega `.env`, não faz
 rede e não escreve no pacote. O código de saída é 0 para aprovação local e 1
 para recusa; erros não imprimem arquivos, credenciais ou entradas recebidas.
+
+Montagem e verificação emitem diagnóstico JSON seguro em stderr com `stage`,
+`code`, `action` e `installedPackageVerified:false`. As etapas são `arguments`,
+`package` e `validation`; as categorias distinguem configuração inválida,
+arquivo inseguro/alterado durante a leitura, conteúdo potencialmente secreto,
+destino existente, integridade e contrato divergentes. Falhas não classificadas
+retornam `INVALID_PACKAGE`, sem copiar mensagens de exceção, caminhos ou valores.
+As APIs e a CLI usam a mesma validação de geração, variante, URL e conexão.
+
+Arquivos são lidos com limite de bytes por descritor e conferência de identidade,
+tamanho e datas antes/depois; mudança concorrente detectada recusa o pacote,
+sem retry. A leitura bloqueia links finais e verifica que o caminho ainda aponta
+ao arquivo aberto. Isso não cria um snapshot atômico de toda a árvore: a origem
+e seus diretórios ancestrais devem permanecer sob controle do operador, sem
+edição concorrente durante a montagem ou validação.
+Falha no fechamento do descritor não substitui a falha principal: `cleanupFailed`
+registra a ocorrência sem mensagem nativa. Se somente o fechamento falhar, o
+resultado também é recusado, com `FILE_CLOSE_FAILED`; falha nativa durante leitura
+usa `FILE_READ_FAILED`, sem expor caminho ou conteúdo.
 
 Destino final: `<output>/<geração>/<variante>/se7e`. Destinos existentes são
 recusados, inclusive em montagem concorrente. Um lease serializa a montagem;

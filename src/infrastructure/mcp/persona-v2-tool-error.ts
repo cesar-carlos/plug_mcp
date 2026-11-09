@@ -102,6 +102,16 @@ function safeDiagnostic(error: DomainError, details: Record<string, string | num
       };
   }
   if (error.source === "plug_server_http" && details.rpcCode === undefined) {
+    if (error.code === "PLUG_SERVER_ERROR" && details.httpStatus === 404)
+      return {
+        message: "O hub respondeu HTTP 404; o recurso solicitado não foi encontrado.",
+        hint: "O status isolado não comprova histórico de registro do agente, desconexão ou revogação. Informe o supportId ao responsável para conferir rota e referência; não altere SQL, peça reconexão ou repita automaticamente.",
+      };
+    if (error.code === "PLUG_SERVER_ERROR" && details.httpStatus === 403)
+      return {
+        message: "O hub recusou a solicitação HTTP 403.",
+        hint: "O status isolado não identifica a conta ou concessão afetada. Informe o supportId ao responsável; não presuma Client inativo, revogação ou expiração OAuth, nem repita automaticamente.",
+      };
     if (error.code === "AGENT_UNAVAILABLE" && details.httpStatus === 503)
       return {
         message: "O hub respondeu HTTP 503; não foi possível concluir a solicitação.",

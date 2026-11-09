@@ -336,6 +336,79 @@ it("cancelamento do contexto MCP encerra espera sem executar SQL nem contaminar 
   await expect(f.service.run(identity, { params: { minimum: 0 } })).resolves.toBeDefined();
   expect(f.execute).toHaveBeenCalledTimes(1);
 });
+
+it("cancelamento durante autorização impede despacho após a autorização tardia", async () => {
+  const f = fixture(),
+    controller = new AbortController();
+  let authorized!: () => void;
+  let entered!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    authorized = resolve;
+  });
+  f.gateway.authorize.mockImplementationOnce(async () => {
+    entered();
+    await gate;
+    return { execute: f.execute, revalidate: f.revalidate };
+  });
+  const run = queryTransportContext.run(
+    { personaId: identity.personaId, signal: controller.signal },
+    () => f.service.run(identity, { params: { minimum: 0 } }),
+  );
+  const rejected = expect(run).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+  await ready;
+  controller.abort();
+  await rejected;
+  authorized();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(f.execute).not.toHaveBeenCalled();
+});
+
+it("contexto já cancelado não inicia autorização ou SQL", async () => {
+  const f = fixture(),
+    controller = new AbortController();
+  controller.abort();
+  await expect(
+    queryTransportContext.run({ personaId: identity.personaId, signal: controller.signal }, () =>
+      f.service.run(identity, { params: { minimum: 0 } }),
+    ),
+  ).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+  expect(f.gateway.authorize).not.toHaveBeenCalled();
+  expect(f.execute).not.toHaveBeenCalled();
+});
+
+it("resposta SQL tardia após cancelamento não inicia revalidação ou entrega", async () => {
+  const f = fixture(),
+    controller = new AbortController();
+  let complete!: () => void;
+  let entered!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  f.execute.mockImplementationOnce(async () => {
+    entered();
+    await gate;
+    return { columns: ["id", "amount"], rows: [{ id: 1, amount: 2 }], truncated: false };
+  });
+  const run = queryTransportContext.run(
+    { personaId: identity.personaId, signal: controller.signal },
+    () => f.service.run(identity, { params: { minimum: 0 } }),
+  );
+  const rejected = expect(run).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+  await ready;
+  controller.abort();
+  await rejected;
+  const before = f.revalidate.mock.calls.length;
+  complete();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(f.revalidate).toHaveBeenCalledTimes(before);
+  expect(f.execute).toHaveBeenCalledTimes(1);
+});
 it("validar_consulta só executa envelope vazio e não aprova semântica", async () => {
   const f = fixture();
   f.execute.mockResolvedValue({ columns: ["id", "amount"], rows: [] });

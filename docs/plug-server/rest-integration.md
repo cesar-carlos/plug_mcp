@@ -1,5 +1,17 @@
 # Adapter REST neste MCP
 
+Na consulta v2, cancelamento MCP é reconferido após esperas e antes do envio;
+autorização concluída tarde não inicia SQL. Resultado recebido após cancelamento
+não inicia revalidação/entrega, sem prometer cancelamento do SQL já enviado.
+Metadados recusam aliases conflitantes e campos presentes inválidos de nome,
+tipo, nulabilidade e código ODBC. Coleções duplas precisam ser iguais; não escolher
+silenciosamente uma indicação binária nem transformar campo inválido em ausente.
+
+Diagnósticos distinguem login, refresh, getClientProfile e getAgentAccessStatus,
+preservando getPolicy e métodos SQL. Rotas administrativas de acesso usam nomes
+fixos, sem URLs/IDs no campo stage. Fases de transporte são aceitas pelo schema
+de relatos; orientação não pede trocar etapa real por rpc para conseguir enviar.
+
 > Este adapter descreve o runtime legado. Adapters v2 por credencial, prova nativa
 > e operações: [identidade](../persona-v2/source-identity.md),
 > [consultas](../persona-v2/source-queries.md) e [operações](../persona-v2/sql-operations.md).
@@ -7,6 +19,41 @@
 Canal do MCP: **somente REST**. Contrato do hub: [communication.md](communication.md). Autenticação Client / aprovação / `client_token`: [auth.md](auth.md).
 
 Fonte normativa no hub: `plug_server/docs/api/api_rest_bridge.md` e OpenAPI `GET /docs`. Base URL: `PLUG_SERVER_BASE_URL`. Prefixo: `/api/v1`.
+
+O mapper compartilhado registra somente status HTTP e código RPC nas falhas.
+Não registra mensagens, `reason` ou `technical_message` remotos: esses campos
+podem carregar SQL, parâmetros ou dados, mesmo com redação de credenciais no logger.
+A classificação do erro permanece independente desse log; a ausência de texto
+técnico nos logs não altera a autorização nem permite repetir comandos.
+Exceções de rede não tipadas também usam diagnóstico fixo: `transportReason=network`,
+etapa original e somente `errno` reconhecido, sem mensagem livre, conversão do
+objeto em texto ou prazo de retry presumido. A perda da resposta não comprova
+cancelamento no agente. `invalid_payload` pede revisão pelo responsável, sem
+orientar repetição da tool.
+
+HTTP 403 distingue `AGENT_ACCESS_DENIED` de inatividade explícita do Client.
+A compatibilidade com mensagens legadas reconhece somente mensagens exatas do
+Client emitidas pelo hub; palavras como `pending` em metadados ou inatividade
+do owner não provam inatividade do Client. Sem causa comprovada, devolve
+`PLUG_SERVER_ERROR` com status 403 e orientação neutra, sem inferir revogação,
+expiração OAuth ou falta de concessão ao agente.
+
+Em falhas HTTP sem código RPC reconhecido, texto parecido com SQL ou policy
+não comprova origem no motor ou recusa do client_token: pode vir de um proxy.
+O diagnóstico permanece HTTP, sem copiar texto remoto ou autorizar retry.
+Códigos RPC reconhecidos continuam específicos; a compatibilidade textual de
+erros SQL legados sem código aplica-se somente a envelopes HTTP 200.
+
+HTTP 404 sem causa RPC reconhecida retorna `PLUG_SERVER_ERROR`, preservando
+status e etapa. Pode vir da rota/referência ou de um intermediário; não comprova
+que o agente nunca se registrou, está desconectado ou foi revogado. O responsável
+confere a referência e a rota, sem retry automático. RPC -32000 mantém diagnóstico
+próprio de indisponibilidade do agente.
+
+Em HTTP 429/503, `retryAfterMs` conserva o prazo válido do header ou, na ausência
+dele, o prazo válido do corpo RPC. Zero é válido e mantém precedência. Sem prazo
+válido, retorna `null`; não se presume espera de três ou cinco segundos. Esse
+metadado não autoriza retry automático nem comprova recuperação após a espera.
 
 ## Endpoints que o adapter chama
 

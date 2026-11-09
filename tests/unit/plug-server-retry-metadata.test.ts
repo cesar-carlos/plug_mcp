@@ -9,6 +9,24 @@ import {
 afterEach(() => vi.restoreAllMocks());
 const now = Date.parse("2026-11-08T12:00:00Z");
 
+it.each([429, 503])("HTTP %s não fabrica prazo ausente ou inválido", (status) => {
+  for (const retryAfterMs of [undefined, null, NaN, Infinity, -1, 0.5]) {
+    const error = mapPlugServerFailure({ status, body: {}, retryAfterMs });
+    expect(error.retryAfterMs).toBeNull();
+    expect(error.hint).toContain("não repita automaticamente");
+  }
+});
+
+it.each([429, 503])(
+  "HTTP %s preserva prazo RPC quando o header não fornece prazo válido",
+  (status) => {
+    const body = { error: { data: { retry_after_ms: 1700 } } };
+    expect(mapPlugServerFailure({ status, body, retryAfterMs: NaN }).retryAfterMs).toBe(1700);
+    expect(mapPlugServerFailure({ status, body, retryAfterMs: 0 }).retryAfterMs).toBe(0);
+    expect(mapPlugServerFailure({ status, body, retryAfterMs: 2500 }).retryAfterMs).toBe(2500);
+  },
+);
+
 it.each(["-1", "1.5", "1e3", "0x10", "Infinity", " ", "999999999999999999999", "invalid"])(
   "ignora Retry-After inválido %s e usa reset válido",
   (header) => {

@@ -1,5 +1,7 @@
+import { PluginFailure } from "./package-diagnostics.js";
 import { createHash } from "node:crypto";
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { lstat, readdir } from "node:fs/promises";
+import { readStablePluginFile } from "./package-read.js";
 import { resolve } from "node:path";
 import { parseDocument } from "yaml";
 import { pareceSegredoEmTexto } from "../../domain/entities/parece-segredo.js";
@@ -24,7 +26,7 @@ export const OFFICIAL_PLUGIN_ICONS: Readonly<Record<string, string>> = {
 };
 export const readPluginFiles = async (root: string): Promise<Map<string, Buffer>> => {
   if (!(await lstat(root)).isDirectory() || (await lstat(root)).isSymbolicLink()) {
-    throw new Error("Raiz do pacote inválida.");
+    throw new PluginFailure("UNSAFE_FILE", "Raiz do pacote inválida.");
   }
   const files = new Map<string, Buffer>();
   const seen = new Set<string>();
@@ -32,7 +34,7 @@ export const readPluginFiles = async (root: string): Promise<Map<string, Buffer>
   const visit = async (directory: string): Promise<void> => {
     for (const name of (await readdir(resolve(root, directory))).sort()) {
       if (forbidden.test(name)) {
-        throw new Error("Arquivo não permitido no pacote.");
+        throw new PluginFailure("UNSAFE_FILE", "Arquivo não permitido no pacote.");
       }
       const path = directory ? `${directory}/${name}` : name;
       relativePluginPath.parse(path);
@@ -46,7 +48,7 @@ export const readPluginFiles = async (root: string): Promise<Map<string, Buffer>
       }
       const stat = await lstat(resolve(root, path));
       if (stat.isSymbolicLink()) {
-        throw new Error("Links simbólicos não são permitidos no pacote.");
+        throw new PluginFailure("UNSAFE_FILE", "Links simbólicos não são permitidos no pacote.");
       }
       if (stat.isDirectory()) {
         await visit(path);
@@ -57,16 +59,16 @@ export const readPluginFiles = async (root: string): Promise<Map<string, Buffer>
         files.size >= MAX_FILES ||
         stat.size > (path.endsWith(".png") ? 5 * 1024 * 1024 : MAX_TEXT_BYTES)
       ) {
-        throw new Error("Arquivo ou limite de pacote inválido.");
+        throw new PluginFailure("UNSAFE_FILE", "Arquivo ou limite de pacote inválido.");
       }
       if (!/\.(?:md|json|png)$/.test(path)) {
-        throw new Error("Formato de arquivo não permitido no pacote.");
+        throw new PluginFailure("UNSAFE_FILE", "Formato de arquivo não permitido no pacote.");
       }
       bytes += stat.size;
       if (bytes > MAX_TOTAL_BYTES) {
         throw new Error("Pacote excede o limite de bytes.");
       }
-      const data = await readFile(resolve(root, path));
+      const data = await readStablePluginFile(resolve(root, path), stat.size);
       if (data.length !== stat.size) {
         throw new Error("Arquivo mudou durante a leitura.");
       }
@@ -77,7 +79,10 @@ export const readPluginFiles = async (root: string): Promise<Map<string, Buffer>
           pareceSegredoEmTexto(text) ||
           /\b(?:https?|postgres(?:ql)?):\/\/[^\s/]+:[^\s/]+@/i.test(text)
         ) {
-          throw new Error("Conteúdo inválido ou possível segredo no pacote.");
+          throw new PluginFailure(
+            "UNSAFE_CONTENT",
+            "Conteúdo inválido ou possível segredo no pacote.",
+          );
         }
       }
       files.set(path, data);

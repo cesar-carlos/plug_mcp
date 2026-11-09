@@ -24,6 +24,7 @@
     "persona:release-check": "node scripts/check-persona-release.mjs",
     "persona:test-federation": "tsx --env-file-if-exists=.env src/infrastructure/persistence/persona-v2/run-federation-cases.ts",
     "persona:test-publication": "tsx --env-file-if-exists=.env src/infrastructure/persistence/persona-v2/run-publication-cases.ts",
+    "persona:test-publication:ssh": "tsx scripts/run-persona-ssh-publication.ts",
     "persona:test-external": "tsx --env-file-if-exists=.env src/infrastructure/persistence/persona-v2/run-external-cases.ts",
     "persona:test-operations": "tsx --env-file-if-exists=.env src/infrastructure/persistence/persona-v2/run-operation-cases.ts",
     "build": "tsc -p tsconfig.build.json",

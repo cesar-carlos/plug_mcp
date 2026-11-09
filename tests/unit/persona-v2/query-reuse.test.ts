@@ -5,9 +5,56 @@ import {
   PERSONA_QUERY_REUSE_PREFIX,
 } from "../../../src/infrastructure/persona-v2/query-reuse.js";
 import { NodeCryptoAdapter } from "../../../src/infrastructure/crypto/node-crypto.adapter.js";
+import { DomainError } from "../../../src/domain/errors/domain-error.js";
+import { SourceExecutionError } from "../../../src/domain/persona-v2/source-execution-error.js";
+import { reportPersonaV2ToolError } from "../../../src/infrastructure/mcp/persona-v2-tool-error.js";
 const crypto = new NodeCryptoAdapter("a".repeat(64));
 const create = (store = new PersonaMemoryQueryStore(), ttl = 1000) =>
   new PersonaQueryReuse(store, crypto, "fixture-cache-key", "https://fixture.test", ttl);
+
+it("singleflight preserva diagnóstico original e não cacheia falha nem repete o produtor", async () => {
+  const store = new PersonaMemoryQueryStore(),
+    reuse = create(store);
+  const publish = vi.spyOn(store, "publish");
+  vi.spyOn(store, "release").mockRejectedValue(new Error("private-cleanup"));
+  let fail!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    fail = resolve;
+  });
+  const error = new SourceExecutionError(
+    new DomainError({
+      code: "PLUG_SERVER_ERROR",
+      message: "private-native",
+      hint: "private-hint",
+      source: "plug_server_http",
+      stage: "sql.execute.response",
+      details: { transportReason: "network", errno: "ECONNRESET" },
+    }),
+    "sql_fornecido",
+    ["publication"],
+  );
+  const produce = vi.fn(async () => {
+    await gate;
+    throw error;
+  });
+  const leader = reuse.run("same", Date.now() + 1000, produce).catch((e: unknown) => e);
+  const follower = reuse.run("same", Date.now() + 1000, produce).catch((e: unknown) => e);
+  fail();
+  const errors = await Promise.all([leader, follower]);
+  for (const item of errors) {
+    expect(item).toBe(error);
+    const reply = reportPersonaV2ToolError(item);
+    expect(reply).toMatchObject({
+      source: "plug_server_http",
+      stage: "sql.execute.response",
+      retryable: false,
+      details: { transportReason: "network", errno: "ECONNRESET" },
+    });
+    expect(JSON.stringify(reply)).not.toContain("private-");
+  }
+  expect(produce).toHaveBeenCalledTimes(1);
+  expect(publish).not.toHaveBeenCalled();
+});
 it("usa chaves opacas e valores cifrados, sem alterar horário de leitura ou compartilhar referências", async () => {
   const store = new PersonaMemoryQueryStore(),
     publish = vi.spyOn(store, "publish"),

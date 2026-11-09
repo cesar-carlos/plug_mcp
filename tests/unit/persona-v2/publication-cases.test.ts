@@ -57,9 +57,60 @@ function fixture() {
     cases,
     saveReport,
     executor,
-    run: () => runSqlPublicationCases(repository, source.personaId, "skill", crypto, executor),
+    run: (options?: Parameters<typeof runSqlPublicationCases>[6]) =>
+      runSqlPublicationCases(
+        repository,
+        source.personaId,
+        "skill",
+        crypto,
+        executor,
+        undefined,
+        options,
+      ),
   };
 }
+
+it("inspeção de operador devolve vínculo sem gravar aprovação ou executar", async () => {
+  const f = fixture();
+  const report = await f.run({ inspectOnly: true });
+  expect(report).toMatchObject({
+    approved: false,
+    revision: 1,
+    results: [],
+    sourceId: f.source.id,
+  });
+  expect(report.packageHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(report.casesHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(f.saveReport).not.toHaveBeenCalled();
+  expect(f.executor.evaluateQuery).not.toHaveBeenCalled();
+});
+it.each(["revision", "cases", "source"])(
+  "vínculo de operador obsoleto por %s recusa antes de gravar ou executar",
+  async (kind) => {
+    const f = fixture();
+    const {
+      approved: _approved,
+      results: _results,
+      ...expected
+    } = await f.run({ inspectOnly: true });
+    if (kind === "revision") f.draft.revision++;
+    if (kind === "cases") f.cases[0]!.content.expected.ordered = false;
+    if (kind === "source") f.source.credentialVersion++;
+    await expect(f.run({ expected })).rejects.toMatchObject({ code: "STALE_AUTHORIZATION" });
+    expect(f.executor.evaluateQuery).not.toHaveBeenCalled();
+    expect(f.saveReport).not.toHaveBeenCalled();
+  },
+);
+it("vínculo exato usa o runner real e só aprova após revalidação", async () => {
+  const f = fixture();
+  const {
+    approved: _approved,
+    results: _results,
+    ...expected
+  } = await f.run({ inspectOnly: true });
+  expect(await f.run({ expected })).toMatchObject({ ...expected, approved: true });
+  expect(f.saveReport).toHaveBeenCalledTimes(2);
+});
 
 it("invalida aprovação antes de executar fora da transação e aprova após revalidação", async () => {
   const f = fixture();

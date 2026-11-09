@@ -381,6 +381,10 @@ operacionais ou semântica de negócio. Não encerra qualquer gate de release.
 
 ### Comando de operador e evidência
 
+Para rascunhos no servidor de teste, o caminho separado de operador está em
+[publicação por SSH](operator-publication.md). Não substituir o banco deste
+runner local pelo controle remoto nem importar relatórios de outra persona.
+
 `npm run persona:test-publication -- <manifesto.json>` é exclusivo de desenvolvimento.
 `DATABASE_URL` aponta ao controle MCP v2; a geração/migrations são verificadas,
 sem reset. O manifesto fica na sessão `chain-*` da fixture temporária ainda ativa.
@@ -438,6 +442,8 @@ chaves compostas e campos de saldo/prazo. Não lê dados operacionais nem altera
 fixtures PostgreSQL/SQL Anywhere. A regressão da geração de metadados não
 certifica a execução nativa dessa modalidade; a sessão exige os mesmos requisitos
 de isolamento e homologação descritos abaixo.
+No wrapper PowerShell, use `-CampoPrazos`; ele encaminha o argumento booleano
+ao runner sem concatenar comandos. Ausência mantém a modalidade desativada.
 
 O comando abaixo cria uma fixture Windows nova, privada e descartável. Exige os
 três motores/ODBC, Flutter, dependências dos três checkouts e imagem candidata

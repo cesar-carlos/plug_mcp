@@ -22,6 +22,19 @@ Não misturar os contratos de mesmo nome entre as duas entradas.
 
 ## Persona-v2
 
+- APIs de pacote preservam a exclusão entre variante portátil e conexão ChatGPT.
+  Comparação de contratos JSON usa conteúdo canônico sem relaxar valores, arrays
+  ou hashes dos arquivos; reordenação de chaves não é divergência semântica.
+  CLI e APIs compartilham validação de configuração. Leitura do pacote é limitada
+  por descritor, com identidade reconferida; falha não ecoa conteúdo/caminho.
+  Comparação pós-deploy exige snapshot novo e SHA esperado; não comprova servidor
+  vivo ou instalação no cliente e não substitui conferência do servidor/worker.
+  Inventário recusado não fornece URL/versão ao diagnóstico. Falha de fechamento
+  conserva o erro principal e marca cleanupFailed; nunca retorna sucesso incerto.
+  Manifestos de treinamento presentes são validados independentemente do outro
+  lado e exigem todos os tópicos únicos com hashes coerentes. Ausência opcional
+  não autoriza ignorar manifesto inválido nem aceitar lacunas iguais nos dois lados.
+
 - Integrações externas distinguem status HTTP, erro RPC, falha da ferramenta e
   resposta/catálogo incompatível por categoria local e supportId. Nunca copiar
   message/data remotos nem interpretar 401 externo como reconexão OAuth do MCP.

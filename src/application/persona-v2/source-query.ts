@@ -246,6 +246,7 @@ export class PersonaSourceQueries {
       ...(internal?.signal ? [internal.signal] : []),
       ...(parentSignal ? [parentSignal] : []),
     ]);
+    if (signal.aborted) throw new PersonaV2Error("BUDGET_EXCEEDED", "Consulta interrompida.");
     let timer: ReturnType<typeof setTimeout> | undefined;
     let expire!: (error: PersonaV2Error) => void;
     const expired = new Promise<never>((_resolve, reject) => {
@@ -568,7 +569,11 @@ export class PersonaSourceQueries {
     };
     const deadline = started + options.timeoutMs;
     const assertDeadline = () => {
-      if (Date.now() >= deadline || internal?.signal.aborted)
+      if (
+        Date.now() >= deadline ||
+        internal?.signal.aborted ||
+        queryTransportContext.getStore()?.signal.aborted
+      )
         throw new PersonaV2Error("BUDGET_EXCEEDED", "Prazo da consulta excedido.");
     };
     assertDeadline();
@@ -607,6 +612,7 @@ export class PersonaSourceQueries {
       )
     );
     const readFresh = async (): Promise<SourceQueryResponse> => {
+      assertDeadline();
       const result = await this.timings
         .measure("hub", () =>
           lease.execute(

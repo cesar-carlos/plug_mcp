@@ -1,22 +1,11 @@
-import {
-  lstat,
-  mkdir,
-  mkdtemp,
-  open,
-  readFile,
-  realpath,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { PERSONA_CONSUMER_GUIDANCE } from "../../application/persona-v2/consumer-guidance.js";
 import { personaPluginCompatibility } from "./persona-compatibility.js";
 import { trainingManifest } from "../../application/persona-v2/training-topics.js";
 import {
   readPluginManifest,
-  validateConnectionId,
-  validatePublicPluginUrl,
+  validatePluginConfiguration,
   validateSe7ePackage,
 } from "./package-validation.js";
 import {
@@ -32,6 +21,8 @@ import {
   validatePluginSkills,
 } from "./package-files.js";
 import { pluginTools, pluginResource, pluginToolCatalogHash } from "./tool-catalog.js";
+import { readStablePluginFile } from "./package-read.js";
+import { PluginFailure } from "./package-diagnostics.js";
 
 export interface PluginPackageInput {
   root: string;
@@ -63,8 +54,7 @@ const absent = async (path: string): Promise<boolean> => {
 export const packageSe7ePlugin = async (input: PluginPackageInput): Promise<string> => {
   const runtime = pluginRuntimeSchema.parse(input.runtime);
   const variant = input.portable === true ? "portable" : "chatgpt";
-  const connection = variant === "chatgpt" ? validateConnectionId(input.connectionId) : undefined;
-  const url = validatePublicPluginUrl(input.publicBaseUrl);
+  const { url, connection } = validatePluginConfiguration({ ...input, variant });
   const root = resolve(input.root);
   if ((await lstat(root)).isSymbolicLink()) {
     throw new Error("Links simbólicos não são permitidos.");
@@ -100,7 +90,7 @@ export const packageSe7ePlugin = async (input: PluginPackageInput): Promise<stri
     if ((await lstat(icon)).isSymbolicLink()) {
       throw new Error("Asset oficial não pode ser link simbólico.");
     }
-    files.set(`assets/se7e-${size}.png`, await readFile(icon));
+    files.set(`assets/se7e-${size}.png`, await readStablePluginFile(icon, 5 * 1024 * 1024));
   }
   manifest.extensions = {
     "com.openai": {
@@ -145,7 +135,7 @@ export const packageSe7ePlugin = async (input: PluginPackageInput): Promise<stri
   const parent = await realpath(requestedParent);
   const output = resolve(parent, "se7e");
   if (!(await absent(output))) {
-    throw new Error("Destino já existe; informe outro --output.");
+    throw new PluginFailure("DESTINATION_EXISTS", "Destino já existe; informe outro --output.");
   }
   // A sibling lease serializes concurrent builders; unvalidated files stay in a private staging directory.
   const leasePath = resolve(parent, ".se7e-package.lock");
@@ -153,7 +143,7 @@ export const packageSe7ePlugin = async (input: PluginPackageInput): Promise<stri
   let staging: string | undefined;
   try {
     if (!(await absent(output))) {
-      throw new Error("Destino já existe; informe outro --output.");
+      throw new PluginFailure("DESTINATION_EXISTS", "Destino já existe; informe outro --output.");
     }
     staging = await mkdtemp(resolve(parent, ".se7e-staging-"));
     const candidate = resolve(staging, "se7e");
@@ -172,7 +162,7 @@ export const packageSe7ePlugin = async (input: PluginPackageInput): Promise<stri
       connectionId: connection,
     });
     if (!(await absent(output))) {
-      throw new Error("Destino já existe; informe outro --output.");
+      throw new PluginFailure("DESTINATION_EXISTS", "Destino já existe; informe outro --output.");
     }
     await rename(candidate, output);
     return output;

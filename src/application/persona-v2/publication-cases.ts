@@ -27,6 +27,14 @@ export interface IsolatedPublicationCaseExecutor extends IsolatedOperationCaseEx
   evaluateQuery(pkg: QueryPackage, source: Source, test: QueryPublicationCase): Promise<boolean>;
 }
 
+export interface PublicationCaseExpectation {
+  readonly revision: number;
+  readonly packageHash: string;
+  readonly casesHash: string;
+  readonly sourceId: string;
+  readonly sourceFingerprint: string;
+}
+
 /** Operator-only. No endpoint accepts reports. Network work never holds MCP locks. */
 export async function runSqlPublicationCases(
   repository: PersonaRepositoryPort,
@@ -35,10 +43,14 @@ export async function runSqlPublicationCases(
   crypto: CryptoPort,
   executor: IsolatedPublicationCaseExecutor,
   now: () => Date = () => new Date(),
+  options: { expected?: PublicationCaseExpectation; inspectOnly?: boolean } = {},
 ): Promise<{
   approved: boolean;
   revision: number;
   packageHash: string;
+  casesHash: string;
+  sourceId: string;
+  sourceFingerprint: string;
   results: { id: string; passed: boolean }[];
 }> {
   const locks = { personaIds: [personaId], tokenIds: [] };
@@ -143,6 +155,19 @@ export async function runSqlPublicationCases(
   };
   const snapshot = await repository.transaction(locks, async (tx) => {
     const current = await capture(tx);
+    if (
+      options.expected &&
+      canonicalJson(options.expected) !==
+        canonicalJson({
+          revision: current.draft.revision,
+          packageHash: current.packageHash,
+          casesHash: current.casesHash,
+          sourceId: current.source.id,
+          sourceFingerprint: crypto.sha256Hex(canonicalJson(current.source)),
+        })
+    )
+      throw new PersonaV2Error("STALE_AUTHORIZATION", "Revisão ou vínculo do operador divergente.");
+    if (options.inspectOnly) return structuredClone(current);
     await tx.catalog.saveReport(
       personaId,
       skillId,
@@ -156,6 +181,14 @@ export async function runSqlPublicationCases(
     );
     return structuredClone(current);
   });
+  const binding = {
+    revision: snapshot.draft.revision,
+    packageHash: snapshot.packageHash,
+    casesHash: snapshot.casesHash,
+    sourceId: snapshot.source.id,
+    sourceFingerprint: crypto.sha256Hex(canonicalJson(snapshot.source)),
+  };
+  if (options.inspectOnly) return { ...binding, approved: false, results: [] };
   const results: { id: string; passed: boolean }[] = [];
   for (const test of snapshot.cases) {
     await repository.transaction(locks, async (tx) => {
@@ -258,6 +291,7 @@ export async function runSqlPublicationCases(
       evidence(current.source, current.pkg, true),
     );
     return {
+      ...binding,
       approved,
       revision: current.draft.revision,
       packageHash: current.packageHash,

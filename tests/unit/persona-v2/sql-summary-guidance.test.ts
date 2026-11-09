@@ -17,6 +17,37 @@ const scope = escopoFromSqlModelo(
   ),
 );
 
+it.each(["mssql", "postgres", "sybase"] as const)(
+  "conversão antes de SUM é aceita pelo parser %s no escopo publicado",
+  (dialect) => {
+    const sql =
+      "SELECT SUM(CAST(s.net_amount AS DECIMAL(18,2))) AS total_amount FROM fixture_sales s WHERE s.sold_at >= :start AND s.sold_at < :end";
+    expect(validateSourceSql(sql, dialect, scope).sql).toBe(sql);
+    expect(() =>
+      validateSourceSql(sql.replace("s.net_amount", "s.secret"), dialect, scope),
+    ).toThrow();
+  },
+);
+
+it("média por item conserva fração, ignora nulos e não converte denominador vazio em zero", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(
+      "CREATE TABLE fixture_sales(net_amount INTEGER, sold_at TEXT); INSERT INTO fixture_sales VALUES (1,'2026-11-01'),(2,'2026-11-01'),(NULL,'2026-11-01');",
+    );
+    const query = db.prepare(SQL_SUMMARY_EXAMPLES[7].sql);
+    expect(query.get({ start: "2026-11-01", end: "2026-11-02" })).toEqual({ item_average: 1.5 });
+    expect(query.get({ start: "2026-11-02", end: "2026-11-03" })).toEqual({ item_average: null });
+    db.exec("INSERT INTO fixture_sales VALUES (NULL,'2026-11-02');");
+    expect(query.get({ start: "2026-11-02", end: "2026-11-03" })).toEqual({ item_average: null });
+    expect(PERSONA_V2_TRAINING_BASE.queryContract.ratios.undefinedRatio).toContain(
+      "Divisão inteira",
+    );
+  } finally {
+    db.close();
+  }
+});
+
 it("base, runtime e guia do pacote entregam a mesma orientação de resumos", () => {
   expect(PERSONA_V2_TRAINING_BASE.sqlSummaries.guidance).toBe(SQL_SUMMARY_GUIDANCE);
   expect(PERSONA_V2_INSTRUCTIONS).toContain(SQL_SUMMARY_GUIDANCE);

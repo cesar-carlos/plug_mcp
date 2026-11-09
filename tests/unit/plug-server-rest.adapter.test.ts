@@ -710,7 +710,9 @@ describe("PlugServerRestAdapter network errors", () => {
     ).rejects.toMatchObject({
       code: "PLUG_SERVER_ERROR",
       source: "plug_server_http",
-      retryable: true,
+      retryable: false,
+      retryAfterMs: null,
+      details: { transportReason: "network", errno: "ECONNREFUSED" },
       stage: "sql.execute",
     });
   });

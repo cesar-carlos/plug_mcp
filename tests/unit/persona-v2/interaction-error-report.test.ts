@@ -4,6 +4,10 @@ import {
   trainingTopic,
 } from "../../../src/application/persona-v2/training-topics.js";
 import { describe, expect, it } from "vitest";
+import {
+  PLUG_SERVER_STAGES,
+  PLUG_SERVER_PHASE_STAGES,
+} from "../../../src/domain/errors/plug-server-stages.js";
 import { PERSONA_V2_INSTRUCTIONS } from "../../../src/application/persona-v2/runtime-instructions.js";
 import { PERSONA_V2_TRAINING_BASE } from "../../../src/application/persona-v2/training-base.js";
 import {
@@ -39,14 +43,18 @@ describe("relato de erro da interação", () => {
     ).toEqual([]);
   });
 
-  it.each(["protocol", "authentication", "request", "validar_escopo", "sql.execute", "rpc"])(
-    "preserva etapa MCP %s",
-    (stage) => {
-      expect(
-        interactionErrorReportSchema.parse({ ...report, error: { ...report.error, stage } }).error,
-      ).toMatchObject({ supportId, stage });
-    },
-  );
+  it.each([
+    "protocol",
+    "authentication",
+    "request",
+    "validar_escopo",
+    ...PLUG_SERVER_STAGES,
+    ...PLUG_SERVER_PHASE_STAGES,
+  ])("preserva etapa MCP %s", (stage) => {
+    expect(
+      interactionErrorReportSchema.parse({ ...report, error: { ...report.error, stage } }).error,
+    ).toMatchObject({ supportId, stage });
+  });
 
   it("exige detalhe só na categoria outro e recusa campo extra", () => {
     expect(interactionErrorReportSchema.safeParse({ ...report, category: "outro" }).success).toBe(

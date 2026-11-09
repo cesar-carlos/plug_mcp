@@ -1,4 +1,5 @@
 import { DomainError, ERROR_SOURCE } from "../../domain/errors/domain-error.js";
+import { safeErrorDetails } from "../../domain/errors/safe-error-details.js";
 import { z } from "zod";
 import { ERROR_CODES, type ErrorCode } from "../../domain/errors/error-codes.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
@@ -118,20 +119,18 @@ export const isUnclassifiableSqlDenial = (
   haystack = "",
 ): boolean => rpcCode === -32002 && /classification/i.test(`${technicalMessage ?? ""} ${haystack}`);
 
-/**
- * SQL Server 1033/4104: ORDER BY com alias no wrap gerenciado (page+page_size).
- * O mapper não vê `options.page` no envelope (igual ao 1033): 4104 de alias
- * solto fora do wrap também recebe este hint. O rewrite OFFSET/FETCH é do plug_agente.
- */
+/** The response alone does not prove whether managed pagination rewrote the query. */
 export const HINT_SQLSERVER_PAGINACAO_1033 =
-  "O wrap gerenciado do hub colocou ORDER BY numa derived table (SQL Server 1033/4104). Não persista este SQL. Não repita options.page neste SQL. Sem página: TOP n + ORDER BY (guia://dialeto/mssql). Não acrescente OFFSET/FETCH com page — o validador recusa. validar_consulta já passa neste caso (não reproduz o wrap). O rewrite OFFSET/FETCH é do plug_agente. Não é recusa do pacote MCP.";
+  "SQL Server 1033: revise ORDER BY em views, CTEs, subconsultas e tabelas derivadas conforme guia://dialeto/mssql. O erro isolado não comprova alteração pela paginação gerenciada. Não acrescente TOP ou remova options.page automaticamente; preserve o recorte publicado. Não combine OFFSET/FETCH com page. validar_consulta verifica o contrato local, sem reproduzir o motor ou eventual rewrite do agente. Não persista SQL falho nem repita automaticamente.";
+
+const isSqlServerIdentifierBinding = (blob: string): boolean =>
+  /\b4104\b/.test(blob) ||
+  (/multi-part identifier/i.test(blob) && /could not be bound/i.test(blob));
 
 export const isSqlServerOrderByWrap = (blob: string): boolean =>
   /\b1033\b/.test(blob) ||
-  /\b4104\b/.test(blob) ||
   /order by clause is invalid/i.test(blob) ||
-  /cl[aá]usula order by [eé] inv[aá]lida/i.test(blob) ||
-  (/multi-part identifier/i.test(blob) && /could not be bound/i.test(blob));
+  /cl[aá]usula order by [eé] inv[aá]lida/i.test(blob);
 
 const looksLikeEngineSql = (blob: string): boolean =>
   /\b(sql state|sqlstate|odbc|invalid column|invalid object|unknown column|column unknown|table unknown|dynamic sql error|sql error code|syntax error|conversion failed|does not exist|undefined column|column \S+ not found|table \S+ not found|asa[- ]error|42P01|42703|\b1033\b|\b4104\b|\b207\b|\b208\b)\b/i.test(
@@ -175,8 +174,8 @@ const nodeErrnoOf = (error: unknown, depth = 0): string | undefined => {
   if (!rec) {
     return undefined;
   }
-  const code = readString(rec.code);
-  if (code && /^[A-Z][A-Z0-9_]+$/.test(code)) {
+  const code = safeErrorDetails({ errno: rec.code }).errno;
+  if (typeof code === "string") {
     return code;
   }
   return nodeErrnoOf(rec.cause, depth + 1);
@@ -185,25 +184,15 @@ const nodeErrnoOf = (error: unknown, depth = 0): string | undefined => {
 /** Falha TCP/TLS/`fetch` até o hub — não é recusa de SQL nem INTERNAL_ERROR opaco. */
 export const mapPlugServerNetworkError = (error: unknown, stage = "rpc"): DomainError => {
   const errno = nodeErrnoOf(error);
-  const cause = asRecord(asRecord(error)?.cause);
-  const raw = [
-    error instanceof Error ? error.message : String(error),
-    readString(cause?.message),
-    errno,
-  ]
-    .filter((item): item is string => Boolean(item))
-    .join(" ");
-  const detail = sanitizeEngineMessage(raw);
   const errnoHint = errno ? ` (${errno})` : "";
   return new DomainError({
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "Não foi possível conectar ao plug-server.",
-    hint: `Falha de rede até o hub${errnoHint}, não recusa de SQL nem de policy. Não altere o SELECT. Tente de novo; se persistir, o hub ou a rede está inacessível.${detail ? ` Detalhe: ${detail}` : ""}`,
-    retryable: true,
-    retryAfterMs: 3000,
+    hint: `Falha de rede até o hub${errnoHint}, não recusa de SQL nem de policy. Não altere o SELECT nem repita automaticamente. Informe o diagnóstico ao responsável; a interrupção da resposta não comprova cancelamento no agente.`,
+    retryable: false,
     source: HUB_ERROR_SOURCE.http,
     stage,
-    ...(errno ? { details: { errno } } : {}),
+    details: { transportReason: "network", ...(errno ? { errno } : {}) },
   });
 };
 
@@ -300,7 +289,7 @@ const mappingInvalidClientTokenAuth: RpcMapping = {
 const mappingInvalidPayload: RpcMapping = {
   code: ERROR_CODES.PLUG_SERVER_ERROR,
   message: "O hub recusou o payload (frame/assinatura/batch), não o SQL.",
-  hint: "Não reescreva o SQL. Problema de transporte (PayloadFrame / invalid_payload / batch), não do motor nem do pacote MCP. Tente de novo; se persistir, reporte details.rpcCode.",
+  hint: "Não reescreva o SQL. Problema de transporte (PayloadFrame / invalid_payload / batch), não do motor nem do pacote MCP. Informe o diagnóstico ao responsável e não repita automaticamente.",
   retryable: false,
   source: HUB_ERROR_SOURCE.http,
 };
@@ -380,14 +369,14 @@ const rpcMap: Record<number, RpcMapping> = {
   [-32012]: {
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "Erro de rede entre o hub e o plug_agente.",
-    hint: "Rede com o agente, não recusa de pacote. Aguarde retryAfterMs e tente de novo sem mudar o SQL.",
+    hint: "Rede com o agente, não recusa de pacote. Não altere SQL nem repita automaticamente; informe o diagnóstico ao responsável.",
     retryable: true,
     source: HUB_ERROR_SOURCE.http,
   },
   [-32013]: {
     code: ERROR_CODES.RATE_LIMITED,
     message: "Rate limit do agente.",
-    hint: "Aguarde retryAfterMs e tente de novo. Evite rajadas de consultar_dados. Não altere o SQL só por causa do 429 do agente.",
+    hint: "Respeite retryAfterMs quando informado, sem repetir automaticamente. Evite rajadas de consultar_dados e não altere SQL por causa do limite.",
     retryable: true,
     source: HUB_ERROR_SOURCE.policy,
   },
@@ -401,7 +390,7 @@ const rpcMap: Record<number, RpcMapping> = {
   [-32000]: {
     code: ERROR_CODES.AGENT_UNAVAILABLE,
     message: "O plug_agente está indisponível neste hub.",
-    hint: "Agente conhecido neste hub mas sem socket /agents. Peça para ligar o plug_agente. Não altere o SQL. Distinto de HTTP 404 (agentId nunca registado nesta réplica).",
+    hint: "Agente conhecido neste hub mas sem socket /agents. Peça para ligar o plug_agente. Não altere o SQL. HTTP 404 isolado não comprova esse estado.",
     retryable: true,
     source: HUB_ERROR_SOURCE.http,
   },
@@ -431,7 +420,7 @@ const rpcMap: Record<number, RpcMapping> = {
   [-32104]: {
     code: ERROR_CODES.AGENT_UNAVAILABLE,
     message: "Pool de conexões do agente esgotado.",
-    hint: "Infra do ERP, não SQL inválido. Aguarde retryAfterMs e tente de novo sem mudar o SELECT.",
+    hint: "Infra do ERP, não SQL inválido. Não altere SQL nem repita automaticamente; informe o diagnóstico ao responsável.",
     retryable: true,
     source: HUB_ERROR_SOURCE.http,
   },
@@ -489,9 +478,6 @@ const logPlugDetail = (
   logger?.warn("plug-server failure detail", {
     status: failure.status,
     rpcCode: rpc.code,
-    rpcMessage: rpc.message,
-    rpcReason: rpc.reason,
-    technicalMessage: rpc.technicalMessage,
   });
 };
 
@@ -518,22 +504,27 @@ const classifyPlugServerFailure = (
   // Textual legacy SQL diagnostics cannot override an explicit non-SQL RPC or HTTP failure.
   const mappedRpc = typeof rpc.code === "number" ? rpcMap[rpc.code] : undefined;
   const mayDiagnoseSql = !mappedRpc || mappedRpc.sqlEngine === true || rpc.code === -32009;
+  const identifierBinding = isSqlServerIdentifierBinding(rpcHaystack);
   if (
     failure.status === 200 &&
     mayDiagnoseSql &&
     !isInvalidPayload &&
-    isSqlServerOrderByWrap(rpcHaystack)
+    (identifierBinding || isSqlServerOrderByWrap(rpcHaystack))
   ) {
     logPlugDetail(logger, failure, rpc);
     return new DomainError({
       code: ERROR_CODES.INVALID_SQL,
-      message: "O SQL Server recusou ORDER BY no wrap de paginação gerenciada.",
-      hint: HINT_SQLSERVER_PAGINACAO_1033,
+      message: identifierBinding
+        ? "O SQL Server não conseguiu resolver um identificador qualificado."
+        : "O SQL Server recusou ORDER BY nesse contexto da consulta.",
+      hint: identifierBinding
+        ? "SQL Server 4104: revise aliases, qualificadores e escopo das referências no contrato publicado. O erro isolado não comprova falha de paginação. Não invente tabelas ou colunas, acrescente TOP ou remova paginação automaticamente. Valide a revisão antes de qualquer execução explícita; validação local não reproduz o motor. Não persista SQL falho nem repita automaticamente."
+        : HINT_SQLSERVER_PAGINACAO_1033,
       retryable: false,
       retryAfterMs: rpc.retryAfterMs ?? failure.retryAfterMs ?? null,
       source: HUB_ERROR_SOURCE.sqlEngine,
       stage,
-      nextAction: "consultar_dados",
+      nextAction: "validar_consulta",
       details: rpcDetails(rpc),
     });
   }
@@ -541,9 +532,19 @@ const classifyPlugServerFailure = (
     let mapped: RpcMapping | undefined = rpcMap[rpc.code];
     if (rpc.code === -32001) {
       mapped = mappingFor32001(rpc.reason, rpcHaystack);
-    } else if (rpc.code === -32009 && !isInvalidPayload && looksLikeEngineSql(rpcHaystack)) {
+    } else if (
+      failure.status === 200 &&
+      rpc.code === -32009 &&
+      !isInvalidPayload &&
+      looksLikeEngineSql(rpcHaystack)
+    ) {
       mapped = mappingSqlEngineInvalid;
-    } else if (!mapped && !isInvalidPayload && (rpc.hubCategory ?? "").toLowerCase() === "sql") {
+    } else if (
+      failure.status === 200 &&
+      !mapped &&
+      !isInvalidPayload &&
+      (rpc.hubCategory ?? "").toLowerCase() === "sql"
+    ) {
       mapped = mappingSqlEngineInvalid;
     }
     if (mapped) {
@@ -570,7 +571,7 @@ const classifyPlugServerFailure = (
         mapped.code === ERROR_CODES.AGENT_UNAVAILABLE &&
         /disconnected/i.test(`${rpc.reason ?? ""} ${rpcHaystack}`);
       const hint = disconnected
-        ? "O plug_agente desconectou no dispatch (agent_disconnected_at_dispatch). Não altere o SQL. Peça para religar o agente e tente de novo. Distinto de HTTP 404 (agentId nunca registado nesta réplica)."
+        ? "O plug_agente desconectou no dispatch (agent_disconnected_at_dispatch). Não altere o SQL nem repita automaticamente; informe o diagnóstico ao responsável. HTTP 404 isolado não comprova esse estado."
         : engine?.genericOnly
           ? engine.hintSuffix
           : engine
@@ -623,8 +624,16 @@ const classifyPlugServerFailure = (
     });
   }
   if (failure.status === 403) {
-    const blob = JSON.stringify(failure.body ?? {}).toLowerCase();
-    const clientInactive = /pending|blocked|inactive|not active|não ativ/.test(blob);
+    const root = asRecord(failure.body);
+    const httpError = asRecord(root?.error) ?? root;
+    const httpCode = readString(httpError?.code, rpc.reason)?.toUpperCase();
+    const clientInactive =
+      httpCode === "CLIENT_NOT_ACTIVE" ||
+      httpCode === "PENDING" ||
+      ((!httpCode || httpCode === "FORBIDDEN") &&
+        /^(?:Client account is (?:blocked|not active)|Client is pending)$/i.test(
+          rpc.message ?? "",
+        ));
     if (clientInactive) {
       return new DomainError({
         code: ERROR_CODES.CLIENT_NOT_ACTIVE,
@@ -632,6 +641,16 @@ const classifyPlugServerFailure = (
         hint: "Peça ao dono do ERP para ativar o Client. Não trate como senha errada, SQL inválido nem gap de skill. Chame verificar_acesso; não faça polling agressivo.",
         source: HUB_ERROR_SOURCE.http,
         stage,
+      });
+    }
+    if (httpCode !== "AGENT_ACCESS_DENIED") {
+      return new DomainError({
+        code: ERROR_CODES.PLUG_SERVER_ERROR,
+        message: "O hub recusou a solicitação HTTP 403.",
+        hint: "A recusa não identifica por si só a conta ou concessão afetada. Informe o diagnóstico ao responsável; não altere SQL, credenciais ou repita automaticamente.",
+        source: HUB_ERROR_SOURCE.http,
+        stage,
+        retryable: false,
       });
     }
     return new DomainError({
@@ -644,22 +663,21 @@ const classifyPlugServerFailure = (
   }
   if (failure.status === 404) {
     return new DomainError({
-      code: ERROR_CODES.AGENT_UNAVAILABLE,
-      message: "agentId desconhecido nesta réplica do hub.",
-      hint: "HTTP 404: este agentId nunca fez agent:register neste processo (catálogo vazio nesta réplica). Confira o UUID em listar_acessos e se o plug_agente está ligado. Não reenvie o SQL e não trate como falha de dialeto. Distinto de JSON-RPC -32000 (agente conhecido mas socket desligado).",
+      code: ERROR_CODES.PLUG_SERVER_ERROR,
+      message: "O hub respondeu HTTP 404; o recurso solicitado não foi encontrado.",
+      hint: "O status isolado não comprova ausência de registro do agente, desconexão ou revogação. Peça ao responsável para conferir a rota e a referência solicitada. Não altere SQL ou credenciais nem repita automaticamente.",
       retryable: false,
       source: HUB_ERROR_SOURCE.http,
       stage,
-      nextAction: "verificar_acesso",
     });
   }
   if (failure.status === 429) {
     return new DomainError({
       code: ERROR_CODES.RATE_LIMITED,
       message: "Rate limit do plug-server.",
-      hint: "HTTP 429 do hub (TOO_MANY_REQUESTS), não recusa de SQL. Respeite retryAfterMs / RateLimit-Reset. Não reenvie em rajada e não altere o SELECT só por causa do limite.",
+      hint: "HTTP 429 do hub (TOO_MANY_REQUESTS), não recusa de SQL. Respeite retryAfterMs quando informado; ausência não define prazo de espera. Informe o diagnóstico ao responsável e não repita automaticamente nem altere o SELECT só por causa do limite.",
       retryable: true,
-      retryAfterMs: failure.retryAfterMs ?? rpc.retryAfterMs ?? 5000,
+      retryAfterMs: failure.retryAfterMs ?? rpc.retryAfterMs ?? null,
       source: HUB_ERROR_SOURCE.http,
       stage,
     });
@@ -684,11 +702,25 @@ const classifyPlugServerFailure = (
     return new DomainError({
       code: ERROR_CODES.AGENT_UNAVAILABLE,
       message: "plug-server temporariamente indisponível.",
-      hint: "HTTP 503: fila cheia, agente offline ou Nginx na borda. Aguarde retryAfterMs. Não é recusa de pacote nem de policy. Não aumente o SELECT.",
+      hint: "HTTP 503 isolado não distingue saturação, proxy ou indisponibilidade do agente. Respeite retryAfterMs quando informado; ausência não define prazo de espera. Informe o diagnóstico ao responsável e não repita automaticamente nem altere o SELECT.",
       retryable: true,
-      retryAfterMs: failure.retryAfterMs ?? 3000,
+      retryAfterMs: failure.retryAfterMs ?? rpc.retryAfterMs ?? null,
       source: HUB_ERROR_SOURCE.http,
       stage,
+    });
+  }
+
+  // Unmapped HTTP failures may originate at a proxy. Their text is not proof of SQL/policy.
+  if (failure.status !== 200) {
+    return new DomainError({
+      code: ERROR_CODES.PLUG_SERVER_ERROR,
+      message: "Falha ao comunicar com o plug-server.",
+      hint: `HTTP ${String(failure.status)} sem causa RPC reconhecida. Informe o diagnóstico ao responsável. Não altere SQL ou credenciais nem repita automaticamente; a falha não comprova execução ou cancelamento no agente.`,
+      source: HUB_ERROR_SOURCE.http,
+      stage,
+      retryable: false,
+      retryAfterMs: failure.retryAfterMs ?? rpc.retryAfterMs ?? null,
+      details: rpcDetails(rpc),
     });
   }
 
@@ -699,7 +731,7 @@ const classifyPlugServerFailure = (
       : "");
   const lower = `${raw} ${rpc.reason ?? ""}`.toLowerCase();
   if (
-    failure.status < 500 &&
+    failure.status === 200 &&
     (lower.includes("permission") || lower.includes("not allowed") || lower.includes("denied"))
   ) {
     return new DomainError({
@@ -718,11 +750,8 @@ const classifyPlugServerFailure = (
       ? engineDetails(rpc, fallbackHaystack)
       : null;
   const rpcLabel = typeof rpc.code === "number" ? ` JSON-RPC ${String(rpc.code)}.` : "";
-  const hintBase =
-    failure.status >= 500
-      ? `HTTP ${String(failure.status)} do hub.${rpcLabel} Não é o validador do pacote. Se Motor aparecer, o SQL chegou ao agente e falhou — não persista; senão é indisponibilidade. Não insista no mesmo comando se retryable for false.`
-      : `Falha no hub sem código mapeado.${rpcLabel} Ajuste só se Motor citar identificador; senão verifique o ambiente. Não persista SQL falho. Se retryable não estiver indicado, não insista.`;
-  const retryable = rpc.hubRetryable ?? failure.status >= 500;
+  const hintBase = `Falha no hub sem código mapeado.${rpcLabel} Ajuste só se Motor citar identificador; senão verifique o ambiente. Não persista SQL falho. Se retryable não estiver indicado, não insista.`;
+  const retryable = rpc.hubRetryable ?? false;
   return new DomainError({
     code: ERROR_CODES.PLUG_SERVER_ERROR,
     message: "Falha ao comunicar com o plug-server.",

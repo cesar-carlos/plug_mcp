@@ -242,6 +242,23 @@ deploy, exclusivamente para o servidor de teste sem clientes. Mantém controles
 de segurança e aceite integral para futura liberação a clientes. Plano canônico:
 [primeiro deploy de teste](first-test-deploy.md).
 
+## DV2-018 — Operador SSH com fixtures locais — 2026-11-08
+
+**Aprovado pelo responsável:** executar o runner no servidor de teste por SSH,
+mantendo as fixtures isoladas na máquina local. Motivo: testar rascunhos do
+catálogo original sem exportar credenciais ou promover relatórios de outro
+controle. O canal privado transporta apenas o protocolo de teste; os segredos
+permanecem em suas origens.
+
+**Alcance:** consultas MSSQL, vínculos e revisões exatos, fixture local de uso
+único e relatório produzido pelo runner existente. Não permite testes no ERP,
+importação de aprovações, publicação automática, DML ou liberação para clientes.
+Substitui apenas a limitação do comando anterior ao controle de desenvolvimento,
+por um caminho de operador separado. Preserva casos, revalidações, limpeza e
+gates editoriais. Contrato: [operador SSH](operator-publication.md).
+
+Esta decisão autoriza a arquitetura; não atesta implantação ou piloto nativo.
+
 ## Manutenção do registro de decisões
 
 Nota de implementação de DV2-009 — 2026-10-12: núcleo OAuth e montagem candidata

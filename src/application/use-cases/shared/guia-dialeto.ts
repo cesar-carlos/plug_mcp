@@ -18,7 +18,7 @@ const withTruncated = (sintaxe: string): string => `${sintaxe}. ${GUIA_PAGINACAO
 const GUIAS: Record<Exclude<Dialeto, "firebird">, Omit<GuiaDialeto, "dialeto">> = {
   mssql: {
     paginacao: withTruncated(
-      "Consulta única limitada: SELECT TOP n ... ORDER BY ... (sem options.page). Paginação de páginas: só ORDER BY no SQL + options.page e options.page_size juntos — não escreva TOP/OFFSET/FETCH. Se o hub devolver 1033, use TOP n sem options.page até o rewrite OFFSET/FETCH no agente",
+      "Consulta única limitada: SELECT TOP n ... ORDER BY ... (sem options.page). Paginação de páginas: só ORDER BY no SQL + options.page e options.page_size juntos — não escreva TOP/OFFSET/FETCH. Erro 1033 exige revisar ORDER BY no contexto; 4104 exige revisar aliases e escopo. Não presumir falha do wrap nem trocar paginação por TOP automaticamente; validar_consulta não reproduz o motor",
     ),
     data: "YEAR(col), MONTH(col), DATEADD, DATEDIFF(day, t.emissao, t.vencimento) ou DATEDIFF_BIG com unidade temporal sem aspas e colunas publicadas qualificadas, CONVERT(date, col), GETDATE()",
     concatenacao: "col1 + col2 ou CONCAT(col1, col2)",

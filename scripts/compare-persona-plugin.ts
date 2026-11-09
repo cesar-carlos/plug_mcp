@@ -1,23 +1,26 @@
-import { readFile, lstat } from "node:fs/promises";
+import { readStablePluginFile } from "../src/infrastructure/plugins/package-read.js";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { diagnosePersonaPlugin } from "../src/infrastructure/plugins/persona-compatibility.js";
+import {
+  diagnosePersonaPlugin,
+  checkPluginDeploymentRevision,
+} from "../src/infrastructure/plugins/persona-compatibility.js";
 import { pluginRecordSchema } from "../src/infrastructure/plugins/package-schemas.js";
 import { validateSe7ePackage } from "../src/infrastructure/plugins/package-validation.js";
 
 async function readJson(path: string): Promise<unknown> {
-  const stat = await lstat(path);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 512 * 1024)
-    throw new Error("Invalid file");
-  return JSON.parse(await readFile(path, "utf8")) as unknown;
+  return JSON.parse((await readStablePluginFile(path, 512 * 1024)).toString("utf8")) as unknown;
 }
 let stage = "arguments";
 try {
   const args = process.argv.slice(2);
   if (
-    args.length !== 2 ||
+    (args.length !== 2 && args.length !== 3) ||
     !args[0]?.startsWith("--package=") ||
-    !args[1]?.startsWith("--capabilities=")
+    !args[0].slice("--package=".length) ||
+    !args[1]?.startsWith("--capabilities=") ||
+    !args[1].slice("--capabilities=".length) ||
+    (args.length === 3 && !/^--expected-revision=[a-f0-9]{40}$/.test(args[2]!))
   )
     throw new Error("Arguments");
   const root = resolve(args[0].slice("--package=".length));
@@ -40,6 +43,17 @@ try {
     packageTraining,
     server.training,
   );
+  const deployment = args[2]
+    ? checkPluginDeploymentRevision(
+        args[2].slice("--expected-revision=".length),
+        server.serverBuild?.revision,
+      )
+    : undefined;
+  if (deployment && !deployment.revisionMatches) {
+    result.compatible = false;
+    result.differences.push("serverRevision");
+    result.diagnostics.push(...deployment.diagnostics);
+  }
   try {
     await validateSe7ePackage(root, record);
   } catch {
@@ -55,8 +69,7 @@ try {
   process.stdout.write(
     JSON.stringify({
       ...result,
-      packageVersion: record.version,
-      resource: record.resource,
+      ...(deployment ? { deployment } : {}),
       serverRevision:
         server.serverBuild?.revision && /^[a-f0-9]{40}$/.test(server.serverBuild.revision)
           ? server.serverBuild.revision

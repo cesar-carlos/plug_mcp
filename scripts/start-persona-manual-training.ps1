@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)] [string] $Flutter,
     [Parameter(Mandatory = $true)] [string] $CandidateImage,
     [ValidateRange(10, 120)] [int] $Minutes = 60,
+    [switch] $CampoPrazos,
     [string] $HubCheckout = (Join-Path $PSScriptRoot '../../plug_server'),
     [string] $AgentCheckout = (Join-Path $PSScriptRoot '../../plug_agente'),
     [string] $SqlAnywhereDirectory = 'C:/Program Files/SQL Anywhere 16/Bin64'
@@ -39,7 +40,8 @@ try {
     Write-Host "Fixture privada: $manifestPath"
     Write-Host 'Aguarde o endereço do console. Credenciais sintéticas serão gravadas somente no arquivo privado indicado.'
     Write-Host 'Mantenha este terminal aberto; use stop-persona-manual-training.ps1 para encerrar antes do prazo.'
-    & (Join-Path $PSScriptRoot 'with-project-node.ps1') node node_modules/tsx/dist/cli.mjs scripts/homologation/manual-training.ts --manifest $manifestPath --hub $hubPath --agent $agentPath --flutter $flutterPath --image $imageId --minutes $Minutes
+    $trainingArguments = @(& (Join-Path $PSScriptRoot 'homologation/manual-training-arguments.ps1') -Manifest $manifestPath -Hub $hubPath -Agent $agentPath -Flutter $flutterPath -Image $imageId -Minutes $Minutes -CampoPrazos:$CampoPrazos)
+    & (Join-Path $PSScriptRoot 'with-project-node.ps1') node node_modules/tsx/dist/cli.mjs scripts/homologation/manual-training.ts @trainingArguments
     $sessionExit = $LASTEXITCODE
 } finally {
     try {

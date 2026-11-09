@@ -237,10 +237,9 @@ describe("mapPlugServerFailure", () => {
     expect(err.code).toBe("PLUG_SERVER_ERROR");
     expect(err.message).toBe("Falha ao comunicar com o plug-server.");
     expect(err.message).not.toContain("ClienteSecreto");
-    expect(err.hint).toMatch(/syntax error/i);
-    expect(err.details).toEqual(
-      expect.objectContaining({ engineMessage: expect.stringMatching(/ClienteSecreto/) }),
-    );
+    expect(err.hint).not.toMatch(/syntax error|ClienteSecreto/i);
+    expect(err.source).toBe("plug_server_http");
+    expect(err.details).toEqual({ httpStatus: 502 });
   });
 
   it("mapeia SQL Server 1033 do wrap gerenciado para INVALID_SQL, não PLUG_SERVER_ERROR", () => {
@@ -268,8 +267,8 @@ describe("mapPlugServerFailure", () => {
     expect(err.retryable).toBe(false);
     expect(err.source).toBe("sql_engine");
     expect(err.stage).toBe("sql.execute");
-    expect(err.nextAction).toBe("consultar_dados");
-    expect(err.message).toMatch(/paginação gerenciada/i);
+    expect(err.nextAction).toBe("validar_consulta");
+    expect(err.message).toMatch(/ORDER BY/i);
     expect(err.message).not.toContain("ContaReceber");
     expect(err.hint).toMatch(/1033/);
     expect(err.hint).toMatch(/options\.page/);
@@ -278,7 +277,7 @@ describe("mapPlugServerFailure", () => {
     expect(err.hint).not.toContain("ContaReceber");
   });
 
-  it("mapeia SQL Server 4104 do wrap gerenciado para o mesmo hint de 1033", () => {
+  it("mapeia SQL Server 4104 para revisão de aliases sem presumir wrap", () => {
     const err = mapPlugServerFailure(
       {
         status: 200,
@@ -303,11 +302,10 @@ describe("mapPlugServerFailure", () => {
     );
     expect(err.code).toBe("INVALID_SQL");
     expect(err.source).toBe("sql_engine");
-    expect(err.nextAction).toBe("consultar_dados");
-    expect(err.nextAction).not.toBe("validar_consulta");
-    expect(err.hint).toMatch(/1033\/4104|4104/);
-    expect(err.hint).toMatch(/options\.page/);
-    expect(err.hint).toMatch(/TOP n/);
+    expect(err.nextAction).toBe("validar_consulta");
+    expect(err.hint).toMatch(/4104/);
+    expect(err.hint).toMatch(/aliases/);
+    expect(err.hint).not.toMatch(/TOP n/);
     expect(err.hint).not.toMatch(/FROM real/i);
   });
 
@@ -326,7 +324,7 @@ describe("mapPlugServerFailure", () => {
       },
     });
     expect(err.code).toBe("INVALID_SQL");
-    expect(err.hint).toMatch(/Não repita options\.page/);
+    expect(err.hint).toMatch(/não comprova alteração pela paginação/);
     expect(err.hint).not.toMatch(/sqlModelo de obter_skill/);
   });
 
@@ -520,17 +518,17 @@ describe("mapPlugServerFailure", () => {
     expect(err.hint).not.toMatch(/pacote MCP \(TABELA_FORA/);
   });
 
-  it("mapeia HTTP 404 de agentId nunca registado para AGENT_UNAVAILABLE sem retry cego", () => {
+  it("mapeia HTTP 404 sem presumir histórico do agente", () => {
     const err = mapPlugServerFailure({
       status: 404,
       body: { code: "NOT_FOUND", message: "Agent not found" },
     });
-    expect(err.code).toBe("AGENT_UNAVAILABLE");
+    expect(err.code).toBe("PLUG_SERVER_ERROR");
     expect(err.retryable).toBe(false);
     expect(err.source).toBe("plug_server_http");
-    expect(err.nextAction).toBe("verificar_acesso");
-    expect(err.hint).toMatch(/nunca fez agent:register/i);
-    expect(err.hint).toMatch(/-32000/);
+    expect(err.nextAction).toBeUndefined();
+    expect(err.hint).toMatch(/não comprova/);
+    expect(err.hint).not.toMatch(/nunca fez agent:register/i);
   });
 
   it("mapeia -32000 agent_disconnected_at_dispatch com hint distinto de HTTP 404", () => {
@@ -841,7 +839,7 @@ describe("mapPlugServerFailure", () => {
     expect(err.details).toEqual(expect.objectContaining({ sqlstate: "42703" }));
   });
 
-  it("mapPlugServerNetworkError é plug_server_http retryable, não INTERNAL_ERROR", () => {
+  it("mapPlugServerNetworkError preserva origem sem autorizar retry", () => {
     const err = mapPlugServerNetworkError(
       Object.assign(new TypeError("fetch failed"), {
         cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:9"), {
@@ -852,11 +850,11 @@ describe("mapPlugServerFailure", () => {
     );
     expect(err.code).toBe("PLUG_SERVER_ERROR");
     expect(err.source).toBe("plug_server_http");
-    expect(err.retryable).toBe(true);
+    expect(err.retryable).toBe(false);
     expect(err.stage).toBe("sql.execute");
     expect(err.hint).toMatch(/Não altere o SELECT/);
     expect(err.hint).toMatch(/ECONNREFUSED/);
     expect(err.message).not.toMatch(/Erro interno/);
-    expect(err.details).toEqual({ errno: "ECONNREFUSED" });
+    expect(err.details).toEqual({ transportReason: "network", errno: "ECONNREFUSED" });
   });
 });

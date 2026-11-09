@@ -33,6 +33,11 @@ vira unknown, nunca approved. Não inferir revogação ou recuperar concessões.
 
 ## Persona-v2
 
+Cancelamento MCP é reconferido após autorização/espera, antes do dispatch e
+após o resultado. Resposta tardia não inicia entrega/revalidação; SQL já enviado
+pode continuar no agente. Metadados com aliases contraditórios ou tipos inválidos
+são recusados antes de normalizar, inclusive odbc_type/odbcType e coleções duplas.
+
 - Consulta propaga prazo total e cancelamento MCP ao transporte. Limitar admissão
   por pool/destino e por persona no contexto de consulta; saturação não autoriza
   retry/reconexão. Cancelamento antes do envio remove a espera; depois do envio
@@ -114,13 +119,42 @@ Não adicionar retry genérico de SQL nem agrupar policy+SQL em batch.
 
 ## Falhas
 
+Login, refresh, perfil e acesso usam etapas fixas próprias; fases queue,
+connection e response são preservadas nos relatos. Nunca usar URL/ID como etapa.
+Schema do relato aceita o vocabulário emitido, sem aceitar strings livres.
+
+HTTP 404 isolado informa recurso não encontrado, sem inferir histórico de
+registro, desconexão ou revogação do agente. Preservar RPC específico -32000;
+conferir rota/referência com o responsável, sem retry ou reconexão automática.
+
+Falha HTTP sem RPC reconhecido não vira SQL/policy por palavras da resposta
+ou category livre. Compatibilidade de diagnóstico textual legado exige HTTP 200. Código RPC específico reconhecido mantém precedência; erro HTTP genérico
+não autoriza retry nem inclui texto remoto ou afirma execução no banco.
+
+HTTP 403 usa código explícito do erro, sem procurar palavras em metadados.
+Mensagem legada reconhecida exige referência exata ao Client. Código de acesso
+ao agente prevalece sobre texto contraditório; recusa sem causa comprovada
+permanece HTTP, sem afirmar Client inativo ou ausência de concessão ao agente.
+
+O log do mapper compartilhado conserva somente status HTTP e código RPC.
+Mensagens, reason e diagnóstico técnico remotos podem conter SQL e dados;
+não registrá-los, mesmo quando o logger aplica redação de credenciais por chave.
+
 Metadados de espera exigem milissegundos inteiros, seguros e não negativos.
+HTTP 429/503 não inventam espera padrão; header válido prevalece sobre prazo
+RPC válido, inclusive zero. Ausência dos dois conserva null, sem autorizar retry.
 Prazo/data inválidos são ignorados, sem NaN/Infinity ou reenvio implícito.
 Timeout não inventa prazo de retry nem comprova cancelamento do SQL.
+Exceção de rede não tipada conserva transportReason=network e somente errno
+reconhecido, sem converter o objeto em texto, copiar sua mensagem ou inventar
+prazo de retry. Recusa invalid_payload não orienta repetir a tool.
 
 Heurística textual de SQL 1033/4104 não substitui código RPC conhecido de
 autenticação, protocolo, rate limit ou infraestrutura, nem falha HTTP explícita.
 Preservar compatibilidade dos diagnósticos SQL legados sem ampliar sua precedência.
+1033 orienta revisar ORDER BY no contexto; 4104 orienta revisar aliases,
+qualificadores e escopo. Nenhum comprova rewrite pela paginação. Não trocar
+paginação por TOP automaticamente. Validação local não reproduz o motor.
 
 Replay não autoriza trocar ID ou repetir tool. Pool, conexão/configuração de
 banco, execução ausente e cancelamento têm diagnóstico fixo por código RPC.

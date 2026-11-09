@@ -40,6 +40,7 @@ Precedência e índice das rules: [AGENTS.md](../AGENTS.md).
 | Anexos JSON/binários, handles e download autorizado           | [Anexos v2](persona-v2/attachments.md)                          |
 | Templates, datasets e importação estrutural de DDL            | [Biblioteca editorial v2](persona-v2/knowledge-library.md)      |
 | Fixture e cadeia real MCP/hub/agente nos três motores         | [Homologação isolada](persona-v2/homologation-chain.md)         |
+| Rascunhos remotos com fixtures locais isoladas                | [Runner de operador SSH](persona-v2/operator-publication.md)    |
 | Avaliação da IA, referências e limites dos ensaios sintéticos | [Avaliador do consumidor](persona-v2/consumer-evaluation.md)    |
 
 ## Referências da entrada legada

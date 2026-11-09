@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PLUG_SERVER_STAGES, PLUG_SERVER_PHASE_STAGES } from "../errors/plug-server-stages.js";
 
 /** New reports per token in the last hour. Replays of the same supportId do not count. */
 export const INTERACTION_ERROR_REPORTS_PER_HOUR = 20;
@@ -31,8 +32,8 @@ export const INTERACTION_ERROR_STAGES = [
   "hub",
   "sanitize",
   "validar_escopo",
-  "sql.execute",
-  "rpc",
+  ...PLUG_SERVER_STAGES,
+  ...PLUG_SERVER_PHASE_STAGES,
   "protocol",
   "authentication",
   "request",

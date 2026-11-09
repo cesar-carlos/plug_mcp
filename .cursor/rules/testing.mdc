@@ -60,6 +60,13 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Isolamento e gates
 
+- Runner SSH de operador conserva controle/cofre no servidor de teste e fixture
+  MSSQL local. Inspeção não executa/grava; execução fixa revisão/packageHash/casesHash/
+  sourceFingerprint e mantém revalidação/reprovação preventiva. Não recebe relatório
+  pronto, não cria endpoint público nem publica. Uma tentativa por sessão privada;
+  perda de confirmação não autoriza retry. Transporte sintético/PostgreSQL de controle
+  não certificam MSSQL nativo. Contrato: docs/persona-v2/operator-publication.md.
+
 - Fixtures HTTP do hub reutilizam contratos tipados quando disponíveis e passam
   pelo adapter real. A resposta positiva deve fixar a identidade pedida; regressões
   negativas mantêm recusa de identidade ausente/trocada. Não afrouxar o adapter

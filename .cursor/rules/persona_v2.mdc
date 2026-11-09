@@ -9,6 +9,12 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Razões SQL preservam precisão decimal antes da divisão; denominador vazio/nulo
+não vira zero. Exemplo sintético de média por item usa somente valores presentes
+e não substitui ticket por venda. Ensaios SQLite/parser não homologam motores.
+Overflow exige conversão antes da agregação quando publicada; converter o
+resultado após SUM/AVG não protege o acumulador. Tipo e precisão são do contrato.
+
 O tópico plug-server de obter_treinamento_base descreve somente o transporte v2:
 credencial cifrada por fonte, opções MCP distintas do RPC e falhas sem retry.
 Guias por tópico têm serialização/hash calculados uma vez e respostas isoladas;

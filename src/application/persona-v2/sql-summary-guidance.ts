@@ -23,7 +23,7 @@ Em obter_treinamento_base, use topic sql. ${QUERY_SKILL_SELECTION} Siga queryKno
 
 ${QUERY_SCOPE_PARAMS} Se a pergunta mudar o grão de vendas por produto para vendas por filial, adapte o SELECT e o GROUP BY quando medida, coluna de filial e finalidade estiverem publicadas. Se faltar o vínculo entre venda e filial, identifique o elo para curadoria.
 
-Antes de consultar, leia obter_skill, dialeto, medida, grão, chaves, cardinalidade, filtros e finalidades. Em SQL Server, use colunas/expressões físicas qualificadas no GROUP BY e no HAVING, nunca aliases de saída do mesmo SELECT. ORDER BY pode usar aliases únicos simples projetados; inclua desempate projetado e estável ao paginar. CTE/derivada só pode usar recursos e expressões aceitos no pacote e no validador. Valores ficam em params tipados. Preserve moeda, escala decimal, nulos, calendário e fuso treinados; para timestamps, use intervalo início inclusivo/fim exclusivo quando essa for a regra publicada. Não aplique CAST, arredondamento ou substituição de NULL para mascarar divergências. AVG de médias de grupos não é média global: preserve soma e contagem compatíveis quando treinado.
+Antes de consultar, leia obter_skill, dialeto, medida, grão, chaves, cardinalidade, filtros e finalidades. Em SQL Server, use colunas/expressões físicas qualificadas no GROUP BY e no HAVING, nunca aliases de saída do mesmo SELECT. ORDER BY pode usar aliases únicos simples projetados; inclua desempate projetado e estável ao paginar. CTE/derivada só pode usar recursos e expressões aceitos no pacote e no validador. Valores ficam em params tipados. Preserve moeda, escala decimal, nulos, calendário e fuso treinados; para timestamps, use intervalo início inclusivo/fim exclusivo quando essa for a regra publicada. Não aplique CAST, arredondamento ou substituição de NULL para mascarar divergências. Previna overflow com CAST antes de SUM/AVG só com tipo e precisão publicados; CAST depois não resolve. AVG de médias de grupos não é média global: preserve soma e contagem compatíveis quando treinado.
 
 ### Grão e relacionamentos
 
@@ -79,5 +79,10 @@ export const SQL_SUMMARY_EXAMPLES = [
     purpose:
       "Fixture: bases do ticket médio com valor líquido de item não nulo e chave de venda composta por filial e número.",
     sql: "WITH sales AS (SELECT s.branch_id AS branch, s.sale_id AS sale, SUM(s.net_amount) AS sale_amount FROM fixture_sales s WHERE s.sold_at >= :start AND s.sold_at < :end GROUP BY s.branch_id, s.sale_id) SELECT SUM(v.sale_amount) AS revenue, COUNT(*) AS sale_count FROM sales v",
+  },
+  {
+    dialect: "mssql" as const,
+    purpose: "Fixture: média por item com valor presente, não ticket por venda.",
+    sql: "SELECT 1.0 * SUM(s.net_amount) / NULLIF(COUNT(s.net_amount), 0) AS item_average FROM fixture_sales s WHERE s.sold_at >= :start AND s.sold_at < :end",
   },
 ] as const;

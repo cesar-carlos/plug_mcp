@@ -11,6 +11,38 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Runner de operador por canal SSH privado para consultas MSSQL do servidor de teste, com inspeção sem efeitos, revisão/hashes fixados e fixture local de uso único; relatório permanece no catálogo original. Piloto nativo e implantação ainda não atestados.
+- Fixed: Wrapper da sessão manual encaminha `-CampoPrazos` explicitamente, mantendo desativação por padrão e argumentos separados.
+
+- Fixed: Consulta v2 reconfere cancelamento MCP após esperas e antes do envio, evitando dispatch após autorização tardia e processamento de resultado após cancelamento. Sem promessa de interromper SQL em andamento.
+- Fixed: Normalização SQL recusa metadados contraditórios ou malformados entre aliases de nome/tipo/nulabilidade/ODBC e coleções duplicadas, sem perder diagnóstico seguro.
+- Changed: Treinamento orienta conversão publicada antes de agregações para prevenir overflow; regressões de parser cobrem os três dialetos sem certificar motores nativos. Singleflight preserva falha original mesmo quando a liberação do cache falha.
+
+- Fixed: Etapas de autenticação/acesso deixam de aparecer genericamente como rpc; schema de relatos aceita as etapas e fases realmente emitidas, com vocabulário fechado. Matriz adapter→MCP cobre códigos HTTP/RPC, correlação e ausência de replay.
+- Changed: Treinamento SQL explica truncamento de divisão inteira e inclui média sintética por item com denominador de valores presentes, sem confundir com ticket por venda ou converter ausência em zero.
+
+- Fixed: HTTP 429/503 não inventam prazos de retry quando ausentes ou inválidos; 503 passa a preservar prazo RPC válido na ausência de header válido, incluindo zero e precedência explícita, sem autorizar repetição automática.
+
+- Fixed: Compatibilidade do plugin valida manifestos de treinamento presentes mesmo sem contraparte e recusa tópicos ausentes nos dois lados, evitando falso resultado compatível.
+
+- Fixed: HTTP 404 deixa de afirmar que o agente nunca se registrou, inclusive em falhas de login/rota; treinamento compartilhado e diagnóstico v2 orientam conferir rota/referência sem inferir desconexão ou revogação. RPC explícito de indisponibilidade permanece distinto.
+
+- Fixed: Comparador do plugin não ecoa URL/versão de inventário não confiável; fechamento de arquivo não mascara falha principal da leitura e conserva diagnóstico seguro de limpeza.
+
+- Fixed: Falhas HTTP genéricas deixam de virar SQL/policy por texto ou categoria livre da resposta, sem copiar mensagem remota nem habilitar retry; preservados códigos RPC reconhecidos e compatibilidade textual legada em HTTP 200.
+
+- Changed: Pacotes usam validação compartilhada entre CLI/APIs, leitura limitada por descritor com detecção de alteração concorrente e diagnóstico seguro por etapa/categoria. Comparação pós-deploy aceita SHA esperado e recusa revisão ausente/divergente, sem certificar instalação ou servidor vivo por snapshot.
+
+- Fixed: Diagnóstico HTTP 403 deixa de inferir Client inativo por palavras em metadados ou mensagens sobre o owner; preserva código explícito de acesso ao agente e informa recusa sem causa comprovada de forma neutra, sem serializar o corpo para classificar.
+
+- Fixed: Diagnósticos e treinamento SQL separam erro 4104 de resolução de identificadores do 1033 de ORDER BY; deixam de presumir falha no wrap do agente ou recomendar TOP como recuperação automática. Revisão usa validação local sem alegar execução no motor.
+
+- Fixed: Falhas de rede não tipadas deixam de divulgar texto da exceção e códigos arbitrários ou sugerir retry em três segundos; preservam etapa e motivo seguro. Recusa invalid_payload também deixa de orientar repetição em contradição com retryable:false.
+
+- Security: Mapper compartilhado do plug_server deixa de registrar mensagens livres remotas que podem conter SQL ou dados; preserva status HTTP/código RPC e cobre a proteção com regressão usando o logger real.
+
+- Fixed: APIs do pacote recusam conexão ChatGPT na variante portátil; validação compara contratos JSON sem falsos conflitos por ordem de chaves, mantendo hashes e recusa de conteúdo divergente.
+
 - Added: Diagnóstico HTTP seguro com categorias de rota, motivo e supportId correlacionado; métricas v2 amostradas por etapa, desligadas por padrão; conferência automática de SHA/imagem/saúde/ciclos e logs após deploy sem repetir efeitos.
 - Changed: Fixture HTTP compartilhada valida identidade do agente pelo adapter real, com regressões para respostas incompletas ou de outro agente.
 

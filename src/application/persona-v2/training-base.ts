@@ -107,7 +107,7 @@ const content = {
       share:
         "Para participação, identifique o universo do denominador: por exemplo, vendas do produto divididas pelas vendas de todos os produtos elegíveis na filial e período pedidos. O filtro do produto limita o numerador; preserve no denominador os filtros de acesso e os de negócio que definem o universo. Calcule antes de paginar o ranking. Se o pedido for participação apenas no top N, identifique esse universo na resposta.",
       undefinedRatio:
-        "Denominador zero, ausente ou sem cobertura suficiente impede informar uma razão definitiva. Siga a regra publicada de precisão e arredondamento; não transforme falta de base em 0%.",
+        "Divisão inteira pode truncar frações; use precisão decimal publicada antes de dividir. Denominador zero, ausente ou incompleto impede uma razão definitiva. Siga a regra publicada de precisão e arredondamento; não transforme falta de base em 0%.",
     },
     businessDay: {
       instructions:
@@ -150,14 +150,14 @@ const content = {
     write:
       "sql.operation.execute/get/cancel exigem capability sqlOperations v1 negociada e opt-in do agente. O expectedSource da fonte e a capability sourceIdentity v1 vinculam a prova à própria conexão executora, sem reconexão. A IA usa preparar_operacao/executar_operacao/obter_operacao, respeitando aprovação e estado desconhecido.",
   },
-  sql: "Leia a skill publicada e o dialeto da fonte. Não invente tabela, coluna, relacionamento ou regra. Os motores suportados são PostgreSQL, SQL Server e SQL Anywhere. Firebird não é suportado. Agregações decimais largas podem exigir CAST explicitamente treinado conforme a precisão de negócio e do driver. Use parâmetros separados dos valores, filtros e agregações no banco. Preserve grão, cardinalidade, nulos, unidades, calendário e decimais. Uma página não representa o total. Nunca use SUM(DISTINCT valor) como correção automática de duplicidade.",
+  sql: "Leia a skill publicada e o dialeto da fonte. Não invente tabela, coluna, relacionamento ou regra. Os motores suportados são PostgreSQL, SQL Server e SQL Anywhere. Firebird não é suportado. Previna overflow com CAST antes de SUM/AVG, só com tipo/precisão publicados e compatíveis com motor/driver. Use parâmetros separados dos valores, filtros e agregações no banco. Preserve grão, cardinalidade, nulos, unidades, calendário e decimais. Uma página não representa o total. Nunca use SUM(DISTINCT valor) como correção automática de duplicidade.",
   sources:
     "Uma persona pode ter várias fontes independentes. A fonte identifica a base física e seu dialeto; tabelas homônimas de fontes diferentes não são equivalentes. Esclareça origem ambígua. Um SELECT nunca mistura conexões.",
   plugServer:
     "Toda comunicação com bases de negócio segue MCP → plug_server → plug_agente → banco. O MCP não abre conexão direta. O plug_server roteia comandos para o plug_agente; não interpreta nem reescreve dialetos. JWT Client, ClientAgentAccess e policy do client_token continuam obrigatórios. Falhas de transporte não autorizam alterar SQL. INSERT corresponde à permissão upstream update, mas isso não concede autorização no MCP.",
   hubTransport: {
     recovery:
-      "Texto SQL não substitui código RPC de autenticação/protocolo nem falha HTTP. Prazo inválido não orienta espera ou retry. details.httpStatus não é código RPC. HTTP 400 pede revisão do contrato; 503 não distingue fila, proxy ou agente. Retry-After, mesmo em HTTP 200/RPC -32013, não autoriza retry. 404 não prova revogação; isHubConnected=false não prova offline. 401 do hub não comprova expiração OAuth MCP. requestId/correlation_id não substituem supportId. Use só diagnóstico seguro da tool, nunca technical_message remoto. Replay não autoriza trocar ID ou repetir tool. Execução ausente/cancelada não comprova rollback. Sem causa comprovada, encaminhe supportId ao responsável.",
+      "Texto SQL não substitui código RPC de autenticação/protocolo nem falha HTTP. Prazo inválido não orienta espera ou retry. details.httpStatus não é código RPC. HTTP 400 pede revisão do contrato; 503 não distingue fila, proxy ou agente. Retry-After, mesmo em HTTP 200/RPC -32013, não autoriza retry. 404 não prova revogação, desconexão ou histórico do agente; isHubConnected=false não prova offline. 401 do hub não comprova expiração OAuth MCP. requestId/correlation_id não substituem supportId. Use só diagnóstico seguro da tool, nunca technical_message remoto. Replay não autoriza trocar ID ou repetir tool. Execução ausente/cancelada não comprova rollback. Sem causa comprovada, encaminhe supportId ao responsável.",
     errorResponse:
       "Ao responder uma falha, informe o que não pôde ser concluído, code, stage, motivo seguro disponível, supportId e a próxima ação indicada. Não reduza todos os erros a erro de comunicação. outcome_unknown verdadeiro exige consultar o journal original, nunca repetir a operação nem afirmar rollback. invalid_response não significa resultado vazio; exceção com causa indeterminada não comprova expiração ou ausência de dados. Não copie SQL, valores, credenciais ou mensagens remotas livres.",
     scheduling:

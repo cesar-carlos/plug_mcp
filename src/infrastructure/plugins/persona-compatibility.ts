@@ -52,6 +52,36 @@ export interface PersonaCompatibilityDiagnosis {
   installedPackageVerified: false;
 }
 
+/** A local snapshot is evidence of comparison, never proof of a live installation. */
+export function checkPluginDeploymentRevision(
+  expected: string,
+  actual: unknown,
+): {
+  revisionMatches: boolean;
+  liveServerVerified: false;
+  installedPackageVerified: false;
+  diagnostics: PersonaCompatibilityDiagnosis["diagnostics"];
+} {
+  const valid = /^[a-f0-9]{40}$/;
+  const revisionMatches =
+    valid.test(expected) && typeof actual === "string" && valid.test(actual) && actual === expected;
+  return {
+    revisionMatches,
+    liveServerVerified: false,
+    installedPackageVerified: false,
+    diagnostics: revisionMatches
+      ? []
+      : [
+          {
+            component: "serverRevision",
+            reason: "missing_or_different",
+            action:
+              "Obtenha novamente obter_capacidades após o deploy e confira o SHA completo esperado com a versão do servidor e do worker.",
+          },
+        ],
+  };
+}
+
 /** Never echo untrusted values, paths or unknown field names into the diagnostic. */
 export function diagnosePersonaPlugin(
   packageValue: unknown,
@@ -98,8 +128,7 @@ export function diagnosePersonaPlugin(
   if (
     pkg.success &&
     server.success &&
-    packageTraining !== undefined &&
-    serverTraining !== undefined
+    (packageTraining !== undefined || serverTraining !== undefined)
   ) {
     const schema = z.strictObject({
       version: z.string().min(1).max(100),
@@ -112,8 +141,7 @@ export function diagnosePersonaPlugin(
             bytes: z.number().int().positive(),
           }),
         )
-        .min(1)
-        .max(TRAINING_TOPICS.length),
+        .length(TRAINING_TOPICS.length),
     });
     const a = schema.safeParse(packageTraining),
       b = schema.safeParse(serverTraining);
@@ -124,14 +152,17 @@ export function diagnosePersonaPlugin(
       value.baseHash === contract.trainingBaseHash &&
       hash(canonicalJson(value.topics)) === contract.trainingTopicsHash &&
       new Set(value.topics.map((entry) => entry.topic)).size === value.topics.length;
-    if (!a.success || !b.success || !valid(a.data, pkg.data) || !valid(b.data, server.data)) {
+    if (
+      (packageTraining !== undefined && (!a.success || !valid(a.data, pkg.data))) ||
+      (serverTraining !== undefined && (!b.success || !valid(b.data, server.data)))
+    ) {
       diagnostics.push({
         component: "trainingManifest",
         reason: "invalid",
         action:
           "Obtenha o manifesto gerado com o pacote e training de obter_capacidades; os hashes agregados precisam corresponder. Não altere os hashes manualmente.",
       });
-    } else
+    } else if (a.success && b.success)
       for (const topic of TRAINING_TOPICS) {
         const left = a.data.topics.find((entry) => entry.topic === topic),
           right = b.data.topics.find((entry) => entry.topic === topic);

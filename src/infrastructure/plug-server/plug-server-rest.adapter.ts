@@ -2,6 +2,7 @@ import { queryTransportContext } from "../../application/persona-v2/query-transp
 import type { ExpectedSource } from "../../domain/persona-v2/source-discovery.js";
 import type { ExpectedStructure } from "../../domain/persona-v2/source-schema.js";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import type { SqlOperationTransportPort } from "../../domain/ports/sql-operation-transport.port.js";
 import { parseFullClientPolicy } from "./full-policy.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
@@ -48,6 +49,17 @@ const defaultHubHttpClients = (): PlugServerHttpClients => {
 };
 
 type HubHttpPool = "auth" | "sql";
+
+const routeStage = (path: string): string => {
+  if (path === "/api/v1/client-auth/login") return "login";
+  if (path === "/api/v1/client-auth/refresh") return "refresh";
+  if (path === "/api/v1/client-auth/me") return "getClientProfile";
+  if (path === "/api/v1/client/me/agents") return "requestAgentAccess";
+  if (path.startsWith("/api/v1/client/me/agent-access-requests?")) return "getAgentAccessRequests";
+  if (/^\/api\/v1\/client\/me\/agents\/[^/]+\/client-token$/.test(path)) return "updateClientToken";
+  if (/^\/api\/v1\/client\/me\/agents\/[^/]+$/.test(path)) return "getAgentAccessStatus";
+  return "rpc";
+};
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -103,6 +115,7 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
       throw new DomainError({
         code: ERROR_CODES.PLUG_SERVER_ERROR,
         message: "Perfil Client incompatível.",
+        stage: "getClientProfile",
         hint: "Verifique o contrato GET /api/v1/client-auth/me do hub.",
         source: "plug_server_http",
       });
@@ -136,7 +149,7 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
         typeof rec.hasClientToken !== "boolean" ||
         typeof rec.isHubConnected !== "boolean"
       ) {
-        throw invalidHubResponse("rpc");
+        throw invalidHubResponse("getAgentAccessStatus");
       }
       const caps = asRecord(rec.sqlOperations);
       return {
@@ -433,7 +446,7 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
       "";
     const refreshToken = typeof data.refreshToken === "string" ? data.refreshToken : "";
     if (!accessToken) {
-      throw invalidHubResponse("rpc");
+      throw invalidHubResponse(routeStage(path));
     }
     return { accessToken, refreshToken };
   }
@@ -457,7 +470,7 @@ export class PlugServerRestAdapter implements PlugServerGatewayPort, SqlOperatio
             commandMethod === "sql.operation.get" ||
             commandMethod === "sql.operation.cancel"
           ? commandMethod
-          : "rpc";
+          : routeStage(path);
     let response: Response;
     try {
       const fetchImpl = pool === "sql" ? this.sqlFetch : this.authFetch;
@@ -606,6 +619,12 @@ const readPagination = (result: Record<string, unknown>): SqlExecuteResult["pagi
 };
 
 const readColumnsMetadata = (result: Record<string, unknown>): SqlColumnMetadata[] => {
+  if (
+    result.column_metadata !== undefined &&
+    result.columns_metadata !== undefined &&
+    !isDeepStrictEqual(result.column_metadata, result.columns_metadata)
+  )
+    throw invalidHubResponse("sql.execute");
   const raw =
     result.column_metadata !== undefined ? result.column_metadata : result.columns_metadata;
   if (raw === undefined) return [];
@@ -615,6 +634,25 @@ const readColumnsMetadata = (result: Record<string, unknown>): SqlColumnMetadata
   for (const item of raw) {
     const rec = asRecord(item);
     if (!rec) throw invalidHubResponse("sql.execute");
+    // Aliases represent one fact, not alternatives that may hide invalid or contradictory data.
+    for (const [left, right, kind] of [
+      ["name", "column_name", "string"],
+      ["type", "data_type", "string"],
+      ["nullable", "is_nullable", "boolean"],
+      ["odbc_type", "odbcType", "number"],
+    ] as const) {
+      for (const value of [rec[left], rec[right]]) {
+        if (value === undefined) continue;
+        if (
+          typeof value !== kind ||
+          (kind === "number" && !Number.isSafeInteger(value)) ||
+          value === ""
+        )
+          throw invalidHubResponse("sql.execute");
+      }
+      if (rec[left] !== undefined && rec[right] !== undefined && rec[left] !== rec[right])
+        throw invalidHubResponse("sql.execute");
+    }
     const name =
       typeof rec.name === "string"
         ? rec.name
