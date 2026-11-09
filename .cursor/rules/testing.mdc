@@ -68,6 +68,8 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
   não certificam MSSQL nativo. Contrato: docs/persona-v2/operator-publication.md.
   Perfis individuais de prazo criam somente a tabela do caso; não acrescentar
   sementes estranhas ao treinamento nem afrouxar a igualdade do manifesto.
+  Perfis Campo de consulta são fechados por caso; não inferir colunas, FKs ou
+  constraints a partir de nomes, nem reusar a sessão de outro rascunho.
 
 - Fixtures HTTP do hub reutilizam contratos tipados quando disponíveis e passam
   pelo adapter real. A resposta positiva deve fixar a identidade pedida; regressões

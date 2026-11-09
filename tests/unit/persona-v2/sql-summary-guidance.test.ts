@@ -63,6 +63,9 @@ it("base, runtime e guia do pacote entregam a mesma orientação de resumos", ()
     "não reescreva SQL",
     "não prometer suporte irrestrito",
     "publicados",
+    "origem efetiva do FROM",
+    "Cada ramo UNION",
+    "WHERE 1=1",
   ])
     expect(SQL_SUMMARY_GUIDANCE).toContain(required);
 });

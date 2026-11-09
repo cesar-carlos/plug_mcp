@@ -32,6 +32,14 @@ recursivas ou com referência futura são recusadas; nomes de CTE não autorizam
 tabelas físicas. Esta correção de linhagem não aprova semântica, cardinalidade
 ou relatórios de negócio.
 
+O recorte pode ser herdado da CTE/derivada que dirige o FROM, incluindo cadeias,
+desde que cada ramo UNION esteja filtrado ou agregado. Dimensões adicionais
+exigem INNER/LEFT JOIN, chaves diretas, todos os pares publicados e cardinalidade
+N:1/1:1 na direção da dimensão. Não conta agregação em CTE não utilizada ou em
+outra subconsulta; RIGHT/FULL/CROSS, dimensão derivada, chave transformada,
+cardinalidade desconhecida/multiplicadora ou self JOIN com direção ambígua não habilitam esse caminho.
+As demais validações de escopo, fanout, parâmetros e paginação são preservadas.
+
 `obter_treinamento_base({topic})` permite solicitar `sql`, `knowledge`,
 `operations`, `administration` ou `plug-server`. Sem topic conserva a base completa.
 Cada tópico informa `baseHash` e `contentHash` do guia retornado; não são

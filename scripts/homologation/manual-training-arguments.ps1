@@ -6,11 +6,13 @@ param(
     [Parameter(Mandatory = $true)] [string] $Image,
     [ValidateRange(10, 120)] [int] $Minutes = 60,
     [switch] $CampoPrazos,
-    [ValidateSet('', 'pagar', 'receber')] [string] $CampoPrazo = ''
+    [ValidateSet('', 'pagar', 'receber')] [string] $CampoPrazo = '',
+    [ValidateSet('', 'titulos-pagar', 'vencidos-pagar', 'agenda-pagar', 'saldo-fornecedor')] [string] $CampoConsulta = ''
 )
-if ($CampoPrazos -and $CampoPrazo) { throw 'Escolha um único perfil de fixture de prazo.' }
+if (@($CampoPrazos, [bool]$CampoPrazo, [bool]$CampoConsulta).Where({ $_ }).Count -gt 1) { throw 'Escolha um único perfil de fixture de prazo.' }
 # Emit distinct arguments, never a shell command or expanded credential string.
 @('--manifest', $Manifest, '--hub', $Hub, '--agent', $Agent,
     '--flutter', $Flutter, '--image', $Image, '--minutes', [string]$Minutes)
 if ($CampoPrazos) { '--campoPrazos' }
 if ($CampoPrazo) { '--campoPrazo'; $CampoPrazo }
+if ($CampoConsulta) { '--campoConsulta'; $CampoConsulta }

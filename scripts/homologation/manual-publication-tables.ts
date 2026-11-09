@@ -2,13 +2,21 @@ import {
   fixtureTablesSchema,
   type PublicationFixtureTable,
 } from "../../src/domain/persona-v2/publication-fixture.js";
+import { campoQueryTables, type CampoQueryProfile } from "./campo-query-fixtures.js";
 
 /** Typed, synthetic tables only; no setup SQL or operational data. */
 export function manualPublicationTables(
   dialect: string,
   campoPrazos = false,
   campoPrazo?: "pagar" | "receber",
+  campoConsulta?: CampoQueryProfile,
 ): PublicationFixtureTable[] {
+  if ([campoPrazos, !!campoPrazo, !!campoConsulta].filter(Boolean).length > 1)
+    throw new Error("Escolha um único perfil de fixture de prazo.");
+  if (campoConsulta) {
+    const tables = campoQueryTables(campoConsulta);
+    if (dialect === "mssql") return tables;
+  }
   if (campoPrazo && (campoPrazos || !["pagar", "receber"].includes(campoPrazo)))
     throw new Error("Escolha um único perfil de fixture de prazo.");
   const sides = campoPrazo ? [campoPrazo] : ["receber", "pagar"];

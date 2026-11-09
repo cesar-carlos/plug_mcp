@@ -12,6 +12,7 @@ import { FixtureProcesses } from "./fixture-processes.js";
 import { assertManualFixtureAccess } from "./manual-fixture-access.js";
 import { applyPersonaMigrations } from "../../src/infrastructure/persistence/persona-v2/migrate.js";
 import { manualPublicationTables } from "./manual-publication-tables.js";
+import { campoQueryProfileSchema } from "./campo-query-fixtures.js";
 
 const values = parseArgs({
   options: {
@@ -22,6 +23,7 @@ const values = parseArgs({
     image: { type: "string" },
     campoPrazos: { type: "boolean", default: false },
     campoPrazo: { type: "string" },
+    campoConsulta: { type: "string" },
     minutes: { type: "string", default: "60" },
   },
 }).values;
@@ -34,9 +36,13 @@ const input = z
     image: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     campoPrazos: z.boolean(),
     campoPrazo: z.enum(["pagar", "receber"]).optional(),
+    campoConsulta: campoQueryProfileSchema.optional(),
     minutes: z.coerce.number().int().min(10).max(120),
   })
-  .refine((value) => !(value.campoPrazos && value.campoPrazo))
+  .refine(
+    (value) =>
+      [value.campoPrazos, !!value.campoPrazo, !!value.campoConsulta].filter(Boolean).length <= 1,
+  )
   .parse(values);
 const project = realpathSync(process.cwd());
 const manifest = readChainManifest(realpathSync(input.manifest));
@@ -71,7 +77,12 @@ writeFileSync(
         dialect,
         {
           ...manifest.engines[dialect],
-          publicationTables: manualPublicationTables(dialect, input.campoPrazos, input.campoPrazo),
+          publicationTables: manualPublicationTables(
+            dialect,
+            input.campoPrazos,
+            input.campoPrazo,
+            input.campoConsulta,
+          ),
         },
       ]),
     ),

@@ -13,19 +13,21 @@ export const QUERY_SKILL_SELECTION =
 /** Session guidance only: does not publish skills or grant SQL authority. */
 export const SQL_SUMMARY_GUIDANCE = `## Resumos SQL na fonte
 
-Modelos publicados podem usar SELECT em uma linha e a projeção na seguinte. O transporte v2 prepara esse separador para o agente; preserve o recorte e os parâmetros do modelo.
+O transporte v2 aceita quebra de linha após SELECT/WITH. Preserve recorte e parâmetros publicados.
 
-Para totais, contagens, indicadores e resumos por produto, classe ou período de uma única fonte, prefira calcular no banco e retornar somente dimensões e medidas necessárias. Use WHERE para o recorte e GROUP BY com SUM, COUNT, MIN, MAX ou AVG quando o significado publicado permitir; HAVING filtra grupos. Não baixe linhas detalhadas para somar no chat quando um resumo autorizado resolve a pergunta. Detalhamento solicitado continua sendo uma consulta própria, com seus limites. O plug_server encaminha o SQL ao plug_agente; o banco executa a agregação, sem reescrita de dialeto ou agregação automática pelo hub.
+Calcule totais, contagens e resumos de uma fonte no banco com WHERE, GROUP BY e SUM/COUNT/MIN/MAX/AVG conforme o significado publicado; HAVING filtra grupos. Retorne dimensões e medidas necessárias, sem baixar detalhes para somar no chat. Detalhes solicitados seguem seus próprios limites. O plug_server encaminha ao plug_agente e o banco agrega; o hub não reescreve dialeto nem agrega resultados.
 
 ### Recorte e acesso
 
-Em obter_treinamento_base, use topic sql. ${QUERY_SKILL_SELECTION} Siga queryKnowledgeWorkflow para localizar a skill e conferir medida, grão e vínculos concedidos. Consulte relationshipPaths antes de combinar tabelas. Escolha o formato pela pergunta: total único dispensa GROUP BY, ORDER BY e paginação; resumo agrupa no grão pedido; ranking ordena os grupos depois de agregar. Compare a coluna diretamente a parâmetros do tipo publicado. Para um dia, prefira o intervalo treinado a converter cada timestamp em data. Isso permite ao otimizador considerar índices existentes; só evidência da base confirma seu uso. Não crie índices nem envie hints ou comandos de plano pela tool.
+Em obter_treinamento_base, use topic sql. ${QUERY_SKILL_SELECTION} Siga queryKnowledgeWorkflow e confira relationshipPaths antes de combinar tabelas. Total único dispensa GROUP BY, ORDER BY e paginação; resumo agrupa no grão pedido; ranking ordena os grupos depois de agregar. Compare a coluna diretamente a parâmetros do tipo publicado. Para um dia, prefira o intervalo treinado a converter cada timestamp em data. Pode aproveitar índices existentes; confirme por evidência da base. Não crie índices nem envie hints ou comandos de plano pela tool.
 
 ${QUERY_SCOPE_PARAMS} Se a pergunta mudar o grão de vendas por produto para vendas por filial, adapte o SELECT e o GROUP BY quando medida, coluna de filial e finalidade estiverem publicadas. Se faltar o vínculo entre venda e filial, identifique o elo para curadoria.
 
 Antes de consultar, leia obter_skill, dialeto, medida, grão, chaves, cardinalidade, filtros e finalidades. Em SQL Server, use colunas/expressões físicas qualificadas no GROUP BY e no HAVING, nunca aliases de saída do mesmo SELECT. ORDER BY pode usar aliases únicos simples projetados; inclua desempate projetado e estável ao paginar. CTE/derivada só pode usar recursos e expressões aceitos no pacote e no validador. Valores ficam em params tipados. Preserve moeda, escala decimal, nulos, calendário e fuso treinados; para timestamps, use intervalo início inclusivo/fim exclusivo quando essa for a regra publicada. Não aplique CAST, arredondamento ou substituição de NULL para mascarar divergências. Previna overflow com CAST antes de SUM/AVG só com tipo e precisão publicados; CAST depois não resolve. AVG de médias de grupos não é média global: preserve soma e contagem compatíveis quando treinado.
 
 ### Grão e relacionamentos
+
+CTE/derivada pode fornecer o recorte ao SELECT externo se for a origem efetiva do FROM. Dimensões: INNER/LEFT, chaves diretas e relação completa publicada N:1/1:1 na direção da dimensão. Cada ramo UNION exige recorte. CTE não usada, RIGHT/FULL/CROSS, chave transformada, self JOIN ambíguo ou cardinalidade desconhecida/multiplicadora não habilitam essa prova. Não use WHERE 1=1; solicite curadoria.
 
 Evite multiplicar medidas de cabeçalho por itens em JOIN 1:N ou N:N. Agregue cada medida no seu grão confirmado antes de combinar, somente se os relacionamentos publicados permitirem. Nunca use SUM(DISTINCT valor) como remendo: valores iguais podem pertencer a vendas distintas. Concilie itens e cabeçalhos por período, filial, status, cancelamentos, devoluções, descontos, frete, impostos, moeda, grão e regra publicados; não invente rateios nem force igualdade. Validação técnica não aprova a métrica de negócio.
 

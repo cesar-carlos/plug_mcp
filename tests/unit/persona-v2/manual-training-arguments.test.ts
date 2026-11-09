@@ -2,66 +2,82 @@ import { spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { expect, it } from "vitest";
 
-it.each([false, true, "pagar", "receber"])(
-  "wrapper emite argumentos isolados e campoPrazos explícito: %s",
-  (enabled) => {
-    const manifest = "fixture folder/manifest.json";
-    const result = spawnSync(
-      process.platform === "win32" ? "powershell.exe" : "pwsh",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-File",
-        "scripts/homologation/manual-training-arguments.ps1",
-        "-Manifest",
-        manifest,
-        "-Hub",
-        "hub folder",
-        "-Agent",
-        "agent folder",
-        "-Flutter",
-        "flutter folder/flutter.bat",
-        "-Image",
-        `sha256:${"a".repeat(64)}`,
-        "-Minutes",
-        "30",
-        ...(typeof enabled === "string"
-          ? ["-CampoPrazo", enabled]
-          : enabled
-            ? ["-CampoPrazos"]
-            : []),
-      ],
-      { encoding: "utf8" },
-    );
-    expect(result.error).toBeUndefined();
-    expect(result.status, result.stderr).toBe(0);
-    const values = parseArgs({
-      args: result.stdout.trim().split(/\r?\n/),
-      options: {
-        manifest: { type: "string" },
-        hub: { type: "string" },
-        agent: { type: "string" },
-        flutter: { type: "string" },
-        image: { type: "string" },
-        minutes: { type: "string" },
-        campoPrazos: { type: "boolean", default: false },
-        campoPrazo: { type: "string" },
-      },
-    }).values;
-    expect(values).toEqual({
+it.each([
+  false,
+  true,
+  "pagar",
+  "receber",
+  "titulos-pagar",
+  "vencidos-pagar",
+  "agenda-pagar",
+  "saldo-fornecedor",
+])("wrapper emite argumentos isolados e campoPrazos explícito: %s", (enabled) => {
+  const manifest = "fixture folder/manifest.json";
+  const result = spawnSync(
+    process.platform === "win32" ? "powershell.exe" : "pwsh",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-File",
+      "scripts/homologation/manual-training-arguments.ps1",
+      "-Manifest",
       manifest,
-      hub: "hub folder",
-      agent: "agent folder",
-      flutter: "flutter folder/flutter.bat",
-      image: `sha256:${"a".repeat(64)}`,
-      minutes: "30",
-      campoPrazos: enabled === true,
-      ...(typeof enabled === "string" ? { campoPrazo: enabled } : {}),
-    });
-  },
-);
+      "-Hub",
+      "hub folder",
+      "-Agent",
+      "agent folder",
+      "-Flutter",
+      "flutter folder/flutter.bat",
+      "-Image",
+      `sha256:${"a".repeat(64)}`,
+      "-Minutes",
+      "30",
+      ...(typeof enabled === "string"
+        ? [["pagar", "receber"].includes(enabled) ? "-CampoPrazo" : "-CampoConsulta", enabled]
+        : enabled
+          ? ["-CampoPrazos"]
+          : []),
+    ],
+    { encoding: "utf8" },
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.status, result.stderr).toBe(0);
+  const values = parseArgs({
+    args: result.stdout.trim().split(/\r?\n/),
+    options: {
+      manifest: { type: "string" },
+      hub: { type: "string" },
+      agent: { type: "string" },
+      flutter: { type: "string" },
+      image: { type: "string" },
+      minutes: { type: "string" },
+      campoPrazos: { type: "boolean", default: false },
+      campoPrazo: { type: "string" },
+      campoConsulta: { type: "string" },
+    },
+  }).values;
+  expect(values).toEqual({
+    manifest,
+    hub: "hub folder",
+    agent: "agent folder",
+    flutter: "flutter folder/flutter.bat",
+    image: `sha256:${"a".repeat(64)}`,
+    minutes: "30",
+    campoPrazos: enabled === true,
+    ...(typeof enabled === "string"
+      ? { [["pagar", "receber"].includes(enabled) ? "campoPrazo" : "campoConsulta"]: enabled }
+      : {}),
+  });
+});
 
-it("recusa dois perfis antes de emitir argumentos", () => {
+it.each(
+  [
+    ["-CampoPrazos", "-CampoPrazo", "pagar"],
+    ["-CampoPrazos", "-CampoConsulta", "titulos-pagar"],
+    ["-CampoPrazo", "receber", "-CampoConsulta", "agenda-pagar"],
+    ["-CampoConsulta", "arbitrario"],
+  ].map((profiles) => ({ profiles })),
+)("recusa perfis inválidos antes de emitir argumentos (%#)", ({ profiles }) => {
   const result = spawnSync(
     process.platform === "win32" ? "powershell.exe" : "pwsh",
     [
@@ -79,9 +95,7 @@ it("recusa dois perfis antes de emitir argumentos", () => {
       "flutter",
       "-Image",
       `sha256:${"a".repeat(64)}`,
-      "-CampoPrazos",
-      "-CampoPrazo",
-      "pagar",
+      ...profiles,
     ],
     { encoding: "utf8" },
   );

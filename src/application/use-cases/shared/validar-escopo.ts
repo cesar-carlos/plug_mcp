@@ -18,6 +18,7 @@ import {
 import { hintComProximos } from "./sugestoes.js";
 import { resolvePhysicalJoinKey } from "./assert-fanout.js";
 import { sqlDeclaraLimiteExterno, sqlTemOrderByExterno } from "./sql-scan.js";
+import { temRecorteComprovado } from "./select-recorte.js";
 
 export const GROUP_BY_MAX_EXPRESSIONS = 16;
 
@@ -384,16 +385,13 @@ const validarSelect = (
   }
 };
 
-const assertRecorte = (ast: SqlAstSelect): void => {
-  if (!ast.temWhere && !ast.temAgregacaoLocal) {
+const assertRecorte = (ast: SqlAstSelect, escopo: EscopoSkill): void => {
+  if (!temRecorteComprovado(ast, escopo)) {
     throw DomainError.pacote({
       code: ERROR_CODES.CONSULTA_SEM_RECORTE,
       message: "Consulta sem recorte nem agregação.",
-      hint: "Adicione WHERE (período, empresa, status) ou agregue no banco (SUM/COUNT/GROUP BY). Não reenvie o mesmo SELECT sem recorte nem some linhas na IA.",
+      hint: "Não reenvie a mesma consulta sem ajustes. Adicione WHERE (período, empresa, status) ou agregue no banco. Em CTE/derivada, delimite a origem efetiva do FROM; dimensões exigem INNER/LEFT, chaves diretas e relacionamento completo N:1/1:1 na direção da dimensão. Cada ramo UNION exige recorte. Não use WHERE 1=1 para contornar a recusa nem some linhas na IA.",
     });
-  }
-  for (const branch of ast.setBranches) {
-    assertRecorte(branch);
   }
 };
 
@@ -461,7 +459,7 @@ export const validarAstNoEscopo = (
   const cteNomes = new Set(ast.cteNomes.map(lower));
   validarSelect(ast, escopo, cteNomes, modo === "inspecao");
   if (modo !== "inspecao") {
-    assertRecorte(ast);
+    assertRecorte(ast, escopo);
   }
   exigirPaginacaoEstavel(ast.sql, ast, options);
   return ast;

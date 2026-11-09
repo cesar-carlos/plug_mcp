@@ -9,6 +9,11 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Recorte herdado usa somente a CTE/derivada que dirige o FROM, com todos os ramos
+delimitados. Dimensões exigem INNER/LEFT, chaves diretas e relação completa
+N:1/1:1 na direção consumida; CTE não utilizada, chave transformada e expansão
+de grão não constituem prova. Escopo, fanout e paginação continuam independentes.
+
 Razões SQL preservam precisão decimal antes da divisão; denominador vazio/nulo
 não vira zero. Exemplo sintético de média por item usa somente valores presentes
 e não substitui ticket por venda. Ensaios SQLite/parser não homologam motores.

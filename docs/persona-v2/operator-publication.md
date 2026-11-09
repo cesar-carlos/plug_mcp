@@ -72,6 +72,13 @@ O modo inspect recusa sessão, e run exige sessão. Os IDs, hashes e a revisão 
 substituem acesso SSH de operador. O programa não publica nem amplia grants.
 Após relatório aprovado, revisão editorial e publicação continuam no console.
 
+Outros rascunhos usam perfis locais fechados por `-CampoConsulta`: `titulos-pagar`,
+`vencidos-pagar`, `agenda-pagar` e `saldo-fornecedor`. Títulos/saldo incluem
+`dbo.fornecedor`; vencidos/agenda usam somente `dbo.contapagar`. Os campos vêm
+dos casos curados, sem campos extras ou FKs inferidas. Não combinar esses perfis
+com `-CampoPrazo` ou `-CampoPrazos`. A existência do perfil não aprova o caso:
+inspecionar a revisão atual e usar uma sessão nova continuam obrigatórios.
+
 ## Interrupção, limites e reexecução
 
 Cada sessão local aceita uma única tentativa de operador, marcada por arquivo
@@ -152,3 +159,30 @@ corrigem essa incompatibilidade sem enfraquecer a igualdade do manifesto.
 23 regressões direcionadas, tipos, lint e documentação passaram após o ajuste.
 Isso não certifica consultas arbitrárias, outros rascunhos, PostgreSQL/Sybase
 nativos ou aceite integral para clientes. Publicação editorial permanece separada.
+
+### Ampliação isolada em 09/11/2026 UTC
+
+Os casos originais de títulos (revisão 5), vencidos (revisão 2) e agenda
+(revisão 2) passaram individualmente no SQL Server, usando o runner remoto
+`ffd7801`. Cada tentativa usou uma sessão própria, inventário inalterado e
+limpeza confirmada. Nenhum dado operacional foi consultado.
+
+| Perfil   | Hash do pacote                                                     | Hash dos casos                                                     | Resultado |
+| -------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ | --------- |
+| títulos  | `7930ef39ad1fb79ff1733e0bdde926add14a5eb16c964806151655bb14c4a6ec` | `ca74ef0018c9bfe62c5bd5b73a5850a44572f3bcef31b285abbe684f9ef35d0c` | 1/1       |
+| vencidos | `17c9b4e600274340e3598252a88ffe748ecad005fa4013c5428d59aba7d84d01` | `35a15f6ca6ea9ea549e8c171a58f81c1cf7adf9178bd563ca638ce7ada4a520f` | 1/1       |
+| agenda   | `88ac647f4a46e215e25b13eba5741f05f1566e617bfaa5520a201624fbc7dab6` | `57ce28b713760893c7774deb02e5b82e2d0e5f2b56737ea04bf911bb6532b2ba` | 1/1       |
+
+Inventário MCP local: `f0e544bf19acaa4a33db292b8e6afc010f46e8805c8b0ec962312646f67152a4`.
+Agente: mesmo commit base anterior, com patch local explícito para permitir
+somente `dbo.fornecedor` na fixture MSSQL; inventário
+`ccfbec6d12035112b7c6cddab6202bd40d669633b3f4b1f612e477d00210207f`.
+A tentativa inicial de títulos foi recusada antes do runner porque essa tabela
+não estava na lista permitida do agente. A regressão do agente reproduziu a
+recusa e passou após a extensão fechada (9 testes, incluindo negativas).
+
+A correção do recorte em CTE foi reproduzida no validador e validada com casos
+positivos e recusas de cardinalidade, direção, chaves e UNION. O gate completo
+local passou: 2.387 testes gerais e 285 do console; 91 testes gerais não
+selecionados permaneceram ignorados. Saldo por fornecedor ainda exige deploy
+do novo validador e rodada nativa própria; estes três relatórios não o aprovam.

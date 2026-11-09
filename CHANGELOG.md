@@ -11,6 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Consulta reconhece recorte/agregação na CTE ou derivada que dirige o FROM, preservando UNION, chaves diretas e cardinalidade de dimensões; rejeita recortes sem vínculo, expansão de grão e self JOIN sem direção inequívoca. Treinamento e regressões cobrem o padrão de pré-agregação.
+- Added: Perfis isolados explícitos para títulos, vencidos, agenda e saldo por fornecedor, com somente tabelas/colunas dos casos curados, sem inferir FKs ou alterar fontes operacionais.
+
 - Fixed: Perfis locais `-CampoPrazo pagar|receber` criam somente a tabela MSSQL exigida pelos casos, sem acrescentar sementes ao treinamento nem relaxar a correspondência exata do manifesto; perfis incompatíveis são recusados antes do provisionamento.
 
 - Added: Runner de operador por canal SSH privado para consultas MSSQL do servidor de teste, com inspeção sem efeitos, revisão/hashes fixados e fixture local de uso único; relatório permanece no catálogo original. Deploy e piloto nativo 6/6 documentados em `docs/persona-v2/operator-publication.md`, sem aceite integral para clientes.
