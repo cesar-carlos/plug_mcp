@@ -169,6 +169,7 @@ export const federationPublicationCaseSchema = z.strictObject({
   expected: z.union([
     queryPublicationCaseSchema.shape.expected.safeExtend({
       totalRows: z.number().int().min(0).max(10000),
+      completeness: z.never().optional(),
     }),
     z.strictObject({ errorCode: z.enum(["INVALID_PLAN", "INCOMPLETE_INPUT", "BUDGET_EXCEEDED"]) }),
   ]),

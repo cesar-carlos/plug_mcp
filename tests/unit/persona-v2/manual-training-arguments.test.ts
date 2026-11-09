@@ -7,10 +7,18 @@ it.each([
   true,
   "pagar",
   "receber",
+  "titulos-receber",
   "titulos-pagar",
   "vencidos-pagar",
   "agenda-pagar",
   "saldo-fornecedor",
+  "horizonte-pagar",
+  "horizonte-receber",
+  "atraso-fornecedor",
+  "cobranca-cliente",
+  "vendas-resumo",
+  "vendas-vendedor",
+  "vendas-municipio",
 ])("wrapper emite argumentos isolados e campoPrazos explícito: %s", (enabled) => {
   const manifest = "fixture folder/manifest.json";
   const result = spawnSync(

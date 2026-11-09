@@ -11,6 +11,15 @@ relatório prévio para produzir a evidência. Publicações existentes não sã
 reescritas, suspensas ou certificadas retroativamente. A política classifica o
 SQL treinado; não certifica toda adaptação futura nem significado comercial.
 
+Casos de consulta preservam a exigência de completude por padrão. O opt-in
+`expected.completeness: { mode: "sql_limit", maxRows: 10 }` declara um ranking
+TOP literal MSSQL com ordem, sem afirmar que a fonte foi obtida por completo.
+Exige limite exato e prova fresca de transporte íntegro no runner, além de
+igualdade de todas as linhas/colunas/ordem. A declaração integra o hash dos
+casos e muda a revisão; relatórios anteriores não são reaprovados. Não é aceita
+em casos de cruzamento. Contrato e restrições no
+[runner de consultas](operator-publication.md#casos-de-ranking-limitado).
+
 `training.semantics` opcional usa `version: 1`, `synonyms` (até 30 termos) e
 `metrics` (até 50 definições). Cada métrica fixa `id`, `name`, `definition`,
 `aggregation` (sum/count/count_distinct/min/max/average/ratio/classification),

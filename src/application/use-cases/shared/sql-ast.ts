@@ -95,6 +95,8 @@ export interface SqlAstSelect {
   readonly simplePaginationOrder?: boolean;
   readonly simplePaginationProjection?: boolean;
   readonly temLimite: boolean;
+  /** Only a plain outer MSSQL TOP literal; not PERCENT, OFFSET or another limit form. */
+  readonly literalTop?: number;
   readonly temStar: boolean;
   readonly temLiteralTextoFiltro: boolean;
   readonly groupByCount: number;
@@ -664,6 +666,16 @@ const fromSelectAst = (
       (ast.limit != null &&
         (!isRecord(ast.limit) || !Array.isArray(ast.limit.value) || ast.limit.value.length > 0)) ||
       ast.top != null,
+    ...(database === "transactsql" &&
+    isRecord(ast.top) &&
+    typeof ast.top.value === "number" &&
+    Number.isSafeInteger(ast.top.value) &&
+    ast.top.value > 0 &&
+    ast.top.percent == null &&
+    ast.limit == null &&
+    Object.keys(ast.top).every((key) => ["value", "percent", "parentheses"].includes(key))
+      ? { literalTop: ast.top.value }
+      : {}),
     temStar: temStar || nestedStar,
     temLiteralTextoFiltro:
       hasStringLiteral(ast.where) ||

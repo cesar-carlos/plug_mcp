@@ -5,6 +5,7 @@ import { queryTraining, trainingSource } from "../helpers/persona-v2-training.js
 import { federationTraining } from "../helpers/persona-v2-federation.js";
 import { federationPublicationCaseSchema } from "../../src/domain/persona-v2/federation-training.js";
 import { operationCaseSchema } from "../../src/application/persona-v2/operation-cases.js";
+import { queryPublicationCaseSchema } from "../../src/domain/persona-v2/publication-fixture.js";
 
 async function fixture(page: Page, failLoad = false) {
   let revision = 1;
@@ -95,6 +96,101 @@ async function fixture(page: Page, failLoad = false) {
   const panel = page.getByRole("region", { name: "Ícone da persona" });
   return { panel, state, sent };
 }
+
+test("caso de ranking exige declaração explícita e conserva TOP na releitura", async ({ page }) => {
+  await fixture(page);
+  const skillId = "11111111-2222-4333-8444-555555555555";
+  let revision = 1;
+  let content = queryPublicationCaseSchema.parse({
+    name: "Ranking vazio",
+    input: {
+      sql: "SELECT TOP 10 p.id FROM orders p ORDER BY p.id",
+      params: {},
+      fixtures: [{ table: "orders", rows: [] }],
+    },
+    expected: { columns: [{ name: "id", type: "integer" }], rows: [], ordered: true },
+  });
+  let saves = 0;
+  await page.route("**/api/admin/personas/icon-fixture/fontes", (route) =>
+    route.fulfill({
+      json: { fontes: [{ ...trainingSource, dialect: "mssql", personaId: "icon-fixture" }] },
+    }),
+  );
+  await page.route("**/api/admin/personas/icon-fixture/skills", (route) =>
+    route.fulfill({
+      json: {
+        skills: [
+          {
+            id: skillId,
+            personaId: "icon-fixture",
+            kind: "consulta",
+            slug: "ranking",
+            name: "Ranking",
+            revision,
+            training: { ...queryTraining(), dialect: "mssql" },
+            activePublicationId: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**/skills/${skillId}/publicacao`, (route) =>
+    route.fulfill({ json: { publication: null } }),
+  );
+  await page.route(`**/skills/${skillId}/testes-consulta`, (route) =>
+    route.fulfill({
+      json: {
+        revision,
+        cases: [{ id: "22222222-2222-4222-8222-222222222222", required: true, content }],
+        reports: [],
+        requiredApproved: false,
+        nextCursor: null,
+      },
+    }),
+  );
+  await page.route(`**/skills/${skillId}/casos-consulta`, async (route) => {
+    const body = route.request().postDataJSON();
+    expect(body.expectedRevision).toBe(revision);
+    content = queryPublicationCaseSchema.parse(body.content);
+    expect(content.expected.completeness).toEqual({ mode: "sql_limit", maxRows: 10 });
+    expect(content.expected.ordered).toBe(true);
+    saves++;
+    await route.fulfill({ json: { revision: ++revision } });
+  });
+  await page.getByRole("combobox", { name: /^Persona/ }).selectOption("");
+  await page.getByRole("combobox", { name: /^Persona/ }).selectOption("icon-fixture");
+  await page.getByRole("link", { name: "Treinamentos", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Editar treinamento", exact: true })
+    .selectOption(skillId);
+  const panel = page.getByRole("region", { name: "Casos e relatórios da consulta", exact: true });
+  await panel.getByRole("button", { name: "Consultar testes da consulta", exact: true }).click();
+  await panel.getByRole("button", { name: "Editar caso Ranking vazio", exact: true }).click();
+  const form = panel.getByRole("form", { name: "Caso de consulta", exact: true });
+  await expect(
+    form.getByRole("combobox", { name: "Completude esperada", exact: true }),
+  ).toHaveValue("complete");
+  await form
+    .getByRole("combobox", { name: "Completude esperada", exact: true })
+    .selectOption("sql_limit");
+  await expect(form.getByLabel("Limite TOP esperado", { exact: true })).toHaveValue("10");
+  await expect(form.getByLabel("Comparar a ordem dos registros", { exact: true })).toBeDisabled();
+  await expect(form.getByText(/A resposta ao consumidor continua parcial/)).toBeVisible();
+  await form.getByRole("button", { name: "Salvar caso de consulta", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await panel.getByRole("button", { name: "Consultar testes da consulta", exact: true }).click();
+  await panel.getByRole("button", { name: "Editar caso Ranking vazio", exact: true }).click();
+  await expect(
+    form.getByRole("combobox", { name: "Completude esperada", exact: true }),
+  ).toHaveValue("sql_limit");
+  await expect(form.getByLabel("Limite TOP esperado", { exact: true })).toHaveValue("10");
+  await form
+    .getByRole("combobox", { name: "Completude esperada", exact: true })
+    .selectOption("complete");
+  await expect(form.getByLabel("Limite TOP esperado", { exact: true })).not.toBeVisible();
+  await expect(form.getByLabel("Comparar a ordem dos registros", { exact: true })).toBeEnabled();
+  expect(saves).toBe(1);
+});
 
 test("edição da persona associa recusa ao campo sem perder texto e limpa erro após salvar", async ({
   page,

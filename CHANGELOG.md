@@ -11,6 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Casos de consulta podem declarar ranking limitado por TOP inteiro em SQL Server; runner exige limite exato, ordem e transporte íntegro, comparando todas as linhas esperadas. Console edita e relê a declaração sem converter casos antigos. Resposta pública permanece parcial e cruzamentos não herdam a exceção; alterações exigem nova rodada isolada, sem aprovação automática.
+
+- Fixed: O wrapper SSH preserva a recusa `AGREGACAO_INSEGURA` sem convertê-la em falha de comunicação inconclusiva; mantém reprovação, ausência de retry e descarte de mensagens/dados remotos. Regressão exercita o wrapper com canal simulado e conteúdo sensível sintético.
+
+- Added: Perfis locais fechados de homologação MSSQL para horizontes a pagar/a receber por filial e dívidas antigas por fornecedor, sem tabelas adicionais, FKs inferidas ou mudanças de concessão.
+
 - Security: Corrige GHSA-rmxm-3fg6-px4f atualizando a dependência transitiva `@hono/node-server` de 1.19.17 para 2.1.6, dentro da faixa aceita pelo SDK MCP. Regressão com arquivos sintéticos reproduz o desvio de autorização por dupla decodificação na versão antiga e verifica recusa na corrigida. O console usa Express, sem uso direto de `serveStatic` do Hono identificado; a correção remove o componente vulnerável da distribuição.
 
 - Changed: Atualiza as ferramentas de desenvolvimento ESLint para 10.14.0 e Vitest para 5.1.0, mantendo as regras de lint e os gates de regressão existentes.

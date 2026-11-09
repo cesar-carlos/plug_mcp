@@ -60,6 +60,14 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Isolamento e gates
 
+- Ranking de consulta só admite parcialidade intencional por declaração explícita
+  `expected.completeness` no caso, TOP literal MSSQL exato e ordenação. Exigir
+  prova fresca de transporte íntegro e comparação completa de linhas/ordem;
+  preservar parcialidade pública e rejeição de entradas parciais em cruzamentos.
+  Cobrir vazio, empate com desempate, sinal de truncamento ausente/positivo,
+  teto insuficiente, limite divergente/interno e revogação. Não substituir SQL
+  limitado por ilimitado no teste para alegar certificação do ranking original.
+
 - Runner SSH de operador conserva controle/cofre no servidor de teste e fixture
   MSSQL local. Inspeção não executa/grava; execução fixa revisão/packageHash/casesHash/
   sourceFingerprint e mantém revalidação/reprovação preventiva. Não recebe relatório
@@ -68,6 +76,7 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
   não certificam MSSQL nativo. Contrato: docs/persona-v2/operator-publication.md.
   Perfis individuais de prazo criam somente a tabela do caso; não acrescentar
   sementes estranhas ao treinamento nem afrouxar a igualdade do manifesto.
+  Horizontes por filial e atraso por fornecedor usam seus perfis locais próprios, com moeda, nulos e fronteiras declarados nos casos; não reutilizar o perfil de prazo emissão–vencimento.
   Perfis Campo de consulta são fechados por caso; não inferir colunas, FKs ou
   constraints a partir de nomes, nem reusar a sessão de outro rascunho.
 

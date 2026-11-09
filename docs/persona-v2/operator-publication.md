@@ -36,6 +36,40 @@ pipes brutos; use exclusivamente o wrapper, que filtra a saída.
 
 ## Preparação e comandos
 
+### Casos de ranking limitado
+
+Casos sem `expected.completeness` (ou com `{ "mode": "complete" }`) continuam
+exigindo resposta completa. Para testar um ranking intencionalmente limitado,
+o curador declara explicitamente no caso:
+
+```json
+{ "mode": "sql_limit", "maxRows": 10 }
+```
+
+Esse objeto fica em `expected.completeness`, com `expected.ordered: true`.
+O SQL escolhido pelo caso deve ter `TOP 10` externo literal em SQL Server e
+`ORDER BY`; o curador inclui desempate explícito e sementes que o exercitem.
+O limite declarado é inteiro entre 1 e 100 e deve corresponder exatamente ao SQL.
+PERCENT, WITH TIES, OFFSET, outros dialetos, conjuntos externos e limites internos
+não são suportados nesse modo. Casos antigos não são convertidos automaticamente.
+
+O runner exige `truncated:false` explícito do transporte, nenhuma paginação,
+e teto de transporte efetivo maior que o TOP e que a quantidade devolvida.
+Compara todas as colunas, valores e ordem com o resultado esperado, inclusive
+zero linhas. Sinal ausente, teto insuficiente e resultado divergente não aprovam.
+A prova de transporte existe apenas na instância do executor e só é vinculada
+após a consulta concluir suas revalidações; não vai para resposta, cache ou log.
+Consultas continuam retornando `complete:false`/`truncated:true` ao consumidor
+quando possuem limite SQL: aprovar o ranking não comprova o total da fonte.
+Cruzamentos continuam exigindo entradas completas e recusam esse opt-in.
+
+Alterar essa declaração muda o hash dos casos, exige revisão/CAS e uma nova
+rodada isolada. Não reescreve relatórios reprovados, aprova casos pelo console
+ou publica a skill. A implantação do runner compatível precede a rodada nativa;
+testes locais com transporte sintético não certificam SQL Server real.
+
+### Execução pelo operador
+
 1. Revisar, testar e implantar a revisão que inclui
    `dist/infrastructure/persistence/persona-v2/run-ssh-publication.js` pelo fluxo
    oficial do servidor de teste. Checkout atualizado sozinho não altera a imagem.
@@ -68,6 +102,12 @@ npm run persona:test-publication:ssh -- --host=ALIAS_SSH --request=run.json --se
 ```
 
 A montagem do descritor de fixture é interna; não é recebida do JSON de pedido.
+O wrapper preserva `AGREGACAO_INSEGURA` como recusa do validador, sem classificá-la
+como transporte inconclusivo. Continua retornando `approved:false` e
+`repeatAllowed:false`, sem copiar mensagens, SQL ou detalhes remotos. Códigos
+desconhecidos e envelopes incompatíveis permanecem inconclusivos; diagnóstico
+não aprova o pacote nem autoriza repetição.
+
 O modo inspect recusa sessão, e run exige sessão. Os IDs, hashes e a revisão não
 substituem acesso SSH de operador. O programa não publica nem amplia grants.
 Após relatório aprovado, revisão editorial e publicação continuam no console.
@@ -186,3 +226,19 @@ positivos e recusas de cardinalidade, direção, chaves e UNION. O gate completo
 local passou: 2.387 testes gerais e 285 do console; 91 testes gerais não
 selecionados permaneceram ignorados. Saldo por fornecedor ainda exige deploy
 do novo validador e rodada nativa própria; estes três relatórios não o aprovam.
+
+## Perfis financeiros por filial
+
+Os perfis locais `horizonte-pagar`, `horizonte-receber` e `atraso-fornecedor` declaram somente a tabela de carteira correspondente aos casos. Horizontes incluem chave composta empresa/título, filial, moeda, saldo residual, status e vencimento. Atraso acrescenta código do fornecedor, sem tabela cadastral ou FK inferida. Colunas fora da chave admitem nulos para testar exclusões e cobertura. São alternativas exclusivas aos perfis anteriores e preservam o isolamento MSSQL; não ampliam tabelas no ERP nem concessões. Cada revisão exige inspect, sessão nova e relatório próprio. A existência desses perfis não comprova execução nativa ou aprovação das consultas.
+
+O perfil `cobranca-cliente` usa dbo.contareceber com os sete campos de carteira e codcliente, sem cadastro ou FK inferida. Aging pode usar horizonte-receber quando suas sementes tiverem exatamente o mesmo contrato físico; isso exige sessão e relatório próprios, sem herdar aprovação.
+
+`titulos-receber` acrescenta à carteira o número do título, parcela e código do
+cliente, com `dbo.cliente` contendo apenas código e nome. A chave da carteira é
+empresa/título; a do cadastro é código do cliente. Não declara FK nem habilita
+fontes operacionais. O companion precisa da allowlist MSSQL revisada para essa
+tabela, mantendo a restrição à base descartável e os testes de isolamento.
+
+## Perfis de vendas
+
+`vendas-resumo`, `vendas-vendedor` e `vendas-municipio` usam ProdutoVendido e TipoOperacaoSaida das amostras autorizadas. Cada dimensão acrescenta somente código/nome (município inclui UF); sem FKs inferidas. Casos devem cobrir períodos sobrepostos, cancelamento, pré-venda, operação sem financeiro e ausência de dimensão. Os perfis não autorizam dados operacionais nem outras tabelas; exigem nova sessão por revisão.

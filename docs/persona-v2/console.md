@@ -321,6 +321,14 @@ do schema são recusados sem conversão. Enquanto há edição pendente do caso,
 treinamento principal fica protegido; navegação/troca de persona exige descarte.
 Nenhum cadastro executa SQL ou aprova o caso. Não herdar aprovação do snapshot.
 
+Em **Resultado esperado**, a completude permanece **Resultado completo** por
+padrão. **Ranking limitado por TOP (SQL Server)** exige escolha explícita e o
+limite inteiro exato do SQL (1–100); fixa comparação de ordem e conserva a opção
+na releitura. A descrição orienta desempate e informa que a resposta pública
+continua parcial. O caso só aprova com transporte íntegro e resultados exatos
+no runner isolado; salvar não executa nem aprova. Ver o
+[contrato de ranking](operator-publication.md#casos-de-ranking-limitado).
+
 Histórico de versões do padrão oferece leitura paginada do impacto nas personas
 do responsável. Mostra nomes publicados e dependências diretas/indiretas sem
 expor outros responsáveis ou confirmar disponibilidade de execução.

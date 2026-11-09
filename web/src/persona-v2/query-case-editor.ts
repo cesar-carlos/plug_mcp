@@ -25,6 +25,18 @@ export function emptyQueryCaseExpectedColumn(): QueryPublicationCase["expected"]
   return { name: "", type: "string" };
 }
 
+export function setQueryCaseCompleteness(
+  expected: QueryPublicationCase["expected"],
+  mode: "complete" | "sql_limit",
+): void {
+  if (mode === "complete") {
+    delete expected.completeness;
+  } else if (expected.completeness?.mode !== "sql_limit") {
+    expected.completeness = { mode: "sql_limit", maxRows: 10 };
+    expected.ordered = true;
+  }
+}
+
 export function queryCaseDatasetKey(value: { id: string; version: number }): string {
   return `${value.id}:${value.version}`;
 }

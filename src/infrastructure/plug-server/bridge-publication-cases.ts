@@ -18,6 +18,7 @@ import {
 } from "../../domain/persona-v2/publication-fixture.js";
 import { quoteOperationTable } from "../../domain/persona-v2/operation-identifiers.js";
 import { caseRowsEqual, caseValue } from "../../application/persona-v2/publication-case-values.js";
+import { queryCaseSqlLimit } from "../../application/persona-v2/query-case-completeness.js";
 import {
   PersonaSourceQueries,
   type SourceQueryResponse,
@@ -37,6 +38,8 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
   private readonly tables: readonly PublicationFixtureTable[];
   private poisoned = false;
   private readonly targetSource: Source;
+  // Fresh transport proof stays inside this executor; never serialized or reused by federation.
+  private readonly queryTransportCeilings = new WeakMap<SourceQueryResponse, number>();
   private async paceReadCheck(): Promise<void> {
     let schedule = readCheckSchedule.get(this.reads);
     if (!schedule) {
@@ -330,6 +333,7 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
     source: Source,
     test: QueryPublicationCase,
   ): Promise<boolean> {
+    const sqlLimit = queryCaseSqlLimit(test, test.input.sql ?? pkg.sqlModel, source.dialect);
     this.check(source.id, test.input.fixtures, pkg.scope.tabelas);
     if (canonicalJson(source) !== canonicalJson(this.targetSource))
       throw new PersonaV2Error("STALE_AUTHORIZATION", "Fonte alterada.");
@@ -343,8 +347,15 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
         test.input.params,
       );
       terminal = true;
+      const transportCeiling = this.queryTransportCeilings.get(result);
+      this.queryTransportCeilings.delete(result);
       return (
-        result.completeness.complete &&
+        (sqlLimit === undefined
+          ? result.completeness.complete
+          : transportCeiling !== undefined &&
+            transportCeiling > sqlLimit &&
+            result.rows !== undefined &&
+            result.rows.length <= sqlLimit) &&
         canonicalJson(result.columns) === canonicalJson(test.expected.columns.map((c) => c.name)) &&
         caseRowsEqual(
           result.rows ?? [],
@@ -368,6 +379,7 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
     internal?: FederationQueryContext,
   ): Promise<SourceQueryResponse> {
     let dispatched = false;
+    let transportCeiling: number | undefined;
     this.evidence(source);
     if (
       this.poisoned ||
@@ -409,9 +421,22 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
           await revalidate();
           const lease = await this.reads.authorize(this.source, resources, fences);
           return {
-            execute: (...args) => {
+            execute: async (...args) => {
               dispatched = true;
-              return lease.execute(...args);
+              const raw = await lease.execute(...args);
+              const ceiling = Math.min(
+                args[2].maxRows ?? 0,
+                raw.effectiveMaxRows ?? args[2].maxRows ?? 0,
+              );
+              transportCeiling =
+                raw.truncated === false &&
+                !raw.pagination &&
+                !args[2].page &&
+                Number.isSafeInteger(ceiling) &&
+                ceiling > raw.rows.length
+                  ? ceiling
+                  : undefined;
+              return raw;
             },
             revalidate: async () => {
               await lease.revalidate();
@@ -422,7 +447,7 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
       },
     );
     try {
-      return await queries.run(
+      const result = await queries.run(
         {
           personaId: source.personaId,
           tokenId: "trusted-runner",
@@ -439,6 +464,9 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
         false,
         internal,
       );
+      if (transportCeiling !== undefined && !internal)
+        this.queryTransportCeilings.set(result, transportCeiling);
+      return result;
     } catch (error) {
       if (dispatched) this.poisoned = true;
       throw error;

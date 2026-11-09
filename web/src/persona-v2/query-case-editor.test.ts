@@ -15,6 +15,7 @@ import {
   queryCaseFingerprint,
   queryCaseOptionalSql,
   queryCaseParameterStatus,
+  setQueryCaseCompleteness,
 } from "./query-case-editor";
 
 const hash = "a".repeat(64);
@@ -66,6 +67,22 @@ function seeds(): DatasetCaseSeeds {
 }
 
 describe("regras do editor de casos da consulta", () => {
+  it("declara ranking explicitamente, conserva limite relido e retorna ao padrão sem promover casos", () => {
+    const test = emptyQueryPublicationCase();
+    expect(test.expected.completeness).toBeUndefined();
+    test.expected.ordered = false;
+    const before = queryCaseFingerprint(test, true);
+    setQueryCaseCompleteness(test.expected, "sql_limit");
+    expect(test.expected.completeness).toEqual({ mode: "sql_limit", maxRows: 10 });
+    expect(test.expected.ordered).toBe(true);
+    expect(queryCaseFingerprint(test, true)).not.toBe(before);
+    if (test.expected.completeness?.mode === "sql_limit") test.expected.completeness.maxRows = 7;
+    const reloaded = JSON.parse(JSON.stringify(test)) as QueryPublicationCase;
+    setQueryCaseCompleteness(reloaded.expected, "sql_limit");
+    expect(reloaded.expected.completeness).toEqual({ mode: "sql_limit", maxRows: 7 });
+    setQueryCaseCompleteness(reloaded.expected, "complete");
+    expect(reloaded.expected).not.toHaveProperty("completeness");
+  });
   it("abre caso vazio sem herdar semente, execução ou aprovação", () => {
     expect(emptyQueryPublicationCase()).toEqual({
       name: "",

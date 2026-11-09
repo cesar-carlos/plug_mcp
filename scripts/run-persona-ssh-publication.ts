@@ -67,6 +67,7 @@ async function main(): Promise<void> {
             "STALE_AUTHORIZATION",
             "AUTHORIZATION_DENIED",
             "INVALID_PLAN",
+            "AGREGACAO_INSEGURA",
             "INCOMPLETE_INPUT",
             "CAPABILITY_UNAVAILABLE",
             "RUNNER_FAILED",

@@ -159,9 +159,27 @@ export const queryPublicationCaseSchema = z.strictObject({
         .max(100),
       rows: z.array(fixtureRow).max(100),
       ordered: z.boolean(),
+      completeness: z
+        .discriminatedUnion("mode", [
+          z.strictObject({ mode: z.literal("complete") }),
+          z.strictObject({
+            mode: z.literal("sql_limit"),
+            maxRows: z.number().int().min(1).max(100),
+          }),
+        ])
+        .optional(),
     })
     .superRefine((expected, context) => {
       const names = expected.columns.map((c) => c.name);
+      if (
+        expected.completeness?.mode === "sql_limit" &&
+        (!expected.ordered || expected.rows.length > expected.completeness.maxRows)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Ranking limitado exige ordem e linhas dentro do TOP declarado.",
+        });
+      }
       if (
         new Set(names).size !== names.length ||
         expected.rows.some(
