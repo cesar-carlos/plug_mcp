@@ -74,6 +74,8 @@ async function main(): Promise<void> {
             "INCOMPLETE_INPUT",
             "CAPABILITY_UNAVAILABLE",
             "RUNNER_FAILED",
+            "BUDGET_EXCEEDED",
+            "RATE_LIMITED",
           ]),
         })
         .safeParse(message);
@@ -97,7 +99,7 @@ async function main(): Promise<void> {
         message.kind === "request"
       ) {
         if (!local) throw Error("Read-only inspection attempted fixture work.");
-        await paceCase(message);
+        await paceCase(message, (frame) => channel.send(frame));
         const response = await local.handler.handle(message);
         const diagnostic = local.handler.failure;
         if (diagnostic)

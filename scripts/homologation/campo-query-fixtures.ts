@@ -17,6 +17,8 @@ export const campoQueryProfileSchema = z.enum([
   "atraso-fornecedor",
   "cobranca-cliente",
   "custo-atual",
+  "itens-gestao",
+  "itens-variedade-perdas",
   "itens-cestas",
   "vendas-distribuicoes",
   "vendas-clientes",
@@ -30,6 +32,112 @@ export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
 /** Fixed synthetic schemas matching the curated cases, never inferred from an ERP. */
 export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
   const profile = campoQueryProfileSchema.parse(input);
+  if (profile === "itens-variedade-perdas") {
+    const allowed = new Set([
+      "codempresa",
+      "codfilial",
+      "codprodutovendido",
+      "itemprodutovendido",
+      "codproduto",
+      "quantidade",
+      "valoritem",
+      "custovenda",
+      "codtipooperacaosaida",
+      "datavenda",
+      "prevenda",
+      "codvendedor",
+      "gerafinanceiro",
+    ]);
+    return fixtureTablesSchema.parse(
+      campoQueryTables("itens-gestao")
+        .slice(0, 3)
+        .map((table) => ({
+          ...table,
+          columns: table.columns.filter((column) => allowed.has(column.name)),
+        })),
+    );
+  }
+  if (profile === "itens-gestao") {
+    const specs: [string, string[], [string, "integer" | "string" | "decimal" | "date"][]][] = [
+      [
+        "dbo.itemprodutovendido",
+        ["codempresa", "codprodutovendido", "itemprodutovendido"],
+        [
+          ["codempresa", "integer"],
+          ["codprodutovendido", "integer"],
+          ["itemprodutovendido", "integer"],
+          ["codproduto", "integer"],
+          ["nomeproduto", "string"],
+          ["codunidademedida", "string"],
+          ["quantidade", "decimal"],
+          ["valoritem", "decimal"],
+          ["custovenda", "decimal"],
+        ],
+      ],
+      [
+        "dbo.produtovendido",
+        ["codempresa", "codprodutovendido"],
+        [
+          ["codempresa", "integer"],
+          ["codfilial", "integer"],
+          ["codprodutovendido", "integer"],
+          ["codtipooperacaosaida", "integer"],
+          ["datavenda", "date"],
+          ["prevenda", "string"],
+          ["codvendedor", "integer"],
+          ["valorbruto", "decimal"],
+          ["valordesconto", "decimal"],
+          ["valorliquido", "decimal"],
+        ],
+      ],
+      [
+        "dbo.tipooperacaosaida",
+        ["codempresa", "codtipooperacaosaida"],
+        [
+          ["codempresa", "integer"],
+          ["codtipooperacaosaida", "integer"],
+          ["gerafinanceiro", "string"],
+        ],
+      ],
+      [
+        "dbo.produto",
+        ["codproduto"],
+        [
+          ["codproduto", "integer"],
+          ["codmarca", "integer"],
+          ["codgrupoproduto", "integer"],
+          ["nome", "string"],
+        ],
+      ],
+      [
+        "dbo.marca",
+        ["codmarca"],
+        [
+          ["codmarca", "integer"],
+          ["nome", "string"],
+        ],
+      ],
+      [
+        "dbo.grupoproduto",
+        ["codgrupoproduto"],
+        [
+          ["codgrupoproduto", "integer"],
+          ["nome", "string"],
+        ],
+      ],
+    ];
+    return fixtureTablesSchema.parse(
+      specs.map(([table, primaryKey, fields]) => ({
+        table,
+        primaryKey,
+        columns: fields.map(([name, type]) => ({
+          name,
+          type,
+          nullable: !primaryKey.includes(name),
+        })),
+      })),
+    );
+  }
   if (profile === "custo-atual") {
     const specs: [string, string[], [string, "integer" | "string" | "decimal"][]][] = [
       [

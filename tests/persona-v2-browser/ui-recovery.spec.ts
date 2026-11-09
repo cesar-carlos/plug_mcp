@@ -198,8 +198,66 @@ test("sessão expirada durante leitura remove a área autenticada", async ({ pag
   );
   await expect(page.getByLabel("Senha", { exact: true })).toHaveValue("");
   await expect(
-    page.getByText("Sua sessão expirou. Entre novamente.", { exact: true }),
+    page.getByText(
+      "Sua sessão terminou. Entre novamente. Os registros já salvos permanecem. Após entrar, confira a última ação antes de reenviar; alterações não salvas precisam ser refeitas.",
+      { exact: true },
+    ),
   ).toBeVisible();
+});
+
+test("sessão perdida durante gravação pede login sem repetir ação nem apagar registros", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  let attempts = 0;
+  await page.route("**/tokens/token-0/editar", (route) => {
+    attempts++;
+    return route.fulfill({
+      status: 401,
+      json: {
+        error: { code: "ADMIN_SESSION_EXPIRED", message: "Sessão administrativa expirada." },
+      },
+    });
+  });
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await page.getByRole("button", { name: "Editar A", exact: true }).click();
+  const form = page.getByRole("form", { name: "Editar token", exact: true });
+  await form.getByLabel("Nome do consumidor", { exact: true }).fill("Não gravado");
+  await form.getByRole("button", { name: "Salvar token", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Entrar", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Senha", { exact: true })).toHaveValue("");
+  await expect(page.getByText(/Os registros já salvos permanecem/)).toBeVisible();
+  await page.getByLabel("Senha", { exact: true }).fill("fixture");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByRole("combobox", { name: /^Persona/ }).selectOption("ui-persona");
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Editar A", exact: true })).toBeVisible();
+  expect(attempts).toBe(1);
+  expect(state.tokens[0]!.name).toBe("A");
+  expect(state.revocations).toEqual([]);
+});
+
+test("CSRF incorreto mantém edição e sessão sem tentar novamente", async ({ page }) => {
+  await fixture(page);
+  let attempts = 0;
+  await page.route("**/tokens/token-0/editar", (route) => {
+    attempts++;
+    return route.fulfill({
+      status: 403,
+      json: { error: { code: "AUTHORIZATION_DENIED", message: "CSRF inválido." } },
+    });
+  });
+  await page.getByRole("link", { name: "Tokens e conexões", exact: true }).click();
+  await page.getByRole("button", { name: "Editar A", exact: true }).click();
+  const form = page.getByRole("form", { name: "Editar token", exact: true });
+  await form.getByLabel("Nome do consumidor", { exact: true }).fill("Edição preservada");
+  await form.getByRole("button", { name: "Salvar token", exact: true }).click();
+  await expect(page.getByText("CSRF inválido.", { exact: true })).toBeVisible();
+  await expect(form.getByLabel("Nome do consumidor", { exact: true })).toHaveValue(
+    "Edição preservada",
+  );
+  await expect(page.getByRole("button", { name: "Entrar", exact: true })).toHaveCount(0);
+  expect(attempts).toBe(1);
 });
 
 test("recusa de tamanho mostra atendimento e conserva edição sem reenviar", async ({ page }) => {

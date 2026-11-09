@@ -98,3 +98,10 @@ export const operatorResponseSchema = z.strictObject({
   ok: z.boolean(),
   value: z.unknown().optional(),
 });
+
+/** Liveness only while waiting to prepare the next synthetic case; never a result. */
+export const operatorPrepareWaitSchema = z.strictObject({
+  kind: z.literal("prepare-wait"),
+  id: z.number().int().positive().max(2000),
+  remainingMs: z.number().int().min(1).max(90000),
+});

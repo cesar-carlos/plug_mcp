@@ -313,11 +313,12 @@ export const createPersonaAdministrationApp = (input: {
     const id = session(req.get("cookie"));
     const provided = req.get("x-csrf-token");
     const expected = csrfTokens.get(input.crypto.sha256Hex(id));
-    if (expected && expected.expiresAt <= new Date())
+    // A restart discards both administrative sessions and their CSRF context.
+    // Distinguish that loss from an invalid CSRF proof for a live session.
+    if (!expected || expected.expiresAt <= new Date())
       throw new PersonaV2Error("ADMIN_SESSION_EXPIRED", "Sessão administrativa expirada.");
     if (
       !provided ||
-      !expected ||
       !timingSafeEqual(Buffer.from(input.crypto.sha256Hex(provided)), Buffer.from(expected.hash))
     ) {
       throw new PersonaV2Error("AUTHORIZATION_DENIED", "CSRF inválido.");

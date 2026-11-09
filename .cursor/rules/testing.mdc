@@ -60,6 +60,13 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Isolamento e gates
 
+Runner SSH espaça somente preparações entre casos, fora do orçamento SQL.
+Progresso de espera exige ID correlacionado, contagem limitada e prazo restante
+decrescente; não aprova casos nem autoriza retry. Prazo total e expiração da
+fixture encerram o canal mesmo com progresso, preservando o timeout ocioso e
+as cotas. Cobrir limites e silêncio com transporte isolado, sem testes em ERP.
+Contrato: `docs/persona-v2/operator-publication.md`.
+
 - Ranking de consulta só admite parcialidade intencional por declaração explícita
   `expected.completeness` no caso, TOP literal MSSQL exato e ordenação. Exigir
   prova fresca de transporte íntegro e comparação completa de linhas/ordem;

@@ -11,6 +11,12 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Runner SSH espaça preparações fora do orçamento SQL, com progresso correlacionado e limitado, prazo total e expiração da fixture efetivos. Preserva diagnóstico sanitizado de `BUDGET_EXCEEDED`/`RATE_LIMITED`, cotas e ausência de retry; regressões cobrem canal real em memória, silêncio, progresso inválido e prazo.
+
+- Added: Perfis isolados `itens-gestao` e `itens-variedade-perdas` com campos curados, nulos e chaves explícitas. Disponibilizar fixtures não aprova nem publica os rascunhos de treinamento.
+
+- Fixed: Console reconhece a perda da sessão após reinício/deploy como `ADMIN_SESSION_EXPIRED` (401), retorna ao login e orienta conferir a última ação sem reenviá-la automaticamente. CSRF incorreto continua bloqueado com 403. Regressões com PostgreSQL isolado e navegador cobrem preservação de casos salvos, novo login e ausência de replay.
+
 - Added: Perfis isolados de clientes, distribuições, itens/cestas e custo atual usam somente amostras curadas. Runner informa diagnóstico enumerado sem segredos e espaça preparação de casos, sem retry nem alteração das cotas ou guardas.
 
 - Added: Exclusão administrativa de cadastro de base sem dependências, com confirmação de ID/versão, sessão Client e CSRF. Remove somente configuração e credencial locais; migração 0054 preserva identidade histórica da auditoria, sem cascata ou comandos no banco externo. Testes PostgreSQL isolados e navegador cobrem proteção e confirmação.

@@ -23,6 +23,8 @@ afterEach(() => {
 it.each([
   { code: "AGREGACAO_INSEGURA", approved: false, expected: "AGREGACAO_INSEGURA" },
   { code: "INVALID_PLAN", approved: false, expected: "INVALID_PLAN" },
+  { code: "BUDGET_EXCEEDED", approved: false, expected: "BUDGET_EXCEEDED" },
+  { code: "RATE_LIMITED", approved: false, expected: "RATE_LIMITED" },
   { code: "UNRECOGNIZED_SECRET", approved: false, expected: "OPERATOR_RUN_UNCONFIRMED" },
   { code: "AGREGACAO_INSEGURA", approved: true, expected: "OPERATOR_RUN_UNCONFIRMED" },
 ])("classifies $code approved=$approved without leaking remote content", async (entry) => {

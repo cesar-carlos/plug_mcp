@@ -18,6 +18,8 @@ it.each([
   "atraso-fornecedor",
   "cobranca-cliente",
   "custo-atual",
+  "itens-gestao",
+  "itens-variedade-perdas",
   "itens-cestas",
   "vendas-distribuicoes",
   "vendas-clientes",

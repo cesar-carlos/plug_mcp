@@ -133,9 +133,7 @@ const replacement = (s: Source) => ({
     clientToken: "replacement-fixture-token",
   },
 });
-beforeAll(async () => {
-  await admin.query(`CREATE DATABASE "${name}"`);
-  await applyPersonaMigrations(url.toString());
+async function startRuntime() {
   runtime = await composePersonaV2(testConfig({ DATABASE_URL: url.toString() }), {
     ownerAuth: {
       hubOrigin: "http://hub.fixture.test",
@@ -144,12 +142,83 @@ beforeAll(async () => {
     },
     sourceVerifier: { verify },
   });
+}
+beforeAll(async () => {
+  await admin.query(`CREATE DATABASE "${name}"`);
+  await applyPersonaMigrations(url.toString());
+  await startRuntime();
 });
 beforeEach(async () => {
   owner = "owner-a";
   active = true;
   verify.mockClear();
   await login();
+});
+
+it("reinício invalida sessão com 401, preserva casos salvos e exige novo login sem replay", async () => {
+  const p = await persona();
+  const s = await source(p);
+  const draft = await api("post", `/api/admin/personas/${p.id}/skills`)
+    .send({
+      slug: `restart-${randomUUID()}`,
+      kind: "consulta",
+      name: "Pedidos",
+      training: queryTraining(s.id),
+    })
+    .expect(201);
+  const root = `/api/admin/personas/${p.id}/skills/${draft.body.skill.id}`;
+  const content = {
+    name: "Caso preservado após reinício",
+    input: { params: { minimum: 0 }, fixtures: [{ table: "orders", rows: [] }] },
+    expected: {
+      columns: [
+        { name: "id", type: "integer" },
+        { name: "amount", type: "decimal" },
+      ],
+      rows: [],
+      ordered: true,
+    },
+  };
+  const details = await api("get", `${root}/testes-consulta`).expect(200);
+  await api("post", `${root}/casos-consulta`)
+    .send({ expectedRevision: details.body.revision, required: true, content })
+    .expect(200);
+  const saved = (await api("get", `${root}/testes-consulta`).expect(200)).body;
+  expect(saved.cases).toHaveLength(1);
+  const pending = {
+    expectedRevision: saved.revision,
+    required: true,
+    content: { ...content, name: "Não deve ser salvo" },
+  };
+  for (const csrf of ["", "incorrect-csrf"]) {
+    const denied = await api("post", `${root}/casos-consulta`)
+      .set("X-CSRF-Token", csrf)
+      .send(pending)
+      .expect(403);
+    expect(denied.body.error.code).toBe("AUTHORIZATION_DENIED");
+  }
+  await runtime.close();
+  await startRuntime();
+  for (const method of ["get", "post"] as const) {
+    const expired = await api(
+      method,
+      `${root}/${method === "get" ? "testes-consulta" : "casos-consulta"}`,
+    )
+      .send(method === "post" ? pending : undefined)
+      .expect(401);
+    expect(expired.body.error.code).toBe("ADMIN_SESSION_EXPIRED");
+    expect(expired.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(JSON.stringify(expired.body)).not.toContain(session.csrf);
+  }
+  await api("post", `${root}/casos-consulta`)
+    .set("Origin", "https://foreign.fixture.test")
+    .send(pending)
+    .expect(403);
+  await login();
+  const recovered = (await api("get", `${root}/testes-consulta`).expect(200)).body;
+  expect(recovered.cases).toEqual(saved.cases);
+  expect(recovered.revision).toBe(saved.revision);
+  expect(recovered.reports).toEqual(saved.reports);
 });
 
 it("exclui somente cadastro sem vínculos e credencial, preservando auditoria e a outra fonte", async () => {

@@ -15,6 +15,7 @@ import {
   type operatorFixtureSchema,
   operatorRequestSchema,
   operatorResponseSchema,
+  operatorPrepareWaitSchema,
 } from "./operator-contract.js";
 
 const resultSchema = z.object({
@@ -56,15 +57,40 @@ export class RemoteOperatorFixture
   private async call(call: z.infer<typeof operatorCallSchema>): Promise<unknown> {
     if (this.poisoned || Date.parse(this.fixture.expiresAt) <= Date.now())
       throw Error("Fixture unavailable.");
+    const preparationDeadline = Math.min(Date.now() + 135000, Date.parse(this.fixture.expiresAt));
+    const preparationTimer =
+      call.op === "prepare"
+        ? setTimeout(() => this.channel.close(), Math.max(1, preparationDeadline - Date.now()))
+        : undefined;
     try {
       const id = ++this.sequence;
       await this.channel.send(operatorRequestSchema.parse({ kind: "request", id, call }));
-      const reply = operatorResponseSchema.parse(await this.channel.read());
+      let previousRemaining = 90001;
+      let waits = 0;
+      let message = await this.channel.read();
+      while (operatorPrepareWaitSchema.safeParse(message).success) {
+        const wait = operatorPrepareWaitSchema.parse(message);
+        if (
+          call.op !== "prepare" ||
+          wait.id !== id ||
+          ++waits > 9 ||
+          wait.remainingMs >= previousRemaining ||
+          Date.now() >= preparationDeadline
+        )
+          throw Error("Invalid preparation wait.");
+        previousRemaining = wait.remainingMs;
+        message = await this.channel.read();
+      }
+      if (call.op === "prepare" && Date.now() >= preparationDeadline)
+        throw Error("Preparation deadline expired.");
+      const reply = operatorResponseSchema.parse(message);
       if (reply.id !== id || !reply.ok) throw Error("Fixture execution unconfirmed.");
       return reply.value;
     } catch {
       this.poisoned = true;
       throw Error("Fixture channel failed; do not retry.");
+    } finally {
+      clearTimeout(preparationTimer);
     }
   }
   private check(source: Parameters<SourceQueryGatewayPort["authorize"]>[0]): void {
@@ -111,18 +137,32 @@ export class RemoteOperatorFixture
   }
 }
 
-/** Space new cases before any fixture action; never retries a failed call. */
+/** Pace only between cases, outside the query budget; liveness never approves or retries. */
 export function createOperatorCasePacer(
   now: () => number = () => performance.now(),
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-): (raw: unknown) => Promise<void> {
+): (
+  raw: unknown,
+  progress?: (frame: z.infer<typeof operatorPrepareWaitSchema>) => Promise<void>,
+) => Promise<void> {
   let previous: number | undefined;
-  return async (raw) => {
+  return async (raw, progress) => {
     const request = operatorRequestSchema.parse(raw);
     if (request.call.op !== "prepare") return;
     if (previous !== undefined) {
-      const remaining = 10000 - (now() - previous);
-      if (remaining > 0) await sleep(remaining);
+      let remaining = Math.ceil(90000 - (now() - previous));
+      for (let pulses = 0; remaining > 0; pulses++) {
+        if (pulses >= 9) throw Error("Preparation pacing deadline expired.");
+        await progress?.(
+          operatorPrepareWaitSchema.parse({
+            kind: "prepare-wait",
+            id: request.id,
+            remainingMs: remaining,
+          }),
+        );
+        await sleep(Math.min(10000, remaining));
+        remaining = Math.ceil(90000 - (now() - previous));
+      }
     }
     previous = now();
   };

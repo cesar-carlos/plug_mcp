@@ -3,6 +3,9 @@ import { sessionExpirationDelayMs, sessionWarningDelayMs } from "./console-sessi
 import { ConsoleRequestError, type ContextRequests, type Persona } from "./model";
 import type { UncertainIssuance } from "./token-permissions";
 
+const sessionEndedMessage =
+  "Sua sessão terminou. Entre novamente. Os registros já salvos permanecem. Após entrar, confira a última ação antes de reenviar; alterações não salvas precisam ser refeitas.";
+
 export interface ConsoleSessionWorkspace {
   personaSearch: Ref<string>;
   uncertainIssuance: Ref<Record<string, UncertainIssuance>>;
@@ -49,7 +52,7 @@ export function useConsoleSession(
     } catch (cause) {
       if (cause instanceof ConsoleRequestError && cause.code === "ADMIN_SESSION_EXPIRED") {
         clearSession();
-        message.value = "Sua sessão expirou. Entre novamente.";
+        message.value = sessionEndedMessage;
       }
       throw cause;
     }
@@ -111,7 +114,7 @@ export function useConsoleSession(
         expiration = window.setTimeout(
           () => {
             clearSession();
-            message.value = "Sua sessão expirou. Entre novamente.";
+            message.value = sessionEndedMessage;
           },
           sessionExpirationDelayMs(session.expiresAt, now),
         );

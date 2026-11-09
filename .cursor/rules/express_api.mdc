@@ -18,6 +18,10 @@ Requisitos de navegador e segredos em `security.mdc`.
   exigidas pela entrada, sem DDL.
 - V2: console `/app`, sessão administrativa Client/cookie HttpOnly de 15 minutos,
   CSRF e rotas `/api/admin`; contrato em `docs/persona-v2/onboarding.md`.
+  Contexto administrativo/CSRF perdido após reinício exige `ADMIN_SESSION_EXPIRED`
+  (401) e novo login, sem replay de gravações. CSRF ausente/incorreto para sessão
+  conhecida permanece 403; não relaxar Host/Origin nem persistir segredos para
+  atravessar deploy. Registros salvos permanecem; contexto local é descartado.
   Rotas de revisão/aprovação de operação não recebem confirmação da IA.
   Assets v2 usam allowlist de arquivos, sem expor o diretório inteiro de build;
   manifesto próprio não altera o legado. ADMIN_SESSION_EXPIRED retorna HTTP 401.

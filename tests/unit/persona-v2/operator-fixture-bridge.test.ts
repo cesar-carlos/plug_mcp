@@ -228,17 +228,18 @@ it("espaça preparações sem atrasar limpeza nem repetir chamadas", async () =>
   const prepare = {
     kind: "request",
     id: 1,
-    call: { op: "prepare", seeds: [{ table: "publication_orders", rows: [] }] },
+    call: { op: "prepare", seeds: [{ table: "publication_orders", generated: [], rows: [] }] },
   };
   await pace(prepare);
   expect(sleep).not.toHaveBeenCalled();
   clock = 2000;
   await pace({ ...prepare, id: 2 });
-  expect(sleep).toHaveBeenCalledExactlyOnceWith(8000);
+  expect(sleep).toHaveBeenCalledTimes(9);
+  expect(sleep.mock.calls.reduce((n, [ms]) => n + ms, 0)).toBe(88000);
   await pace({ kind: "request", id: 3, call: { op: "clear" } });
-  clock = 25000;
+  clock = 190000;
   await pace({ ...prepare, id: 4 });
-  expect(sleep).toHaveBeenCalledTimes(1);
+  expect(sleep).toHaveBeenCalledTimes(9);
 });
 it("falha no espaçamento propaga sem retry", async () => {
   const sleep = vi.fn(async () => {
@@ -248,9 +249,186 @@ it("falha no espaçamento propaga sem retry", async () => {
   const request = {
     kind: "request",
     id: 1,
-    call: { op: "prepare", seeds: [{ table: "publication_orders", rows: [] }] },
+    call: { op: "prepare", seeds: [{ table: "publication_orders", generated: [], rows: [] }] },
   };
   await pace(request);
   await expect(pace({ ...request, id: 2 })).rejects.toThrow("interrupted");
   expect(sleep).toHaveBeenCalledTimes(1);
+});
+
+it("não consome o orçamento SQL com pausas em autorização, execução ou revalidação", async () => {
+  let clock = 0;
+  const sleep = vi.fn(async (ms: number) => {
+    clock += ms;
+  });
+  const pace = createOperatorCasePacer(() => clock, sleep);
+  await pace({
+    kind: "request",
+    id: 1,
+    call: { op: "authorize", resources: [{ name: "publication_orders", type: "table" }] },
+  });
+  await pace({
+    kind: "request",
+    id: 2,
+    call: { op: "revalidate", lease: "7b71c68d-c3a7-41b2-aab4-3f0162151803" },
+  });
+  expect(sleep).not.toHaveBeenCalled();
+  await pace({
+    kind: "request",
+    id: 3,
+    call: {
+      op: "execute",
+      lease: "7b71c68d-c3a7-41b2-aab4-3f0162151803",
+      sql: "SELECT 1",
+      params: {},
+      options: { timeoutMs: 15000 },
+    },
+  });
+  await pace({ kind: "request", id: 3, call: { op: "clear" } });
+  expect(sleep).not.toHaveBeenCalled();
+  expect(clock).toBeLessThan(45000);
+});
+
+it("espera de preparo mantém o canal vivo além de45s sem executar ou aprovar", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = fixture();
+    const pending = f.remote.prepare(f.descriptor.source, [
+      { table: "publication_orders", generated: [], rows: [] },
+    ]);
+    const request = (await f.server.read()) as { id: number };
+    for (let remainingMs = 90000; remainingMs > 0; remainingMs -= 10000) {
+      await f.server.send({ kind: "prepare-wait", id: request.id, remainingMs });
+      await vi.advanceTimersByTimeAsync(10000);
+    }
+    expect(f.control.prepare).not.toHaveBeenCalled();
+    await f.server.send(await f.handler.handle(request));
+    await pending;
+    expect(f.control.prepare).toHaveBeenCalledOnce();
+    expect(f.reads.authorize).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it.each(["wrong-id", "non-decreasing", "authorize"])(
+  "recusa progresso inválido: %s",
+  async (variant) => {
+    const f = fixture();
+    const pending =
+      variant === "authorize"
+        ? f.remote.authorize(f.descriptor.source, [{ name: "publication_orders", type: "table" }])
+        : f.remote.prepare(f.descriptor.source, [
+            { table: "publication_orders", generated: [], rows: [] },
+          ]);
+    const rejected = expect(pending).rejects.toThrow("do not retry");
+    const request = (await f.server.read()) as { id: number };
+    await f.server.send({
+      kind: "prepare-wait",
+      id: request.id + (variant === "wrong-id" ? 1 : 0),
+      remainingMs: 90000,
+    });
+    if (variant === "non-decreasing") {
+      await f.server.send({ kind: "prepare-wait", id: request.id, remainingMs: 90000 });
+    }
+    await rejected;
+    expect(f.control.prepare).not.toHaveBeenCalled();
+    expect(f.reads.authorize).not.toHaveBeenCalled();
+  },
+);
+
+it("pacing anuncia espera decrescente apenas antes de preparar", async () => {
+  let clock = 0;
+  const sleep = vi.fn(async (ms: number) => {
+    clock += ms;
+  });
+  const progress = vi.fn(async () => undefined);
+  const pace = createOperatorCasePacer(() => clock, sleep);
+  const request = {
+    kind: "request",
+    id: 1,
+    call: { op: "prepare", seeds: [{ table: "publication_orders", generated: [], rows: [] }] },
+  };
+  await pace(request, progress);
+  await pace({ ...request, id: 2 }, progress);
+  expect(progress).toHaveBeenCalledTimes(9);
+  expect(progress.mock.calls).toEqual(
+    Array.from({ length: 9 }, (_, n) => [
+      { kind: "prepare-wait", id: 2, remainingMs: 90000 - n * 10000 },
+    ]),
+  );
+  expect(clock).toBe(90000);
+});
+
+it.each(["count", "deadline", "expiry", "silent"])(
+  "encerra preparo sem replay ao ultrapassar limite: %s",
+  async (variant) => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      if (variant === "expiry") f.descriptor.expiresAt = new Date(Date.now() + 25000).toISOString();
+      const pending = f.remote.prepare(f.descriptor.source, [
+        { table: "publication_orders", generated: [], rows: [] },
+      ]);
+      const rejected = expect(pending).rejects.toThrow("do not retry");
+      const request = (await f.server.read()) as { id: number };
+      if (variant === "count") {
+        for (let i = 0; i < 10; i++) {
+          await f.server.send({ kind: "prepare-wait", id: request.id, remainingMs: 90000 - i });
+          await vi.advanceTimersByTimeAsync(1);
+        }
+      } else if (variant === "deadline") {
+        for (let i = 0; i < 6; i++) {
+          await f.server.send({ kind: "prepare-wait", id: request.id, remainingMs: 90000 - i });
+          await vi.advanceTimersByTimeAsync(20000);
+        }
+        await f.server.send({ kind: "prepare-wait", id: request.id, remainingMs: 80000 });
+        await vi.advanceTimersByTimeAsync(15000);
+      } else {
+        await f.server.send({ kind: "prepare-wait", id: request.id, remainingMs: 90000 });
+        await vi.advanceTimersByTimeAsync(variant === "expiry" ? 25000 : 45000);
+      }
+      await rejected;
+      expect(f.control.prepare).not.toHaveBeenCalled();
+      await expect(f.remote.prepare(f.descriptor.source, [])).rejects.toThrow("unavailable");
+      expect(f.reads.authorize).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+
+it("integra pacer e canal reais entre dois casos sem atrasar a consulta", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = fixture();
+    const pace = createOperatorCasePacer(() => Date.now());
+    const seeds = [{ table: "publication_orders", generated: [], rows: [] }];
+    const serve = async () => {
+      const frame = await f.server.read();
+      await pace(frame, (progress) => f.server.send(progress));
+      await f.server.send(await f.handler.handle(frame));
+    };
+    const first = f.remote.prepare(f.descriptor.source, seeds);
+    await serve();
+    await first;
+    const second = f.remote.prepare(f.descriptor.source, seeds);
+    const serving = serve();
+    await vi.advanceTimersByTimeAsync(90000);
+    await Promise.all([second, serving]);
+    const started = Date.now();
+    const authorization = f.remote.authorize(f.descriptor.source, [
+      { name: "publication_orders", type: "table" },
+    ]);
+    await serve();
+    const lease = await authorization;
+    const execution = lease.execute("SELECT id FROM publication_orders", {}, { timeoutMs: 15000 });
+    await serve();
+    await expect(execution).resolves.toMatchObject({ rows: [{ id: 1 }] });
+    expect(Date.now()).toBe(started);
+    expect(f.control.prepare).toHaveBeenCalledTimes(2);
+    expect(f.lease.execute).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
 });

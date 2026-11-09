@@ -418,6 +418,13 @@ Conflitos preservam a edição e a versão original; não existe reaplicação a
 A sessão dura 15 minutos, com aviso dois minutos antes. Expiração ou identidade
 administrativa revogada (`ADMIN_SESSION_EXPIRED`, HTTP 401) descarta dados e
 segredos. Erros de permissão de uma fonte não equivalem a expiração da sessão.
+Sessões e contexto CSRF são locais ao processo: reinício/deploy exige novo login.
+Cookie com formato válido cujo contexto já não existe recebe o mesmo 401,
+inclusive antes de gravações; CSRF ausente/incorreto numa sessão conhecida
+continua sendo 403, mantendo as verificações de Host/Origin. O console retorna
+ao login sem repetir ações, informa que registros já salvos permanecem e orienta
+conferir a última ação após entrar. Edições não salvas são descartadas com o
+contexto; não há renovação automática nem persistência de segredos no navegador.
 Requisições de catálogo e persona têm contextos separados; logout cancela ambos.
 
 ## Ciclo de vida da persona
