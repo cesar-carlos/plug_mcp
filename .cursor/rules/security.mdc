@@ -8,6 +8,12 @@ alwaysApply: false
 
 Aplicar `AGENTS.md` e `persona_v2.mdc`. A refatoração não dispensa estes controles.
 
+Correções de dependências transitivas preservam a compatibilidade declarada pelo
+consumidor e o lockfile revisado. Conferir o aviso oficial, distinguir componente
+instalado de caminho efetivamente exposto e reproduzir a falha com dados sintéticos
+quando possível. Regressão comportamental e auditoria se complementam; não habilitar
+opções de compatibilidade que restaurem o comportamento vulnerável para passar testes.
+
 ## Segredos e navegador
 
 - Senha/client_token/Bearer somente no fluxo autorizado do navegador, nunca em

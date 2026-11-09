@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Security: Corrige GHSA-rmxm-3fg6-px4f atualizando a dependência transitiva `@hono/node-server` de 1.19.17 para 2.1.6, dentro da faixa aceita pelo SDK MCP. Regressão com arquivos sintéticos reproduz o desvio de autorização por dupla decodificação na versão antiga e verifica recusa na corrigida. O console usa Express, sem uso direto de `serveStatic` do Hono identificado; a correção remove o componente vulnerável da distribuição.
+
 - Changed: Atualiza as ferramentas de desenvolvimento ESLint para 10.14.0 e Vitest para 5.1.0, mantendo as regras de lint e os gates de regressão existentes.
 
 - Fixed: Consulta reconhece recorte/agregação na CTE ou derivada que dirige o FROM, preservando UNION, chaves diretas e cardinalidade de dimensões; rejeita recortes sem vínculo, expansão de grão e self JOIN sem direção inequívoca. Treinamento e regressões cobrem o padrão de pré-agregação.
