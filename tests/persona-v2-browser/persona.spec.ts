@@ -2607,6 +2607,17 @@ test("suspende e recupera persona preservando histórico e revisão explícita",
   ).toBeVisible();
   await expect(page.getByText("Editar persona", { exact: true })).toBeVisible();
 });
+async function selectKnowledgeSource(knowledge: Locator, account: "a" | "b") {
+  const select = knowledge.getByLabel("Base para conhecimento");
+  const option = select.locator("option").filter({ hasText: new RegExp(`^Base ${account} — `) });
+  await expect(option).toHaveCount(1);
+  const id = await option.getAttribute("value");
+  expect(id).toMatch(/^[a-f0-9-]{36}$/);
+  await expect(option).toContainText(`ID: ${id}`);
+  await select.selectOption(id!);
+  await expect(select).toHaveValue(id!);
+}
+
 const addSource = async (page: Page, account: "a" | "b" | "view") => {
   await go(page, "Bases");
   const form = page.getByRole("form", { name: "Cadastrar base", exact: true });
@@ -2646,7 +2657,7 @@ test("inspeção estrutural não duplica submissão no mesmo evento", async ({ p
     name: "Conhecimento das bases da persona",
     exact: true,
   });
-  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base a — postgres" });
+  await selectKnowledgeSource(knowledge, "a");
   const panel = knowledge.getByRole("region", { name: "Inspeção estrutural", exact: true });
   await panel.getByLabel("Tabela ou view 1", { exact: true }).fill("orders");
   let requests = 0;
@@ -2691,7 +2702,7 @@ test("combina páginas de inspeção explicitamente e descarta prova ao mudar o 
     name: "Conhecimento das bases da persona",
     exact: true,
   });
-  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base a — postgres" });
+  await selectKnowledgeSource(knowledge, "a");
   const panel = knowledge.getByRole("region", { name: "Inspeção estrutural", exact: true });
   const names = ["orders", "missing_a", "missing_b", "missing_c", "missing_d"];
   for (let i = 0; i < names.length; i++) {
@@ -3112,7 +3123,7 @@ test("inspeciona, publica perfil físico e adota versão exata no rascunho sem m
     name: "Conhecimento das bases da persona",
     exact: true,
   });
-  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base a — postgres" });
+  await selectKnowledgeSource(knowledge, "a");
   await knowledge.getByLabel("Catálogo autorizado").selectOption(catalog.catalog.id);
   await knowledge
     .getByRole("combobox", { name: "Versão do padrão", exact: true })
@@ -3228,7 +3239,7 @@ test("inspeciona, publica perfil físico e adota versão exata no rascunho sem m
   await physicalCalendar
     .getByLabel("Justificativa da revisão")
     .fill("Revisão específica da instalação");
-  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base b — postgres" });
+  await selectKnowledgeSource(knowledge, "b");
   await page.getByRole("button", { name: "Continuar editando", exact: true }).click();
   await expect(physicalCalendar.getByLabel("Justificativa da revisão")).toHaveValue(
     "Revisão específica da instalação",
@@ -3239,7 +3250,7 @@ test("inspeciona, publica perfil físico e adota versão exata no rascunho sem m
       "Prazo registrado. Publicação e permissões permanecem sem alteração.",
     ),
   ).toBeVisible();
-  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base b — postgres" });
+  await selectKnowledgeSource(knowledge, "b");
   await knowledge.getByLabel("Catálogo autorizado").selectOption(catalog.catalog.id);
   await knowledge
     .getByRole("combobox", { name: "Versão do padrão", exact: true })
@@ -3323,7 +3334,7 @@ test("inspeciona, publica perfil físico e adota versão exata no rascunho sem m
     page.getByText("Treinamento publicado. Libere seu uso em um token.", { exact: true }),
   ).toBeVisible();
   await go(page, "Conhecimento");
-  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base a — postgres" });
+  await selectKnowledgeSource(knowledge, "a");
   await knowledge.getByLabel("Catálogo autorizado").selectOption(catalog.catalog.id);
   await knowledge
     .getByRole("combobox", { name: "Versão do padrão", exact: true })
@@ -6294,7 +6305,7 @@ test("seleciona ERP no cadastro e verifica compatibilidade sem conceder acesso",
     name: "Conhecimento das bases da persona",
     exact: true,
   });
-  await knowledge.getByLabel("Base para conhecimento").selectOption({ label: "Base a — postgres" });
+  await selectKnowledgeSource(knowledge, "a");
   await knowledge.getByRole("button", { name: "Atualizar versões disponíveis" }).click();
   await knowledge.getByLabel("Catálogo autorizado").selectOption(catalog.catalog.id);
   await knowledge
