@@ -614,7 +614,10 @@ describe("baseline persona-v2 e administração em PostgreSQL real", () => {
         .rows[0].revoked_at,
     ).toBeInstanceOf(Date);
     expect((await authorized("post", "/api/admin/logout", session).send({})).status).toBe(204);
-    expect((await authorized("get", "/api/admin/personas", session)).status).toBe(403);
+    const loggedOut = await authorized("get", "/api/admin/personas", session);
+    expect(loggedOut.status).toBe(401);
+    expect(loggedOut.body.error.code).toBe("ADMIN_SESSION_EXPIRED");
+    expect(loggedOut.body.personas).toBeUndefined();
   });
 });
 
