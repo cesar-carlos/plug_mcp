@@ -1,7 +1,7 @@
 # Testes de rascunhos por operador SSH
 
-Implementação local para revisão e implantação. Não registra aceite integral,
-execução nativa do piloto Helena ou publicação de rascunhos por si só.
+Runner implantado no servidor de teste, com piloto nativo registrado abaixo.
+Não registra aceite integral para clientes nem publica rascunhos por si só.
 
 ## Contrato e alcance
 
@@ -52,7 +52,11 @@ npm run persona:test-publication:ssh -- --host=ALIAS_SSH --request=inspect.json
 
 5. Preparar imagem candidata e iniciar uma sessão isolada nova pelo wrapper
    [manual](homologation-chain.md#sessão-contínua-para-treinamento-manual), usando
-   `-CampoPrazos` para os casos de prazo. O companion precisa conter exatamente
+   `-CampoPrazo pagar` ou `-CampoPrazo receber` para cada piloto de prazo. Cada
+   perfil MSSQL cria somente a tabela correspondente; não altera as sementes
+   dos casos para incluir tabelas estranhas. `-CampoPrazos` continua sendo o perfil
+   amplo anterior e não pode ser combinado com o perfil individual.
+   O companion precisa conter exatamente
    as tabelas declaradas nos casos; a flag não acrescenta tabelas arbitrárias.
 6. Criar pedido `run` com os mesmos IDs/SHA e `expected` contendo somente
    `revision`, `packageHash`, `casesHash`, `sourceId` e `sourceFingerprint` devolvidos
@@ -109,3 +113,42 @@ persistentes v2 aprovados. PostgreSQL 16 descartável e processo separado cobrir
 o novo protocolo; nenhum teste usou o ERP. Tipos, lint, formatação, documentação,
 treinamento com checkout exato do hub e builds passaram. Os logs locais ficam em
 `test-results/`, fora do Git. Isso não substitui o CI nem o piloto nativo.
+
+## Deploy e piloto de 2026-11-08
+
+Runtime `ffd780192e4d6dc9936dc3a04419c0a640f3c9aa`, com
+[CI aprovado](https://github.com/cesar-carlos/plug_mcp/actions/runs/42545801387)
+e [deploy concluído](https://github.com/cesar-carlos/plug_mcp/actions/runs/42547045440).
+Servidor e worker usam a imagem
+`sha256:ddd4cca36d2a4a0b30953951616cb5869bc8e68f28ec79c034883dc02281a71c`.
+A verificação pós-deploy confirmou saúde, SHA e os quatro ciclos do worker;
+na janela observada não houve warnings, erros, truncamento ou supportIds.
+
+O piloto da Helena executou os rascunhos originais de prazo a pagar e receber,
+ambos na revisão 4, sem alterar casos ou consultar o ERP. Cada um usou uma
+sessão local própria, SQL Server nativo e perfil de tabela individual. Os seis
+casos passaram, com relatório aprovado gravado pelo runner no catálogo original.
+
+| Perfil  | Casos aprovados | Hash do pacote                                                     | Hash dos casos                                                     |
+| ------- | --------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| pagar   | 3/3             | `9700ad6695e7f46238b7949a0d07650d0a1978368edc33f140101ccd22b87068` | `d1abb5fdfe4ef9bb79173f0eb6e551a9c4fdbac7565773184e9f5506216db483` |
+| receber | 3/3             | `5f6c56b943de9cae5eab44bfaff818f55a5f1c237ef0af0f835080582eedd055` | `0ba2aecbaab21522838ae2dbea4c8c6228d7490d946ac73159727542c9e6b631` |
+
+Candidata local do mesmo SHA:
+`sha256:63a396f6bb978dddd5f7ce974c61750abf0181b77cb9e7e8edf10e155eeb92d3`.
+Hub fixado em `41cc6b12501384ee41c97a281d740c3da7d2366e`; agente em
+`dba1e40f8b08aba56bdde125bda66dfe52d7ccb3`. O patch local dos perfis de fixture
+estava presente: inventário MCP
+`417a6f896445bb0d3e43ee1a8b51849fc66ac1b3a722d1dff94674f0e35a3e79`,
+inalterado antes/depois de ambas as sessões. Ambos os inventários terminaram
+com `testExitCode: 0`, `unchanged: true` e `result: passed`; as fixtures foram
+removidas pelo procedimento de propriedade verificada.
+
+Duas tentativas anteriores não foram reutilizadas: a primeira não iniciou o
+MCP por bytes CRLF locais em quatro migrations (restaurados exatamente do Git,
+sem alterar migrations publicadas); a segunda recusou `INVALID_PLAN` porque
+o perfil amplo tinha três tabelas e o caso somente uma. Os perfis individuais
+corrigem essa incompatibilidade sem enfraquecer a igualdade do manifesto.
+23 regressões direcionadas, tipos, lint e documentação passaram após o ajuste.
+Isso não certifica consultas arbitrárias, outros rascunhos, PostgreSQL/Sybase
+nativos ou aceite integral para clientes. Publicação editorial permanece separada.

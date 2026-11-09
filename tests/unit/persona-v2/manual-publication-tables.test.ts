@@ -1,6 +1,19 @@
 import { expect, it } from "vitest";
 import { manualPublicationTables } from "../../../scripts/homologation/manual-publication-tables.js";
 
+it.each(["pagar", "receber"] as const)("perfil %s conserva somente a tabela do caso", (side) => {
+  const tables = manualPublicationTables("mssql", false, side);
+  expect(tables.map((table) => table.table)).toEqual([`dbo.conta${side}`]);
+  expect(tables).toEqual(
+    manualPublicationTables("mssql", true).filter((t) => t.table === `dbo.conta${side}`),
+  );
+  expect(manualPublicationTables("postgres", false, side)).toEqual(
+    manualPublicationTables("postgres"),
+  );
+  expect(manualPublicationTables("sybase", false, side)).toEqual(manualPublicationTables("sybase"));
+  expect(() => manualPublicationTables("mssql", true, side)).toThrow("único perfil");
+});
+
 it.each(["mssql", "postgres", "sybase"])("fixture padrão permanece mínima em %s", (dialect) => {
   expect(manualPublicationTables(dialect).map((table) => table.table)).toEqual([
     "publication_orders",

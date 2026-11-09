@@ -464,6 +464,11 @@ agentes com persistência/cofre isolados e servidor/worker da imagem candidata.
 As migrations são explícitas. Não cria persona, fonte, token, treinamento ou
 publicação no MCP: essas ações pertencem ao ensaio humano.
 
+Para o [piloto por SSH](operator-publication.md), `-CampoPrazo pagar` e
+`-CampoPrazo receber` selecionam a tabela MSSQL exata de cada rascunho. São
+alternativas ao perfil amplo `-CampoPrazos`; não podem ser combinadas. Os casos
+conservam suas sementes originais, e cada tentativa usa uma sessão nova.
+
 A duração é de 10 a 120 minutos, padrão de 60, contada desde o início da
 preparação dos companions. Não há renovação automática. Sessão administrativa,
 aprovações, operações e consultas conservam seus próprios prazos e limites.

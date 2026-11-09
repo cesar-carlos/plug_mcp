@@ -4,11 +4,13 @@ param(
     [Parameter(Mandatory = $true)] [string] $CandidateImage,
     [ValidateRange(10, 120)] [int] $Minutes = 60,
     [switch] $CampoPrazos,
+    [ValidateSet('', 'pagar', 'receber')] [string] $CampoPrazo = '',
     [string] $HubCheckout = (Join-Path $PSScriptRoot '../../plug_server'),
     [string] $AgentCheckout = (Join-Path $PSScriptRoot '../../plug_agente'),
     [string] $SqlAnywhereDirectory = 'C:/Program Files/SQL Anywhere 16/Bin64'
 )
 $ErrorActionPreference = 'Stop'
+if ($CampoPrazos -and $CampoPrazo) { throw 'Escolha um único perfil de fixture de prazo.' }
 $hubPath = (Resolve-Path -LiteralPath $HubCheckout).Path
 $agentPath = (Resolve-Path -LiteralPath $AgentCheckout).Path
 $flutterPath = (Resolve-Path -LiteralPath $Flutter).Path
@@ -40,7 +42,7 @@ try {
     Write-Host "Fixture privada: $manifestPath"
     Write-Host 'Aguarde o endereço do console. Credenciais sintéticas serão gravadas somente no arquivo privado indicado.'
     Write-Host 'Mantenha este terminal aberto; use stop-persona-manual-training.ps1 para encerrar antes do prazo.'
-    $trainingArguments = @(& (Join-Path $PSScriptRoot 'homologation/manual-training-arguments.ps1') -Manifest $manifestPath -Hub $hubPath -Agent $agentPath -Flutter $flutterPath -Image $imageId -Minutes $Minutes -CampoPrazos:$CampoPrazos)
+    $trainingArguments = @(& (Join-Path $PSScriptRoot 'homologation/manual-training-arguments.ps1') -Manifest $manifestPath -Hub $hubPath -Agent $agentPath -Flutter $flutterPath -Image $imageId -Minutes $Minutes -CampoPrazos:$CampoPrazos -CampoPrazo $CampoPrazo)
     & (Join-Path $PSScriptRoot 'with-project-node.ps1') node node_modules/tsx/dist/cli.mjs scripts/homologation/manual-training.ts @trainingArguments
     $sessionExit = $LASTEXITCODE
 } finally {

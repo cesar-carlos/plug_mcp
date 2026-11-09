@@ -21,6 +21,7 @@ const values = parseArgs({
     flutter: { type: "string" },
     image: { type: "string" },
     campoPrazos: { type: "boolean", default: false },
+    campoPrazo: { type: "string" },
     minutes: { type: "string", default: "60" },
   },
 }).values;
@@ -32,8 +33,10 @@ const input = z
     flutter: z.string().min(1),
     image: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     campoPrazos: z.boolean(),
+    campoPrazo: z.enum(["pagar", "receber"]).optional(),
     minutes: z.coerce.number().int().min(10).max(120),
   })
+  .refine((value) => !(value.campoPrazos && value.campoPrazo))
   .parse(values);
 const project = realpathSync(process.cwd());
 const manifest = readChainManifest(realpathSync(input.manifest));
@@ -68,7 +71,7 @@ writeFileSync(
         dialect,
         {
           ...manifest.engines[dialect],
-          publicationTables: manualPublicationTables(dialect, input.campoPrazos),
+          publicationTables: manualPublicationTables(dialect, input.campoPrazos, input.campoPrazo),
         },
       ]),
     ),

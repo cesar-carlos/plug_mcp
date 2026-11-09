@@ -7,19 +7,27 @@ import {
 export function manualPublicationTables(
   dialect: string,
   campoPrazos = false,
+  campoPrazo?: "pagar" | "receber",
 ): PublicationFixtureTable[] {
+  if (campoPrazo && (campoPrazos || !["pagar", "receber"].includes(campoPrazo)))
+    throw new Error("Escolha um único perfil de fixture de prazo.");
+  const sides = campoPrazo ? [campoPrazo] : ["receber", "pagar"];
   return fixtureTablesSchema.parse([
-    {
-      table: "publication_orders",
-      columns: [
-        { name: "id", type: "integer" },
-        { name: "marker", type: "string", nullable: true },
-        { name: "revision", type: "integer" },
-      ],
-      primaryKey: ["id"],
-    },
-    ...(campoPrazos && dialect === "mssql"
-      ? ["receber", "pagar"].map((side) => ({
+    ...(!campoPrazo || dialect !== "mssql"
+      ? [
+          {
+            table: "publication_orders",
+            columns: [
+              { name: "id", type: "integer" },
+              { name: "marker", type: "string", nullable: true },
+              { name: "revision", type: "integer" },
+            ],
+            primaryKey: ["id"],
+          },
+        ]
+      : []),
+    ...((campoPrazos || campoPrazo) && dialect === "mssql"
+      ? sides.map((side) => ({
           table: "dbo.conta" + side,
           columns: [
             { name: "codempresa", type: "integer" },

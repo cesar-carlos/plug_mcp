@@ -11,7 +11,9 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
-- Added: Runner de operador por canal SSH privado para consultas MSSQL do servidor de teste, com inspeção sem efeitos, revisão/hashes fixados e fixture local de uso único; relatório permanece no catálogo original. Piloto nativo e implantação ainda não atestados.
+- Fixed: Perfis locais `-CampoPrazo pagar|receber` criam somente a tabela MSSQL exigida pelos casos, sem acrescentar sementes ao treinamento nem relaxar a correspondência exata do manifesto; perfis incompatíveis são recusados antes do provisionamento.
+
+- Added: Runner de operador por canal SSH privado para consultas MSSQL do servidor de teste, com inspeção sem efeitos, revisão/hashes fixados e fixture local de uso único; relatório permanece no catálogo original. Deploy e piloto nativo 6/6 documentados em `docs/persona-v2/operator-publication.md`, sem aceite integral para clientes.
 - Fixed: Wrapper da sessão manual encaminha `-CampoPrazos` explicitamente, mantendo desativação por padrão e argumentos separados.
 
 - Fixed: Consulta v2 reconfere cancelamento MCP após esperas e antes do envio, evitando dispatch após autorização tardia e processamento de resultado após cancelamento. Sem promessa de interromper SQL em andamento.

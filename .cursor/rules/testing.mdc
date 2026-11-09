@@ -66,6 +66,8 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
   pronto, não cria endpoint público nem publica. Uma tentativa por sessão privada;
   perda de confirmação não autoriza retry. Transporte sintético/PostgreSQL de controle
   não certificam MSSQL nativo. Contrato: docs/persona-v2/operator-publication.md.
+  Perfis individuais de prazo criam somente a tabela do caso; não acrescentar
+  sementes estranhas ao treinamento nem afrouxar a igualdade do manifesto.
 
 - Fixtures HTTP do hub reutilizam contratos tipados quando disponíveis e passam
   pelo adapter real. A resposta positiva deve fixar a identidade pedida; regressões

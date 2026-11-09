@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { expect, it } from "vitest";
 
-it.each([false, true])(
+it.each([false, true, "pagar", "receber"])(
   "wrapper emite argumentos isolados e campoPrazos explícito: %s",
   (enabled) => {
     const manifest = "fixture folder/manifest.json";
@@ -25,7 +25,11 @@ it.each([false, true])(
         `sha256:${"a".repeat(64)}`,
         "-Minutes",
         "30",
-        ...(enabled ? ["-CampoPrazos"] : []),
+        ...(typeof enabled === "string"
+          ? ["-CampoPrazo", enabled]
+          : enabled
+            ? ["-CampoPrazos"]
+            : []),
       ],
       { encoding: "utf8" },
     );
@@ -41,6 +45,7 @@ it.each([false, true])(
         image: { type: "string" },
         minutes: { type: "string" },
         campoPrazos: { type: "boolean", default: false },
+        campoPrazo: { type: "string" },
       },
     }).values;
     expect(values).toEqual({
@@ -50,7 +55,37 @@ it.each([false, true])(
       flutter: "flutter folder/flutter.bat",
       image: `sha256:${"a".repeat(64)}`,
       minutes: "30",
-      campoPrazos: enabled,
+      campoPrazos: enabled === true,
+      ...(typeof enabled === "string" ? { campoPrazo: enabled } : {}),
     });
   },
 );
+
+it("recusa dois perfis antes de emitir argumentos", () => {
+  const result = spawnSync(
+    process.platform === "win32" ? "powershell.exe" : "pwsh",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-File",
+      "scripts/homologation/manual-training-arguments.ps1",
+      "-Manifest",
+      "fixture",
+      "-Hub",
+      "hub",
+      "-Agent",
+      "agent",
+      "-Flutter",
+      "flutter",
+      "-Image",
+      `sha256:${"a".repeat(64)}`,
+      "-CampoPrazos",
+      "-CampoPrazo",
+      "pagar",
+    ],
+    { encoding: "utf8" },
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.status).not.toBe(0);
+  expect(result.stdout.trim()).toBe("");
+});
