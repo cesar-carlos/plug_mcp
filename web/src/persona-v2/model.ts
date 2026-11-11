@@ -1,4 +1,5 @@
 import type { OperationPackage } from "../../../src/domain/persona-v2/operation-training";
+import { adminReads } from "./admin-read-queue";
 import {
   TOKEN_JSON_BYTES,
   TOKEN_REQUEST_TOO_LARGE,
@@ -211,6 +212,18 @@ export class ContextRequests {
     this.controller = new AbortController();
   }
   async json<T>(url: string, init: RequestInit = {}, format: "json" | "mcp" = "json"): Promise<T> {
+    if ((init.method ?? "GET").toUpperCase() !== "GET" || !/^\/api\/admin(?:\/|$)/.test(url))
+      return this.sendJson<T>(url, init, format);
+    const signal = this.controller.signal;
+    const release = await adminReads.acquire(signal);
+    try {
+      if (signal.aborted) throw new Error("O contexto mudou. A resposta anterior foi descartada.");
+      return await this.sendJson<T>(url, init, format);
+    } finally {
+      release();
+    }
+  }
+  private async sendJson<T>(url: string, init: RequestInit, format: "json" | "mcp"): Promise<T> {
     const tokenWrite = isTokenWritePath(url.split("?")[0] ?? url, init.method ?? "GET");
     if (
       tokenWrite &&

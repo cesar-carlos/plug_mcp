@@ -10,6 +10,11 @@ Otimização nunca substitui autorização, completude ou isolamento.
 
 ## Persona-v2
 
+- Leituras GET administrativas do console compartilham admissão por janela:
+  duas em andamento, até 32 aguardando por no máximo dez segundos. Troca de
+  contexto cancela espera; erro libera a vaga sem retry. Não compartilhar resultados
+  nem cachear autoridade. Escritas e chamadas MCP não entram nessa fila.
+
 - Telemetria de consultas é opt-in, amostrada e limitada a fases fixas e contagens,
   com relógio monotônico e isolamento por chamada. Não capturar SQL, parâmetros,
   resultados ou identidade; falha do observador não altera resultado ou autorização.

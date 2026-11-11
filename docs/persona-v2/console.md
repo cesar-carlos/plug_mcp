@@ -6,6 +6,15 @@ de autoridade; não há cache de autorização, retry ou aumento do pool para co
 saturação. Falhas upstream conservam supportId e diagnóstico de transporte seguro
 nos logs (origem/etapa enumeradas), sem SQL, valores ou mensagens remotas.
 
+Os painéis e clientes administrativos da mesma janela compartilham um limite de
+duas leituras GET em andamento. Até 32 leituras aguardam por no máximo dez segundos;
+excesso/espera vencida informam ocupação local, sem enviar ou repetir a chamada.
+Trocar persona/sessão cancela leituras pendentes do contexto anterior. Cada leitura
+enviada conserva sua autorização vigente no servidor, sem cache ou deduplicação.
+Escritas e chamadas MCP mantêm seu fluxo próprio. O limite por janela não promete
+eliminar saturação causada por outros usuários ou janelas; falhas remotas continuam
+visíveis com seu código de atendimento.
+
 ## Identificação de bases e cadastros com o mesmo nome
 
 A tela Bases permite buscar por nome, dialeto, banco, ambiente, finalidade e ID;

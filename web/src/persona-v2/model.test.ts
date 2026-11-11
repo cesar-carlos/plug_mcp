@@ -123,6 +123,7 @@ it("descarta respostas de uma persona anterior mesmo se transporte ignorar abort
   );
   const requests = new ContextRequests();
   const pending = requests.json("/api/admin/personas").catch((error: unknown) => error);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
   requests.reset();
   finish(new Response(JSON.stringify({ personas: ["old-context"] })));
   expect(await pending).toEqual(new Error("O contexto mudou. A resposta anterior foi descartada."));
