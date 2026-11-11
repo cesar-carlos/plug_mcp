@@ -6,6 +6,11 @@ alwaysApply: false
 
 # Testes
 
+DNS dos mirrors Ubuntu no CI é conferido como usuário `_apt`. Recuperação por
+resolvedor alternativo só pode ocorrer no runner Linux descartável hospedado
+pelo GitHub, com prazos limitados e reconferência obrigatória. Não remover
+dependências nativas, testes de navegador ou tolerar falhas para liberar deploy.
+
 ## Obrigação de evidência em revisões e melhorias
 
 - Toda revisão registra o escopo examinado, os achados confirmados e a validação

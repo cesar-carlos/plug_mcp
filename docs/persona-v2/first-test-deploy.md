@@ -28,6 +28,16 @@ alterações; essas etapas exigem evidência da revisão efetivamente publicada.
 
 ## Implementado
 
+Antes de instalar Chromium e suas dependências nativas, o CI verifica a resolução
+dos mirrors Ubuntu como `_apt`. `scripts/prepare-ci-browser-dns.ts` preserva DNS
+saudável; se falhar, configura `1.1.1.1` e `8.8.8.8` na interface padrão do runner
+Linux descartável hospedado pelo GitHub, usando `resolvectl`, e exige nova prova
+de resolução. Recusa execução local/self-hosted, interface ambígua e falha persistente.
+Não altera DNS do servidor, mirrors, assinaturas APT, TLS ou os gates de navegador.
+A configuração desaparece com a VM do job. Referências:
+[resolvectl](https://www.freedesktop.org/software/systemd/man/255/resolvectl.html) e
+[isolamento dos runners GitHub](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
+
 Após subir os serviços, o receptor executa `scripts/verify-persona-deployment.mjs`.
 Ele reconfere SHA e imagem exatos, modo test-server, saúde, ausência de reinícios
 e OOM, além de um ciclo concluído de review/ephemeral/retention/outbox. A espera

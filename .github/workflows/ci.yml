@@ -104,6 +104,8 @@ jobs:
           PERSONA_V2_TEST_REDIS_URL: redis://localhost:6379
       - name: Release gate
         run: npm run release:check
+      - name: Check Ubuntu repository DNS in disposable runner
+        run: npx tsx scripts/prepare-ci-browser-dns.ts
       - name: Install Chromium for browser tests
         run: npx playwright install --with-deps chromium
       - name: Console browser regressions

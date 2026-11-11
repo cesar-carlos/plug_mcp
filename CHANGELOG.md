@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: CI confere DNS dos mirrors Ubuntu antes de instalar Chromium, com recuperação limitada ao runner Linux descartável e nova verificação obrigatória. Preserva dependências nativas e todos os testes; regressões cobrem DNS saudável, recuperação, falha persistente e recusa fora do runner.
+
 - Fixed: Editor de cruzamentos evita rajadas simultâneas ao ler publicações e interrompe novas leituras após falha/desmontagem, preservando revalidação. Logs de falhas upstream do console conservam supportId, etapa e diagnóstico de transporte por allowlist, com regressões de concorrência e logger real.
 
 - Added: Perfis sintéticos separados de prazo por filial para receber/pagar, com oito colunas e seleção explícita no wrapper. Preservam perfis antigos, chaves e permissões; regressões cobrem isolamento de seleção, tipos e ausência de alteração em outros motores. Não executam nem aprovam treinamento.
