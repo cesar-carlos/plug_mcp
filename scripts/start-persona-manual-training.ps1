@@ -5,7 +5,7 @@ param(
     [ValidateRange(10, 120)] [int] $Minutes = 60,
     [switch] $CampoPrazos,
     [ValidateSet('', 'pagar', 'receber')] [string] $CampoPrazo = '',
-    [ValidateSet('', 'prazo-filial-receber', 'prazo-filial-pagar', 'agenda-receber-pagar', 'titulos-receber', 'titulos-pagar', 'vencidos-pagar', 'agenda-pagar', 'saldo-fornecedor', 'horizonte-pagar', 'horizonte-receber', 'atraso-fornecedor', 'cobranca-cliente', 'custo-atual', 'itens-gestao', 'itens-variedade-perdas', 'itens-cestas', 'vendas-distribuicoes', 'vendas-clientes', 'vendas-resumo', 'vendas-vendedor', 'vendas-descontos', 'vendas-municipio')] [string] $CampoConsulta = '',
+    [ValidateSet('', 'estoque-locais', 'estoque-saldos', 'cadastro-filiais', 'prazo-filial-receber', 'prazo-filial-pagar', 'agenda-receber-pagar', 'titulos-receber', 'titulos-pagar', 'vencidos-pagar', 'agenda-pagar', 'saldo-fornecedor', 'horizonte-pagar', 'horizonte-receber', 'atraso-fornecedor', 'cobranca-cliente', 'custo-atual', 'itens-gestao', 'itens-variedade-perdas', 'itens-cestas', 'vendas-distribuicoes', 'vendas-clientes', 'vendas-resumo', 'vendas-vendedor', 'vendas-descontos', 'vendas-municipio')] [string] $CampoConsulta = '',
     [string] $HubCheckout = (Join-Path $PSScriptRoot '../../plug_server'),
     [string] $AgentCheckout = (Join-Path $PSScriptRoot '../../plug_agente'),
     [string] $SqlAnywhereDirectory = 'C:/Program Files/SQL Anywhere 16/Bin64'

@@ -6,6 +6,9 @@ import {
 } from "../../src/domain/persona-v2/publication-fixture.js";
 
 export const campoQueryProfileSchema = z.enum([
+  "estoque-locais",
+  "estoque-saldos",
+  "cadastro-filiais",
   "prazo-filial-receber",
   "prazo-filial-pagar",
   "agenda-receber-pagar",
@@ -34,6 +37,115 @@ export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
 /** Fixed synthetic schemas matching the curated cases, never inferred from an ERP. */
 export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
   const profile = campoQueryProfileSchema.parse(input);
+  if (profile === "estoque-locais" || profile === "estoque-saldos") {
+    const tables = [
+      {
+        table: "dbo.localarmazenagem",
+        columns: [
+          { name: "codlocalarmazenagem", type: "integer" },
+          { name: "nome", type: "string", nullable: true },
+        ],
+        primaryKey: ["codlocalarmazenagem"],
+      },
+      {
+        table: "dbo.localarmazenagemfilial",
+        columns: [
+          { name: "codempresa", type: "integer" },
+          { name: "codfilial", type: "integer" },
+          { name: "codlocalarmazenagem", type: "integer" },
+        ],
+        primaryKey: ["codempresa", "codfilial", "codlocalarmazenagem"],
+      },
+    ];
+    if (profile === "estoque-saldos")
+      tables.push(
+        {
+          table: "dbo.saldoestoque",
+          columns: [
+            { name: "codlocalarmazenagem", type: "integer" },
+            { name: "codproduto", type: "integer" },
+            ...["saldoatual", "quantidadepedidocompra"].map((name) => ({
+              name,
+              type: "decimal",
+              nullable: true,
+            })),
+          ],
+          primaryKey: ["codlocalarmazenagem", "codproduto"],
+        },
+        {
+          table: "dbo.produto",
+          columns: [
+            { name: "codproduto", type: "integer" },
+            ...["nome", "codunidademedida"].map((name) => ({
+              name,
+              type: "string",
+              nullable: true,
+            })),
+            ...["codmarca", "codgrupoproduto"].map((name) => ({
+              name,
+              type: "integer",
+              nullable: true,
+            })),
+          ],
+          primaryKey: ["codproduto"],
+        },
+      );
+    if (profile === "estoque-saldos")
+      tables.push(
+        {
+          table: "dbo.marca",
+          columns: [
+            { name: "codmarca", type: "integer" },
+            { name: "nome", type: "string", nullable: true },
+          ],
+          primaryKey: ["codmarca"],
+        },
+        {
+          table: "dbo.grupoproduto",
+          columns: [
+            { name: "codgrupoproduto", type: "integer" },
+            { name: "nome", type: "string", nullable: true },
+          ],
+          primaryKey: ["codgrupoproduto"],
+        },
+      );
+    return fixtureTablesSchema.parse(
+      profile === "estoque-saldos"
+        ? tables.filter((t) => t.table !== "dbo.localarmazenagemfilial")
+        : tables,
+    );
+  }
+  if (profile === "cadastro-filiais") {
+    return fixtureTablesSchema.parse([
+      {
+        table: "dbo.filial",
+        columns: [
+          { name: "codempresa", type: "integer" },
+          { name: "codfilial", type: "integer" },
+          ...["nome", "nomefantasia", "regimetributario", "cnpj", "cnae", "inscricaoestadual"].map(
+            (name) => ({ name, type: "string", nullable: true }),
+          ),
+          { name: "codmunicipio", type: "integer", nullable: true },
+          ...["logradouro", "numerologradouro", "bairro", "cep"].map((name) => ({
+            name,
+            type: "string",
+            nullable: true,
+          })),
+        ],
+        primaryKey: ["codempresa", "codfilial"],
+      },
+      {
+        table: "dbo.municipio",
+        columns: [
+          { name: "codmunicipio", type: "integer" },
+          { name: "nome", type: "string", nullable: true },
+          { name: "uf", type: "string", nullable: true },
+        ],
+        primaryKey: ["codmunicipio"],
+      },
+    ]);
+  }
+
   if (profile === "prazo-filial-receber" || profile === "prazo-filial-pagar") {
     const side = profile === "prazo-filial-receber" ? "receber" : "pagar";
     return fixtureTablesSchema.parse([

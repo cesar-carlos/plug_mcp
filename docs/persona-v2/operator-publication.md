@@ -119,6 +119,10 @@ dos casos curados, sem campos extras ou FKs inferidas. Não combinar esses perfi
 com `-CampoPrazo` ou `-CampoPrazos`. A existência do perfil não aprova o caso:
 inspecionar a revisão atual e usar uma sessão nova continuam obrigatórios.
 
+## Perfis locais de estoque da Campo
+
+Os perfis fechados `estoque-locais` e `estoque-saldos` usam apenas as colunas das amostras fornecidas pelo responsável. O primeiro declara `dbo.localarmazenagem` e `dbo.localarmazenagemfilial`; o segundo declara `dbo.localarmazenagem`, `dbo.saldoestoque`, `dbo.produto`, `dbo.marca` e `dbo.grupoproduto`, sem tabela de vínculo não utilizada. O vínculo de local com filial é opcional: não há FK inferida, fallback em `Filial` nem associação por igualdade de códigos. Somente MSSQL recebe essas tabelas; os demais motores conservam suas fixtures genéricas. O companion exige os nomes exatos e banco descartável. Existência do perfil e testes técnicos não aprovam consultas; cada revisão exige casos e nova sessão oficial.
+
 ## Diagnóstico local e ritmo dos casos
 
 A ponte local registra apenas operação, código e origem enumerados e, para RATE_LIMITED, prazo numérico limitado. Não copia mensagem, SQL, credenciais ou detalhes do erro. O resultado continua não aprovado, sem retry. A ponte local espaça somente o início das preparações em 90 segundos, fora do orçamento SQL. Durante essa espera, envia até nove quadros prepare-wait vinculados ao pedido, com prazo restante estritamente decrescente, a cada dez segundos. O receptor aceita esses quadros somente no preparo, com limite total de 135 segundos ou a expiração da fixture, o que vier primeiro. O prazo ocioso de 45 segundos permanece; sem progresso válido o canal falha. Autorizar, executar, revalidar e limpar não recebem essa pausa. Preserva cotas, autorização por chamada e prazo SQL; heartbeat não é relatório nem aprovação. BUDGET_EXCEEDED e RATE_LIMITED são preservados como códigos sanitizados pelo CLI SSH. Esse intervalo não promete evitar qualquer cota personalizada. Se houver recusa, investigar e usar nova sessão conforme o procedimento abaixo.
@@ -319,3 +323,7 @@ O perfil `custo-atual` limita a fixture MSSQL às cinco tabelas e 17 campos da a
 O perfil local `itens-gestao` contém somente as seis tabelas e 30 campos das amostras de vendas/itens/operação e produto/marca/grupo. Preserva custos, receitas e classificações nulos e não cria FKs presumidas. Casos de margens e ABC verificam empresa/filial, períodos independentes, ponderação, cortes 80/95, empates, sinais, dados incompletos e vazio. O decimal da fixture não comprova a precisão do ERP: reconciliar a escala real separadamente por ODBC. A presença do perfil não aprova casos nem concede acesso.
 
 O perfil itens-variedade-perdas reutiliza somente três tabelas e 17 campos de itens-gestao, excluindo dimensões e valores de cabeçalho não usados. Preserva nulos e chaves compostas; valida variedade por vendedor e perdas históricas sem ampliar o escopo fornecido.
+
+### Cadastro de filiais — perfil local de 11/11/2026
+
+`-CampoConsulta cadastro-filiais` declara apenas dbo.filial (13 campos) e dbo.municipio (3 campos) da amostra do responsável. Chave da filial é empresa/filial; município é anulável na filial e não há FK sintética obrigatória, permitindo testar ausência de correspondência no INNER JOIN. Códigos são inteiros, demais campos textuais, sem interpretação de regime tributário. Somente MSSQL; não amplia fonte operacional. Perfil e testes locais não comprovam execução do runner, publicação ou acesso da persona.

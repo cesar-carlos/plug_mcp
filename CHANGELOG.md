@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Perfis isolados `estoque-locais` e `estoque-saldos` para homologação MSSQL, com regressões de isolamento, seleção pelo launcher e documentação. Não alteram publicações ou concessões existentes.
+
 - Fixed: Console coordena leituras GET administrativas entre painéis e clientes para evitar saturação do pool de autoridade. Fila limitada por quantidade/prazo cancela contexto descartado, conserva supportId remoto e não repete solicitações; escritas e MCP permanecem fora da fila.
 
 - Fixed: CI confere DNS dos mirrors Ubuntu antes de instalar Chromium, com recuperação limitada ao runner Linux descartável e nova verificação obrigatória. Preserva dependências nativas e todos os testes; regressões cobrem DNS saudável, recuperação, falha persistente e recusa fora do runner.
@@ -1799,3 +1801,7 @@ O guia do pacote de consulta declara o relato condicional à descoberta e orient
 - Prova esperada integra hash local e escopo do journal. Nenhum fallback ou
   retry sem prova; SQL Anywhere locator permanece recusado no fluxo v2.
 - Deploy bloqueado; aceite integral e cadeia real ainda pendentes.
+
+## Perfil isolado de cadastro de filiais — 2026-11-11
+
+- Acrescenta perfil local fechado cadastro-filiais ao launcher, com duas tabelas e apenas os campos fornecidos. Testes cobrem chaves, nulidade, isolamento por motor e argumentos. Sem mudança no runtime ou nas concessões.
