@@ -482,5 +482,8 @@ a limpeza não estende validade, remove concessões ou muda revogações.
 
 Falha técnica ao resolver o Bearer no MCP retorna 503 sem WWW-Authenticate; o cliente preserva a conexão.
 Falhas OAuth e de download usam X-Support-Id com metadados seguros. Indisponibilidade temporária não pede reconexão. A listagem administrativa aceita supportId exato dentro da persona, inclusive após vencer o texto.
+Recusas HTTP MCP antes da ferramenta conservam o mesmo supportId no corpo,
+no header X-Support-Id e nos logs de protocolo e HTTP. IDs enviados pelo cliente
+não substituem esse identificador gerado pelo servidor.
 
 Use details.authorizationReason: access_expired permite refresh automático; grant_revoked ou grant_expired exige nova autorização no navegador; permission_denied exige revisar a concessão; authentication_unavailable exige aguardar. Não sugira reconexão somente pelo código genérico.

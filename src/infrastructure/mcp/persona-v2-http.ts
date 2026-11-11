@@ -76,6 +76,16 @@ import {
   type PersonaAttachments,
 } from "../../application/persona-v2/attachments.js";
 
+/** Only diagnostics created by this server supply the correlation header. */
+function sendHttpFailure<T extends { supportId: string }>(
+  res: Response,
+  status: number,
+  diagnostic: T,
+): void {
+  res.setHeader("X-Support-Id", diagnostic.supportId);
+  res.status(status).json({ error: diagnostic });
+}
+
 /** Stateless SDK transport: each request captures its own identity; no mutable token/session binding. */
 export const createPersonaV2McpHandler = (
   catalog: PersonaConsumerCatalog,
@@ -107,9 +117,7 @@ export const createPersonaV2McpHandler = (
       req.get("host") !== new URL(origin).host ||
       (req.get("origin") && req.get("origin") !== origin)
     ) {
-      res
-        .status(403)
-        .json({ error: reportPersonaProtocolError(logger, "ORIGIN_DENIED", "request") });
+      sendHttpFailure(res, 403, reportPersonaProtocolError(logger, "ORIGIN_DENIED", "request"));
       return;
     }
     if (req.method !== "POST") {
@@ -121,22 +129,18 @@ export const createPersonaV2McpHandler = (
     const bearer = readBearer(req);
     if (oauth && !bearer) {
       res.setHeader("WWW-Authenticate", chatGptOAuthChallenge(publicBaseUrl));
-      res.status(401).json({
-        error: {
-          ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
-          code: "AUTHORIZATION_DENIED",
-          message: "Autenticação necessária. Informe o token da persona.",
-        },
+      sendHttpFailure(res, 401, {
+        ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
+        code: "AUTHORIZATION_DENIED",
+        message: "Autenticação necessária. Informe o token da persona.",
       });
       return;
     }
     if (req.get("authorization") && !bearer) {
-      res.status(401).json({
-        error: {
-          ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
-          code: "AUTHORIZATION_DENIED",
-          message: "O cabeçalho de autorização não contém um token utilizável.",
-        },
+      sendHttpFailure(res, 401, {
+        ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
+        code: "AUTHORIZATION_DENIED",
+        message: "O cabeçalho de autorização não contém um token utilizável.",
       });
       return;
     }
@@ -152,11 +156,13 @@ export const createPersonaV2McpHandler = (
             "WWW-Authenticate",
             oauth ? chatGptOAuthChallenge(publicBaseUrl, true) : 'Bearer realm="persona-v2"',
           );
-        res.status(denied ? 401 : 503).json({
-          error: denied
+        sendHttpFailure(
+          res,
+          denied ? 401 : 503,
+          denied
             ? reportPersonaV2ToolError(error, logger)
             : reportPersonaProtocolError(logger, "AUTHORITY_UNAVAILABLE", "authentication"),
-        });
+        );
         return;
       }
     }
@@ -1123,7 +1129,7 @@ export const createPersonaV2McpHandler = (
         error instanceof PersonaV2Error
           ? reportPersonaV2ToolError(error, logger)
           : reportPersonaProtocolError(logger, "MCP_REQUEST_FAILED", "request");
-      if (!res.headersSent) res.status(503).json({ error: diagnostic });
+      if (!res.headersSent) sendHttpFailure(res, 503, diagnostic);
       else res.end();
     }
   };

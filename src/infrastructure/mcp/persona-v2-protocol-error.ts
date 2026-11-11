@@ -68,15 +68,15 @@ export const personaMcpParserError =
     }
     const status =
       (error as { type?: unknown } | undefined)?.type === "entity.too.large" ? 413 : 400;
-    res.status(status).json({
-      error: reportPersonaProtocolError(
-        logger,
-        status === 413 ? "REQUEST_TOO_LARGE" : "MCP_PROTOCOL_ERROR",
-        "protocol",
-        undefined,
-        { protocolOrigin: "http_parser" },
-      ),
-    });
+    const diagnostic = reportPersonaProtocolError(
+      logger,
+      status === 413 ? "REQUEST_TOO_LARGE" : "MCP_PROTOCOL_ERROR",
+      "protocol",
+      undefined,
+      { protocolOrigin: "http_parser" },
+    );
+    res.setHeader("X-Support-Id", diagnostic.supportId);
+    res.status(status).json({ error: diagnostic });
   };
 
 /** Fixed metadata only: SDK messages can contain arguments and resource identifiers. */

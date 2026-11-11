@@ -4,6 +4,139 @@ import pino from "pino";
 import { expect, it } from "vitest";
 import { adminRequestDiagnostics } from "../../../src/infrastructure/http/persona-admin-diagnostics.js";
 import { PinoLoggerAdapter } from "../../../src/infrastructure/logging/pino-logger.adapter.js";
+import { createPersonaV2McpHandler } from "../../../src/infrastructure/mcp/persona-v2-http.js";
+import { personaMcpParserError } from "../../../src/infrastructure/mcp/persona-v2-protocol-error.js";
+
+it.each(["missing", "malformed", "authority", "origin", "preparation"])(
+  "MCP conserva o mesmo supportId no corpo, header e logger real: %s",
+  async (mode) => {
+    let log = "";
+    const logger = new PinoLoggerAdapter(
+      pino(
+        {},
+        {
+          write: (line) => {
+            log += line;
+          },
+        },
+      ),
+    );
+    const app = express();
+    app.use(adminRequestDiagnostics(logger));
+    app.use(express.json());
+    const catalog = { authenticate: async () => ({ personaId: "fixture" }) };
+    const oauth =
+      mode === "missing" || mode === "authority"
+        ? {
+            resolve: async () => {
+              throw Error("secret-fixture");
+            },
+          }
+        : undefined;
+    const setups =
+      mode === "preparation"
+        ? {
+            visible: async () => {
+              throw Error("secret-fixture");
+            },
+          }
+        : undefined;
+    app.post(
+      "/mcp/chatgpt",
+      createPersonaV2McpHandler(
+        catalog as unknown as Parameters<typeof createPersonaV2McpHandler>[0],
+        "https://fixture.test",
+        undefined,
+        undefined,
+        undefined,
+        oauth as Parameters<typeof createPersonaV2McpHandler>[5],
+        setups as unknown as Parameters<typeof createPersonaV2McpHandler>[6],
+        undefined,
+        undefined,
+        logger,
+      ),
+    );
+    const call = request(app)
+      .post("/mcp/chatgpt")
+      .set("Host", mode === "origin" ? "wrong.test" : "fixture.test")
+      .set("X-Support-Id", "11111111-1111-4111-8111-111111111111");
+    if (mode !== "missing")
+      call.set(
+        "Authorization",
+        mode === "malformed" ? "Basic secret-fixture" : "Bearer secret-fixture",
+      );
+    const response = await call.send({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+    expect(response.status).toBe(
+      mode === "origin" ? 403 : mode === "authority" || mode === "preparation" ? 503 : 401,
+    );
+    expect(response.headers["x-support-id"]).toBe(response.body.error.supportId);
+    expect(response.headers["x-support-id"]).not.toBe("11111111-1111-4111-8111-111111111111");
+    const entries = log
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      errorCode:
+        mode === "origin"
+          ? "ORIGIN_DENIED"
+          : mode === "authority"
+            ? "AUTHORITY_UNAVAILABLE"
+            : mode === "preparation"
+              ? "MCP_REQUEST_FAILED"
+              : "AUTHORIZATION_DENIED",
+      stage: mode === "origin" || mode === "preparation" ? "request" : "authentication",
+    });
+    expect(entries.every((entry) => entry.supportId === response.body.error.supportId)).toBe(true);
+    expect(log + JSON.stringify(response.body)).not.toContain("secret-fixture");
+    if (mode === "missing")
+      expect(response.headers["www-authenticate"]).toContain("oauth-protected-resource");
+    if (mode === "authority") expect(response.headers).not.toHaveProperty("www-authenticate");
+  },
+);
+
+it.each([false, true])(
+  "parser MCP conserva supportId com logger real; oversized=%s",
+  async (oversized) => {
+    let log = "";
+    const logger = new PinoLoggerAdapter(
+      pino(
+        {},
+        {
+          write: (line) => {
+            log += line;
+          },
+        },
+      ),
+    );
+    const app = express();
+    app.use(adminRequestDiagnostics(logger));
+    app.use(express.json({ limit: 128 }));
+    app.use(personaMcpParserError(logger));
+    const response = await request(app)
+      .post("/mcp/chatgpt")
+      .type("json")
+      .send(
+        oversized
+          ? JSON.stringify({ secret: "private-fixture".repeat(20) })
+          : '{"secret":"private-fixture"',
+      );
+    expect(response.status).toBe(oversized ? 413 : 400);
+    expect(response.headers["x-support-id"]).toBe(response.body.error.supportId);
+    const entries = log
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(entries).toHaveLength(2);
+    expect(entries.every((e) => e.supportId === response.body.error.supportId)).toBe(true);
+    expect(entries[0]).toMatchObject({
+      errorCode: oversized ? "REQUEST_TOO_LARGE" : "MCP_PROTOCOL_ERROR",
+      stage: "protocol",
+      protocolOrigin: "http_parser",
+    });
+    expect(log + JSON.stringify(response.body)).not.toContain("private-fixture");
+  },
+);
 
 it("correlaciona 404, parser e recusa sem expor caminho, entrada ou existência do recurso", async () => {
   let log = "";
