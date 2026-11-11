@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Diagnósticos de `INVALID_SQL` preservam categoria segura `sqlReason` no retorno v2 e nos logs por supportId, sem SQL, identificadores ou valores. Regressões usam logger real e mantêm a separação entre erros de motor e protocolo.
+
 - Added: Perfis isolados `estoque-locais` e `estoque-saldos` para homologação MSSQL, com regressões de isolamento, seleção pelo launcher e documentação. Não alteram publicações ou concessões existentes.
 
 - Fixed: Console coordena leituras GET administrativas entre painéis e clientes para evitar saturação do pool de autoridade. Fila limitada por quantidade/prazo cancela contexto descartado, conserva supportId remoto e não repete solicitações; escritas e MCP permanecem fora da fila.

@@ -775,10 +775,32 @@ export const mapPlugServerFailure = (
     logger,
     stage,
   );
+  // Keep only a fixed category from diagnostics already used by the mapper.
+  // The upstream text must never be copied to support logs or v2 responses.
+  let sqlReason: string | undefined;
+  if (mapped.source === HUB_ERROR_SOURCE.sqlEngine && mapped.code === ERROR_CODES.INVALID_SQL) {
+    const rpc = extractRpcError(failure.body);
+    const diagnostic = rpcHaystackOf(rpc);
+    sqlReason = isSqlServerIdentifierBinding(diagnostic)
+      ? "identifier_binding"
+      : isSqlServerOrderByWrap(diagnostic)
+        ? "order_by_context"
+        : isUnclassifiableSqlDenial(rpc.code ?? 0, rpc.technicalMessage, diagnostic)
+          ? "sql_unclassified"
+          : isInvalidIdentificadorMotor(diagnostic)
+            ? "identifier_not_found"
+            : GENERIC_DRIVER_WRAP.test(pickEngineRaw(rpc, diagnostic))
+              ? "driver_diagnostic_missing"
+              : "unclassified_engine_error";
+  }
   return new DomainError({
     ...mapped,
     message: mapped.message,
-    details: { ...asRecord(mapped.details), httpStatus: failure.status },
+    details: {
+      ...asRecord(mapped.details),
+      httpStatus: failure.status,
+      ...(sqlReason ? { sqlReason } : {}),
+    },
   });
 };
 

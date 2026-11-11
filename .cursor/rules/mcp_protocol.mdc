@@ -17,6 +17,10 @@ Diagnóstico de AGREGACAO_INSEGURA local registra somente aggregationReason
 enumerado e supportId, sem SQL, aliases, nomes físicos, valores ou detalhes livres.
 Preservar as recusas de grão/cardinalidade; categoria não autoriza retry.
 
+Falha INVALID_SQL do motor preserva sqlReason enumerado junto ao supportId,
+sem mensagem nativa ou identificadores. Diagnóstico ausente/desconhecido permanece
+explícito; não inferir causa da paginação nem promover falha HTTP/protocolo a SQL.
+
 Escolher o runtime antes de alterar tools/resources. `AGENTS.md` define a transição.
 Não misturar os contratos de mesmo nome entre as duas entradas.
 

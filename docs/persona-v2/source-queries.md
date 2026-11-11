@@ -362,6 +362,8 @@ amplia. Revalidação antes do dispatch e da entrega impede usar orçamento anti
 
 Na recusa do mecanismo SQL durante a execução v2, o evento do supportId registra queryOrigin (modelo_publicado ou sql_fornecido) e publicationIds obtidos das publicações autorizadas. Esses campos são internos. SQL, parâmetros e linhas ficam fora do log.
 
+Falhas `INVALID_SQL` do motor conservam `details.sqlReason` no retorno e no log correlacionado: `identifier_binding`, `order_by_context`, `identifier_not_found`, `sql_unclassified`, `driver_diagnostic_missing` ou `unclassified_engine_error`. A categoria deriva do diagnóstico já reconhecido pelo adapter, não de um campo livre recebido do hub. As duas últimas indicam limite do diagnóstico; nenhuma categoria comprova culpa da paginação ou autoriza repetir a consulta. Mensagens nativas, SQL e identificadores continuam omitidos. Logs antigos não permitem reconstruir detalhes descartados.
+
 Para `AGREGACAO_INSEGURA` local (`source: sql`), o evento técnico registra
 `aggregationReason` junto ao `supportId`: `invalid_declared_grain` (chaves do
 grão incompatíveis), `join_grain_unproven` (JOIN sem prova de origem),

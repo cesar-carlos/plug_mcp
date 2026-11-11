@@ -57,6 +57,18 @@ export function safeErrorDetails(value: unknown): Record<string, string | number
     result.rpcCode = raw.rpcCode;
   if (typeof raw.reason === "string" && reasons.has(raw.reason)) result.reason = raw.reason;
   if (typeof raw.errno === "string" && errnos.has(raw.errno)) result.errno = raw.errno;
+  if (
+    typeof raw.sqlReason === "string" &&
+    [
+      "identifier_binding",
+      "order_by_context",
+      "identifier_not_found",
+      "sql_unclassified",
+      "driver_diagnostic_missing",
+      "unclassified_engine_error",
+    ].includes(raw.sqlReason)
+  )
+    result.sqlReason = raw.sqlReason;
   if (typeof raw.sqlstate === "string" && /^[0-9A-Z]{5}$/.test(raw.sqlstate))
     result.sqlstate = raw.sqlstate;
   return result;
