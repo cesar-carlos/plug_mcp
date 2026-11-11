@@ -128,6 +128,9 @@ Opcionais: `PERSONA_V2_TEST_PREVIOUS_KEYS`, `PERSONA_V2_TEST_TRUST_PROXY`,
 `PERSONA_V2_TEST_OAUTH_ENABLED` e `PERSONA_V2_TEST_OAUTH_CLIENTS`.
 OAuth/cache ficam desligados sem opção explícita. Habilitar exige configuração
 própria; não amplia concessões existentes. Não publicar banco/Redis na internet.
+Para bootstrap, habilitar OAuth com `PERSONA_V2_TEST_OAUTH_CLIENTS={}` publica
+descoberta e recusa autorizações. Depois cadastrar client ID CIMD e callback reais
+exatos; nunca usar valores fictícios ou curingas.
 
 `PERSONA_V2_TEST_QUERY_TIMINGS_SAMPLE_PERCENT` controla a amostragem de métricas
 de consulta na composição: inteiro de 0 a 100, padrão 0 (desativado), convertido

@@ -554,6 +554,83 @@ it("descoberta anuncia apenas v2; inicialização exige OAuth e não aceita Bear
   ).toBe(401);
 });
 
+it("allowlist vazia permite discovery mas recusa autorização, código, refresh e access existentes", async () => {
+  const code = (await flow()).code;
+  const tokens = await oauth.token(exchange((await flow()).code));
+  const closed = new PersonaOAuth(
+    store,
+    repository,
+    crypto,
+    client,
+    { ...policy, clients: {} },
+    challenge,
+  );
+  const discovery = await composePersonaV2(
+    testConfig({
+      PUBLIC_BASE_URL: origin,
+      DATABASE_URL: url.toString(),
+      MCP_ENCRYPTION_KEY: "01".repeat(32),
+      PERSONA_V2_OAUTH_ENABLED: true,
+      PERSONA_V2_OAUTH_CLIENTS: {},
+    }),
+    { oauthClient: client },
+  );
+  client.validate.mockClear();
+  try {
+    const resource = await request(discovery.app)
+      .get("/.well-known/oauth-protected-resource/mcp/chatgpt")
+      .set("Host", "persona.fixture.test")
+      .expect(200);
+    expect(resource.body).toMatchObject({
+      resource: policy.resource,
+      authorization_servers: [origin],
+      scopes_supported: ["se7e:persona"],
+    });
+    const metadata = await request(discovery.app)
+      .get("/.well-known/oauth-authorization-server")
+      .set("Host", "persona.fixture.test")
+      .expect(200);
+    expect(metadata.body).toMatchObject({
+      issuer: origin,
+      client_id_metadata_document_supported: true,
+      code_challenge_methods_supported: ["S256"],
+    });
+    const denied = await request(discovery.app)
+      .get("/oauth/persona-v2/authorize")
+      .query(authorization())
+      .set("Host", "persona.fixture.test")
+      .expect(400);
+    expect(denied.headers["x-support-id"]).toMatch(/^[a-f0-9-]{36}$/);
+    expect(denied.headers["set-cookie"]).toBeUndefined();
+    expect(denied.headers.location).toBeUndefined();
+    for (const access of [undefined, bearer, tokens.access_token]) {
+      const call = request(discovery.app)
+        .post("/mcp/chatgpt")
+        .set("Host", "persona.fixture.test")
+        .set("Accept", "application/json, text/event-stream");
+      if (access) call.set("Authorization", `Bearer ${access}`);
+      const response = await call
+        .send({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })
+        .expect(401);
+      expect(response.headers["www-authenticate"]).toContain(
+        "oauth-protected-resource/mcp/chatgpt",
+      );
+    }
+    await expect(closed.begin(authorization())).rejects.toMatchObject({ code: "invalid_client" });
+    await expect(closed.token(exchange(code))).rejects.toMatchObject({ code: "invalid_client" });
+    await expect(closed.token(refresh(tokens.refresh_token))).rejects.toMatchObject({
+      code: "invalid_client",
+    });
+    expect(client.validate).not.toHaveBeenCalled();
+    // Rejected attempts neither consume credentials nor revoke the original grant.
+    expect((await oauth.token(exchange(code))).access_token).toBeTruthy();
+    expect((await oauth.token(refresh(tokens.refresh_token))).access_token).toBeTruthy();
+    expect(await oauth.resolve(tokens.access_token)).toMatchObject({ tokenId: identity.tokenId });
+  } finally {
+    await discovery.close();
+  }
+});
+
 it("MCP real lista ferramentas do pacote e devolve perfil estável e comprovante terminal", async () => {
   const tokens = await oauth.token(exchange((await flow()).code));
   const another = await oauth.token(exchange((await flow()).code));

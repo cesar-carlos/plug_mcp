@@ -16,6 +16,11 @@ opções de compatibilidade que restaurem o comportamento vulnerável para passa
 
 ## Segredos e navegador
 
+OAuth v2 habilitado com allowlist vazia permite descoberta pública, sem autorizar
+clientes, consumir códigos/refresh ou entregar dados. Cadastro posterior exige
+client ID CIMD e callback reais exatos; não herdar allowlist legada nem aceitar
+curingas. HTTPS, PKCE, consentimento e revalidações permanecem obrigatórios.
+
 - Senha/client_token/Bearer somente no fluxo autorizado do navegador, nunca em
   chat, argumentos de tools, erros, logs ou auditoria. Credenciais persistidas
   são cifradas, Bearer só hash e JWT do hub somente memória.

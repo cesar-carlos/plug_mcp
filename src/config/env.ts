@@ -223,12 +223,9 @@ export const loadConfig = (overrides: Record<string, string | undefined> = {}): 
     )
       throw new Error("OAuth exige URL PostgreSQL.");
   }
-  if (
-    parsed.PERSONA_V2_OAUTH_ENABLED &&
-    Object.keys(parsed.PERSONA_V2_OAUTH_CLIENTS).length === 0
-  ) {
-    throw new Error("OAuth persona-v2 exige allowlist própria de clientes e redirects exatos.");
-  }
+  // An empty v2 allowlist exposes discovery only. PersonaOAuth checks the exact
+  // client/redirect before authorization and again for existing credentials.
+  // This permits clients to discover their registration metadata without granting access.
   return {
     ...parsed,
     PUBLIC_BASE_URL: publicBase,

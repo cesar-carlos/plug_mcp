@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: OAuth v2 permite descoberta pública com allowlist vazia para resolver o cadastro inicial do cliente. Autorizações e credenciais continuam recusadas até cadastro explícito de client ID/redirect, sem herdar configuração legada. Regressões cobrem descoberta, challenge e ausência de consumo/revogação.
+
 - Fixed: Runner SSH espaça preparações fora do orçamento SQL, com progresso correlacionado e limitado, prazo total e expiração da fixture efetivos. Preserva diagnóstico sanitizado de `BUDGET_EXCEEDED`/`RATE_LIMITED`, cotas e ausência de retry; regressões cobrem canal real em memória, silêncio, progresso inválido e prazo.
 
 - Added: Perfis isolados `itens-gestao` e `itens-variedade-perdas` com campos curados, nulos e chaves explícitas. Disponibilizar fixtures não aprova nem publica os rascunhos de treinamento.

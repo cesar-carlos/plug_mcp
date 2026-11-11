@@ -7,13 +7,14 @@ it("OAuth v2 exige HTTPS e allowlist independente do legado", () => {
   expect(() =>
     testConfig({ PERSONA_V2_OAUTH_ENABLED: true, CHATGPT_OAUTH_CLIENTS: clients }),
   ).toThrow();
-  expect(() =>
+  expect(
     testConfig({
       PERSONA_V2_OAUTH_ENABLED: true,
       PUBLIC_BASE_URL: "https://persona.fixture.test",
       PERSONA_V2_OAUTH_CLIENTS: {},
-    }),
-  ).toThrow("allowlist própria");
+      CHATGPT_OAUTH_CLIENTS: clients,
+    }).PERSONA_V2_OAUTH_CLIENTS,
+  ).toEqual({});
   const config = testConfig({
     PERSONA_V2_OAUTH_ENABLED: true,
     PUBLIC_BASE_URL: "https://persona.fixture.test",

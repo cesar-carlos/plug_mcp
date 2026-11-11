@@ -16,6 +16,10 @@ revalidam token originador, consentimento e publicações antes de entregar byte
 `PERSONA_V2_OAUTH_ENABLED=false` por padrão. Ao habilitar, exigir PostgreSQL v2
 dedicado, `PUBLIC_BASE_URL` HTTPS canônica sem path/query e
 `PERSONA_V2_OAUTH_CLIENTS` com JSON de client IDs CIMD e redirects exatos.
+A lista vazia `{}` permite descoberta pública para obter client ID e callback
+reais, mas recusa toda autorização, troca de código, refresh e access.
+Não herda clientes legados nem registra clientes automaticamente. Cadastre o par
+exato após conferir o CIMD; descoberta 200/challenge 401 não comprovam conexão.
 A allowlist legada `CHATGPT_OAUTH_CLIENTS` não habilita a v2.
 Registrar somente URLs reais do ambiente autorizado; não incluir segredos.
 
