@@ -6,6 +6,8 @@ import {
 } from "../../src/domain/persona-v2/publication-fixture.js";
 
 export const campoQueryProfileSchema = z.enum([
+  "prazo-filial-receber",
+  "prazo-filial-pagar",
   "agenda-receber-pagar",
   "titulos-receber",
   "titulos-pagar",
@@ -32,6 +34,25 @@ export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
 /** Fixed synthetic schemas matching the curated cases, never inferred from an ERP. */
 export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
   const profile = campoQueryProfileSchema.parse(input);
+  if (profile === "prazo-filial-receber" || profile === "prazo-filial-pagar") {
+    const side = profile === "prazo-filial-receber" ? "receber" : "pagar";
+    return fixtureTablesSchema.parse([
+      {
+        table: `dbo.conta${side}`,
+        columns: [
+          { name: "codempresa", type: "integer" },
+          { name: "codfilial", type: "integer" },
+          { name: `codconta${side}`, type: "integer" },
+          { name: "moeda", type: "string", nullable: true },
+          { name: "status", type: "string" },
+          { name: `saldo${side}`, type: "decimal", nullable: true },
+          { name: "dataemissao", type: "date", nullable: true },
+          { name: "datavencimento", type: "date", nullable: true },
+        ],
+        primaryKey: ["codempresa", `codconta${side}`],
+      },
+    ]);
+  }
   if (profile === "itens-variedade-perdas") {
     const allowed = new Set([
       "codempresa",

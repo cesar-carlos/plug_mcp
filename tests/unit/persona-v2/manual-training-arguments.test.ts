@@ -7,6 +7,8 @@ it.each([
   true,
   "pagar",
   "receber",
+  "prazo-filial-receber",
+  "prazo-filial-pagar",
   "titulos-receber",
   "agenda-receber-pagar",
   "titulos-pagar",

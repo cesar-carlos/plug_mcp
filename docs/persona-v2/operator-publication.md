@@ -253,6 +253,48 @@ tabela, mantendo a restrição à base descartável e os testes de isolamento.
 
 ## Perfis de vendas
 
+Os perfis `prazo-filial-receber` e `prazo-filial-pagar`, selecionados por
+`-CampoConsulta`, usam somente a tabela correspondente da fixture MSSQL, com as
+sete colunas de prazo originais mais `codfilial` inteiro obrigatório. Preservam a
+chave empresa/título e os nulos de moeda, saldo e datas; não alteram `CampoPrazo`
+nem `CampoPrazos`. Não mudam allowlists, permissões ou o agente. Casos devem
+conferir isolamento entre filiais da mesma empresa, moedas, saldo parcial,
+datas inválidas e carteira vazia. Selecionar perfil não executa nem aprova casos;
+a sessão nova e os hashes oficiais da revisão continuam obrigatórios.
+
+### Evidência isolada de prazo por filial — 2026-11-11
+
+Perfis novos aprovados em 53 testes locais de schema/seleção e regressão dos
+perfis anteriores; typecheck, lint dos testes e `docs:check` passaram. Os quatro
+cenários de perfil/wrapper novo falharam antes da implementação. Nenhum código,
+allowlist ou permissão do hub/agente foi alterado nesta rodada.
+
+Runner remoto `58cc764c1b2bddbf9b7d83c94deab2705f27082a`; candidato local
+`sha256:3b8a22738ac3fc0a080b4023991e15e6bf7922fac737ee77bbb5ae97581f379b`.
+O candidato contém o runtime; perfis sintéticos são fornecidos pelo manifesto
+local. As duas revisões 4 foram reinspecionadas antes da única tentativa de cada
+rodada, com comparação dos hashes e da identidade da fonte.
+
+| Perfil               | Skill                                | Sessão descartável                                                      | Resultado          |
+| -------------------- | ------------------------------------ | ----------------------------------------------------------------------- | ------------------ |
+| prazo-filial-receber | df7b8496-19bf-4d45-8741-d3d43749ab3c | se7e_persona_b92096f927a6_test / chain-0a205aed4cb1420fabc17910f790dc58 | approved:true, 3/3 |
+| prazo-filial-pagar   | 405ddb23-9dd7-4b64-9a46-ac7ef7bea369 | se7e_persona_fb37c0401438_test / chain-3eb2fa3bef914002b443cd8cc073bc5f | approved:true, 3/3 |
+
+Receber: packageHash `2a1b1c34202cb438b70282cbea068b4dc6ef222647d51897f6d2b61dd3721dd2`,
+casesHash `5f1dc2e9fa43c40c9ad260ee925166a447adaef6b49f2814c250757b6a06707c`.
+Pagar: packageHash `f76b821843e9b053fbc4ba42d064815853eb56183ba8d9d1ae05a5ffbd9187c3`,
+casesHash `ba83852edf294315fb16c3f035d73746b7ff2d2248262c3298726e86c655ee26`.
+
+Parada e remoção oficiais confirmadas às 12:56:14Z e 13:02:03Z, respectivamente,
+com `testExitCode:0`, `unchanged:true` e `result:passed` no inventário MCP/hub/agente.
+Diretórios e containers dessas sessões foram removidos. Uma preparação anterior
+parou no carregamento de Set-Acl pelo Windows PowerShell, antes de criar bancos
+ou executar casos; seu diretório vazio foi removido. A nova preparação usou
+PowerShell 7 com ACL intacta. Nenhum caso foi repetido.
+
+Esta evidência aprova somente os casos sintéticos dessas revisões. Não executa
+no ERP, publica skills, altera concessões ou comprova resposta no ChatGPT.
+
 O perfil separado `vendas-descontos` usa as mesmas três tabelas do vendedor,
 mas contém `valorbruto` e `valordesconto` decimal nullable no lugar de
 `valorliquido` em ProdutoVendido. Preserva chaves, empresa, filial, operação,
