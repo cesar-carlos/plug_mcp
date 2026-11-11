@@ -14,6 +14,10 @@ function routeLabel(req: Request): string {
     if (/\/rotacionar\/?$/i.test(req.path)) return "token.rotate";
     return "token.issue";
   }
+  if (
+    /^\/api\/admin\/personas\/[0-9a-f-]{36}\/skills\/[0-9a-f-]{36}\/publicacao\/?$/i.test(req.path)
+  )
+    return "admin.skill.publication";
   if (/^\/api\/admin\/personas(?:\/|$)/i.test(req.path)) return "admin.personas";
   if (/^\/api\/admin(?:\/|$)/i.test(req.path)) return "admin.other";
   if (/^\/mcp(?:\/|$)/i.test(req.path)) return "mcp";

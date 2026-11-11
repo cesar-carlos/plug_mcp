@@ -116,16 +116,19 @@ export function useFederationSkillEditor(
       return;
     }
     drafts.value = result.skills.filter((skill) => skill.kind === "cruzamento");
-    const candidates = await Promise.all(
-      result.skills
-        .filter((skill) => skill.kind === "consulta" && skill.activePublicationId)
-        .map(async (skill) => {
-          const { publication } = await props.api<{
-            publication: CatalogPublication<PublishedPackage> | null;
-          }>(`${root.value}/${skill.id}/publicacao`);
-          return federationPublicationCandidate(publication, props.sources);
-        }),
-    );
+    const candidates: QueryDependency[] = [];
+    // Each read revalidates authority at the hub. Do not saturate its shared pool.
+    for (const skill of result.skills.filter(
+      (item) => item.kind === "consulta" && item.activePublicationId,
+    )) {
+      if (!live) return;
+      const { publication } = await props.api<{
+        publication: CatalogPublication<PublishedPackage> | null;
+      }>(`${root.value}/${skill.id}/publicacao`);
+      if (!live) return;
+      const candidate = federationPublicationCandidate(publication, props.sources);
+      if (candidate) candidates.push(candidate);
+    }
     if (live) {
       publications.value = candidates.filter((item) => item !== null);
     }

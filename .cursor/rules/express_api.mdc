@@ -52,5 +52,7 @@ Requisitos de navegador e segredos em `security.mdc`.
   quando presentes. Não compartilhar stores entre runtimes.
 
 Erros upstream no console usam frases fixas por código e correlação X-Request-ID.
+O log conserva também o supportId entregue, etapa/origem enumeradas e detalhes
+de transporte por allowlist. Não registrar mensagem, hint ou objeto remoto livre.
 Timeout do bridge não é recusa de autoridade. Não devolver mensagem nativa,
 corpo ou detalhes livres do hub; não disparar retry ou rotação de credenciais.

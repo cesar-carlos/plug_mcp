@@ -1,5 +1,11 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+O seletor administrativo de dependências de cruzamento lê publicações em sequência,
+interrompendo ao falhar ou desmontar o editor. Cada leitura mantém a revalidação
+de autoridade; não há cache de autorização, retry ou aumento do pool para contornar
+saturação. Falhas upstream conservam supportId e diagnóstico de transporte seguro
+nos logs (origem/etapa enumeradas), sem SQL, valores ou mensagens remotas.
+
 ## Identificação de bases e cadastros com o mesmo nome
 
 A tela Bases permite buscar por nome, dialeto, banco, ambiente, finalidade e ID;

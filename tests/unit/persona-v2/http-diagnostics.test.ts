@@ -7,6 +7,36 @@ import { PinoLoggerAdapter } from "../../../src/infrastructure/logging/pino-logg
 import { createPersonaV2McpHandler } from "../../../src/infrastructure/mcp/persona-v2-http.js";
 import { personaMcpParserError } from "../../../src/infrastructure/mcp/persona-v2-protocol-error.js";
 
+it("identifica leitura de publicação por rótulo fixo sem expor IDs ou query", async () => {
+  let log = "";
+  const logger = new PinoLoggerAdapter(
+    pino(
+      {},
+      {
+        write: (line) => {
+          log += line;
+        },
+      },
+    ),
+  );
+  const app = express();
+  app.use(adminRequestDiagnostics(logger));
+  app.get("/api/admin/personas/:persona/skills/:skill/publicacao", (_req, res) => {
+    res.status(503).json({ error: { code: "PLUG_SERVER_ERROR" } });
+  });
+  const id = "11111111-1111-4111-8111-111111111111";
+  const response = await request(app).get(
+    `/api/admin/personas/${id}/skills/${id}/publicacao?secret=value`,
+  );
+  expect(JSON.parse(log)).toMatchObject({
+    route: "admin.skill.publication",
+    supportId: response.body.error.supportId,
+    status: 503,
+  });
+  expect(log).not.toContain(id);
+  expect(log).not.toContain("secret");
+});
+
 it.each(["missing", "malformed", "authority", "origin", "preparation"])(
   "MCP conserva o mesmo supportId no corpo, header e logger real: %s",
   async (mode) => {

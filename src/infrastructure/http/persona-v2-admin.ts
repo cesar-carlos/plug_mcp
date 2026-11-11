@@ -32,6 +32,7 @@ import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { adminUnexpectedFailure } from "./admin-unexpected-error.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 import { DomainError } from "../../domain/errors/domain-error.js";
+import { adminDomainDiagnostics } from "./admin-domain-diagnostics.js";
 import { publicQueryFailure } from "../../domain/errors/public-query-failure.js";
 import { permissionsSchema } from "../persistence/persona-v2/permissions-schema.js";
 import type { PersonaCatalog } from "../../application/persona-v2/catalog.js";
@@ -1280,8 +1281,10 @@ export const createPersonaAdministrationApp = (input: {
         const published = publicQueryFailure(error.code);
         input.logger?.warn("admin upstream request failed", {
           requestId: res.getHeader("X-Request-ID"),
+          supportId: res.getHeader("X-Support-Id") ?? res.getHeader("X-Request-ID"),
           errorCode: error.code,
           status,
+          ...adminDomainDiagnostics(error),
         });
         res.status(status).json({
           error: {

@@ -191,7 +191,13 @@ it.each([
   expect(JSON.stringify(response.body)).not.toContain("private-");
   expect(f.logger.warnings).toContainEqual({
     message: "admin upstream request failed",
-    fields: { requestId: response.get("X-Request-ID"), errorCode: code, status: response.status },
+    fields: {
+      requestId: response.get("X-Request-ID"),
+      supportId: response.body.error.supportId,
+      errorCode: code,
+      status: response.status,
+      source: "plug_server_http",
+    },
   });
   expect(f.administration.issueToken).toHaveBeenCalledTimes(1);
 });
