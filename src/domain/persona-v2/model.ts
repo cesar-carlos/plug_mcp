@@ -150,6 +150,7 @@ export class PersonaV2Error extends Error {
     | "access_expired"
     | "grant_expired"
     | "grant_revoked"
+    | "oauth_client_unavailable"
     | "identity_invalid";
   readonly source?: "mcp" | "client_agent_access" | "client_token_rpc";
   readonly hint?: string;

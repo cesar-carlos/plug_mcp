@@ -1,4 +1,5 @@
 import { queryTransportContext } from "../../application/persona-v2/query-transport-context.js";
+import { personaAuthenticationFailure } from "./persona-v2-authentication-error.js";
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 import { McpServer, ResourceTemplate, createMcpHandler } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
@@ -127,42 +128,35 @@ export const createPersonaV2McpHandler = (
     }
     let identity: ConsumerIdentity | undefined;
     const bearer = readBearer(req);
+    const rejectAuthentication = (error: unknown) => {
+      const diagnostic = personaAuthenticationFailure(error, oauth ? "oauth" : "bearer", logger);
+      if (diagnostic.challengeType !== "none")
+        res.setHeader(
+          "WWW-Authenticate",
+          oauth
+            ? chatGptOAuthChallenge(
+                publicBaseUrl,
+                diagnostic.challengeType === "oauth_invalid_token",
+              )
+            : 'Bearer realm="persona-v2"',
+        );
+      sendHttpFailure(res, diagnostic.status, diagnostic.body);
+    };
     if (oauth && !bearer) {
-      res.setHeader("WWW-Authenticate", chatGptOAuthChallenge(publicBaseUrl));
-      sendHttpFailure(res, 401, {
-        ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
-        code: "AUTHORIZATION_DENIED",
-        message: "Autenticação necessária. Informe o token da persona.",
-      });
+      rejectAuthentication(
+        req.get("authorization") ? "credential_malformed" : "credential_missing",
+      );
       return;
     }
     if (req.get("authorization") && !bearer) {
-      sendHttpFailure(res, 401, {
-        ...reportPersonaProtocolError(logger, "AUTHORIZATION_DENIED", "authentication"),
-        code: "AUTHORIZATION_DENIED",
-        message: "O cabeçalho de autorização não contém um token utilizável.",
-      });
+      rejectAuthentication("credential_malformed");
       return;
     }
     if (bearer) {
       try {
         identity = oauth ? await oauth.resolve(bearer) : await catalog.authenticate(bearer);
       } catch (error) {
-        const denied =
-          error instanceof PersonaV2Error &&
-          ["AUTHORIZATION_DENIED", "STALE_AUTHORIZATION"].includes(error.code);
-        if (denied)
-          res.setHeader(
-            "WWW-Authenticate",
-            oauth ? chatGptOAuthChallenge(publicBaseUrl, true) : 'Bearer realm="persona-v2"',
-          );
-        sendHttpFailure(
-          res,
-          denied ? 401 : 503,
-          denied
-            ? reportPersonaV2ToolError(error, logger)
-            : reportPersonaProtocolError(logger, "AUTHORITY_UNAVAILABLE", "authentication"),
-        );
+        rejectAuthentication(error);
         return;
       }
     }

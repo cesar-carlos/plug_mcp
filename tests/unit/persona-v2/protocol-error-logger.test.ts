@@ -62,7 +62,9 @@ it("correlaciona recusas SDK, autenticação e preparação com Pino real sem pa
     .trim()
     .split(/\r?\n/)
     .map((line) => JSON.parse(line));
-  const events = lines.filter((line) => line.msg === "persona-v2 request failed");
+  const events = lines.filter((line) =>
+    ["persona-v2 request failed", "persona-v2 authentication failed"].includes(line.msg),
+  );
   interface Diagnostic {
     supportId: string;
     code: string;

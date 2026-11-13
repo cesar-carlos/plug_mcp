@@ -21,6 +21,19 @@ reais, mas recusa toda autorização, troca de código, refresh e access.
 Não herda clientes legados nem registra clientes automaticamente. Cadastre o par
 exato após conferir o CIMD; descoberta 200/challenge 401 não comprovam conexão.
 A allowlist legada `CHATGPT_OAUTH_CLIENTS` não habilita a v2.
+Recusas na entrada MCP conservam `source: mcp`, `stage: authentication`,
+`details.authenticationMode` (`bearer`/`oauth`) e `details.authorizationReason`,
+correlacionados pelo mesmo supportId no corpo, header e log. O evento
+`persona-v2 authentication failed` registra também `challengeType`: `none`,
+`bearer`, `oauth_discovery` ou `oauth_invalid_token`. Ausência/formato de credencial
+usa `credential_missing`/`credential_malformed`; motivo não classificado usa
+`authorization_unknown`. Os motivos de expiração/revogação são preservados;
+`oauth_client_unavailable` identifica a recusa de configuração do cliente.
+Nenhum campo contém credencial, hash, URL de cliente ou mensagem nativa.
+Falha temporária (`authentication_unavailable`) retorna 503 sem challenge e sem
+pedir reconexão. Access expirado retorna 401 orientando refresh disponível;
+refresh não recupera concessões revogadas nem amplia permissões. Registros antigos
+sem esses campos não comprovam motivo ou pedido de reconexão pelo cliente.
 Registrar somente URLs reais do ambiente autorizado; não incluir segredos.
 
 | Interface                                           | Contrato                                                                 |

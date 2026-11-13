@@ -18,6 +18,10 @@ opções de compatibilidade que restaurem o comportamento vulnerável para passa
 
 Falhas HTTP MCP conservam o supportId gerado pelo servidor no corpo, header e
 logs HTTP/protocolo. Não usar IDs enviados pelo cliente para essa correlação.
+Recusas na autenticação MCP registram modo Bearer/OAuth, etapa, motivo enumerado
+e tipo de challenge pelo supportId. Nunca registrar credenciais, hashes delas,
+URLs privadas ou mensagens nativas. Falha temporária retorna 503 sem challenge;
+access expirado orienta refresh. Motivo desconhecido não comprova reconexão necessária.
 
 OAuth v2 habilitado com allowlist vazia permite descoberta pública, sem autorizar
 clientes, consumir códigos/refresh ou entregar dados. Cadastro posterior exige

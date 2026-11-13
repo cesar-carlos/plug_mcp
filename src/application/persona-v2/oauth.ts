@@ -418,11 +418,15 @@ export class PersonaOAuth {
     try {
       this.allowed(row);
     } catch {
-      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Cliente OAuth indisponível.");
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Cliente OAuth indisponível.", {
+        authorizationReason: "oauth_client_unavailable",
+      });
     }
     const state = await this.repository.authorization(row.identity);
     if (!state) {
-      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Conexão OAuth indisponível.");
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Conexão OAuth indisponível.", {
+        authorizationReason: "identity_invalid",
+      });
     }
     assertConsumer(row.identity, state, new Date(this.now()));
     return row.identity;

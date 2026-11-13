@@ -293,7 +293,10 @@ export class PersonaConsumerCatalog {
     const state = await this.services.repository.authentication(
       this.services.crypto.sha256Hex(bearer),
     );
-    if (!state) throw new PersonaV2Error("AUTHORIZATION_DENIED", "Token inválido.");
+    if (!state)
+      throw new PersonaV2Error("AUTHORIZATION_DENIED", "Token inválido.", {
+        authorizationReason: "identity_invalid",
+      });
     const identity = {
       personaId: state.persona.id,
       tokenId: state.token.id,

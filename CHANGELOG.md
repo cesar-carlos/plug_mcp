@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Recusas HTTP de autenticação MCP preservam modo, motivo seguro, etapa e tipo de challenge pelo supportId. Mensagens privadas não vazam; indisponibilidade mantém 503 sem challenge, enquanto access expirado orienta refresh. Regressões cobrem logger real, Bearer/OAuth e resolver.
+
 - Fixed: Diagnósticos de `INVALID_SQL` preservam categoria segura `sqlReason` no retorno v2 e nos logs por supportId, sem SQL, identificadores ou valores. Regressões usam logger real e mantêm a separação entre erros de motor e protocolo.
 
 - Added: Perfis isolados `estoque-locais` e `estoque-saldos` para homologação MSSQL, com regressões de isolamento, seleção pelo launcher e documentação. Não alteram publicações ou concessões existentes.
