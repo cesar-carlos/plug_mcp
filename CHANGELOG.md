@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: CI executa release, persistência/cache e navegador/OAuth em paralelo com gates obrigatórios, reutiliza o build do console e inicia imagens sem esperar documentação. Cache Docker por alvo/arquitetura preserva testes da imagem e identidade exata; regressões recusam deploy sem os novos jobs.
+
 - Added: Perfil isolado `estoque-gestao` para homologação MSSQL de saldo, custo atual e demanda, com seleção explícita no launcher e testes de isolamento. Não infere vínculo entre local e filial nem altera publicações ou concessões.
 
 - Fixed: Recusas HTTP de autenticação MCP preservam modo, motivo seguro, etapa e tipo de challenge pelo supportId. Mensagens privadas não vazam; indisponibilidade mantém 503 sem challenge, enquanto access expirado orienta refresh. Regressões cobrem logger real, Bearer/OAuth e resolver.

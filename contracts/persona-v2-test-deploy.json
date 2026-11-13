@@ -14,6 +14,8 @@
     "native-musl (amd64)",
     "native-musl (arm64)",
     "persona-v2-candidate",
-    "persona-v2-test-server"
+    "persona-v2-test-server",
+    "persistence",
+    "browser"
   ]
 }

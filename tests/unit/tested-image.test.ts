@@ -77,7 +77,20 @@ describe("publication ordering", () => {
     const candidate = workflow("ci")["persona-v2-candidate"]!;
     expect(candidate.permissions?.packages).toBeUndefined();
     const commands = candidate.steps.map((step) => step.run ?? "").join("\n");
-    expect(commands).toContain("--target persona-v2-candidate");
+    const build = candidate.steps.findIndex((step) =>
+      step.uses?.startsWith("docker/build-push-action@"),
+    );
+    expect(build).toBeGreaterThanOrEqual(0);
+    expect(candidate.steps[build]!.with).toMatchObject({
+      target: "persona-v2-candidate",
+      load: true,
+      tags: "se7e-native",
+      "build-args": "GIT_SHA=${{ github.sha }}",
+    });
+    expect(candidate.steps[build]!.with?.push).not.toBe(true);
+    expect(
+      candidate.steps.findIndex((step) => step.run?.includes("test-persona-candidate.ps1")),
+    ).toBeGreaterThan(build);
     expect(commands.indexOf("test-persona-candidate.ps1 -Image se7e-native")).toBeLessThan(
       commands.indexOf("docker save"),
     );
@@ -100,6 +113,8 @@ describe("publication ordering", () => {
       if (name === "publish-image") continue;
       expect(job.permissions?.packages).not.toBe("write");
       expect(job.steps.map((step) => step.run ?? "").join("\n")).not.toContain("docker push");
+      for (const step of job.steps.filter((s) => s.uses?.startsWith("docker/build-push-action@")))
+        expect(step.with?.push).not.toBe(true);
     }
     const commands = publish.steps.map((step) => step.run ?? "").join("\n");
     expect(commands).not.toContain("docker build");

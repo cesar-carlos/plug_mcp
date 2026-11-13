@@ -6,6 +6,13 @@ alwaysApply: false
 
 # Testes
 
+CI separa release, persistência/cache e navegador/OAuth em jobs obrigatórios com
+serviços isolados. Builds Docker podem começar em paralelo à documentação, mas
+publicação exige todos os gates. Browser reutiliza um build do mesmo checkout;
+não reconstruir assets durante a suíte nem paralelizar a fixture compartilhada.
+Cache Docker é segregado por alvo/arquitetura, gravado apenas por push/main;
+cache não substitui smoke tests, SHA, origem ou comprovante da imagem.
+
 DNS dos mirrors Ubuntu no CI é conferido como usuário `_apt`. Recuperação por
 resolvedor alternativo só pode ocorrer no runner Linux descartável hospedado
 pelo GitHub, com prazos limitados e reconferência obrigatória. Não remover

@@ -151,6 +151,26 @@ composição pelo procedimento de operação, preservando a identidade da imagem
 
 ## Envio e verificação no destino
 
+O CI executa `verify` (release e runtime), `persistence` (contrato do hub,
+migrations, isolamento PostgreSQL e cache Redis) e `browser` (console,
+onboarding e OAuth) em paralelo, cada um com serviços descartáveis próprios.
+Todos são obrigatórios no contrato de deploy. Windows, documentação e imagens
+nativas/candidatas continuam obrigatórios; nenhum teste foi transferido para
+execução exclusivamente local. O console é construído uma vez por job antes
+das suítes de navegador, que preservam o worker único da fixture integrada.
+
+Builds Docker não aguardam documentação, mas o envio aguarda todos os gates.
+Buildx reutiliza camadas por alvo/arquitetura; somente push da main grava cache.
+A imagem carregada é testada e exportada na mesma rodada, com SHA e hashes
+verificados normalmente, inclusive quando o cache está vazio. Cache não é
+evidência de aprovação. A primeira rodada mede cache frio; ganhos de cache
+quente exigem medição posterior, sem prometer duração fixa.
+
+Na máquina local, executar lint, tipos, testes afetados e `release:check` antes
+do push antecipa falhas. Isso não substitui a rodada do commit exato no GitHub,
+nem permite usar binários ou dependências Windows na imagem Linux. Compare a
+duração total e os jobs entre rodadas, separando fila, execução e envio remoto.
+
 O gate compara o candidato com a última publicação efetiva registrada no workflow
 `deploy.yml`: exige origem do próprio repositório/main e sucesso da etapa
 `Publish the CI image`. Workflow verde que pulou o envio não avança a referência.

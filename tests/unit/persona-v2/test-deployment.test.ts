@@ -86,6 +86,15 @@ function verify(f: ReturnType<typeof originFixture>): string {
 }
 
 describe("test-server deployment authority", () => {
+  it.each(["persistence", "browser"])("refuses absent or unsuccessful parallel gate %s", (name) => {
+    for (const conclusion of ["failure", "skipped", "cancelled", "missing"]) {
+      const f = originFixture();
+      expect(f.jobs.some((j) => j.name === name)).toBe(true);
+      if (conclusion === "missing") f.jobs = f.jobs.filter((j) => j.name !== name);
+      else f.jobs.find((j) => j.name === name)!.conclusion = conclusion;
+      expect(() => verify(f)).toThrow();
+    }
+  });
   it.each(["legacy", "persona-v2-candidate", "persona-v2-test-server"])(
     "accepts only a test-server proof, not %s by implication",
     (runtime) => {
