@@ -9,6 +9,13 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Edição exclusivamente editorial da persona preserva a conexão OAuth: a barreira
+persistida oauth_version_floor permite atualizar o contexto na entrada access/refresh,
+sem alterar concessões ou prazos. Suspensão/recuperação e mudanças de autoridade
+avançam a barreira. Revalidações em voo continuam exigindo revisão exata; não
+ignorar tokenVersion, revogação, expiração, consentimento ou replay. Migration
+0055 não recupera contextos invalidados antes da sua aplicação.
+
 O parser TransactSQL separa subtrações em sua cópia lexical para não absorver
 hífens em parâmetros ou identificadores sem aspas. Literais, comentários,
 identificadores delimitados e expoentes permanecem intactos; SQL de execução e

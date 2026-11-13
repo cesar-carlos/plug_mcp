@@ -31,6 +31,8 @@ export interface Owner {
 }
 
 export interface Persona {
+  /** Old OAuth contexts may cross only editorial revisions above this barrier. */
+  readonly oauthVersionFloor?: number;
   readonly id: string;
   readonly ownerId: string;
   readonly name: string;

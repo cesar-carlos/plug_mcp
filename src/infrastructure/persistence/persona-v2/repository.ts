@@ -44,6 +44,7 @@ import {
 } from "./suspend-source-publications.js";
 
 interface PersonaRow {
+  oauth_version_floor: number;
   id: string;
   responsavel_id: string;
   nome: string;
@@ -84,6 +85,7 @@ interface SourceRow {
 }
 
 const personaFrom = (r: PersonaRow): Persona => ({
+  oauthVersionFloor: r.oauth_version_floor,
   id: r.id,
   ownerId: r.responsavel_id,
   name: r.nome,

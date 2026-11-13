@@ -7,6 +7,7 @@ import type {
   PersonaOAuthUnit,
 } from "../../domain/ports/persona-oauth.port.js";
 import { assertConsumer, permissionsContainedBy } from "../../domain/persona-v2/authorization.js";
+import { currentOAuthProfile } from "../../domain/persona-v2/oauth-profile-context.js";
 import {
   PersonaV2Error,
   type AuthorizationSnapshot,
@@ -134,7 +135,7 @@ export class PersonaOAuth {
       throw new OAuthError("invalid_grant");
     }
     try {
-      assertConsumer(identity, state, new Date(this.now()));
+      assertConsumer(currentOAuthProfile(identity, state), state, new Date(this.now()));
     } catch (error) {
       if (error instanceof PersonaV2Error) {
         throw new OAuthError("invalid_grant");
@@ -323,8 +324,8 @@ export class PersonaOAuth {
   }
 
   private async tokens(tx: PersonaOAuthUnit, record: PersonaOAuthRecord) {
-    const identity = record.identity!;
-    const state = await this.state(tx, identity);
+    const state = await this.state(tx, record.identity!);
+    const identity = currentOAuthProfile(record.identity!, state);
     const access = this.crypto.randomToken(32),
       refresh = this.crypto.randomToken(32);
     const expiresAt = Math.min(
@@ -428,8 +429,9 @@ export class PersonaOAuth {
         authorizationReason: "identity_invalid",
       });
     }
-    assertConsumer(row.identity, state, new Date(this.now()));
-    return row.identity;
+    const identity = currentOAuthProfile(row.identity, state);
+    assertConsumer(identity, state, new Date(this.now()));
+    return identity;
   }
 
   async revoke(identity: ConsumerIdentity): Promise<{

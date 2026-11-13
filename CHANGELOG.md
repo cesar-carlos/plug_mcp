@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Edição editorial da persona não exige reconexão OAuth: access/refresh atualizam somente o contexto de perfil, com barreira persistida pela migration 0055. Preserva concessões, expiração, replay e recusa após suspensão/recuperação; operações em voo mantêm revisão exata. Conteúdo idêntico não incrementa revisão após conferir CAS.
+
 - Fixed: Limpeza da fixture PostgreSQL do runner de publicação aguarda o fechamento das conexões antes do DROP normal, evitando erro assíncrono 57P01 por FORCE; preserva prazo limitado e falha em conexão vazada.
 
 - Fixed: Scanner SQL preserva identificadores com colchetes escapados/internos e reconhece comentários terminados em CR, evitando parâmetros falsos, reescrita de identificadores e perda da ordenação externa. Regressões cobrem extração, conversão de parâmetros e paginação; matriz de operadores confere análise compacta nos parsers vigentes.

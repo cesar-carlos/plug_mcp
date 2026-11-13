@@ -1,5 +1,24 @@
 # OAuth persona-v2 e conexão privada ChatGPT
 
+## Edição de perfil e continuidade da conexão
+
+A migration `0055_oauth_profile_context.sql` conserva a revisão CAS da persona
+e registra `oauth_version_floor`, a revisão mínima aceita para atualizar contexto
+OAuth. Alterações exclusivamente de nome, especialidade e orientações não exigem
+reconexão: a próxima resolução do access ou rotação do refresh usa o perfil atual,
+preservando concessão, limites e prazos. Salvar conteúdo idêntico é um no-op após
+conferir autoridade e CAS. Não altera permissões nem renova o prazo da concessão.
+
+Suspensão/recuperação e outras mudanças de autoridade avançam a barreira; token
+alterado/revogado, grant revogado, expiração e replay continuam recusados. A
+atualização ocorre somente na entrada OAuth: contexto já em execução mantém a
+conferência exata da revisão antes de entregar dados ou efeitos. Sem a barreira
+persistida, o comportamento é conservador. A migration inicia a barreira na
+revisão atual e não recupera conexões anteriormente invalidadas.
+
+Regressões em PostgreSQL isolado verificam edição, access, refresh, concessões
+inalteradas, suspensão/recuperação e replay. Não equivalem a teste real no ChatGPT.
+
 A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, com seleção explícita de todos/nenhum por grupo e contagens locais. Nenhum item começa selecionado; seleção em lote não inclui fontes/dependências de outros grupos nem amplia o token. Limites opcionais preservam valores ao recolher. Aprimoramento usa script estático autorizado por hash CSP, sem rede ou persistência; sem JavaScript a seleção individual continua disponível. Cancelar não exige validar limites opcionais.
 
 Implementado na composição v2, separado do OAuth legado e habilitado explicitamente.

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import pg from "pg";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
@@ -94,6 +95,123 @@ const flow = async (selected?: {
   const code = new URL(location).searchParams.get("code")!;
   return { start, review, code, location };
 };
+
+it("edição editorial preserva access e refresh, sem ampliar concessões ou aceitar contexto em voo", async () => {
+  const tokens = await oauth.token(exchange((await flow()).code));
+  const original = await oauth.resolve(tokens.access_token);
+  const before = (await repository.authorization(original))!;
+  const headers = await administrativeHeaders();
+  const profile = {
+    name: before.persona.name,
+    specialty: before.persona.specialty,
+    instructions: "Orientação sintética nova",
+    expectedVersion: before.persona.authorizationVersion,
+  };
+  const path = `/api/admin/personas/${identity.personaId}/editar`;
+  await request(runtime.app).post(path).set(headers).send(profile).expect(200);
+  // Repeating the same content still checks CAS and never advances authority.
+  await request(runtime.app).post(path).set(headers).send(profile).expect(409);
+  await request(runtime.app)
+    .post(path)
+    .set(headers)
+    .send({ ...profile, expectedVersion: 2 })
+    .expect(200);
+  const state = (await repository.authorization(original))!;
+  expect(state.persona.oauthVersionFloor).toBe(original.personaVersion);
+  // This is the exact old failure; in-flight operations must still reject the old context.
+  expect(() => assertConsumer(original, state, new Date(clock))).toThrow();
+  const resolved = await oauth.resolve(tokens.access_token);
+  expect(resolved).toEqual({ ...original, personaVersion: state.persona.authorizationVersion });
+  expect(state.token).toEqual(before.token);
+  expect(state.grant).toEqual(before.grant);
+  const renewed = await oauth.token(refresh(tokens.refresh_token));
+  expect((await oauth.resolve(renewed.access_token)).personaVersion).toBe(
+    state.persona.authorizationVersion,
+  );
+  expect((await repository.authorization(resolved))!.grant).toEqual(before.grant);
+  await expect(oauth.token(refresh(tokens.refresh_token))).rejects.toMatchObject({
+    code: "invalid_grant",
+  });
+  await expect(oauth.resolve(renewed.access_token)).rejects.toThrow();
+});
+
+it("migration inicia a barreira na revisão existente sem recuperar contextos históricos", async () => {
+  const connection = await db.connect();
+  try {
+    await connection.query("BEGIN");
+    await connection.query("DROP TRIGGER persona_oauth_profile_context_v2 ON persona");
+    await connection.query("DROP FUNCTION guard_persona_oauth_profile_context_v2()");
+    await connection.query("ALTER TABLE persona DROP COLUMN oauth_version_floor");
+    await connection.query("UPDATE persona SET authorization_version=7 WHERE id=$1", [
+      identity.personaId,
+    ]);
+    await connection.query(
+      readFileSync("migrations/persona-v2/0055_oauth_profile_context.sql", "utf8"),
+    );
+    expect(
+      (
+        await connection.query("SELECT oauth_version_floor FROM persona WHERE id=$1", [
+          identity.personaId,
+        ])
+      ).rows,
+    ).toEqual([{ oauth_version_floor: 7 }]);
+    await connection.query(
+      "UPDATE persona SET authorization_version=8,instrucoes='Perfil novo' WHERE id=$1",
+      [identity.personaId],
+    );
+    expect(
+      (
+        await connection.query("SELECT oauth_version_floor FROM persona WHERE id=$1", [
+          identity.personaId,
+        ])
+      ).rows,
+    ).toEqual([{ oauth_version_floor: 7 }]);
+    await connection.query("UPDATE persona SET authorization_version=9 WHERE id=$1", [
+      identity.personaId,
+    ]);
+    expect(
+      (
+        await connection.query("SELECT oauth_version_floor FROM persona WHERE id=$1", [
+          identity.personaId,
+        ])
+      ).rows,
+    ).toEqual([{ oauth_version_floor: 9 }]);
+  } finally {
+    await connection.query("ROLLBACK");
+    connection.release();
+  }
+});
+
+it("suspender e recuperar a persona não ressuscita OAuth antigo, mesmo após editar perfil", async () => {
+  const tokens = await oauth.token(exchange((await flow()).code));
+  for (const active of [false, true]) {
+    await repository.transaction({ personaIds: [identity.personaId], tokenIds: [] }, async (tx) => {
+      const p = (await tx.findPersona(identity.personaId))!;
+      await tx.changePersonaState(
+        { ...p, active, authorizationVersion: p.authorizationVersion + 1 },
+        p.authorizationVersion,
+        new Date(clock),
+      );
+    });
+  }
+  await repository.transaction({ personaIds: [identity.personaId], tokenIds: [] }, async (tx) => {
+    const p = (await tx.findPersona(identity.personaId))!;
+    await tx.updatePersona(
+      {
+        ...p,
+        instructions: "Perfil após recuperação",
+        authorizationVersion: p.authorizationVersion + 1,
+      },
+      p.authorizationVersion,
+    );
+  });
+  await expect(oauth.resolve(tokens.access_token)).rejects.toMatchObject({
+    code: "STALE_AUTHORIZATION",
+  });
+  await expect(oauth.token(refresh(tokens.refresh_token))).rejects.toMatchObject({
+    code: "invalid_grant",
+  });
+});
 
 it("consentimento de gestão exige IDs e permissão explícitos, sem ampliar por seleção forjada", async () => {
   const allowed = randomUUID(),

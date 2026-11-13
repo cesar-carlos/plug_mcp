@@ -332,6 +332,12 @@ export class PersonaMaintenance {
     return this.owned(sessionId, personaId, async (tx) => {
       const current = (await tx.findPersona(personaId))!;
       this.assertVersion(current.authorizationVersion, expectedVersion);
+      if (
+        current.name === input.name &&
+        current.specialty === input.specialty &&
+        current.instructions === input.instructions
+      )
+        return current;
       const next = { ...current, ...input, authorizationVersion: expectedVersion + 1 };
       await tx.updatePersona(next, expectedVersion);
       return next;
