@@ -25,14 +25,14 @@ No destino `test-server`, com servidor e worker no commit `f7ffc72` e migration
 0055 aplicada, a mesma conversa ChatGPT da Helena preservou a conexão após editar
 somente as orientações. Horários abaixo em America/Cuiaba (UTC−04:00):
 
-| Evidência | Horário / resultado |
-| --- | --- |
-| Edição das orientações | 16:47:16.383; revisão da persona 8 → 9, barreira OAuth 7 |
-| Expiração natural do access anterior | 16:56:51.953 |
-| Nova chamada no mesmo chat | Enviada após 16:57:05, sem reconexão manual |
-| Consumo do refresh confirmado no controle v2 | 16:57:36.264 |
-| Validade do novo access | Até 17:12:36.257 |
-| Resposta no ChatGPT | Fonte e duas publicações financeiras retornadas; sem SQL |
+| Evidência                                    | Horário / resultado                                      |
+| -------------------------------------------- | -------------------------------------------------------- |
+| Edição das orientações                       | 16:47:16.383; revisão da persona 8 → 9, barreira OAuth 7 |
+| Expiração natural do access anterior         | 16:56:51.953                                             |
+| Nova chamada no mesmo chat                   | Enviada após 16:57:05, sem reconexão manual              |
+| Consumo do refresh confirmado no controle v2 | 16:57:36.264                                             |
+| Validade do novo access                      | Até 17:12:36.257                                         |
+| Resposta no ChatGPT                          | Fonte e duas publicações financeiras retornadas; sem SQL |
 
 A observação somente de metadados confirmou ausência de novo `oauth.connected`,
 token na revisão 27 e concessão não revogada com prazo original preservado.
