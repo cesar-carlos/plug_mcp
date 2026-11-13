@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
+import { delimitParserSubtraction } from "./sql-parser-subtraction.js";
 
 export interface JoinEqualityAst {
   readonly leftAlias: string;
@@ -694,7 +695,7 @@ const fromSelectAst = (
 };
 
 const tryAstify = (sql: string, database: ParserDatabase): unknown =>
-  parser.astify(sql, { database });
+  parser.astify(database === "transactsql" ? delimitParserSubtraction(sql) : sql, { database });
 
 export const parseSelect = (
   sql: string,

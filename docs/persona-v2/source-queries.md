@@ -1,5 +1,13 @@
 # Consultas por fonte — contrato implementado
 
+Subtrações compactas, como `m.demanda*:dias-m.saldo-m.pedido`, preservam a
+linhagem no parser TransactSQL usado para MSSQL e SQL Anywhere. A separação
+lexical ocorre somente na cópia de análise: SQL de execução, parâmetros e
+fingerprints são preservados. Textos, identificadores delimitados, comentários
+e expoentes numéricos não são modificados. Permanecem as validações de escopo,
+somente leitura, fanout, finalidades e paginação. Regressões sintéticas do parser
+não certificam execução nativa nos motores.
+
 ## Medição de etapas
 
 `PERSONA_V2_QUERY_TIMINGS_SAMPLE_PERCENT` aceita 0–100 e fica em 0 por padrão.

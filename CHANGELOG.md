@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Parser TransactSQL reconhece subtrações sem espaços junto a parâmetros e colunas, evitando INVALID_SQL e linhagem incorreta. A cópia de análise preserva literais, comentários e expoentes; SQL executado e guardas não mudam. Regressões cobrem CTE, agregação e recusa de coluna fora do escopo.
+
 - Changed: CI executa release, persistência/cache e navegador/OAuth em paralelo com gates obrigatórios, reutiliza o build do console e inicia imagens sem esperar documentação. Cache Docker por alvo/arquitetura preserva testes da imagem e identidade exata; regressões recusam deploy sem os novos jobs.
 
 - Added: Perfil isolado `estoque-gestao` para homologação MSSQL de saldo, custo atual e demanda, com seleção explícita no launcher e testes de isolamento. Não infere vínculo entre local e filial nem altera publicações ou concessões.
