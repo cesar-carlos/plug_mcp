@@ -19,6 +19,34 @@ revisão atual e não recupera conexões anteriormente invalidadas.
 Regressões em PostgreSQL isolado verificam edição, access, refresh, concessões
 inalteradas, suspensão/recuperação e replay. Não equivalem a teste real no ChatGPT.
 
+### Evidência real de refresh após edição — 2026-11-13
+
+No destino `test-server`, com servidor e worker no commit `f7ffc72` e migration
+0055 aplicada, a mesma conversa ChatGPT da Helena preservou a conexão após editar
+somente as orientações. Horários abaixo em America/Cuiaba (UTC−04:00):
+
+| Evidência | Horário / resultado |
+| --- | --- |
+| Edição das orientações | 16:47:16.383; revisão da persona 8 → 9, barreira OAuth 7 |
+| Expiração natural do access anterior | 16:56:51.953 |
+| Nova chamada no mesmo chat | Enviada após 16:57:05, sem reconexão manual |
+| Consumo do refresh confirmado no controle v2 | 16:57:36.264 |
+| Validade do novo access | Até 17:12:36.257 |
+| Resposta no ChatGPT | Fonte e duas publicações financeiras retornadas; sem SQL |
+
+A observação somente de metadados confirmou ausência de novo `oauth.connected`,
+token na revisão 27 e concessão não revogada com prazo original preservado.
+Hashes do token/permissões e das 29 publicações permaneceram iguais antes e
+depois. Não foram copiados tokens, conteúdo cifrado, parâmetros ou resultados.
+Os logs desde 16:47 até a conferência posterior à chamada não apresentaram erros,
+avisos estruturados ou supportIds; as duas linhas não JSON eram avisos conhecidos
+do SDK sobre notificações em `responseMode: json`. Os quatro ciclos do worker
+concluíram sem erros.
+
+Esta evidência comprova a continuidade e o refresh real desse cenário, sem reduzir
+TTL nem modificar credenciais. Não certifica todos os fluxos OAuth, outros clientes
+ou o aceite integral para clientes; os demais gates permanecem independentes.
+
 A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, com seleção explícita de todos/nenhum por grupo e contagens locais. Nenhum item começa selecionado; seleção em lote não inclui fontes/dependências de outros grupos nem amplia o token. Limites opcionais preservam valores ao recolher. Aprimoramento usa script estático autorizado por hash CSP, sem rede ou persistência; sem JavaScript a seleção individual continua disponível. Cancelar não exige validar limites opcionais.
 
 Implementado na composição v2, separado do OAuth legado e habilitado explicitamente.
