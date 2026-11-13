@@ -327,3 +327,5 @@ O perfil itens-variedade-perdas reutiliza somente três tabelas e 17 campos de i
 ### Cadastro de filiais — perfil local de 11/11/2026
 
 `-CampoConsulta cadastro-filiais` declara apenas dbo.filial (13 campos) e dbo.municipio (3 campos) da amostra do responsável. Chave da filial é empresa/filial; município é anulável na filial e não há FK sintética obrigatória, permitindo testar ausência de correspondência no INNER JOIN. Códigos são inteiros, demais campos textuais, sem interpretação de regime tributário. Somente MSSQL; não amplia fonte operacional. Perfil e testes locais não comprovam execução do runner, publicação ou acesso da persona.
+
+O perfil `estoque-gestao` contém somente saldoestoque, produto, custoproduto, produtovendido, itemprodutovendido e tipooperacaosaida das amostras curadas. Usa chave de saldo produto/local, custos empresa/filial/produto e itens empresa/venda/item. Não declara vínculo local/filial ou FK inferida. Casos devem separar custo atual, saldo positivo, valores desconhecidos, demanda e confirmação explícita do recorte; a existência do perfil não aprova nem publica consultas.

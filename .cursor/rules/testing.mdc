@@ -99,6 +99,8 @@ Contrato: `docs/persona-v2/operator-publication.md`.
   associar local a filial pela igualdade de códigos nem acrescentar vínculos
   não utilizados ao manifesto. Cadastro de filiais preserva a chave composta
   empresa/filial e o município anulável. Esses perfis são exclusivos de MSSQL.
+  Estoque gerencial combina somente as seis tabelas curadas de saldo, produto,
+  custo e demanda; preserva grãos e nulos sem inferir vínculo local/filial ou FKs.
   Agenda receber/pagar combina somente as duas carteiras declaradas, com suas
   chaves e sementes explícitas; não acrescentar cadastros nem inferir FKs.
 

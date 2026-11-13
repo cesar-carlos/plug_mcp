@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { expect, it } from "vitest";
 
 it.each([
+  "estoque-gestao",
   "estoque-locais",
   "estoque-saldos",
   "cadastro-filiais",
