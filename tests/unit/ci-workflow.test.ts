@@ -83,6 +83,11 @@ it("starts image builds independently but retains all final gates and exact imag
       "build-args": "GIT_SHA=${{ github.sha }}",
     });
     expect(build.with!["cache-from"]).toContain(`scope=${id}-`);
+    const stages = [...readFileSync("Dockerfile", "utf8").matchAll(/^FROM .+ AS (\S+)$/gm)].map(
+      (match) => match[1],
+    );
+    expect(stages).toContain(build.with!.target);
+    if (id === "persona-v2-test-server") expect(build.with!.target).toBe("runtime");
     expect(build.with!["cache-to"]).toContain("github.event_name == 'push'");
     expect(build.with!["cache-to"]).toContain("github.ref == 'refs/heads/main'");
     expect(

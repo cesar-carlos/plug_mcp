@@ -228,7 +228,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          target: persona-v2-test-server
+          target: runtime
           load: true
           tags: se7e-test-server
           build-args: GIT_SHA=${{ github.sha }}
