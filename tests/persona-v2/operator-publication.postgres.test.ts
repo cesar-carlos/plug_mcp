@@ -15,6 +15,7 @@ import { NodeCryptoAdapter } from "../../src/infrastructure/crypto/node-crypto.a
 import { trainingSource, queryTraining } from "../helpers/persona-v2-training.js";
 import { z } from "zod";
 import { fixtureEnvironment } from "../../scripts/homologation/fixture-environment.js";
+import { dropPersonaFixtureDatabase } from "../helpers/persona-fixture-cleanup.js";
 
 it("processo operador grava só no catálogo original com controle PostgreSQL isolado e transporte sintético", async () => {
   const adminUrl = new URL(personaV2TestDatabaseUrl());
@@ -226,7 +227,10 @@ it("processo operador grava só no catálogo original com controle PostgreSQL is
     ).toEqual(reports);
   } finally {
     await pool.end();
-    await admin.query(`DROP DATABASE "${name}" WITH (FORCE)`);
-    await admin.end();
+    try {
+      await dropPersonaFixtureDatabase(admin, name);
+    } finally {
+      await admin.end();
+    }
   }
 }, 30000);

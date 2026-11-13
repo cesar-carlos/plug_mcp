@@ -9,7 +9,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it.each(["knowledge_context", "interaction_error"])(
+it.each(["knowledge_context", "interaction_error", "persona_operator"])(
   "aguarda conexões em fechamento da fixture %s sem forçá-las",
   async (prefix) => {
     const name = `${prefix}_0123456789abcdef0123456789abcdef_test`;

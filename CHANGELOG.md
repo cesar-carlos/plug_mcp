@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Limpeza da fixture PostgreSQL do runner de publicação aguarda o fechamento das conexões antes do DROP normal, evitando erro assíncrono 57P01 por FORCE; preserva prazo limitado e falha em conexão vazada.
+
 - Fixed: Scanner SQL preserva identificadores com colchetes escapados/internos e reconhece comentários terminados em CR, evitando parâmetros falsos, reescrita de identificadores e perda da ordenação externa. Regressões cobrem extração, conversão de parâmetros e paginação; matriz de operadores confere análise compacta nos parsers vigentes.
 
 - Fixed: Parser TransactSQL reconhece subtrações sem espaços junto a parâmetros e colunas, evitando INVALID_SQL e linhagem incorreta. A cópia de análise preserva literais, comentários e expoentes; SQL executado e guardas não mudam. Regressões cobrem CTE, agregação e recusa de coluna fora do escopo.

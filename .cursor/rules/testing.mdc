@@ -72,6 +72,10 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Isolamento e gates
 
+A fixture PostgreSQL do runner de publicação aguarda ausência de sessões antes
+do DROP normal, com prazo limitado. Não usar FORCE para encobrir conexões ainda
+fechando ou vazadas; erro de observação/limpeza continua falhando o gate.
+
 Perfis sintéticos de prazo por filial acrescentam apenas codfilial inteiro à
 tabela de prazo correspondente. Preservar perfis anteriores, PK empresa/título,
 nulos e isolamento MSSQL descartável; não ampliar permissões ou allowlists.

@@ -1,8 +1,11 @@
 import type pg from "pg";
 import { setTimeout as delay } from "node:timers/promises";
 
-export async function dropPersonaFixtureDatabase(admin: pg.Pool, name: string): Promise<void> {
-  if (!/^(?:knowledge_context|interaction_error)_[a-f0-9]{32}_test$/.test(name)) {
+export async function dropPersonaFixtureDatabase(
+  admin: pg.Pool | pg.Client,
+  name: string,
+): Promise<void> {
+  if (!/^(?:knowledge_context|interaction_error|persona_operator)_[a-f0-9]{32}_test$/.test(name)) {
     throw new Error("Invalid persona fixture name");
   }
   const deadline = performance.now() + 5000;
