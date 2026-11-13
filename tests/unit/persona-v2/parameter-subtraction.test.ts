@@ -6,6 +6,20 @@ import { delimitParserSubtraction } from "../../../src/application/use-cases/sha
 import { escopoFromSqlModelo } from "../../../src/application/use-cases/shared/escopo-from-modelo.js";
 import { parseSqlModelo } from "../../../src/application/use-cases/shared/sql-modelo.js";
 
+it.each(["+", "-", "*", "/", "%", "=", ">=", "<=", "<>"])(
+  "preserves compact operator %s next to named parameters",
+  (operator) => {
+    const compact = `SELECT m.saldo${operator}:valor AS q FROM medidas m`;
+    const spaced = `SELECT m.saldo ${operator} :valor AS q FROM medidas m`;
+    for (const dialect of ["mssql", "sybase", "postgres"] as const) {
+      const ast = parseSelect(compact, dialect);
+      expect(ast.colunas).toEqual(parseSelect(spaced, dialect).colunas);
+      expect(ast.sql).toBe(compact);
+      expect(extractNamedParams(compact)).toEqual(["valor"]);
+    }
+  },
+);
+
 it.each(["mssql", "sybase"] as const)(
   "preserves subtraction and physical lineage beside named parameters in %s",
   (dialect) => {

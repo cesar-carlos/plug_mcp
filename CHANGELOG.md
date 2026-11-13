@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Scanner SQL preserva identificadores com colchetes escapados/internos e reconhece comentários terminados em CR, evitando parâmetros falsos, reescrita de identificadores e perda da ordenação externa. Regressões cobrem extração, conversão de parâmetros e paginação; matriz de operadores confere análise compacta nos parsers vigentes.
+
 - Fixed: Parser TransactSQL reconhece subtrações sem espaços junto a parâmetros e colunas, evitando INVALID_SQL e linhagem incorreta. A cópia de análise preserva literais, comentários e expoentes; SQL executado e guardas não mudam. Regressões cobrem CTE, agregação e recusa de coluna fora do escopo.
 
 - Changed: CI executa release, persistência/cache e navegador/OAuth em paralelo com gates obrigatórios, reutiliza o build do console e inicia imagens sem esperar documentação. Cache Docker por alvo/arquitetura preserva testes da imagem e identidade exata; regressões recusam deploy sem os novos jobs.

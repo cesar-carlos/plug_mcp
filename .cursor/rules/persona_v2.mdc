@@ -13,6 +13,9 @@ O parser TransactSQL separa subtrações em sua cópia lexical para não absorve
 hífens em parâmetros ou identificadores sem aspas. Literais, comentários,
 identificadores delimitados e expoentes permanecem intactos; SQL de execução e
 fingerprints não são reescritos. Escopo, linhagem e guardas continuam obrigatórios.
+Scanner de parâmetros/ordenação preserva colchetes escapados (`]]`) e abertura
+interna (`[`); comentários de linha reconhecem CR, LF e CRLF. Texto delimitado
+nunca habilita parâmetros ou ORDER BY externos. Cobrir extração e reescrita.
 
 Bases homônimas devem ser distinguíveis por banco, ambiente e ID no console e
 no seletor de conhecimento. Nome repetido não comprova identidade duplicada.

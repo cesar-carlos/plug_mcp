@@ -8,6 +8,11 @@ e expoentes numéricos não são modificados. Permanecem as validações de esco
 somente leitura, fanout, finalidades e paginação. Regressões sintéticas do parser
 não certificam execução nativa nos motores.
 
+O scanner de parâmetros e ordenação respeita identificadores entre colchetes,
+incluindo `]]` escapado e `[` interno. Conteúdo delimitado não cria parâmetros
+nem ordenação externa; conversão de `@nome` preserva esse conteúdo. Comentários
+de linha terminam em CR, LF ou CRLF, sem ocultar parâmetros ou ORDER BY seguintes.
+
 ## Medição de etapas
 
 `PERSONA_V2_QUERY_TIMINGS_SAMPLE_PERCENT` aceita 0–100 e fica em 0 por padrão.

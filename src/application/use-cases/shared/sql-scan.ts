@@ -9,16 +9,14 @@ const isIdentChar = (ch: string | undefined): boolean =>
   ch !== undefined && /[A-Za-z0-9_]/.test(ch);
 
 const skipQuoted = (sql: string, start: number, quote: string, escapeDoubled: boolean): number => {
+  const closing = quote === "[" ? "]" : quote;
   let i = start + 1;
   while (i < sql.length) {
-    if (escapeDoubled && sql[i] === quote && sql[i + 1] === quote) {
+    if ((escapeDoubled || quote === "[") && sql[i] === closing && sql[i + 1] === closing) {
       i += 2;
       continue;
     }
-    if (sql[i] === quote) {
-      return i + 1;
-    }
-    if (quote === "[" && sql[i] === "]") {
+    if (sql[i] === closing) {
       return i + 1;
     }
     i += 1;
@@ -28,7 +26,7 @@ const skipQuoted = (sql: string, start: number, quote: string, escapeDoubled: bo
 
 const skipLineComment = (sql: string, start: number): number => {
   let i = start + 2;
-  while (i < sql.length && sql[i] !== "\n") {
+  while (i < sql.length && sql[i] !== "\n" && sql[i] !== "\r") {
     i += 1;
   }
   return i;
