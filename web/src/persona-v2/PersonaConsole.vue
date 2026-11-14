@@ -419,6 +419,9 @@ onBeforeUnmount(() => {
         @logout="logout"
       />
       <div class="console-workspace">
+        <h2 id="console-content" tabindex="-1" class="area-heading">
+          {{ consoleAreas.find((item) => item.id === area)?.label }}
+        </h2>
         <div v-if="error" role="alert" class="error area-error" tabindex="-1">
           <p>{{ error }}</p>
           <ul v-if="errorFields.length">
@@ -473,9 +476,6 @@ onBeforeUnmount(() => {
           :pending-count="guidedSetup.pendingCount.value"
           @reload="guidedSetup.load()"
         />
-        <h2 id="console-content" tabindex="-1" class="area-heading">
-          {{ consoleAreas.find((item) => item.id === area)?.label }}
-        </h2>
         <ConsoleHelp />
         <p v-if="!personaId && personas.length && area !== 'catalog'" class="notice">
           Selecione uma persona acima para acessar suas bases, treinamentos e permissões.

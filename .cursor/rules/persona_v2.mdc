@@ -9,6 +9,11 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+No console, recolher orientações nunca oculta falhas nem seu código de atendimento.
+Busca e navegação por teclado preservam foco e rascunhos; mudanças visuais não
+disparam requisições, retry ou concessões. Validar regressões em navegador com
+fixtures isoladas, incluindo telas estreitas e confirmação de ausência de escritas.
+
 Edição exclusivamente editorial da persona preserva a conexão OAuth: a barreira
 persistida oauth_version_floor permite atualizar o contexto na entrada access/refresh,
 sem alterar concessões ou prazos. Suspensão/recuperação e mudanças de autoridade

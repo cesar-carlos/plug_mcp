@@ -1,19 +1,30 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
+import { ref } from "vue";
 import { consoleAreas, consoleGroups, type ConsoleArea } from "./navigation";
 
-defineProps<{
+const props = defineProps<{
   area: ConsoleArea;
   nextStepArea?: ConsoleArea;
   busy: boolean;
   expanded: boolean;
 }>();
 const emit = defineEmits<{ toggle: []; logout: [] }>();
+const menuButton = ref<HTMLButtonElement>();
+function closeWithEscape(event: KeyboardEvent): void {
+  if (!props.expanded || !menuButton.value?.getClientRects().length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emit("toggle");
+  menuButton.value.focus();
+}
 </script>
 <template>
-  <nav aria-label="Áreas do console" class="console-navigation">
+  <nav aria-label="Áreas do console" class="console-navigation" @keydown.esc="closeWithEscape">
     <button
+      ref="menuButton"
       class="mobile-menu secondary"
+      type="button"
       aria-label="Menu"
       :aria-expanded="expanded"
       aria-controls="console-menu"

@@ -1,5 +1,17 @@
 # Console persona-v2 — desenvolvimento e servidor de teste
 
+## Navegação e organização visual
+
+O título da área aparece antes do contexto da persona e do guia, como destino
+do link de pular para o conteúdo. Recolher o guia mantém o diagnóstico e o código
+de atendimento visíveis; o resumo distingue próximo passo, carregamento e falha,
+sem anunciar disponibilidade remota. Abrir/recolher não refaz requisições.
+
+A busca reúne campo e ação de limpar, informa contagem filtrada somente quando
+há um termo e devolve o foco ao campo ao limpar. Em telas estreitas, os controles
+quebram linha sem rolagem horizontal. Escape fecha o menu móvel aberto e devolve
+o foco ao botão Menu, sem navegar, descartar edições ou enviar alterações.
+
 O seletor administrativo de dependências de cruzamento lê publicações em sequência,
 interrompendo ao falhar ou desmontar o editor. Cada leitura mantém a revalidação
 de autoridade; não há cache de autorização, retry ou aumento do pool para contornar

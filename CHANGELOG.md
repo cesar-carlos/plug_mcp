@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Changed: Console prioriza o título da área, mantém diagnóstico ao recolher o guia, reúne busca e limpeza com retorno de foco e permite fechar o menu móvel com Escape. Regressões verificam telas estreitas e ausência de escritas ou recargas automáticas.
+
 - Fixed: Edição editorial da persona não exige reconexão OAuth: access/refresh atualizam somente o contexto de perfil, com barreira persistida pela migration 0055. Preserva concessões, expiração, replay e recusa após suspensão/recuperação; operações em voo mantêm revisão exata. Conteúdo idêntico não incrementa revisão após conferir CAS.
 
 - Fixed: Limpeza da fixture PostgreSQL do runner de publicação aguarda o fechamento das conexões antes do DROP normal, evitando erro assíncrono 57P01 por FORCE; preserva prazo limitado e falha em conexão vazada.

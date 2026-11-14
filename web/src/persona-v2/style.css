@@ -96,6 +96,28 @@ body {
 .list-search label {
   margin-bottom: 6px;
 }
+.list-search-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.list-search-controls input {
+  flex: 1 1 220px;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+}
+.list-search-controls button {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.guided-setup-summary {
+  margin-bottom: 0;
+}
+.area-heading {
+  margin-bottom: 20px;
+}
 .list-search p {
   margin: 6px 0;
 }
