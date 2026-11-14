@@ -16,6 +16,8 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+COUNT_BIG MSSQL é agregado com as mesmas guardas de escopo/fanout; compatibilidade do parser pode normalizar estrela para constante somente na cópia de análise. SQL executado permanece intacto e retorna bigint. Não habilitar a função em outros dialetos ou prometer DISTINCT/ALL explícitos sem suporte. Treinamento orienta chave de origem em JOIN, preservando nulos, cardinalidade e autoridade.
+
 INVALID_SQL local registra categoria fechada e contexto das publicações já autorizadas pelo supportId. Metadados vêm do erro local e do catálogo, nunca de details livres; não registrar SQL, parâmetros, tokens esperados ou mensagem nativa. Posição refere-se à cópia analisada pelo parser. Não atribuir falha a uma publicação específica quando houver várias nem reconstruir causas ausentes em logs antigos. Contrato: docs/persona-v2/source-queries.md.
 
 No console, recolher orientações nunca oculta falhas nem seu código de atendimento.

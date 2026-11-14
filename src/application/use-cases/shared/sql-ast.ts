@@ -7,6 +7,7 @@ import {
 } from "../../../domain/errors/sql-validation-diagnostic.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import { delimitParserSubtraction } from "./sql-parser-subtraction.js";
+import { normalizeParserCountBig } from "./sql-parser-count-big.js";
 
 export interface JoinEqualityAst {
   readonly leftAlias: string;
@@ -723,7 +724,7 @@ export const parseSelect = (
   const database = parserDatabaseForDialeto(dialeto);
   let ast: unknown;
   try {
-    ast = tryAstify(sql, database);
+    ast = tryAstify(dialeto === "mssql" ? normalizeParserCountBig(sql) : sql, database);
   } catch (cause) {
     const janela = /\bOVER\s*\(/i.test(sql);
     throw sqlParserFailure(
@@ -803,7 +804,7 @@ const SAFE_DIALECT_FUNCTIONS: Readonly<Record<Dialeto, ReadonlySet<string>>> = {
     ),
   ),
   mssql: new Set(
-    "ISNULL LEN CONVERT TRY_CONVERT TRY_CAST GETDATE GETUTCDATE SYSDATETIME DATEADD DATEDIFF DATEDIFF_BIG DATEPART DATENAME YEAR MONTH DAY EOMONTH DATEFROMPARTS FORMAT IIF STRING_AGG STDEV VAR".split(
+    "COUNT_BIG ISNULL LEN CONVERT TRY_CONVERT TRY_CAST GETDATE GETUTCDATE SYSDATETIME DATEADD DATEDIFF DATEDIFF_BIG DATEPART DATENAME YEAR MONTH DAY EOMONTH DATEFROMPARTS FORMAT IIF STRING_AGG STDEV VAR".split(
       " ",
     ),
   ),
@@ -937,6 +938,28 @@ const assertReadOnlyAst = (
       }
       if (node.type === "function" || node.type === "aggr_func" || node.type === "window_func") {
         const name = functionName(node.name);
+        if (dialeto === "mssql" && name === "COUNT_BIG" && node.type === "function") {
+          const args = isRecord(node.args) ? node.args : null;
+          if (
+            !args ||
+            !Array.isArray(args.value) ||
+            args.value.length !== 1 ||
+            node.within_group != null
+          ) {
+            throw sqlValidationFailure(
+              DomainError.pacote({
+                code: ERROR_CODES.INVALID_SQL,
+                message: "COUNT_BIG exige um argumento de contagem compatível.",
+                hint: "Use COUNT_BIG(*) ou uma expressão publicada; não use WITHIN GROUP.",
+              }),
+              "parser_syntax",
+            );
+          }
+          node.type = "aggr_func";
+          node.name = "COUNT_BIG";
+          node.args = { expr: (args.value as unknown[])[0] };
+          delete node.within_group;
+        }
         if (dialeto === "mssql" && (name === "DATEDIFF" || name === "DATEDIFF_BIG")) {
           normalizeDiffUnit(node.args);
         }

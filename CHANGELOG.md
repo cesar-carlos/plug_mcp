@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Parser MSSQL reconhece COUNT_BIG(*) e COUNT_BIG(expressão) como agregados, incluindo uso em denominadores e CTEs. A cópia de análise não altera SQL executado; guardas de escopo/fanout e limites de dialeto permanecem. Treinamento explica chave de origem em JOIN, nulos e limites de DISTINCT/ALL.
+
 - Fixed: Diagnóstico local de INVALID_SQL correlaciona supportId, categoria fechada da recusa, posição limitada do parser e IDs/revisões das publicações autorizadas. Não registra SQL, parâmetros, identificadores SQL ou mensagens nativas; regressões usam o logger real e recusam metadados forjados.
 
 - Changed: Console prioriza o título da área, mantém diagnóstico ao recolher o guia, reúne busca e limpeza com retorno de foco e permite fechar o menu móvel com Escape. Regressões verificam telas estreitas e ausência de escritas ou recargas automáticas.

@@ -33,7 +33,7 @@ const assertSelectFanout = (
     assertSelectFanout(child, escopo, [...selectPath, index]);
   }
   const measures = ast.colunas.filter((c) =>
-    /\b(SUM|COUNT|AVG|STRING_AGG|LIST)\s*\(/i.test(c.expr),
+    /\b(SUM|COUNT|COUNT_BIG|AVG|STRING_AGG|LIST)\s*\(/i.test(c.expr),
   );
   if (measures.length > 0 && ast.joins.length > 0) {
     assertMeasureGrain(ast, escopo, measures, selectPath);

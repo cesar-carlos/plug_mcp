@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../../../src/domain/persona-v2/catalog.js";
 import { PERSONA_V2_TRAINING_BASE } from "../../../src/application/persona-v2/training-base.js";
+import { personaDialectGuide } from "../../../src/application/persona-v2/dialect-guide.js";
 import {
   TRAINING_TOPICS,
   trainingTopic,
@@ -14,6 +15,14 @@ import {
 } from "../../../scripts/persona-training-budgets.js";
 
 describe("public persona training topics", () => {
+  it("orienta COUNT_BIG sem dispensar origem e limites do parser", () => {
+    expect(JSON.stringify(trainingTopic("sql"))).toContain("COUNT_BIG exige origem");
+    const sql = personaDialectGuide("mssql").limite;
+    expect(sql).toContain("COUNT_BIG(alias.chave)");
+    expect(sql).toContain("DISTINCT/ALL");
+    expect(sql).toContain("ignora NULL");
+    expect(sql).toContain("AGREGACAO_INSEGURA");
+  });
   it.each(TRAINING_TOPICS)("enforces the exact byte ceiling for %s", (topic) => {
     const manifest = trainingManifest();
     const entry = manifest.topics.find((item) => item.topic === topic)!;

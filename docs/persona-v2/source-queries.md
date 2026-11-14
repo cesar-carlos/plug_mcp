@@ -1,5 +1,21 @@
 # Consultas por fonte — contrato implementado
 
+SQL Server aceita `COUNT_BIG(*)` e `COUNT_BIG(expressão publicada)` como
+agregados, inclusive em CTE e denominadores. A estrela vira constante somente
+na cópia de análise do parser; o SQL enviado permanece intacto, preservando
+o retorno bigint do motor. Nomes delimitados, textos e comentários não mudam.
+`DISTINCT`/`ALL` explícitos nessa função continuam fora do suporte do parser.
+Não se estende a função aos demais dialetos. Referência:
+[COUNT_BIG no SQL Server](https://learn.microsoft.com/en-us/sql/t-sql/functions/count-big-transact-sql).
+
+Em JOIN, a contagem exige origem comprovada, como uma chave não nula publicada;
+`COUNT_BIG(*)` não comprova a origem. Expressões contam apenas valores não nulos.
+Não trocar por `SUM(1)` nem remover relacionamentos para contornar fanout.
+Escopo, finalidade, recortes, cardinalidade e publicação continuam obrigatórios.
+O supportId `13377594-f558-460f-9f5e-435be0a4181c` registrou sintaxe recusada
+na publicação r34; o relato da IA e a reprodução sintética apontaram COUNT_BIG,
+sem recuperar ou persistir o SQL original descartado dos logs.
+
 Subtrações compactas, como `m.demanda*:dias-m.saldo-m.pedido`, preservam a
 linhagem no parser TransactSQL usado para MSSQL e SQL Anywhere. A separação
 lexical ocorre somente na cópia de análise: SQL de execução, parâmetros e

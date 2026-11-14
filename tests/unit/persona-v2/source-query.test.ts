@@ -86,6 +86,18 @@ const fixture = (dialect: typeof trainingSource.dialect = "postgres") => {
   };
 };
 
+it("COUNT_BIG é enviado intacto ao gateway MSSQL após as revalidações", async () => {
+  const f = fixture("mssql");
+  const sql = "SELECT COUNT_BIG(*) AS n FROM orders p WHERE p.id>:minimum";
+  f.execute.mockResolvedValue({ columns: ["n"], rows: [{ n: "1" }] });
+  await f.service.run(identity, { sql, params: { minimum: 0 } });
+  expect(f.execute).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(f.execute.mock.calls[0])).toContain("COUNT_BIG(*)");
+  expect(JSON.stringify(f.execute.mock.calls[0])).not.toContain("COUNT_BIG(1)");
+  expect(f.catalog.revalidateQuery).toHaveBeenCalled();
+  expect(f.revalidate).toHaveBeenCalled();
+});
+
 it("telemetria real registra fases e preserva revalidação sem SQL ou identidade", async () => {
   const f = fixture();
   let output = "";

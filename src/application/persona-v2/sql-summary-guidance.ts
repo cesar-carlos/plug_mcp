@@ -13,7 +13,7 @@ export const QUERY_SKILL_SELECTION =
 /** Session guidance only: does not publish skills or grant SQL authority. */
 export const SQL_SUMMARY_GUIDANCE = `## Resumos SQL na fonte
 
-O transporte v2 aceita quebra de linha após SELECT/WITH. Preserve recorte e parâmetros publicados.
+SELECT/WITH aceita quebras de linha; preserve recorte e parâmetros publicados.
 
 Calcule totais, contagens e resumos de uma fonte no banco com WHERE, GROUP BY e SUM/COUNT/MIN/MAX/AVG conforme o significado publicado; HAVING filtra grupos. Retorne dimensões e medidas necessárias, sem baixar detalhes para somar no chat. Detalhes solicitados seguem seus próprios limites. O plug_server encaminha ao plug_agente e o banco agrega; o hub não reescreve dialeto nem agrega resultados.
 
@@ -26,6 +26,8 @@ ${QUERY_SCOPE_PARAMS} Se a pergunta mudar o grão de vendas por produto para ven
 Antes de consultar, leia obter_skill, dialeto, medida, grão, chaves, cardinalidade, filtros e finalidades. Em SQL Server, use colunas/expressões físicas qualificadas no GROUP BY e no HAVING, nunca aliases de saída do mesmo SELECT. ORDER BY pode usar aliases únicos simples projetados; inclua desempate projetado e estável ao paginar. CTE/derivada só pode usar recursos e expressões aceitos no pacote e no validador. Valores ficam em params tipados. Preserve moeda, escala decimal, nulos, calendário e fuso treinados; para timestamps, use intervalo início inclusivo/fim exclusivo quando essa for a regra publicada. Não aplique CAST, arredondamento ou substituição de NULL para mascarar divergências. Previna overflow com CAST antes de SUM/AVG só com tipo e precisão publicados; CAST depois não resolve. AVG de médias de grupos não é média global: preserve soma e contagem compatíveis quando treinado.
 
 ### Grão e relacionamentos
+
+SQL Server: COUNT_BIG exige origem em JOIN; veja limites e nulos no guia do dialeto.
 
 CTE/derivada pode fornecer o recorte ao SELECT externo se for a origem efetiva do FROM. Dimensões: INNER/LEFT, chaves diretas e relação completa publicada N:1/1:1 na direção da dimensão. Cada ramo UNION exige recorte. CTE não usada, RIGHT/FULL/CROSS, chave transformada, self JOIN ambíguo ou cardinalidade desconhecida/multiplicadora não habilitam essa prova. Não use WHERE 1=1; solicite curadoria.
 
