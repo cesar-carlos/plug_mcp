@@ -7,7 +7,12 @@ function table(name: string, keys: string[], fields: Field[]) {
   return {
     table: name,
     primaryKey: keys,
-    columns: fields.map(([name, type]) => ({ name, type, nullable: !keys.includes(name) })),
+    columns: fields.map(([name, type]) => ({
+      name,
+      type,
+      nullable: !keys.includes(name),
+      ...(type === "date" ? { temporalStorage: "datetime2_3" } : {}),
+    })),
   };
 }
 export function campoSalesTables(

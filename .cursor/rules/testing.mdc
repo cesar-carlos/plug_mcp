@@ -6,6 +6,8 @@ alwaysApply: false
 
 # Testes
 
+Fixtures temporais MSSQL usam temporalStorage datetime2_3 explícito para horários UTC de até milissegundos; DATE legado não trunca timestamps. Preservar fronteira de último dia e exclusão do seguinte, nulos e compatibilidade de FKs/triggers. Não converter casos salvos nem afirmar homologação nativa por testes com mocks.
+
 CI separa release, persistência/cache e navegador/OAuth em jobs obrigatórios com
 serviços isolados. Builds Docker podem começar em paralelo à documentação, mas
 publicação exige todos os gates. Browser reutiliza um build do mesmo checkout;

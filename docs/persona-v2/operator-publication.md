@@ -36,6 +36,12 @@ pipes brutos; use exclusivamente o wrapper, que filtra a saída.
 
 ## Preparação e comandos
 
+### Precisão temporal das fixtures
+
+Colunas sintéticas `date` podem declarar `temporalStorage: "datetime2_3"` no manifesto privado MSSQL. O perfil de vendas usa esse armazenamento para conservar a fronteira `23:59:59.997` e excluir o dia seguinte. O tipo escalar continua `date`; não altera casos salvos ou publicações. Sem a declaração, a coluna continua DATE e recusa timestamps. O executor aceita datas válidas e, no armazenamento explícito, timestamps UTC com `Z`, segundos inteiros ou três casas decimais. Recusa offsets, zona ausente, datas inexistentes e precisão excedente; não converte fuso nem trunca horários. Nulos seguem a declaração. FKs e cópias por trigger exigem o mesmo armazenamento nas colunas.
+
+Exige companion e runner remoto compatíveis; atualizar somente o manifesto local não basta. Uma nova sessão e nova rodada são obrigatórias. Testes unitários não certificam SQL Server nem aprovam o rascunho.
+
 ### Casos de ranking limitado
 
 Casos sem `expected.completeness` (ou com `{ "mode": "complete" }`) continuam
@@ -329,3 +335,5 @@ O perfil itens-variedade-perdas reutiliza somente três tabelas e 17 campos de i
 `-CampoConsulta cadastro-filiais` declara apenas dbo.filial (13 campos) e dbo.municipio (3 campos) da amostra do responsável. Chave da filial é empresa/filial; município é anulável na filial e não há FK sintética obrigatória, permitindo testar ausência de correspondência no INNER JOIN. Códigos são inteiros, demais campos textuais, sem interpretação de regime tributário. Somente MSSQL; não amplia fonte operacional. Perfil e testes locais não comprovam execução do runner, publicação ou acesso da persona.
 
 O perfil `estoque-gestao` contém somente saldoestoque, produto, custoproduto, produtovendido, itemprodutovendido e tipooperacaosaida das amostras curadas. Usa chave de saldo produto/local, custos empresa/filial/produto e itens empresa/venda/item. Não declara vínculo local/filial ou FK inferida. Casos devem separar custo atual, saldo positivo, valores desconhecidos, demanda e confirmação explícita do recorte; a existência do perfil não aprova nem publica consultas.
+
+Validação temporal de 2026-11-14: regressão nativa em SQL Server 2022 descartável, ODBC 5.0.4 e driver 18 preservou 23:59:59.997, midnight, NULL e excluiu o dia seguinte. A execução revelou e corrigiu o bind de NULL como BIGINT usando conversão tipada por texto com estilo126, sem interpolar valores. Container sem volumes removido ao concluir. Os 110 testes MCP direcionados e 58 testes Dart passaram; a aprovação do caso salvo exige ainda nova rodada oficial após implantação compatível.

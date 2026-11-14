@@ -23,6 +23,7 @@ export const fixtureTableSchema = z
         z.strictObject({
           name: fixtureIdentifier,
           type: fixtureScalarType,
+          temporalStorage: z.literal("datetime2_3").optional(),
           nullable: z.boolean().default(false),
           generated: z.boolean().default(false),
         }),
@@ -65,6 +66,7 @@ export const fixtureTableSchema = z
       [table.primaryKey, ...table.uniqueKeys].some(
         (key) => new Set(key).size !== key.length || key.some((c) => !names.includes(c)),
       ) ||
+      table.columns.some((c) => c.temporalStorage && c.type !== "date") ||
       table.columns.some((c) => c.generated && (c.type !== "integer" || c.nullable)) ||
       table.columns.filter((c) => c.generated).length > 1 ||
       table.checks.some(
@@ -100,7 +102,12 @@ export const fixtureTablesSchema = z
           fk.columns.every((name, i) => {
             const column = table.columns.find((c) => c.name === name);
             const remote = target.columns.find((c) => c.name === fk.targetColumns[i]);
-            return !!column && !!remote && column.type === remote.type;
+            return (
+              !!column &&
+              !!remote &&
+              column.type === remote.type &&
+              column.temporalStorage === remote.temporalStorage
+            );
           });
       }
       const audits = [table.insertAudit, table.updateAudit, table.deleteAudit].filter(
