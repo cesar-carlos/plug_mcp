@@ -1,5 +1,12 @@
 # Consultas por fonte — contrato implementado
 
+No MSSQL, `DATEADD(day, 1, CAST(:fim AS date))` reconhece `day` como
+datepart, inclusive em filtro com JOIN. A normalização já aplicada a DATEDIFF
+e DATEDIFF_BIG abrange DATEADD apenas no primeiro argumento, com aridade três
+e unidade conhecida não qualificada. Colunas `alias.day` ou `day` nos demais
+argumentos continuam sujeitas ao escopo e à ambiguidade. Não muda o SQL enviado,
+não concede acesso nem define se o período publicado é inclusivo ou exclusivo.
+
 SQL Server aceita `COUNT_BIG(*)` e `COUNT_BIG(expressão publicada)` como
 agregados, inclusive em CTE e denominadores. A estrela vira constante somente
 na cópia de análise do parser; o SQL enviado permanece intacto, preservando
