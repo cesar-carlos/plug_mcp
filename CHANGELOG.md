@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Orientação de AGREGACAO_INSEGURA distingue contagem sem origem de chave da dimensão multiplicável. Explica chave não nula no grão publicado e limita EXISTS à semântica/autoridade vigentes, sem relaxar a guarda.
+
 - Fixed: DATEADD no MSSQL reconhece o primeiro argumento datepart como sintaxe, tal como DATEDIFF/DATEDIFF_BIG, evitando COLUNA_AMBIGUA em JOIN com filtros parametrizados. Colunas reais chamadas day e unidades desconhecidas/qualificadas continuam sujeitas ao escopo.
 
 - Fixed: Parser MSSQL reconhece COUNT_BIG(*) e COUNT_BIG(expressão) como agregados, incluindo uso em denominadores e CTEs. A cópia de análise não altera SQL executado; guardas de escopo/fanout e limites de dialeto permanecem. Treinamento explica chave de origem em JOIN, nulos e limites de DISTINCT/ALL.

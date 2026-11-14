@@ -1,5 +1,7 @@
 # Consultas por fonte — contrato implementado
 
+AGREGACAO_INSEGURA em contagem exige distinguir ausência de origem (COUNT/COUNT_BIG estrela ou constante) de coluna da dimensão multiplicada. Em vendas v N:1 tipos t por chave completa, COUNT_BIG(v.id) só representa linhas de venda se id não nula e o contrato comprovar esse grão; COUNT_BIG(t.id) não autoriza contar vendas pela dimensão. LEFT JOIN e nulos exigem revisão própria. A orientação de EXISTS não garante aceitação ou equivalência: preservar todos os filtros, recortes e elos publicados, sem inventar chave, DISTINCT ou concatenação. As recusas existentes permanecem; regressões sintéticas cobrem vínculo composto, origem explícita e coluna proibida.
+
 No MSSQL, `DATEADD(day, 1, CAST(:fim AS date))` reconhece `day` como
 datepart, inclusive em filtro com JOIN. A normalização já aplicada a DATEDIFF
 e DATEDIFF_BIG abrange DATEADD apenas no primeiro argumento, com aridade três

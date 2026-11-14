@@ -16,6 +16,8 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Contagem sem referência em JOIN não prova origem. Orientação pode sugerir chave não nula do grão publicado sob relação completa N:1/1:1; não escolher dimensão pela unicidade, contornar com SUM(1)/DISTINCT ou prometer EXISTS válido. Preservar guardas, nulos e significado.
+
 No MSSQL, somente o primeiro argumento de DATEADD/DATEDIFF/DATEDIFF_BIG, com três argumentos e unidade conhecida não qualificada, é datepart. Não remover colunas homônimas dos demais argumentos, filtros, projeções ou JOINs; não estender essa normalização a outros dialetos.
 
 COUNT_BIG MSSQL é agregado com as mesmas guardas de escopo/fanout; compatibilidade do parser pode normalizar estrela para constante somente na cópia de análise. SQL executado permanece intacto e retorna bigint. Não habilitar a função em outros dialetos ou prometer DISTINCT/ALL explícitos sem suporte. Treinamento orienta chave de origem em JOIN, preservando nulos, cardinalidade e autoridade.

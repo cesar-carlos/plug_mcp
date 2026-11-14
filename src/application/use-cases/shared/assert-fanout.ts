@@ -237,7 +237,11 @@ const assertMeasureGrain = (
                     ? "relationship_unproven"
                     : "measure_multiplication",
                 },
-                hint: "Se os filtros e a medida estiverem na tabela de origem, agregue diretamente nela dentro do escopo publicado. Preserve filtros e recortes obrigatórios. Quando precisar filtrar por outra tabela, use EXISTS com a chave completa ou pré-agregação no grão comprovado. SUM(DISTINCT valor) pode eliminar valores legítimos iguais.",
+                hint:
+                  (measure.refs.length === 0
+                    ? "Esta expressão não identifica uma coluna de origem. COUNT(*)/COUNT_BIG(*) e SUM(1) não comprovam o grão no JOIN. Se a medida for contagem de linhas, use a chave não nula da origem publicada somente quando preservar o significado e o relacionamento completo provar N:1/1:1 nessa direção. Não escolha a chave da dimensão apenas por ser única. "
+                    : "") +
+                  "Se os filtros e a medida estiverem na tabela de origem, agregue diretamente nela dentro do escopo publicado. Preserve filtros e recortes obrigatórios. EXISTS com chave completa ou pré-agregação só são alternativas se o contrato publicado e o validador permitirem e a semântica for preservada; não garantem aceitação. SUM(DISTINCT valor) pode eliminar valores legítimos iguais.",
               }),
               {
                 selectPath: [...selectPath],
