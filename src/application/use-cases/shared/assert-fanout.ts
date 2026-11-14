@@ -1,4 +1,5 @@
 import type { EscopoSkill } from "../../../domain/entities/escopo.js";
+import { recordAggregationGrain } from "../../../domain/errors/aggregation-diagnostic.js";
 import { paresDoRelacionamento } from "../../../domain/entities/escopo.js";
 import { igualdadesCobremRelacionamento } from "../../../domain/entities/relacionamento.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
@@ -8,24 +9,34 @@ import type { SqlAstSelect } from "./sql-ast.js";
 const lower = (value: string): string => value.trim().toLowerCase();
 
 export const assertFanoutSeguro = (ast: SqlAstSelect, escopo: EscopoSkill): void => {
+  assertSelectFanout(ast, escopo, []);
+};
+const assertSelectFanout = (
+  ast: SqlAstSelect,
+  escopo: EscopoSkill,
+  selectPath: readonly number[],
+): void => {
   for (const [table, grain] of Object.entries(escopo.graosConfirmados ?? {})) {
     const columns = escopo.colunasPorTabela[table];
     if (!grain.chaves.length || !columns || grain.chaves.some((c) => !columns.includes(c)))
-      throw DomainError.pacote({
-        code: ERROR_CODES.AGREGACAO_INSEGURA,
-        message: "Grão declarado não corresponde às chaves físicas do pacote.",
-        details: { aggregationReason: "invalid_declared_grain" },
-        hint: "Confirme o grão novamente; não use GROUP BY como evidência de chave única.",
-      });
+      throw recordAggregationGrain(
+        DomainError.pacote({
+          code: ERROR_CODES.AGREGACAO_INSEGURA,
+          message: "Grão declarado não corresponde às chaves físicas do pacote.",
+          details: { aggregationReason: "invalid_declared_grain" },
+          hint: "Confirme o grão novamente; não use GROUP BY como evidência de chave única.",
+        }),
+        { selectPath: [...selectPath], groupingKeyCount: ast.groupByCount },
+      );
   }
-  for (const child of [...ast.subqueries, ...ast.setBranches]) {
-    assertFanoutSeguro(child, escopo);
+  for (const [index, child] of [...ast.subqueries, ...ast.setBranches].entries()) {
+    assertSelectFanout(child, escopo, [...selectPath, index]);
   }
   const measures = ast.colunas.filter((c) =>
     /\b(SUM|COUNT|AVG|STRING_AGG|LIST)\s*\(/i.test(c.expr),
   );
   if (measures.length > 0 && ast.joins.length > 0) {
-    assertMeasureGrain(ast, escopo, measures);
+    assertMeasureGrain(ast, escopo, measures, selectPath);
   }
 };
 
@@ -90,6 +101,7 @@ const assertMeasureGrain = (
   ast: SqlAstSelect,
   escopo: EscopoSkill,
   measures: readonly SqlAstSelect["colunas"][number][],
+  selectPath: readonly number[],
 ): void => {
   const byAlias = new Map(ast.tabelas.map((t) => [lower(t.alias ?? t.nome), t]));
   const edges: Edge[] = [];
@@ -167,12 +179,15 @@ const assertMeasureGrain = (
       });
     }
     if (sources.size === 0) {
-      throw DomainError.pacote({
-        code: ERROR_CODES.AGREGACAO_INSEGURA,
-        message: "Não foi possível demonstrar o grão do JOIN agregado.",
-        details: { aggregationReason: "join_grain_unproven" },
-        hint: "Use JOINs compostos certificados ou pré-agregação no grão da medida.",
-      });
+      throw recordAggregationGrain(
+        DomainError.pacote({
+          code: ERROR_CODES.AGREGACAO_INSEGURA,
+          message: "Não foi possível demonstrar o grão do JOIN agregado.",
+          details: { aggregationReason: "join_grain_unproven" },
+          hint: "Use JOINs compostos certificados ou pré-agregação no grão da medida.",
+        }),
+        { selectPath: [...selectPath], groupingKeyCount: ast.groupByCount },
+      );
     }
   }
   for (const measure of measures) {
@@ -213,16 +228,25 @@ const assertMeasureGrain = (
           (e) => e.from === current.node && !current.path.has(e.to),
         )) {
           if (edge.multiplying) {
-            throw DomainError.pacote({
-              code: ERROR_CODES.AGREGACAO_INSEGURA,
-              message: `A medida ${measure.alias || "agregada"} pode ser multiplicada pelo JOIN.`,
-              details: {
-                aggregationReason: edge.unknown
-                  ? "relationship_unproven"
-                  : "measure_multiplication",
+            throw recordAggregationGrain(
+              DomainError.pacote({
+                code: ERROR_CODES.AGREGACAO_INSEGURA,
+                message: `A medida ${measure.alias || "agregada"} pode ser multiplicada pelo JOIN.`,
+                details: {
+                  aggregationReason: edge.unknown
+                    ? "relationship_unproven"
+                    : "measure_multiplication",
+                },
+                hint: "Se os filtros e a medida estiverem na tabela de origem, agregue diretamente nela dentro do escopo publicado. Preserve filtros e recortes obrigatórios. Quando precisar filtrar por outra tabela, use EXISTS com a chave completa ou pré-agregação no grão comprovado. SUM(DISTINCT valor) pode eliminar valores legítimos iguais.",
+              }),
+              {
+                selectPath: [...selectPath],
+                groupingKeyCount: ast.groupByCount,
+                measureIndex: ast.colunas.indexOf(measure),
+                sourceIndex: [...byAlias.keys()].indexOf(edge.from),
+                targetIndex: [...byAlias.keys()].indexOf(edge.to),
               },
-              hint: "Se os filtros e a medida estiverem na tabela de origem, agregue diretamente nela dentro do escopo publicado. Preserve filtros e recortes obrigatórios. Quando precisar filtrar por outra tabela, use EXISTS com a chave completa ou pré-agregação no grão comprovado. SUM(DISTINCT valor) pode eliminar valores legítimos iguais.",
-            });
+            );
           }
           pending.push({ node: edge.to, path: new Set([...current.path, edge.to]) });
         }

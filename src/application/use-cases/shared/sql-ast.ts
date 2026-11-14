@@ -1,6 +1,10 @@
 import { createRequire } from "node:module";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
+import {
+  sqlParserFailure,
+  sqlValidationFailure,
+} from "../../../domain/errors/sql-validation-diagnostic.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import { delimitParserSubtraction } from "./sql-parser-subtraction.js";
 
@@ -491,11 +495,14 @@ const fromSelectAst = (
   inheritedCtes: ReadonlyMap<string, SqlAstSelect | null> = new Map(),
 ): SqlAstSelect => {
   if (!isRecord(ast) || ast.type !== "select") {
-    throw DomainError.pacote({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "Só SELECT pode treinar o grafo.",
-      hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
-    });
+    throw sqlValidationFailure(
+      DomainError.pacote({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "Só SELECT pode treinar o grafo.",
+        hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
+      }),
+      "select_required",
+    );
   }
   // Bind each CTE once in lexical order. Pending names shadow outer bindings,
   // but never become physical tables or authorize recursion/forward references.
@@ -503,11 +510,14 @@ const fromSelectAst = (
   const localNames = new Set<string>();
   const cteQueries: SqlAstSelect[] = [];
   const refuseCte = (): never => {
-    throw DomainError.pacote({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "CTE duplicada, recursiva ou com referência futura não suportada.",
-      hint: "Declare CTEs não recursivas em ordem de dependência, com nomes únicos.",
-    });
+    throw sqlValidationFailure(
+      DomainError.pacote({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "CTE duplicada, recursiva ou com referência futura não suportada.",
+        hint: "Declare CTEs não recursivas em ordem de dependência, com nomes únicos.",
+      }),
+      "cte_binding",
+    );
   };
   for (const item of asArray(ast.with)) {
     const name = cteName(item)?.toLowerCase();
@@ -714,33 +724,43 @@ export const parseSelect = (
   let ast: unknown;
   try {
     ast = tryAstify(sql, database);
-  } catch {
+  } catch (cause) {
     const janela = /\bOVER\s*\(/i.test(sql);
-    throw DomainError.pacote({
-      code: ERROR_CODES.INVALID_SQL,
-      message: janela
-        ? "Não foi possível interpretar a função de janela (OVER) neste dialeto."
-        : "Não foi possível interpretar o SQL neste dialeto.",
-      hint: janela
-        ? "Reescreva PARTITION BY / ORDER BY da janela conforme o guia do dialeto do acesso."
-        : "Ajuste o SQL conforme o guia do dialeto do acesso.",
-    });
+    throw sqlParserFailure(
+      DomainError.pacote({
+        code: ERROR_CODES.INVALID_SQL,
+        message: janela
+          ? "Não foi possível interpretar a função de janela (OVER) neste dialeto."
+          : "Não foi possível interpretar o SQL neste dialeto.",
+        hint: janela
+          ? "Reescreva PARTITION BY / ORDER BY da janela conforme o guia do dialeto do acesso."
+          : "Ajuste o SQL conforme o guia do dialeto do acesso.",
+      }),
+      cause,
+      dialeto,
+    );
   }
   const statements: unknown[] = Array.isArray(ast) ? ast : [ast];
   if (statements.length !== 1) {
-    throw DomainError.pacote({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "SQL não pode conter um segundo comando.",
-      hint: "Envie um único SELECT, sem ponto-e-vírgula no meio.",
-    });
+    throw sqlValidationFailure(
+      DomainError.pacote({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "SQL não pode conter um segundo comando.",
+        hint: "Envie um único SELECT, sem ponto-e-vírgula no meio.",
+      }),
+      "multiple_statements",
+    );
   }
   const first = statements[0];
   if (!isRecord(first) || first.type !== "select") {
-    throw DomainError.pacote({
-      code: ERROR_CODES.INVALID_SQL,
-      message: "Só SELECT pode treinar o grafo.",
-      hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
-    });
+    throw sqlValidationFailure(
+      DomainError.pacote({
+        code: ERROR_CODES.INVALID_SQL,
+        message: "Só SELECT pode treinar o grafo.",
+        hint: "Envie um SELECT (CTE WITH ... SELECT também vale). INSERT/UPDATE/DELETE/DDL não são aceitos no treino.",
+      }),
+      "select_required",
+    );
   }
   assertReadOnlyAst(first, dialeto, options.allowSchemaQualifiedTables === true);
   return fromSelectAst(first, sql, database);

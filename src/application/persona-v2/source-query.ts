@@ -21,6 +21,8 @@ import type { SourceQueryGatewayPort } from "../../domain/ports/source-query.por
 import type { SqlExecuteResult } from "../../domain/ports/plug-server-gateway.port.js";
 import { assertSourcePagination, validateSourceSql } from "./source-sql.js";
 import { SourceExecutionError } from "../../domain/persona-v2/source-execution-error.js";
+import { recordAggregationContext } from "../../domain/errors/aggregation-diagnostic.js";
+import { recordSqlValidationPublications } from "../../domain/errors/sql-validation-diagnostic.js";
 import { assertFanoutSeguro } from "../use-cases/shared/assert-fanout.js";
 import {
   bindNamedParams,
@@ -508,7 +510,17 @@ export class PersonaSourceQueries {
       );
     }
     const scope = uniaoEscopos(publications.map((p) => p.package.scope));
-    const ast = validateSourceSql(sql, source.dialect, scope);
+    let ast: ReturnType<typeof validateSourceSql>;
+    try {
+      ast = validateSourceSql(sql, source.dialect, scope);
+    } catch (error) {
+      recordSqlValidationPublications(error, {
+        publicationIds: publications.map((p) => p.id),
+        publicationRevisions: publications.map((p) => p.revision),
+        queryOrigin: input.sql === undefined ? "modelo_publicado" : "sql_fornecido",
+      });
+      throw error;
+    }
     if (attachment?.format === "binary")
       assertBinaryProjection(ast, trainings[0]!.binaryAttachments!);
     const binaryFields = new Set(
@@ -536,7 +548,16 @@ export class PersonaSourceQueries {
     // Field authority (including binary projection) takes precedence over pagination.
     // Both checks still complete before remote authorization or SQL dispatch.
     assertSourcePagination(ast, input.options);
-    assertFanoutSeguro(ast, scope);
+    try {
+      assertFanoutSeguro(ast, scope);
+    } catch (error) {
+      recordAggregationContext(error, {
+        publicationIds: publications.map((p) => p.id),
+        publicationRevisions: publications.map((p) => p.revision),
+        queryOrigin: input.sql === undefined ? "modelo_publicado" : "sql_fornecido",
+      });
+      throw error;
+    }
     enforceSourceRestrictions(ast, scope, restrictions);
     const columns = ast.colunas.map((c) => c.alias);
     if (

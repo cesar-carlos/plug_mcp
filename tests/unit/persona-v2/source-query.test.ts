@@ -129,6 +129,149 @@ const reusableFixture = () => {
   return { ...f, service: new PersonaSourceQueries(f.catalog, f.gateway, reuse), reuse };
 };
 
+it.each([false, true])(
+  "INVALID_SQL correlaciona publicações autorizadas antes do envio (validation=%s)",
+  async (validation) => {
+    const f = fixture();
+    f.evidence.publications.push({
+      ...f.evidence.publications[0]!,
+      id: "second-publication",
+      revision: 7,
+    });
+    let error: unknown;
+    try {
+      await f.service.run(
+        identity,
+        { sql: "SELECT p.id FROM orders p WHERE p.id>:minimum AND", params: { minimum: 927461 } },
+        validation,
+      );
+    } catch (cause) {
+      error = cause;
+    }
+    expect(error).toMatchObject({ code: "INVALID_SQL", source: "sql", stage: "validar_escopo" });
+    let output = "";
+    const body = reportPersonaV2ToolError(
+      error,
+      new PinoLoggerAdapter(
+        pino(
+          {},
+          {
+            write: (line) => {
+              output += line;
+            },
+          },
+        ),
+      ),
+    );
+    expect(JSON.parse(output)).toMatchObject({
+      supportId: body.supportId,
+      errorCode: "INVALID_SQL",
+      sqlValidationReason: "unexpected_end",
+      dialect: "postgres",
+      publicationIds: ["publication", "second-publication"],
+      publicationRevisions: [1, 7],
+      queryOrigin: "sql_fornecido",
+      parserLine: 1,
+      parserColumn: expect.any(Number),
+    });
+    expect(output).not.toMatch(/SELECT|orders|minimum|927461|"params"|"expected"|"found"/);
+    expect(body).not.toHaveProperty("publicationIds");
+    expect(body).not.toHaveProperty("parserColumn");
+    expect(f.gateway.authorize).not.toHaveBeenCalled();
+    expect(f.execute).not.toHaveBeenCalled();
+  },
+);
+
+it.each([false, true])(
+  "correlaciona publicação e grão da recusa de fanout antes do envio (validation=%s)",
+  async (validation) => {
+    const f = fixture();
+    const training = queryTraining();
+    const pkg = compileQueryTraining(
+      {
+        ...training,
+        tables: [...training.tables, { name: "secret_items", meaning: "fixture", grain: ["id"] }],
+        columns: [
+          ...training.columns,
+          ...["id", "order_id"].map((name) => ({
+            table: "secret_items",
+            name,
+            meaning: "fixture",
+            classification: "livre" as const,
+          })),
+        ],
+        relationships: [
+          {
+            from: "secret_items",
+            to: "orders",
+            keys: [{ from: "order_id", to: "id" }],
+            join: "inner",
+            cardinality: "N:1",
+            meaning: "fixture",
+          },
+        ],
+      },
+      f.evidence.source,
+      crypto,
+    );
+    f.evidence.publications[0]!.package = pkg;
+    f.evidence.publications[0]!.hash = crypto.sha256Hex(canonicalJson(pkg));
+    let error: unknown;
+    try {
+      await f.service.run(
+        identity,
+        {
+          sql: "SELECT SUM(p.amount) AS secret_total FROM orders p JOIN secret_items i ON i.order_id=p.id WHERE p.id>:minimum",
+          params: { minimum: 927461 },
+        },
+        validation,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      code: "AGREGACAO_INSEGURA",
+      source: "sql",
+      stage: "validar_escopo",
+    });
+    let output = "";
+    const body = reportPersonaV2ToolError(
+      error,
+      new PinoLoggerAdapter(
+        pino(
+          {},
+          {
+            write: (line) => {
+              output += line;
+            },
+          },
+        ),
+      ),
+    );
+    const event = JSON.parse(output);
+    expect(event).toMatchObject({
+      supportId: body.supportId,
+      errorCode: "AGREGACAO_INSEGURA",
+      aggregationReason: "measure_multiplication",
+      publicationIds: ["publication"],
+      publicationRevisions: [1],
+      queryOrigin: "sql_fornecido",
+      aggregationGrain: {
+        selectPath: [],
+        groupingKeyCount: 0,
+        measureIndex: 0,
+        sourceIndex: 0,
+        targetIndex: 1,
+      },
+    });
+    expect(output).not.toMatch(/secret_|927461|SELECT|amount|order_id|params/);
+    expect(body).not.toHaveProperty("publicationIds");
+    expect(body).not.toHaveProperty("aggregationGrain");
+    expect(f.gateway.authorize).not.toHaveBeenCalled();
+    expect(f.execute).not.toHaveBeenCalled();
+  },
+);
+
 it.each([
   { name: "amount", type: "text", odbcType: -4 },
   { name: "amount", type: "text", odbcType: 7, typeSystem: "odbc_fast" },

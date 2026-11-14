@@ -5,6 +5,7 @@ import {
   type IgualdadeResolvida,
 } from "../../../domain/entities/relacionamento.js";
 import { DomainError } from "../../../domain/errors/domain-error.js";
+import { sqlValidationFailure } from "../../../domain/errors/sql-validation-diagnostic.js";
 import { ERROR_CODES } from "../../../domain/errors/error-codes.js";
 import type { Dialeto } from "../../../domain/entities/dialeto.js";
 import {
@@ -175,15 +176,18 @@ const validarSelect = (
   parents: readonly SqlAstSelect[] = [],
 ): void => {
   if (ast.temStar && !starSimplesInspecao(ast, permitirStarSimples)) {
-    throw DomainError.pacote({
-      code: ERROR_CODES.INVALID_SQL,
-      message: permitirStarSimples
-        ? "SELECT * com JOIN, subquery ou mais de uma tabela não é permitido na inspeção."
-        : "SELECT * não é permitido.",
-      hint: permitirStarSimples
-        ? "Inspecione uma tabela por vez (SELECT * sem JOIN). JOIN só com colunas nomeadas e relacionamento no pacote."
-        : "Nomeie as colunas do dataset publicado.",
-    });
+    throw sqlValidationFailure(
+      DomainError.pacote({
+        code: ERROR_CODES.INVALID_SQL,
+        message: permitirStarSimples
+          ? "SELECT * com JOIN, subquery ou mais de uma tabela não é permitido na inspeção."
+          : "SELECT * não é permitido.",
+        hint: permitirStarSimples
+          ? "Inspecione uma tabela por vez (SELECT * sem JOIN). JOIN só com colunas nomeadas e relacionamento no pacote."
+          : "Nomeie as colunas do dataset publicado.",
+      }),
+      "wildcard_projection",
+    );
   }
   if (ast.groupByCount > GROUP_BY_MAX_EXPRESSIONS) {
     throw DomainError.pacote({

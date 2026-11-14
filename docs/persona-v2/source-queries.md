@@ -375,6 +375,10 @@ amplia. Revalidação antes do dispatch e da entrega impede usar orçamento anti
 
 Na recusa do mecanismo SQL durante a execução v2, o evento do supportId registra queryOrigin (modelo_publicado ou sql_fornecido) e publicationIds obtidos das publicações autorizadas. Esses campos são internos. SQL, parâmetros e linhas ficam fora do log.
 
+Falhas locais `INVALID_SQL` em `validar_consulta` e `consultar_dados` registram, pelo mesmo `supportId`, `sqlValidationReason`: `parser_syntax`, `unexpected_end`, `parser_failure_unclassified`, `multiple_statements`, `select_required`, `cte_binding` ou `wildcard_projection`. Recusas locais ainda sem classificação usam `unclassified_validation`. Sintaxe recusada não comprova SQL inválido no motor: pode ser limitação do parser. Exceções internas não são presumidas como erro de sintaxe.
+
+O log inclui `publicationIds` e `publicationRevisions` na mesma ordem, obtidos das publicações já autorizadas, e `queryOrigin` (`modelo_publicado` ou `sql_fornecido`). A lista informa o contexto da consulta, não atribui culpa a uma publicação individual. Erros sintáticos incluem dialeto e, quando disponíveis e limitados, `parserLine`/`parserColumn` da cópia analisada; normalizações podem deslocar a posição em relação ao SQL original. Não são registrados SQL, parâmetros, resultados, nomes de tabelas/colunas, tokens esperados/encontrados ou mensagem nativa. Metadados livres de `details` não alimentam esse diagnóstico. O retorno público e as validações existentes permanecem iguais; erros anteriores sem esses campos não podem ser reconstruídos.
+
 Falhas `INVALID_SQL` do motor conservam `details.sqlReason` no retorno e no log correlacionado: `identifier_binding`, `order_by_context`, `identifier_not_found`, `sql_unclassified`, `driver_diagnostic_missing` ou `unclassified_engine_error`. A categoria deriva do diagnóstico já reconhecido pelo adapter, não de um campo livre recebido do hub. As duas últimas indicam limite do diagnóstico; nenhuma categoria comprova culpa da paginação ou autoriza repetir a consulta. Mensagens nativas, SQL e identificadores continuam omitidos. Logs antigos não permitem reconstruir detalhes descartados.
 
 Para `AGREGACAO_INSEGURA` local (`source: sql`), o evento técnico registra
@@ -385,6 +389,22 @@ ou `measure_multiplication` (medida potencialmente multiplicada).
 Somente esses valores fixos entram no log, sem SQL, aliases, nomes físicos ou
 valores. Não altera a resposta pública nem as validações. Categoria ausente em
 evento histórico não pode ser reconstruída por suposição.
+
+Na validação de `consultar_dados` e `validar_consulta`, a recusa também registra
+`publicationIds`, `publicationRevisions` e `queryOrigin` das publicações já
+autorizadas. Não identifica uma única publicação como culpada quando o escopo
+combina várias. O contexto é interno à instância do erro; campos fornecidos em
+`details` não podem preencher nem substituir essas referências.
+
+`aggregationGrain` descreve somente a estrutura do bloco recusado: `selectPath`
+é o caminho de índices (base zero) na AST, com raiz `[]` e filhos na ordem
+subqueries seguida de setBranches; `groupingKeyCount` conta as expressões GROUP BY.
+Quando a recusa aponta uma medida/aresta, `measureIndex` é a posição na projeção
+e `sourceIndex`/`targetIndex` são posições no FROM daquele bloco. São referências
+estruturais, não prova de unicidade nem nomes de chaves. Não permitem reconstruir
+SQL livre descartado. Código, etapa, resposta pública, supportId e guardas
+permanecem iguais; nenhum desses campos inclui SQL, aliases, valores ou segredos.
+Logs anteriores continuam sem essas evidências e não recebem preenchimento retroativo.
 
 Falhas capturadas pelo executor de tools v2 retornam `isError: true` e `error` com
 `code`, `message`, `source`/`stage` quando disponíveis e `supportId` UUID gerado

@@ -1,4 +1,6 @@
 import { safeErrorDetails } from "../../domain/errors/safe-error-details.js";
+import { aggregationDiagnostic } from "../../domain/errors/aggregation-diagnostic.js";
+import { sqlValidationDiagnostic } from "../../domain/errors/sql-validation-diagnostic.js";
 import { hasCleanupFailure } from "../../domain/errors/cleanup-failure.js";
 import { ExternalFailure } from "../../domain/persona-v2/external-failure.js";
 import { FieldUseDenied } from "../../application/persona-v2/query-field-uses.js";
@@ -199,6 +201,7 @@ export function reportPersonaV2ToolError(
   logger?.warn("persona-v2 tool failed", {
     supportId,
     errorCode: body.code,
+    ...sqlValidationDiagnostic(error),
     ...(hasCleanupFailure(error) ? { cleanupFailed: true } : {}),
     ...(error instanceof FieldUseDenied ? { fieldUseReason: error.reason } : {}),
     ...(error instanceof FieldContractConflict
@@ -213,7 +216,9 @@ export function reportPersonaV2ToolError(
       ? { queryOrigin: error.queryOrigin, publicationIds: error.publicationIds }
       : {}),
     ...(safeAuthorizationReason ? { authorizationReason: safeAuthorizationReason } : {}),
-    ...(safeAggregationReason ? { aggregationReason: safeAggregationReason } : {}),
+    ...(safeAggregationReason
+      ? { aggregationReason: safeAggregationReason, ...aggregationDiagnostic(error) }
+      : {}),
     source: body.source,
     stage: body.stage,
     details: body.details,

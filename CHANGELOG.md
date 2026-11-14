@@ -11,7 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Diagnóstico local de INVALID_SQL correlaciona supportId, categoria fechada da recusa, posição limitada do parser e IDs/revisões das publicações autorizadas. Não registra SQL, parâmetros, identificadores SQL ou mensagens nativas; regressões usam o logger real e recusam metadados forjados.
+
 - Changed: Console prioriza o título da área, mantém diagnóstico ao recolher o guia, reúne busca e limpeza com retorno de foco e permite fechar o menu móvel com Escape. Regressões verificam telas estreitas e ausência de escritas ou recargas automáticas.
+- Fixed: Diagnóstico de AGREGACAO_INSEGURA correlaciona publicações/revisões autorizadas e estrutura numérica do grão com o supportId nas duas ferramentas de consulta, sem SQL, nomes físicos ou valores. Preserva as recusas e testa logger real, CTE e bloqueio antes do envio.
 
 - Fixed: Edição editorial da persona não exige reconexão OAuth: access/refresh atualizam somente o contexto de perfil, com barreira persistida pela migration 0055. Preserva concessões, expiração, replay e recusa após suspensão/recuperação; operações em voo mantêm revisão exata. Conteúdo idêntico não incrementa revisão após conferir CAS.
 
