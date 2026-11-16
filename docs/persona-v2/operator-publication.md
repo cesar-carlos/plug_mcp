@@ -154,7 +154,45 @@ retorna resultados sintéticos; a comparação e a gravação acontecem no runne
 remoto. Erro remoto reconhecido mantém código seguro; erro não reconhecido informa
 `OPERATOR_RUN_UNCONFIRMED`, sem copiar mensagem livre, SQL ou segredo.
 
+### Diagnóstico de execução não confirmada
+
+O wrapper local acrescenta `supportId`, `stage` e `reason` ao erro
+`OPERATOR_RUN_UNCONFIRMED`. O identificador é gerado localmente por tentativa;
+não é um supportId do servidor nem prova de que um relatório foi persistido.
+`stage` indica a fase local: leitura/validação do pedido, abertura da fixture,
+início do SSH, envio inicial, espera de mensagem, validação de frame, espera de
+preparação, atendimento da fixture, envio da resposta, validação do resultado ou
+espera da saída do processo.
+
+`reason` usa categorias fechadas: leitura/escrita do canal expirada, EOF, erro de
+stream, JSON inválido, frame acima do limite, fila excedida, falha de spawn,
+saída não zero/sinal/timeout, identidade divergente ou falha da fase quando não
+há causa mais específica. Não interpreta stderr, mensagens nativas ou detalhes
+livres. Um código de saída SSH 255 não comprova, sozinho, falha de autenticação,
+DNS ou rede; a causa não observada permanece desconhecida.
+
+Quando disponível, `lastRequest` contém somente ID sequencial e operação de um
+frame já validado. É a última requisição observada, não confirmação de conclusão
+ou limpeza. `sshExitCode` é emitido apenas para saída observada de 0 a 255;
+`sshSignaled` indica sinal observado sem expor seu conteúdo. Eventos causados
+pelo encerramento local de limpeza não substituem o diagnóstico original.
+SQL, params, resultados, host, caminhos, credenciais, stderr e stack não são
+copiados. O canal conserva a primeira causa mesmo após `close()`.
+
+Todos esses erros mantêm `approved:false` e `repeatAllowed:false`. Nenhum
+diagnóstico repete consultas, remove a fixture, aprova relatório ou recupera
+retrospectivamente a causa de tentativas antigas. Conferir relatório e estado
+da sessão continua obrigatório; não repetir uma execução incerta.
+
 ## Evidência e pendências
+
+Diagnóstico de 2026-11-16: 68 regressões direcionadas passaram no wrapper,
+canal e controle de fixture, com streams isolados e relógio falso para deadlines.
+Dois cenários reproduziram antes a ausência de etapa/causa. Foram conferidos
+EOF, spawn, saída não zero/sinal/timeout, frames inválidos/excedidos, identidade,
+primeira causa após cleanup, caminho de sucesso e ausência de conteúdo privado.
+Tipos, lint e docs:check passaram. Não houve SSH de execução, replay da rodada
+incerta nem certificação de uma causa histórica que não foi registrada.
 
 Regressões de unidade cobrem pins, ausência de efeitos em inspect, replay, queda,
 limites, SELECT e isolamento de tabelas. O teste persistente

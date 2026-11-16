@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: OPERATOR_RUN_UNCONFIRMED passa a informar etapa, causa segura, supportId local e última operação validada; distingue falhas de canal, SSH e identidade sem expor conteúdo privado, atribuir o cleanup como causa ou permitir replay.
+
 - Fixed: Fixtures de vendas declaram DATETIME2(3) explicitamente para preservar horários e milissegundos. DATE legado permanece restrito a datas; o executor recusa perda de precisão e exige UTC nos timestamps sintéticos.
 
 - Fixed: Orientação de AGREGACAO_INSEGURA distingue contagem sem origem de chave da dimensão multiplicável. Explica chave não nula no grão publicado e limita EXISTS à semântica/autoridade vigentes, sem relaxar a guarda.

@@ -6,6 +6,12 @@ alwaysApply: false
 
 # Testes
 
+Diagnóstico do operador SSH usa causas fechadas e etapas locais; testar streams
+reais isolados, deadlines com relógio falso e wrapper sem rede. Preservar primeira
+causa durante cleanup, identidade de resultado e ausência de replay. Nunca
+registrar stderr/SQL/segredos ou inferir causa de rede por exit255; supportId local
+não comprova relatório remoto. Contrato: docs/persona-v2/operator-publication.md.
+
 Fixtures temporais MSSQL usam temporalStorage datetime2_3 explícito para horários UTC de até milissegundos; DATE legado não trunca timestamps. Preservar fronteira de último dia e exclusão do seguinte, nulos e compatibilidade de FKs/triggers. Não converter casos salvos nem afirmar homologação nativa por testes com mocks.
 
 CI separa release, persistência/cache e navegador/OAuth em jobs obrigatórios com

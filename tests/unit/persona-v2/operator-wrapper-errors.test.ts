@@ -74,6 +74,13 @@ it.each([
       approved: false,
       repeatAllowed: false,
     });
+    if (entry.expected === "OPERATOR_RUN_UNCONFIRMED") {
+      expect(JSON.parse(output[0]!)).toMatchObject({
+        stage: "validate_result",
+        reason: "invalid_remote_frame",
+        repeatAllowed: false,
+      });
+    }
     expect(output.join("")).not.toMatch(
       /synthetic-secret|synthetic_private_data|UNRECOGNIZED_SECRET/,
     );
