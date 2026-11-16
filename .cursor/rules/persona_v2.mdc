@@ -16,6 +16,10 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Instrução inicial exige contexto atual antes de anunciar recorte/escolher params.
+Confirmação exigida pelo perfil não vem de memória de outra conversa. Orientação
+não é gate técnico; auditoria sem chatId não comprova escolha nem conversa.
+
 Treinamento MSSQL informa a ausência de GROUPING SETS/GROUPING no validador.
 Orientar GROUP BY simples e total separado autorizado, com recorte igual,
 completude e sem prometer snapshot simultâneo. Não relaxar linhagem/fanout ou

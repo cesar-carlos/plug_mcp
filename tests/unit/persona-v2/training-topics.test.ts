@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../../../src/domain/persona-v2/catalog.js";
 import { PERSONA_V2_TRAINING_BASE } from "../../../src/application/persona-v2/training-base.js";
 import { personaDialectGuide } from "../../../src/application/persona-v2/dialect-guide.js";
+import { PERSONA_V2_INSTRUCTIONS } from "../../../src/application/persona-v2/runtime-instructions.js";
 import {
   TRAINING_TOPICS,
   trainingTopic,
@@ -15,6 +16,14 @@ import {
 } from "../../../scripts/persona-training-budgets.js";
 
 describe("public persona training topics", () => {
+  it("prioriza contexto atual e confirmação nesta conversa antes de escolher recorte", () => {
+    const first = PERSONA_V2_INSTRUCTIONS.trim().split("\n")[0]!;
+    expect(first).toContain("obter_contexto_persona");
+    expect(first).toContain("antes de anunciar recorte");
+    expect(first).toContain("outra conversa");
+    expect(first).toContain("não execute consultas dependentes");
+    expect(PERSONA_V2_TRAINING_BASE.workflow[0]).toContain("confirmação nesta conversa");
+  });
   it("explicita limites de subtotais MSSQL sem contornar completude ou autorização", () => {
     for (const guide of [
       JSON.stringify(trainingTopic("sql")),

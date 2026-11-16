@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Instrução inicial prioriza contexto atualizado antes de selecionar recortes e exige confirmação na conversa quando prevista no perfil, sem usar memória de outro chat como escolha. Não introduz gate técnico ou identificação de conversas.
+
 - Fixed: Guia MSSQL e treinamento SQL explicitam limites de GROUPING SETS/GROUPING, orientando resumos simples e totais autorizados separados sem perder recorte, unidades ou completude. Regressões preservam as recusas do validador.
 
 - Fixed: OPERATOR_RUN_UNCONFIRMED passa a informar etapa, causa segura, supportId local e última operação validada; distingue falhas de canal, SSH e identidade sem expor conteúdo privado, atribuir o cleanup como causa ou permitir replay.

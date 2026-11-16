@@ -1,5 +1,15 @@
 # Consultas por fonte — contrato implementado
 
+A instrução de entrada prioriza `obter_contexto_persona` atualizado antes de
+anunciar recorte ou escolher parâmetros. Confirmação exigida pelo perfil deve
+ocorrer na conversa atual, sem opção predefinida ou memória de outro chat como
+substituto. Consultas dependentes aguardam a resposta; descoberta autorizada das
+opções permanece possível. É orientação para a IA, não um gate técnico de
+confirmação. A auditoria atual não identifica chats: publicação, token, conexão
+OAuth ou supportId não comprovam escolha humana nem associação a uma conversa.
+Regressões verificam a prioridade textual e a entrega do treinamento via MCP;
+não certificam obediência de um modelo real. Não altera publicações/concessões.
+
 O guia MSSQL e o tópico SQL explicitam que `GROUPING SETS` e `GROUPING()` não
 são suportados pelo validador atual. Resumos usam `GROUP BY` simples no grão
 publicado; total geral pode exigir consulta separada autorizada com o mesmo
