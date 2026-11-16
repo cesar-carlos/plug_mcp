@@ -9,6 +9,16 @@ import { ERROR_CODES } from "../../src/domain/errors/error-codes.js";
 import { DomainError } from "../../src/domain/errors/domain-error.js";
 
 describe("sql-ast", () => {
+  it("preserva a recusa de subtotais MSSQL não suportados e aceita agrupamento simples", () => {
+    const base = "SELECT p.unit, SUM(p.amount) total FROM products p";
+    expect(() => parseSelect(`${base} GROUP BY p.unit`, "mssql")).not.toThrow();
+    expect(() => parseSelect(`${base} GROUP BY GROUPING SETS ((p.unit), ())`, "mssql")).toThrow(
+      expect.objectContaining({ code: "INVALID_SQL" }),
+    );
+    expect(() =>
+      parseSelect("SELECT GROUPING(p.unit) subtotal FROM products p GROUP BY p.unit", "mssql"),
+    ).toThrow(expect.objectContaining({ code: "SQL_EFEITO_COLATERAL" }));
+  });
   it("distinguishes a DATEDIFF datepart from identically named columns in joined tables", () => {
     const ast = parseSelect(
       "SELECT DATEDIFF(day, a.day, b.fim) AS dias FROM a JOIN b ON a.id = b.id WHERE DATEDIFF_BIG(dd, day, b.fim) > 0",

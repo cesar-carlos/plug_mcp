@@ -1,4 +1,4 @@
-import { RANKING_CUTOFF_GUIDANCE } from "./sql-summary-guidance.js";
+import { MSSQL_SUBTOTAL_GUIDANCE, RANKING_CUTOFF_GUIDANCE } from "./sql-summary-guidance.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
 import type { Dialeto } from "../../domain/entities/dialeto.js";
 import { guiaDialeto, type GuiaDialeto } from "../use-cases/shared/guia-dialeto.js";
@@ -19,7 +19,8 @@ export const personaDialectGuide = (
           "SELECT adaptável com projeção explícita e colunas publicadas; SELECT * não é permitido. Para uma página, use options.page e options.pageSize com ORDER BY, sem corte explícito; uma página não representa o total. Leia completeness e provenance." +
           (dialect === "mssql"
             ? " COUNT_BIG(*) e COUNT_BIG(expressão) preservam bigint; DISTINCT/ALL explícitos ainda não são aceitos. Em JOIN, use COUNT_BIG(alias.chave) não nula da origem publicada quando esse for o grão desejado; estrela não comprova origem. Contagem de expressão ignora NULL. Não substitua por SUM(1) nem remova vínculos para contornar AGREGACAO_INSEGURA. A função não concede acesso novo. Exemplo sintético: vendas v N:1 tipos t com chave completa (empresa,tipo): para contar vendas, COUNT_BIG(v.id) com id não nula explicita a origem; COUNT_BIG(t.id) conta uma coluna da dimensão multiplicável, e COUNT_BIG(*) não explicita origem. A chave simples só é equivalente a contar linhas se não nula no conjunto contado; LEFT JOIN, nulos e outro grão exigem revisão semântica. Não crie CONCAT de chave composta, DISTINCT ou filtros adicionais para forçar aceitação. EXISTS com chave completa só vale se o caminho publicado, os filtros e o validador permitirem; sua sugestão não comprova equivalência nem autorização."
-            : ""),
+            : "") +
+          (dialect === "mssql" ? ` ${MSSQL_SUBTOTAL_GUIDANCE}` : ""),
       }
     : (() => {
         throw new PersonaV2Error("CAPABILITY_UNAVAILABLE", "Firebird não é suportado.");

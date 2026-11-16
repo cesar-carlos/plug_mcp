@@ -15,6 +15,21 @@ import {
 } from "../../../scripts/persona-training-budgets.js";
 
 describe("public persona training topics", () => {
+  it("explicita limites de subtotais MSSQL sem contornar completude ou autorização", () => {
+    for (const guide of [
+      JSON.stringify(trainingTopic("sql")),
+      personaDialectGuide("mssql").limite,
+    ]) {
+      expect(guide).toContain("GROUPING SETS");
+      expect(guide).toContain("GROUPING()");
+      expect(guide).toContain("GROUP BY simples");
+    }
+    const dialect = personaDialectGuide("mssql").limite;
+    expect(dialect).toContain("mesmo recorte");
+    expect(dialect).toContain("snapshot simultâneo");
+    expect(dialect).toContain("página parcial");
+    expect(personaDialectGuide("postgres").limite).not.toContain("GROUPING SETS");
+  });
   it("orienta COUNT_BIG sem dispensar origem e limites do parser", () => {
     expect(JSON.stringify(trainingTopic("sql"))).toContain("COUNT_BIG exige origem");
     const sql = personaDialectGuide("mssql").limite;

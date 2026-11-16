@@ -1,3 +1,6 @@
+export const MSSQL_SUBTOTAL_GUIDANCE =
+  "MSSQL: o validador não suporta GROUPING SETS/GROUPING(). Use GROUP BY simples no grão publicado. Total geral separado exige autorização, mesmo recorte e parâmetros; valide o novo plano, sem retry automático. Não há snapshot simultâneo entre chamadas. Preserve nulos e unidades; não some unidades diferentes nem página parcial. Confira completeness de cada leitura; sem plano equivalente permitido, informe a limitação e solicite curadoria.";
+
 export const RANKING_CUTOFF_GUIDANCE =
   "Para exatamente N itens, pare ao reunir N na ordem publicada com desempate estável. Se o pedido incluir todos os empatados na posição N, compare a medida publicada da última posição e continue enquanto houver empate e pagination.hasNextPage for true. Pare na primeira medida diferente ou no fim confirmado. Se a continuação não puder ser conferida, informe que pode haver outros empatados.";
 
@@ -15,7 +18,7 @@ export const SQL_SUMMARY_GUIDANCE = `## Resumos SQL na fonte
 
 SELECT/WITH aceita quebras de linha; preserve recorte e parâmetros publicados.
 
-Calcule totais, contagens e resumos de uma fonte no banco com WHERE, GROUP BY e SUM/COUNT/MIN/MAX/AVG conforme o significado publicado; HAVING filtra grupos. Retorne dimensões e medidas necessárias, sem baixar detalhes para somar no chat. Detalhes solicitados seguem seus próprios limites. O plug_server encaminha ao plug_agente e o banco agrega; o hub não reescreve dialeto nem agrega resultados.
+Agregue na fonte com WHERE, GROUP BY e SUM/COUNT/MIN/MAX/AVG conforme a publicação; HAVING filtra grupos. Retorne só dimensões/medidas necessárias; detalhes mantêm seus limites, sem somar no chat. O hub encaminha ao agente; não reescreve dialeto nem agrega.
 
 ### Recorte e acesso
 
@@ -26,6 +29,8 @@ ${QUERY_SCOPE_PARAMS} Se a pergunta mudar o grão de vendas por produto para ven
 Antes de consultar, leia obter_skill, dialeto, medida, grão, chaves, cardinalidade, filtros e finalidades. Em SQL Server, use colunas/expressões físicas qualificadas no GROUP BY e no HAVING, nunca aliases de saída do mesmo SELECT. ORDER BY pode usar aliases únicos simples projetados; inclua desempate projetado e estável ao paginar. CTE/derivada só pode usar recursos e expressões aceitos no pacote e no validador. Valores ficam em params tipados. Preserve moeda, escala decimal, nulos, calendário e fuso treinados; para timestamps, use intervalo início inclusivo/fim exclusivo quando essa for a regra publicada. Não aplique CAST, arredondamento ou substituição de NULL para mascarar divergências. Previna overflow com CAST antes de SUM/AVG só com tipo e precisão publicados; CAST depois não resolve. AVG de médias de grupos não é média global: preserve soma e contagem compatíveis quando treinado.
 
 ### Grão e relacionamentos
+
+MSSQL: GROUPING SETS/GROUPING() não suportados. Use GROUP BY simples; para totais separados, leia o guia do dialeto.
 
 SQL Server: COUNT_BIG exige origem em JOIN; veja limites e nulos no guia do dialeto.
 

@@ -16,6 +16,11 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Treinamento MSSQL informa a ausência de GROUPING SETS/GROUPING no validador.
+Orientar GROUP BY simples e total separado autorizado, com recorte igual,
+completude e sem prometer snapshot simultâneo. Não relaxar linhagem/fanout ou
+inferir a sintaxe original apenas de parser_syntax e relato da IA.
+
 Contagem sem referência em JOIN não prova origem. Orientação pode sugerir chave não nula do grão publicado sob relação completa N:1/1:1; não escolher dimensão pela unicidade, contornar com SUM(1)/DISTINCT ou prometer EXISTS válido. Preservar guardas, nulos e significado.
 
 No MSSQL, somente o primeiro argumento de DATEADD/DATEDIFF/DATEDIFF_BIG, com três argumentos e unidade conhecida não qualificada, é datepart. Não remover colunas homônimas dos demais argumentos, filtros, projeções ou JOINs; não estender essa normalização a outros dialetos.

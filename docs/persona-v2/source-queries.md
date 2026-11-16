@@ -1,5 +1,17 @@
 # Consultas por fonte — contrato implementado
 
+O guia MSSQL e o tópico SQL explicitam que `GROUPING SETS` e `GROUPING()` não
+são suportados pelo validador atual. Resumos usam `GROUP BY` simples no grão
+publicado; total geral pode exigir consulta separada autorizada com o mesmo
+recorte. Não há garantia de snapshot simultâneo entre chamadas. Preservar nulos,
+unidades e completude, sem somar página parcial ou repetir automaticamente.
+O supportId `5592d423-23c6-4fb0-85d7-3725ff51db9b` registrou `parser_syntax`
+em SQL fornecido, estoque r35. A descrição da IA e a reprodução sintética
+mostram uma limitação compatível, mas não comprovam a sintaxe exata da tentativa
+original, que não é armazenada nos logs. O exemplo local de resumo por unidade
+foi aceito. Esta correção de orientação não altera publicações nem habilita
+agrupamentos avançados sem prova de linhagem, recorte e fanout.
+
 AGREGACAO_INSEGURA em contagem exige distinguir ausência de origem (COUNT/COUNT_BIG estrela ou constante) de coluna da dimensão multiplicada. Em vendas v N:1 tipos t por chave completa, COUNT_BIG(v.id) só representa linhas de venda se id não nula e o contrato comprovar esse grão; COUNT_BIG(t.id) não autoriza contar vendas pela dimensão. LEFT JOIN e nulos exigem revisão própria. A orientação de EXISTS não garante aceitação ou equivalência: preservar todos os filtros, recortes e elos publicados, sem inventar chave, DISTINCT ou concatenação. As recusas existentes permanecem; regressões sintéticas cobrem vínculo composto, origem explícita e coluna proibida.
 
 No MSSQL, `DATEADD(day, 1, CAST(:fim AS date))` reconhece `day` como

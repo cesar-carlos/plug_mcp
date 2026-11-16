@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Guia MSSQL e treinamento SQL explicitam limites de GROUPING SETS/GROUPING, orientando resumos simples e totais autorizados separados sem perder recorte, unidades ou completude. Regressões preservam as recusas do validador.
+
 - Fixed: OPERATOR_RUN_UNCONFIRMED passa a informar etapa, causa segura, supportId local e última operação validada; distingue falhas de canal, SSH e identidade sem expor conteúdo privado, atribuir o cleanup como causa ou permitir replay.
 
 - Fixed: Fixtures de vendas declaram DATETIME2(3) explicitamente para preservar horários e milissegundos. DATE legado permanece restrito a datas; o executor recusa perda de precisão e exige UTC nos timestamps sintéticos.
