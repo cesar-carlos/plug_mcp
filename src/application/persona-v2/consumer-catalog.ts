@@ -1,4 +1,5 @@
 import { KNOWLEDGE_GAP_DISCOVERY } from "./interaction-error-guidance.js";
+import { PERSONA_V2_TRAINING_BASE } from "./training-base.js";
 import { KnowledgeGraphCache, orderedGraphItems } from "./knowledge-graph-cache.js";
 import type { PersonaServices, PersonaTransaction } from "../../domain/ports/persona-v2.port.js";
 import type { PhysicalQueryFence } from "../../domain/ports/persona-query-reuse.port.js";
@@ -100,6 +101,7 @@ export interface AuthorizedKnowledgeVersion {
   profileHash?: string;
 }
 export interface PublishedQueryContext {
+  queryGuidance: { pagination: typeof PERSONA_V2_TRAINING_BASE.queryContract.pagination };
   personaContext: Pick<Persona, "id" | "name" | "specialty" | "instructions">;
   limits: QueryLimits;
   sharedKnowledge?: QueryPackage["sharedKnowledge"];
@@ -1003,6 +1005,7 @@ export class PersonaConsumerCatalog {
       const pkg = publication.package;
       const training = queryTrainingSchema.parse(publication.package.training);
       return {
+        queryGuidance: { pagination: PERSONA_V2_TRAINING_BASE.queryContract.pagination },
         personaContext,
         id: publication.skillId,
         publicationId: publication.id,

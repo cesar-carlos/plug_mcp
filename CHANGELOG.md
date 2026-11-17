@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Leitura de skill de consulta entrega orientação atual de paginação em queryGuidance, sem depender de obter_treinamento_base nem republicar SQL.
+
 - Fixed: Guia de paginação explicita ORDER BY por alias externo sem prefixo em CTE e distingue resumo paginado de total escalar, com regressões sintéticas sem ampliar o validador.
 
 - Corrigida a entrega das orientações atuais da persona em `obter_skill` e no recurso de skill, separadas do pacote imutável e sob a mesma autorização, sem exigir republicação do SQL.

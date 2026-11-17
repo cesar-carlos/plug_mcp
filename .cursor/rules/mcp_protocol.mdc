@@ -6,6 +6,10 @@ alwaysApply: false
 
 # Protocolo MCP
 
+obter_skill de consulta entrega queryGuidance.pagination atual separada da
+referência commonTraining publicada. Não depender de leitura prévia do guia,
+reescrever pacote/hash ou ampliar autoridade; validar entrega pelo transporte MCP.
+
 Treinamento de paginação com CTE distingue resumo por grupos de total escalar:
 grupos paginados ordenam por aliases externos simples sem prefixo e preservam
 desempate/opções; total escalar dispensa paginação. Regressão deve manter recusas

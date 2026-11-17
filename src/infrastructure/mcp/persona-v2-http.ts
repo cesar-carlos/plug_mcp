@@ -1035,7 +1035,7 @@ export const createPersonaV2McpHandler = (
             "obter_skill",
             {
               description:
-                "Pacote publicado concedido e personaContext atual: leia suas instructions antes de consultar e apresentar a resposta. Orientação não amplia permissões. Rascunhos não são expostos.",
+                "Pacote publicado concedido e personaContext atual: leia instructions e queryGuidance antes de consultar e apresentar a resposta. Orientação não amplia permissões. Rascunhos não são expostos.",
               inputSchema: z.strictObject({
                 slug: z
                   .string()

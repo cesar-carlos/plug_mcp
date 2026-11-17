@@ -2,6 +2,14 @@
 
 ## Contexto atual na leitura de skills
 
+Para consultas, a resposta também inclui `queryGuidance.pagination` atual, mesmo
+sem uma chamada separada a `obter_treinamento_base`. O `commonTraining` publicado
+continua sendo a referência histórica de versão/hash, não o conteúdo atual do guia.
+A orientação dinâmica não entra no hash da publicação nem altera parâmetros,
+SQL, permissões ou perfil. Totais escalares dispensam paginação; resumos por
+grupos paginados usam aliases externos simples. Teste MCP cobre a entrega real
+desse texto, sem depender de uma chamada prévia ao guia.
+
 `obter_skill` e o recurso `skill://` incluem `personaContext` com `id`, `name`,
 `specialty` e `instructions` atuais da persona autenticada. A leitura ocorre na
 mesma transação de autorização do pacote, com revalidação antes da entrega.

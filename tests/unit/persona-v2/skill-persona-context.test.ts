@@ -125,6 +125,12 @@ it("delivers current persona instructions with obter_skill without a separate co
       ),
     );
   const first = await read();
+  expect(first.queryGuidance).toMatchObject({
+    pagination: { instructions: expect.stringContaining("CTE: ORDER BY saldo, não s.saldo") },
+  });
+  expect(first.queryGuidance).toMatchObject({
+    pagination: { instructions: expect.stringContaining("Total único: sem page/pageSize") },
+  });
   expect(first.personaContext).toEqual({
     id: f.identity.personaId,
     name: "Synthetic persona",
@@ -138,6 +144,7 @@ it("delivers current persona instructions with obter_skill without a separate co
   expect(second.publicationId).toBe(first.publicationId);
   expect(second.sqlModel).toBe(first.sqlModel);
   expect(f.publication.package).not.toHaveProperty("personaContext");
+  expect(f.publication.package).not.toHaveProperty("queryGuidance");
   expect(JSON.stringify(second)).not.toContain("PRIVATE_TOKEN_HASH");
 });
 
