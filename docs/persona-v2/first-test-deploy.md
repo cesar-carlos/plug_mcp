@@ -151,6 +151,18 @@ composição pelo procedimento de operação, preservando a identidade da imagem
 
 ## Envio e verificação no destino
 
+O receptor SSH remove somente `image.tar` da tentativa atual ao terminar, inclusive
+em falha de upload, validação ou deploy e nos sinais HUP/INT/TERM. A limpeza não
+repete efeitos nem mascara o código de falha original; se apenas a limpeza falhar,
+a tentativa retorna erro. Não há exclusão recursiva, Docker prune ou remoção de
+backups, configuração privada, bancos e volumes. O workspace e os arquivos Compose
+permanecem disponíveis para operação e recuperação, pois containers podem referenciá-los.
+O arquivo de transporte não é backup: a imagem carregada e o artefato do CI mantêm
+seus ciclos de retenção próprios. SIGKILL, queda de energia ou falha do filesystem
+podem impedir o trap; resíduos nesses casos exigem inspeção explícita, sem varredura
+automática de diretórios de outras tentativas. Para ativar essa proteção, atualizar
+a cópia instalada do receptor pelo procedimento acima; push não a substitui.
+
 O CI executa `verify` (release e runtime), `persistence` (contrato do hub,
 migrations, isolamento PostgreSQL e cache Redis) e `browser` (console,
 onboarding e OAuth) em paralelo, cada um com serviços descartáveis próprios.

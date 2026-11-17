@@ -6,6 +6,12 @@ alwaysApply: false
 
 # Testes
 
+Limpeza do receptor SSH de deploy remove apenas o arquivo de transporte da própria
+tentativa. Regressões executam Bash com dependências isoladas e cobrem sucesso,
+upload parcial, falha, sinal e falha da limpeza, preservando status, Compose,
+backups, configuração, bancos e volumes. Não adicionar prune ou remoção recursiva
+dos workspaces referenciados pelos containers.
+
 Diagnóstico do operador SSH usa causas fechadas e etapas locais; testar streams
 reais isolados, deadlines com relógio falso e wrapper sem rede. Preservar primeira
 causa durante cleanup, identidade de resultado e ausência de replay. Nunca

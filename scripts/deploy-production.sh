@@ -19,7 +19,25 @@ cd "$repository"
 git fetch origin main >&2
 git merge-base --is-ancestor "$revision" origin/main
 release=$(mktemp -d /var/tmp/se7e-persona-test.XXXXXXXX)
-# Preserve private artifacts on failure. Never stash or change the server checkout.
+readonly release
+# The archive is transport-only. Keep the workspace/Compose files for recovery,
+# including on failure, but never retain the large upload after this attempt.
+cleanup_archive() {
+  local status=$?
+  trap - EXIT
+  if [ -f "$release/image.tar" ] && [ ! -L "$release/image.tar" ]; then
+    if ! rm -- "$release/image.tar"; then
+      echo 'Could not remove deployment transport archive.' >&2
+      if [ "$status" -eq 0 ]; then status=1; fi
+    fi
+  fi
+  exit "$status"
+}
+trap cleanup_archive EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+# Never stash or change the server checkout.
 echo "Test deployment workspace: $release" >&2
 git archive "$revision" | tar -x -C "$release"
 cd "$release"
