@@ -71,6 +71,8 @@ export const extractRpcError = (
   hubRetryable?: boolean;
   hubCategory?: string;
   sqlstate?: string;
+  nativeCode?: number;
+  failureCode?: string;
 } => {
   const root = asRecord(body);
   const response = asRecord(root?.response) ?? asRecord(root?.data) ?? root;
@@ -86,7 +88,13 @@ export const extractRpcError = (
   const userMessage = readString(data?.user_message);
   const hubRetryable = typeof data?.retryable === "boolean" ? data.retryable : undefined;
   const hubCategory = readString(data?.category);
-  const sqlstate = readString(data?.sqlstate, data?.sql_state, data?.sqlState);
+  const sqlstate = readString(
+    data?.sqlstate,
+    data?.sql_state,
+    data?.sqlState,
+    data?.odbc_sql_state,
+  );
+  const nativeCode = readNumber(data?.odbc_native_code);
   const retryAfterMs =
     readDelay(data?.retry_after_ms) ??
     (typeof data?.reset_at === "string" && resetTimestampSchema.safeParse(data.reset_at).success
@@ -102,6 +110,8 @@ export const extractRpcError = (
     hubRetryable,
     hubCategory,
     sqlstate,
+    nativeCode,
+    failureCode: readString(data?.failure_code),
   };
 };
 
@@ -499,6 +509,25 @@ const classifyPlugServerFailure = (
 ): DomainError => {
   const rpc = extractRpcError(failure.body);
   const rpcHaystack = rpcHaystackOf(rpc);
+  if (
+    failure.status === 200 &&
+    rpc.code === -32102 &&
+    (rpc.failureCode === "SOURCE_DISCOVERY_UNAVAILABLE" ||
+      rpc.failureCode === "QUERY_RESPONSE_UNAVAILABLE")
+  ) {
+    return new DomainError({
+      code: ERROR_CODES.PLUG_SERVER_ERROR,
+      message:
+        rpc.failureCode === "QUERY_RESPONSE_UNAVAILABLE"
+          ? "O agente não conseguiu preparar a resposta da consulta."
+          : "O agente não conseguiu concluir o processamento da consulta verificada.",
+      hint: "Isso não comprova SQL inválido nem ausência de execução. Não repita automaticamente, altere o SQL ou peça reconexão. Encaminhe o supportId ao responsável para conferir o diagnóstico do agente.",
+      retryable: false,
+      source: HUB_ERROR_SOURCE.policy,
+      stage,
+      details: { rpcCode: rpc.code, failureCode: rpc.failureCode },
+    });
+  }
   const reason = (rpc.reason ?? "").toLowerCase();
   const isInvalidPayload = rpc.code === -32009 && reason === "invalid_payload";
   // Textual legacy SQL diagnostics cannot override an explicit non-SQL RPC or HTTP failure.
@@ -800,6 +829,9 @@ export const mapPlugServerFailure = (
       ...asRecord(mapped.details),
       httpStatus: failure.status,
       ...(sqlReason ? { sqlReason } : {}),
+      ...(mapped.source === HUB_ERROR_SOURCE.sqlEngine
+        ? safeErrorDetails({ nativeCode: extractRpcError(failure.body).nativeCode })
+        : {}),
     },
   });
 };

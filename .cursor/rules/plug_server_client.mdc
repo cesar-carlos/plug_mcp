@@ -7,6 +7,16 @@ alwaysApply: false
 
 # Plug-server
 
+`SOURCE_DISCOVERY_UNAVAILABLE` e `QUERY_RESPONSE_UNAVAILABLE` explícitos em
+RPC -32102/HTTP 200 são falhas de processamento do agente, não sintaxe SQL.
+Conservar failureCode fechado/supportId, recusar replay e não inferir se o
+SELECT executou pelo nome genérico da falha. HTTP de autenticação prevalece.
+
+Diagnóstico SQL aceita `odbc_sql_state` do agente e preserva `odbc_native_code`
+como `nativeCode` somente na origem sql_engine, inteiro de 32 bits. SQLSTATE
+mantém formato fechado de cinco caracteres. Correlacionar pelo supportId sem
+mensagens nativas; código isolado não comprova causa nem autoriza replay.
+
 Recusa atual de acesso ao agente prevalece sobre solicitação histórica aprovada.
 O fallback pode informar estados não autorizados; aprovação histórica após 403
 vira unknown, nunca approved. Não inferir revogação ou recuperar concessões.

@@ -39,7 +39,12 @@ export function safeErrorDetails(value: unknown): Record<string, string | number
   if (raw.outcome_unknown === true) result.outcome_unknown = true;
   if (
     typeof raw.failureCode === "string" &&
-    ["SOURCE_IDENTITY_MISMATCH", "SOURCE_STRUCTURE_MISMATCH"].includes(raw.failureCode)
+    [
+      "SOURCE_IDENTITY_MISMATCH",
+      "SOURCE_STRUCTURE_MISMATCH",
+      "SOURCE_DISCOVERY_UNAVAILABLE",
+      "QUERY_RESPONSE_UNAVAILABLE",
+    ].includes(raw.failureCode)
   )
     result.failureCode = raw.failureCode;
   if (
@@ -71,5 +76,12 @@ export function safeErrorDetails(value: unknown): Record<string, string | number
     result.sqlReason = raw.sqlReason;
   if (typeof raw.sqlstate === "string" && /^[0-9A-Z]{5}$/.test(raw.sqlstate))
     result.sqlstate = raw.sqlstate;
+  if (
+    typeof raw.nativeCode === "number" &&
+    Number.isInteger(raw.nativeCode) &&
+    raw.nativeCode >= -2147483648 &&
+    raw.nativeCode <= 2147483647
+  )
+    result.nativeCode = raw.nativeCode;
   return result;
 }

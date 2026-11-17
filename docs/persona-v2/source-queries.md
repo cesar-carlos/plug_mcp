@@ -428,6 +428,19 @@ O log inclui `publicationIds` e `publicationRevisions` na mesma ordem, obtidos d
 
 Falhas `INVALID_SQL` do motor conservam `details.sqlReason` no retorno e no log correlacionado: `identifier_binding`, `order_by_context`, `identifier_not_found`, `sql_unclassified`, `driver_diagnostic_missing` ou `unclassified_engine_error`. A categoria deriva do diagnóstico já reconhecido pelo adapter, não de um campo livre recebido do hub. As duas últimas indicam limite do diagnóstico; nenhuma categoria comprova culpa da paginação ou autoriza repetir a consulta. Mensagens nativas, SQL e identificadores continuam omitidos. Logs antigos não permitem reconstruir detalhes descartados.
 
+O adapter também lê `odbc_sql_state` e `odbc_native_code` estruturados do agente.
+Recusas RPC `-32102` com `failure_code` explícito `SOURCE_DISCOVERY_UNAVAILABLE`
+ou `QUERY_RESPONSE_UNAVAILABLE` viram `PLUG_SERVER_ERROR`, não `INVALID_SQL`.
+O código fechado é preservado como `failureCode` pelo supportId. O primeiro
+também pode envolver processamento posterior ao SELECT em agentes anteriores;
+não comprova falha antes da execução. Nenhum deles autoriza replay, alteração
+do SQL ou reconexão. Falhas HTTP de autenticação continuam prevalecendo.
+O retorno e o log pelo supportId conservam `sqlstate` (cinco caracteres
+alfanuméricos maiúsculos) e `nativeCode` (inteiro de 32 bits, somente para
+origem `sql_engine`). Não copia `odbc_message` nem infere a causa por um código
+nativo sem contexto do motor. Essa correção não recupera códigos descartados
+em logs anteriores e não autoriza repetir a consulta.
+
 Para `AGREGACAO_INSEGURA` local (`source: sql`), o evento técnico registra
 `aggregationReason` junto ao `supportId`: `invalid_declared_grain` (chaves do
 grão incompatíveis), `join_grain_unproven` (JOIN sem prova de origem),
