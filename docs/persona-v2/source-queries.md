@@ -1,5 +1,14 @@
 # Consultas por fonte — contrato implementado
 
+Em resumo paginado com CTE, use aliases únicos da projeção externa no `ORDER BY`,
+sem prefixo: `saldo DESC, fornecedor`, não `s.saldo DESC, s.fornecedor`.
+Preserve o grão, filtros, desempate completo e `options.page/pageSize`; não retire
+a paginação de um resumo por grupos para contornar a recusa. Um total escalar
+é outro plano: não precisa de paginação nem ordenação. A orientação está na base
+comum e nos tópicos `sql` e `plug-server`. Regressão sintética cobre a recusa
+original, a ordem corrigida, aliases ausentes e posições numéricas. Não amplia
+o contrato publicado nem certifica execução em motor nativo.
+
 A instrução de entrada prioriza `obter_contexto_persona` atualizado antes de
 anunciar recorte ou escolher parâmetros. Confirmação exigida pelo perfil deve
 ocorrer na conversa atual, sem opção predefinida ou memória de outro chat como

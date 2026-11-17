@@ -133,7 +133,7 @@ const content = {
       nextPageExample: { options: { page: 2, pageSize: 20 } },
       instructions:
         LIST_PAGINATION_GUIDANCE +
-        " Total: omita options. Exemplo após page=1/pageSize=20/hasNextPage=true.",
+        " CTE: ORDER BY saldo, não s.saldo. Total único: sem page/pageSize.",
     },
     input:
       "consultar_dados: fonteId, skillIds, sql opcional, params tipados separados e options com page, pageSize, maxRows, maxBytes, timeoutMs. Nunca use page_size/max_rows no contrato MCP v2.",

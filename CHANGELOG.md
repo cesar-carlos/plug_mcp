@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Guia de paginação explicita ORDER BY por alias externo sem prefixo em CTE e distingue resumo paginado de total escalar, com regressões sintéticas sem ampliar o validador.
+
 - Corrigida a entrega das orientações atuais da persona em `obter_skill` e no recurso de skill, separadas do pacote imutável e sob a mesma autorização, sem exigir republicação do SQL.
 
 - Fixed: Falhas explícitas de descoberta/materialização no agente deixam de ser classificadas como INVALID_SQL; diagnóstico seguro por supportId sem replay ou reconexão.

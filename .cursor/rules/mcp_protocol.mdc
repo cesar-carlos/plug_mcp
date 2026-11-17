@@ -6,6 +6,11 @@ alwaysApply: false
 
 # Protocolo MCP
 
+Treinamento de paginação com CTE distingue resumo por grupos de total escalar:
+grupos paginados ordenam por aliases externos simples sem prefixo e preservam
+desempate/opções; total escalar dispensa paginação. Regressão deve manter recusas
+de alias ausente/posição numérica, sem relaxar escopo ou ampliar publicações.
+
 Na v2, recusa de permissão por tool não implica reconexão OAuth. Reconferir
 autenticação antes do challenge; falha de infraestrutura não comprova token
 inválido. Preservar erro/supportId, recusa e ausência de retry da operação.
