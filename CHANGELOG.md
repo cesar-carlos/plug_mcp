@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Orientação comum de listagens com páginas de 30 ou teto menor, sondagem por metadados e contagem autorizada sem confundir páginas com totais.
+
 - Fixed: Instrução inicial prioriza contexto atualizado antes de selecionar recortes e exige confirmação na conversa quando prevista no perfil, sem usar memória de outro chat como escolha. Não introduz gate técnico ou identificação de conversas.
 
 - Fixed: Guia MSSQL e treinamento SQL explicitam limites de GROUPING SETS/GROUPING, orientando resumos simples e totais autorizados separados sem perder recorte, unidades ou completude. Regressões preservam as recusas do validador.

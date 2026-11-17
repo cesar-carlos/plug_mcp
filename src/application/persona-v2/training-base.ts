@@ -1,3 +1,4 @@
+import { LIST_PAGINATION_GUIDANCE } from "./list-pagination-guidance.js";
 import {
   INTERACTION_ERROR_GUIDANCE,
   KNOWLEDGE_GAP_DISCOVERY,
@@ -90,7 +91,7 @@ const content = {
     "Responda fatos, valores e KPIs somente com resultados efetivamente retornados e regras publicadas. Nunca invente registros nem complete valores ausentes por suposição. Informe fonte, período, filtros relevantes e limitações. Indique provenance.readAt como horário da leitura original. Para reuse.kind cache ou singleflight, preserve esse horário. O período dos lançamentos vem dos filtros de negócio, e o horário de leitura por si só não comprova a última atualização do ERP. Para um SUM sem GROUP BY, pode voltar uma linha com total NULL tanto em recorte vazio como quando todos os valores são nulos. Se a distinção for necessária e os usos publicados permitirem, peça junto COUNT(*) para contar linhas e COUNT(campo) para contar valores presentes no mesmo recorte. Conte vendas somente no grão publicado de venda. Apresente zero monetário quando o valor retornado ou a regra publicada o justificar. Zero linhas só descreve a consulta efetuada; erro e negação de acesso não provam ausência. Leia completeness, pagination e provenance; uma página ou resultado parcial não representa o total. Divergências entre bases exigem explicação conforme treinamento, não escolha arbitrária de um valor.",
   queryContract: {
     parameters:
-      "Envie somente marcadores públicos usados pelo SELECT escolhido, mesmo que a skill declare outros. Informe cada marcador obrigatório. Um marcador opcional usado no SQL e omitido de params recebe NULL; o predicado continua ativo conforme o SQL publicado. Confira a semântica do filtro antes de omitir. Para IN, o schema aceita apenas valores escalares em params: use marcadores individuais já declarados quando o modelo os oferecer. Se a lista solicitada não couber nesse contrato, sinalize a lacuna; não interpole valores no SQL.",
+      "Envie só marcadores públicos do SELECT escolhido, incluindo os obrigatórios. Opcional usado mas omitido recebe NULL; o predicado continua ativo: confira sua semântica. IN aceita params escalares, com marcadores individuais publicados. Lista incompatível exige informar a lacuna, nunca interpolar valores.",
     ranking: `Para “mais vendidos”, confira qual medida a pergunta ou a skill define: unidades, faturamento ou número de vendas. Quando houver mais de uma interpretação válida, esclareça o critério. Agregue no grão publicado antes de ordenar. COUNT(*) conta linhas; para quantidade vendida use a medida de unidades publicada. Explicite o critério mesmo quando exibir outras medidas ao lado. ${RANKING_CUTOFF_GUIDANCE}`,
     absence: {
       instructions:
@@ -121,17 +122,18 @@ const content = {
     },
     publishedModelExample: {
       scope:
-        "Exemplo sintético de argumentos. Substitua o ID pelo da skill concedida e os parâmetros pelos marcadores públicos do modelo. Nesta fixture, inicio é date em formato ISO, minimo é decimal em texto com ponto e ativo é boolean JSON. Use o tipo publicado de cada marcador.",
+        "Fixture: use ID da skill concedida e marcadores públicos. Aqui, inicio é date em formato ISO, minimo é decimal em texto com ponto e ativo é boolean JSON. Use o tipo publicado de cada marcador.",
       arguments: {
         skillIds: ["11111111-1111-4111-8111-111111111111"],
         params: { inicio: "2026-01-01", minimo: "10.50", ativo: true },
       },
     },
     pagination: {
-      firstPage: { options: { page: 1, pageSize: 50 } },
+      firstPage: { options: { page: 1, pageSize: 30 } },
       nextPageExample: { options: { page: 2, pageSize: 20 } },
       instructions:
-        "Fragmentos de argumentos para consultar_dados e validar_consulta. Para um total agregado, omita options. Para uma lista, comece com firstPage e uma ordem estável. O exemplo seguinte pressupõe que a primeira resposta trouxe pagination.page = 1, pagination.pageSize = 20 e pagination.hasNextPage = true. Use sempre os valores reais da resposta: próxima page = pagination.page + 1 e pageSize = pagination.pageSize. Preserve fonte, skills, SQL, params e demais limites. Avance somente se precisar de mais linhas. Se hasNextPage for false, pare; sem pagination, não adivinhe a próxima página. Em erro, informe o supportId e a orientação recebida.",
+        LIST_PAGINATION_GUIDANCE +
+        " Total: omita options. Exemplo após page=1/pageSize=20/hasNextPage=true.",
     },
     input:
       "consultar_dados: fonteId, skillIds, sql opcional, params tipados separados e options com page, pageSize, maxRows, maxBytes, timeoutMs. Nunca use page_size/max_rows no contrato MCP v2.",

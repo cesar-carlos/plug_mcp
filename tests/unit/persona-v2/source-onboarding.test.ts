@@ -41,7 +41,7 @@ it("exemplos de paginação do tópico SQL respeitam o contrato e o tamanho efet
     minimo: null,
   });
   const { firstPage, nextPageExample } = contract.pagination;
-  expect(sourceQuerySchema.parse(firstPage).options).toEqual({ page: 1, pageSize: 50 });
+  expect(sourceQuerySchema.parse(firstPage).options).toEqual({ page: 1, pageSize: 30 });
   expect(sourceQuerySchema.parse(nextPageExample).options).toEqual({ page: 2, pageSize: 20 });
 });
 

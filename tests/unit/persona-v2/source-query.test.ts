@@ -1210,3 +1210,46 @@ it.each([true, false])(
     }
   },
 );
+
+it.each([0, 29, 30, 31, 60, 61])(
+  "preserva sondagem e continuidade recebidas para %i linhas sem inferir total",
+  async (total) => {
+    const f = fixture();
+    const pages = Math.max(1, Math.ceil(total / 30));
+    for (let page = 1; page <= pages; page++) {
+      const offset = (page - 1) * 30;
+      const rows = Array.from({ length: Math.min(30, Math.max(0, total - offset)) }, (_, i) => ({
+        id: offset + i + 1,
+        amount: "1.00",
+      }));
+      f.execute.mockResolvedValueOnce({
+        columns: ["id", "amount"],
+        rows,
+        truncated: false,
+        pagination: {
+          page,
+          pageSize: 30,
+          hasNextPage: offset + 30 < total,
+          hasPreviousPage: page > 1,
+        },
+      });
+      const result = await f.service.run(identity, {
+        params: { minimum: 0 },
+        options: { page, pageSize: 30 },
+      });
+      expect(result.pagination).toEqual({
+        page,
+        pageSize: 30,
+        hasNextPage: offset + 30 < total,
+        hasPreviousPage: page > 1,
+      });
+      expect(result.rows).toEqual(rows);
+      expect(result.completeness.complete).toBe(false);
+    }
+    expect(f.execute).toHaveBeenCalledTimes(pages);
+    expect(f.execute.mock.calls.map((c) => c[2].page)).toEqual(
+      Array.from({ length: pages }, (_, i) => i + 1),
+    );
+    expect(new Set(f.execute.mock.calls.map((c) => c[0])).size).toBe(1);
+  },
+);

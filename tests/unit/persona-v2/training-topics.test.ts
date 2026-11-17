@@ -16,6 +16,29 @@ import {
 } from "../../../scripts/persona-training-budgets.js";
 
 describe("public persona training topics", () => {
+  it("orienta sondagem de 30 linhas sem inventar totais ou continuidade", () => {
+    expect(PERSONA_V2_TRAINING_BASE.queryContract.pagination.firstPage.options).toEqual({
+      page: 1,
+      pageSize: 30,
+    });
+    for (const guidance of [PERSONA_V2_TRAINING_BASE.queryContract.pagination.instructions]) {
+      for (const phrase of [
+        "exatamente 30",
+        "teto efetivo menor",
+        "TOP 31",
+        "hasPreviousPage",
+        "mudança de filtro",
+        "bytes",
+        "mesmo grão",
+        "ceil(total / pagination.pageSize)",
+        "0 páginas",
+        "sem prometer botões",
+        "tempo observado",
+        "ABC",
+      ])
+        expect(guidance).toContain(phrase);
+    }
+  });
   it("prioriza contexto atual e confirmação nesta conversa antes de escolher recorte", () => {
     const first = PERSONA_V2_INSTRUCTIONS.trim().split("\n")[0]!;
     expect(first).toContain("obter_contexto_persona");
