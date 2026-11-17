@@ -534,3 +534,10 @@ Na prévia do responsável, conflitos de política de coluna com outra publicaç
 Listagens começam com options {page:1,pageSize:30}, ou teto efetivo menor. A primeira página e pagination.hasNextPage são a sondagem; exatamente 30 linhas não prova mais de 30. Não misture TOP 31 ou OFFSET manual com paginação gerenciada. Use ordem única estável no grão, com desempate publicado. Ofereça próxima/anterior por texto, sem prometer botões; use os metadados reais de página e tamanho efetivo, avance somente com hasNextPage true e volte somente com hasPreviousPage true. Preserve fonte, publicações, SQL, parâmetros, filtros e limites; mudança de filtro reinicia na página 1. Sem paginação retornada, não invente continuidade. Truncamento ou limite de bytes não prova término, nem autoriza contornar tetos. Contagem adicional só quando o usuário pedir total/páginas ou ela for necessária e autorizada; conte o mesmo grão ou grupos e recorte, sem inventar COUNT nem somar páginas para calcular totais ou ABC. Com total completo comprovado, páginas = ceil(total / pagination.pageSize); total zero significa 0 páginas. Sem contagem, diga “página 1, há mais” quando hasNextPage true, sem inventar número de páginas. Informe somente tempo observado e provenance.readAt quando disponível; páginas e contagem não garantem snapshot simultâneo.
 
 Esta orientação usa a paginação entregue pela fonte; o MCP não calcula próxima página pelo número de linhas. O agente de execução faz lookahead de uma linha, devolve a página e metadados. Testes com gateway simulado verificam preservação desses metadados, não certificam execução nativa.
+
+A primeira ação de uma listagem é ler a primeira página autorizada; contagem não
+é pré-requisito. A página atual é a última exibida, inclusive ao voltar.
+Próxima = atual + 1 e anterior = atual - 1, condicionadas aos metadados reais.
+Exemplo: 1 → 2 → 1 → próxima 2, nunca a maior página visitada + 1.
+Mudança de filtro reinicia a navegação na página 1. Estas são orientações para a
+IA cliente, sem estado de conversa no servidor ou mudança das guardas SQL.

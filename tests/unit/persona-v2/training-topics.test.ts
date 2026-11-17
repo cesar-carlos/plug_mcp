@@ -16,6 +16,21 @@ import {
 } from "../../../scripts/persona-training-budgets.js";
 
 describe("public persona training topics", () => {
+  it.each([undefined, "sql", "plug-server"] as const)(
+    "guia %s evita contagem preventiva e salto após voltar uma página",
+    (topic) => {
+      const guide = trainingTopic(topic)
+        .queryContract as typeof PERSONA_V2_TRAINING_BASE.queryContract;
+      const text = guide.pagination.instructions;
+      expect(text).toContain("Liste primeiro; contagem não é pré-requisito");
+      expect(text).toContain("Atual = última página exibida, inclusive ao voltar");
+      expect(text).toContain("próxima=atual+1, anterior=atual-1");
+      expect(text).toContain("1→2→1→2, nunca maior visitada+1");
+      expect(text).toContain("hasNextPage true");
+      expect(text).toContain("hasPreviousPage true");
+      expect(text).toContain("mudança de filtro reinicia página 1");
+    },
+  );
   it("orienta sondagem de 30 linhas sem inventar totais ou continuidade", () => {
     expect(PERSONA_V2_TRAINING_BASE.queryContract.pagination.firstPage.options).toEqual({
       page: 1,

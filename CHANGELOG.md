@@ -11,6 +11,8 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Guia comum inicia listagens sem contagem prévia e usa a última página exibida para próxima/anterior, evitando saltos após voltar.
+
 - Orientação comum de listagens com páginas de 30 ou teto menor, sondagem por metadados e contagem autorizada sem confundir páginas com totais.
 
 - Fixed: Instrução inicial prioriza contexto atualizado antes de selecionar recortes e exige confirmação na conversa quando prevista no perfil, sem usar memória de outro chat como escolha. Não introduz gate técnico ou identificação de conversas.

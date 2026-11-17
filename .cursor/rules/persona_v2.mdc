@@ -667,3 +667,5 @@ limpa o formulário; resposta perdida não repete a tentativa. Contrato: console
 Downloads de anexos retornam 403 sem challenge quando a autenticação passou mas a leitura foi recusada. Access inválido retorna 401 e permite refresh pelo cliente.
 
 Listagens na base comum usam primeira página de 30 ou teto menor; metadados reais orientam navegação textual. Trinta linhas não provam próxima página. Contagem autorizada deve preservar grão/recorte; truncamento não comprova término e não permite ampliar limites. Contrato: docs/persona-v2/source-queries.md.
+
+Listagem não exige contagem prévia. A IA usa a última página exibida como atual, inclusive ao voltar; próxima não usa a maior página visitada. Testar a presença dessas regras na base completa e nos tópicos SQL/plug-server, preservando orçamento textual e metadados de navegação.
