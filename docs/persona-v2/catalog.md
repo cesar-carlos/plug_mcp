@@ -1,5 +1,18 @@
 # Catálogo e publicação em desenvolvimento
 
+## Contexto atual na leitura de skills
+
+`obter_skill` e o recurso `skill://` incluem `personaContext` com `id`, `name`,
+`specialty` e `instructions` atuais da persona autenticada. A leitura ocorre na
+mesma transação de autorização do pacote, com revalidação antes da entrega.
+O cliente deve aplicar essas orientações antes de consultar e apresentar resultados,
+mesmo quando não tiver chamado `obter_contexto_persona` separadamente.
+O contexto não integra o pacote/hash publicado nem amplia permissões; editar o
+perfil não exige republicar SQL. `listar_skills` conserva a lista resumida e
+`initialize` conserva instruções comuns, sem incorporar perfil privado.
+Entrega de instruções não comprova adesão da IA; não há auditoria de conteúdo
+ou confirmação de leitura pelo modelo. Não registrar o texto do perfil nos logs.
+
 ## Qualidade do treinamento e semântica comercial
 
 Novos previews/publicações de consulta com agregação, GROUP BY, JOIN (inclusive

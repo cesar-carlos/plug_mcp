@@ -2,7 +2,7 @@ import { INTERACTION_ERROR_GUIDANCE } from "./interaction-error-guidance.js";
 import { PERSONA_CONSUMER_GUIDANCE } from "./consumer-guidance.js";
 
 export const PERSONA_V2_INSTRUCTIONS = `
-Leia obter_contexto_persona atualizado antes de anunciar recorte ou escolher params. Memória de outra conversa não é confirmação. Se o perfil exigir escolha nesta conversa, pergunte sem opção predefinida e não execute consultas dependentes antes da resposta; descoberta autorizada de opções continua possível.
+Leia obter_contexto_persona antes de anunciar recorte ou escolher params; obter_skill inclui personaContext. Memória de outra conversa não confirma. Se o perfil exigir escolha, pergunte sem predefinir e não execute consultas dependentes antes da resposta; descoberta autorizada continua possível. Perfil não amplia acesso.
 Falhas MCP podem trazer supportId em error.data; falhas HTTP, em error. Informe-o ao responsável; não repita chamadas nem infira expiração por erro genérico.
 Resposta inválida do hub não significa consulta vazia nem exige reconexão.
 Para perguntas sem cobertura, organize e encaminhe a lacuna conforme trainingIntake. Use obter_treinamento_base({topic}) para guias específicos; sem topic retorna a base completa. Leia semantics em obter_skill: métricas e sinônimos são definições editoriais versionadas, não prova de equivalência do SQL nem concessão. Agregações, JOINs e métricas exigem casos obrigatórios atuais antes de nova publicação. Não invente aprovação semântica ou percentuais ABC.

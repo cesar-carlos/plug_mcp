@@ -100,6 +100,7 @@ export interface AuthorizedKnowledgeVersion {
   profileHash?: string;
 }
 export interface PublishedQueryContext {
+  personaContext: Pick<Persona, "id" | "name" | "specialty" | "instructions">;
   limits: QueryLimits;
   sharedKnowledge?: QueryPackage["sharedKnowledge"];
   commonTraining: QueryPackage["commonTraining"];
@@ -947,12 +948,20 @@ export class PersonaConsumerCatalog {
       if (!publication || !(await this.visibleAll(tx, identity, state, publication))) {
         throw new PersonaV2Error("AUTHORIZATION_DENIED", "Skill não disponível para este token.");
       }
+      // Current presentation guidance, separate from the immutable publication and its authority.
+      const personaContext = {
+        id: state.persona.id,
+        name: state.persona.name,
+        specialty: state.persona.specialty,
+        instructions: state.persona.instructions,
+      };
       if (publication.package.format === "persona-sql-operation-v2")
         return {
           id: publication.skillId,
           publicationId: publication.id,
           hash: publication.hash,
           ...publication.package,
+          personaContext,
           limits: consumerOperationLimits(
             identity,
             state,
@@ -968,6 +977,7 @@ export class PersonaConsumerCatalog {
           publicationId: publication.id,
           hash: publication.hash,
           format: pkg.format,
+          personaContext,
           name: pkg.name,
           purpose: pkg.purpose,
           training: pkg.training,
@@ -993,6 +1003,7 @@ export class PersonaConsumerCatalog {
       const pkg = publication.package;
       const training = queryTrainingSchema.parse(publication.package.training);
       return {
+        personaContext,
         id: publication.skillId,
         publicationId: publication.id,
         hash: publication.hash,

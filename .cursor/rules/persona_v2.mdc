@@ -16,6 +16,12 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Leitura autorizada de skill entrega personaContext atual separado do pacote/hash
+imutável, na mesma transação e com revalidação final. Perfil orienta apresentação,
+não concede acesso. Não repetir o perfil em cada item da listagem nem expô-lo no
+initialize público. Testar atualização sem republicação, isolamento e revogação;
+entrega de orientação não comprova adesão da IA nem autoriza registrar seu texto.
+
 Instrução inicial exige contexto atual antes de anunciar recorte/escolher params.
 Confirmação exigida pelo perfil não vem de memória de outra conversa. Orientação
 não é gate técnico; auditoria sem chatId não comprova escolha nem conversa.

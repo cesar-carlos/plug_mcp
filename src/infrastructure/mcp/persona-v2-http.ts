@@ -1034,7 +1034,8 @@ export const createPersonaV2McpHandler = (
           server.registerTool(
             "obter_skill",
             {
-              description: "Pacote publicado concedido. Rascunhos não são expostos.",
+              description:
+                "Pacote publicado concedido e personaContext atual: leia suas instructions antes de consultar e apresentar a resposta. Orientação não amplia permissões. Rascunhos não são expostos.",
               inputSchema: z.strictObject({
                 slug: z
                   .string()
