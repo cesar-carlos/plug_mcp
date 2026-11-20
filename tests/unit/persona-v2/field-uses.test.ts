@@ -24,6 +24,82 @@ const training = (uses: FieldUse[] = ["filtro"]) => ({
   ),
 });
 describe("finalidades de campos em consultas publicadas", () => {
+  it.each(["postgres", "mssql", "sybase"] as const)(
+    "compila exemplo EXISTS correlacionado com SELECT 1 sem ampliar finalidades em %s",
+    (dialect) => {
+      const raw = {
+        ...training(),
+        dialect,
+        relationships: [
+          {
+            from: "orders",
+            to: "orders",
+            keys: [{ from: "id", to: "id" }],
+            join: "inner",
+            cardinality: "1:1",
+            meaning: "Synthetic identity correlation",
+          },
+        ],
+      };
+      for (const predicate of ["EXISTS", "NOT EXISTS"]) {
+        const sql = `SELECT p.id FROM orders p WHERE p.id > :minimum AND ${predicate} (SELECT 1 FROM orders q WHERE q.id = p.id AND q.amount > :minimum) ORDER BY p.id`;
+        expect(() =>
+          compileQueryTraining(
+            {
+              ...raw,
+              examples: [
+                {
+                  id: "candidates",
+                  purpose: "Synthetic candidates",
+                  explanation: "Check existence only",
+                  sql,
+                },
+              ],
+            },
+            { ...trainingSource, dialect },
+            crypto,
+          ),
+        ).not.toThrow();
+        expect(() =>
+          compileQueryTraining(
+            { ...raw, relationships: [], sqlModel: sql },
+            { ...trainingSource, dialect },
+            crypto,
+          ),
+        ).toThrow(/Correlação sem relacionamento/);
+        expect(
+          compileQueryTraining({ ...raw, sqlModel: sql }, { ...trainingSource, dialect }, crypto)
+            .requiredCapabilities,
+        ).toEqual(
+          compileQueryTraining(raw, { ...trainingSource, dialect }, crypto).requiredCapabilities,
+        );
+        // Correlated and inner refs still require the actual filtering purpose.
+        expect(() =>
+          assertQueryFieldUses(parseSelect(sql, dialect), training(["projecao"]).columns),
+        ).toThrow(/finalidade solicitada/);
+        const correlated = `SELECT p.id FROM orders p WHERE ${predicate} (SELECT 1 FROM orders q WHERE q.id = p.amount)`;
+        expect(() =>
+          assertQueryFieldUses(parseSelect(correlated, dialect), training(["projecao"]).columns),
+        ).toThrow(/finalidade solicitada/);
+      }
+    },
+  );
+  it.each(["postgres", "mssql", "sybase"] as const)(
+    "EXISTS não libera projeções, origem desconhecida ou subconsultas escalares em %s",
+    (dialect) => {
+      const fields = training(["projecao", "filtro"]).columns;
+      for (const sql of [
+        "SELECT p.id FROM orders p WHERE EXISTS (SELECT q.amount FROM orders q WHERE q.id = p.id)",
+        "SELECT p.id FROM orders p WHERE EXISTS (SELECT 1 FROM orders q WHERE q.unknown = p.id)",
+        "SELECT p.id FROM orders p WHERE EXISTS (SELECT 1 FROM orders q WHERE q.id = p.id ORDER BY q.amount)",
+        "SELECT p.id FROM orders p WHERE EXISTS (SELECT 1 FROM orders q WHERE q.id = p.id UNION SELECT q.amount FROM orders q)",
+        "SELECT p.id FROM orders p WHERE p.id = (SELECT q.amount FROM orders q)",
+        "SELECT p.id FROM orders p ORDER BY (SELECT q.amount FROM orders q)",
+        "SELECT CASE WHEN EXISTS (SELECT 1 FROM orders q WHERE q.id = p.id) THEN 1 ELSE 0 END AS flag FROM orders p",
+      ])
+        expect(() => assertQueryFieldUses(parseSelect(sql, dialect), fields), sql).toThrow();
+    },
+  );
   it("finalidade adicional de saída verifica todos os ramos por posição, mesmo com aliases diferentes", () => {
     const raw = training(["projecao", "filtro"]),
       pkg = compileQueryTraining(raw, trainingSource, crypto);

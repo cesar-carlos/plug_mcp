@@ -64,6 +64,7 @@ export interface SqlAstColuna {
   readonly isStar: boolean;
   readonly isExpression: boolean;
   readonly isAggregate: boolean;
+  readonly explicitAlias?: boolean;
 }
 
 export interface SqlAstJoin {
@@ -445,6 +446,7 @@ const parseColumns = (
       refs: collectRefsFromNode(exprNode),
       expr,
       alias,
+      ...(readString(item.as) ? { explicitAlias: true } : {}),
       table,
       column,
       isStar: star,
@@ -469,6 +471,42 @@ const collectSelectsIn = (node: unknown, out: unknown[]): void => {
   walkNodes(node, (item) => {
     pushSelectNode(out, item);
   });
+};
+
+// EXISTS with a constant projection only tests row existence. Its WHERE/JOIN
+// field uses are checked in the child SELECT, including correlated references.
+// Do not extend this exception to scalar subqueries or value projections.
+const collectUnresolvedPredicateSelects = (node: unknown, out: unknown[]): void => {
+  if (isRecord(node)) {
+    if (
+      node.type === "binary_expr" &&
+      ["AND", "OR"].includes(String(node.operator).toUpperCase())
+    ) {
+      collectUnresolvedPredicateSelects(node.left, out);
+      collectUnresolvedPredicateSelects(node.right, out);
+      return;
+    }
+    const args = isRecord(node.args) ? asArray(node.args.value) : [];
+    const operand =
+      node.type === "function" && functionName(node.name) === "EXISTS" && args.length === 1
+        ? args[0]
+        : node.type === "unary_expr" && node.operator === "NOT EXISTS"
+          ? node.expr
+          : undefined;
+    const query = isRecord(operand) && isRecord(operand.ast) ? operand.ast : undefined;
+    const columns = query ? asArray(query.columns) : [];
+    const expr = columns.length === 1 && isRecord(columns[0]) ? columns[0].expr : undefined;
+    if (
+      query?.type === "select" &&
+      !query._next &&
+      !query.set_op &&
+      isRecord(expr) &&
+      expr.type === "number" &&
+      expr.value === 1
+    )
+      return;
+  }
+  collectSelectsIn(node, out);
 };
 
 const collectSubqueryAsts = (select: Record<string, unknown>): unknown[] => {
@@ -597,13 +635,13 @@ const fromSelectAst = (
   const nestedUseQueries: unknown[] = [];
   for (const node of [
     ast.columns,
-    ast.where,
     ast.having,
     ast.groupby,
     ast.orderby,
     ...collectFromOnNodes(ast.from),
   ])
     collectSelectsIn(node, nestedUseQueries);
+  collectUnresolvedPredicateSelects(ast.where, nestedUseQueries);
   let unresolvedFieldUses = ast.window != null;
   const distinct =
     (typeof ast.distinct === "string" && ast.distinct.toUpperCase() === "DISTINCT") ||
@@ -670,9 +708,7 @@ const fromSelectAst = (
         !term.expr.collate,
     ),
     simplePaginationProjection:
-      !distinct &&
-      cteNomes.length === 0 &&
-      colunas.every((column) => !column.isExpression && !column.isStar),
+      !distinct && colunas.every((column) => !column.isExpression && !column.isStar),
     // PostgreSQL parser emits limit:{value:[]} even when SQL has no LIMIT/OFFSET.
     temLimite:
       (ast.limit != null &&

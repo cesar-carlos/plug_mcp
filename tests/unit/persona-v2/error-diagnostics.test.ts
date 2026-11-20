@@ -9,6 +9,76 @@ import { SilentTestLogger } from "../../helpers/silent-logger.js";
 import { safeErrorDetails } from "../../../src/domain/errors/safe-error-details.js";
 
 it.each([
+  [
+    { odbc_sql_state: "22018", odbc_native_code: 245 },
+    { sqlstate: "22018", nativeCode: 245 },
+  ],
+  [{}, {}],
+  [{ odbc_sql_state: "private-marker", odbc_native_code: 2147483648 }, {}],
+])(
+  "diagnóstico SQL nativo preserva apenas códigos seguros pelo supportId: %j",
+  async (native, expected) => {
+    let calls = 0;
+    let output = "";
+    const adapter = new PlugServerRestAdapter(
+      "https://fixture.test",
+      new SilentTestLogger(),
+      async () => {
+        calls++;
+        return Response.json({
+          response: {
+            item: {
+              error: {
+                code: -32102,
+                message: "private-marker SELECT private-column",
+                data: {
+                  ...native,
+                  technical_message: "private-marker",
+                  params: { secret: "private-marker" },
+                },
+              },
+            },
+          },
+        });
+      },
+    );
+    const failure = await adapter
+      .executeSql({
+        accessToken: "private-marker",
+        clientToken: "private-marker",
+        agentId: "fixture",
+        sql: "SELECT private-marker",
+        params: { secret: "private-marker" },
+      })
+      .catch((error: unknown) => error);
+    const logger = new PinoLoggerAdapter(
+      pino(
+        {},
+        {
+          write: (line) => {
+            output += line;
+          },
+        },
+      ),
+    );
+    const result = reportPersonaV2ToolError(failure, logger);
+    expect(result.code).toBe("INVALID_SQL");
+    expect(result.retryable).toBe(false);
+    expect(result.details).toMatchObject({ rpcCode: -32102, ...expected });
+    expect(result.details?.sqlstate).toBe("sqlstate" in expected ? expected.sqlstate : undefined);
+    expect(result.details?.nativeCode).toBe(
+      "nativeCode" in expected ? expected.nativeCode : undefined,
+    );
+    expect(JSON.parse(output)).toMatchObject({
+      supportId: result.supportId,
+      details: { rpcCode: -32102, ...expected },
+    });
+    expect(JSON.stringify(result) + output).not.toContain("private-marker");
+    expect(calls).toBe(1);
+  },
+);
+
+it.each([
   [-32014, "repetição do identificador"],
   [-32104, "pool de conexões"],
   [-32106, "conectar ao banco"],

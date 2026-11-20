@@ -139,6 +139,39 @@ export interface SourceQueryResponse {
   };
 }
 
+export function sourceParameterContracts(
+  sql: string,
+  params: Readonly<Record<string, unknown>> | undefined,
+  declared: ReadonlyMap<string, ParametroSkill>,
+  restrictions: ReturnType<typeof parseSourceRestrictions>,
+): ParametroSkill[] {
+  const contracts = new Map(declared);
+  const names = extractNamedParams(sql);
+  for (const restriction of restrictions) {
+    contracts.set(restriction.parameter, {
+      nome: restriction.parameter,
+      tipo:
+        typeof restriction.value === "number"
+          ? "number"
+          : typeof restriction.value === "boolean"
+            ? "boolean"
+            : "string",
+      obrigatorio: true,
+      descricao: "Recorte físico obrigatório controlado pelo servidor",
+    });
+  }
+  if (
+    names.some((name) => !contracts.has(name)) ||
+    Object.keys(params ?? {}).some((name) => !names.includes(name) || name.startsWith("__scope_"))
+  ) {
+    throw new PersonaV2Error(
+      "INVALID_PLAN",
+      "Parâmetros devem corresponder ao SQL e ao contrato publicado.",
+    );
+  }
+  return [...contracts.values()];
+}
+
 /** One source per SELECT. Publication validation precedes any hub/network work. */
 export class PersonaSourceQueries {
   constructor(
@@ -484,31 +517,7 @@ export class PersonaSourceQueries {
         });
       }
     }
-    const names = extractNamedParams(sql);
-    for (const restriction of restrictions) {
-      contracts.set(restriction.parameter, {
-        nome: restriction.parameter,
-        tipo:
-          typeof restriction.value === "number"
-            ? "number"
-            : typeof restriction.value === "boolean"
-              ? "boolean"
-              : "string",
-        obrigatorio: true,
-        descricao: "Recorte físico obrigatório controlado pelo servidor",
-      });
-    }
-    if (
-      names.some((name) => !contracts.has(name)) ||
-      Object.keys(input.params ?? {}).some(
-        (name) => !names.includes(name) || name.startsWith("__scope_"),
-      )
-    ) {
-      throw new PersonaV2Error(
-        "INVALID_PLAN",
-        "Parâmetros devem corresponder ao SQL e ao contrato publicado.",
-      );
-    }
+    const parameterContracts = sourceParameterContracts(sql, input.params, contracts, restrictions);
     const scope = uniaoEscopos(publications.map((p) => p.package.scope));
     let ast: ReturnType<typeof validateSourceSql>;
     try {
@@ -580,9 +589,10 @@ export class PersonaSourceQueries {
       ...input.params,
       ...Object.fromEntries(restrictions.map((r) => [r.parameter, r.value])),
     };
-    const params = coerceBoundParams(bindNamedParams(sql, supplied, [...contracts.values()]), [
-      ...contracts.values(),
-    ]);
+    const params = coerceBoundParams(
+      bindNamedParams(sql, supplied, parameterContracts),
+      parameterContracts,
+    );
     const options = {
       maxRows: limits.maxRows,
       timeoutMs: limits.timeoutMs,

@@ -17,6 +17,18 @@ import {
 
 describe("public persona training topics", () => {
   it.each([undefined, "sql", "plug-server"] as const)(
+    "exemplos de páginas do guia %s preservam tamanho e não repetem registros",
+    (topic) => {
+      const { pagination } = trainingTopic(topic)
+        .queryContract as typeof PERSONA_V2_TRAINING_BASE.queryContract;
+      const first = pagination.firstPage.options;
+      const next = pagination.nextPageExample.options;
+      expect(next.page).toBe(first.page + 1);
+      expect(next.pageSize).toBe(first.pageSize);
+      expect((next.page - 1) * next.pageSize).toBe(first.page * first.pageSize);
+    },
+  );
+  it.each([undefined, "sql", "plug-server"] as const)(
     "guia %s evita contagem preventiva e salto após voltar uma página",
     (topic) => {
       const guide = trainingTopic(topic)

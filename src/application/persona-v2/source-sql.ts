@@ -27,16 +27,19 @@ export const assertSourcePagination = (
   exigirPaginacaoEstavel(ast.sql, ast, options);
   if (options?.page !== undefined) {
     const qualified = ast.orderByRefs.filter((ref) => ref.table);
-    const projected = ast.orderByRefs.every((ref) =>
-      ref.table
-        ? ast.colunas.filter((column) => column.table === ref.table && column.column === ref.column)
-            .length === 1
-        : ast.colunas.some((column) => column.alias.toLowerCase() === ref.column.toLowerCase()),
-    );
+    const outputs = ast.colunas.map((column) => column.alias.toLowerCase());
+    const projected = ast.orderByRefs.every((ref) => {
+      if (!ref.table) return outputs.includes(ref.column.toLowerCase());
+      const matches = ast.colunas.filter(
+        (column) => column.table === ref.table && column.column === ref.column,
+      );
+      return matches.length === 1 && (ast.cteNomes.length === 0 || matches[0]?.explicitAlias);
+    });
     if (
       !ast.simplePaginationOrder ||
       !projected ||
-      (qualified.length > 0 && !ast.simplePaginationProjection)
+      (qualified.length > 0 &&
+        (!ast.simplePaginationProjection || new Set(outputs).size !== outputs.length))
     ) {
       throw new PersonaV2Error(
         "INVALID_PLAN",

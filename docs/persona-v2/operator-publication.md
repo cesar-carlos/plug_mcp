@@ -5,6 +5,22 @@ Não registra aceite integral para clientes nem publica rascunhos por si só.
 
 ## Contrato e alcance
 
+O wrapper reconhece códigos fechados de erro do domínio, incluindo
+`VALIDATION_ERROR`, sem copiar mensagens, SQL, parâmetros ou detalhes remotos.
+Recusas reconhecidas têm `stage: remote_failure`, `supportId` local e, quando
+disponível, a última operação do protocolo. Esse identificador não comprova
+registro remoto, rollback ou limpeza; `repeatAllowed` permanece falso. Frames
+inválidos/códigos desconhecidos continuam `OPERATOR_RUN_UNCONFIRMED`.
+
+Antes de preparar as sementes de cada caso de consulta, o adapter valida em
+memória os nomes, a presença e os tipos dos parâmetros pelo mesmo contrato da execução.
+Parâmetros extras, placeholders sem declaração e recortes fornecidos pelo chamador
+são recusados antes do preparo. Omissão
+obrigatória recusa; opcional omitido continua null e null explícito preserva a
+semântica existente. A execução reconfere todos os portões normalmente. Essa
+checagem não valida sozinha SQL, permissões ou resultados e não autoriza repetir
+uma rodada anterior incerta; editar casos exige nova revisão e nova sessão.
+
 O responsável escolheu um runner no servidor com fixtures locais isoladas.
 `persona:test-publication:ssh` abre canal privado pelos pipes do SSH, sem portas
 públicas, endpoint HTTP/MCP novo ou envio de relatórios prontos. O processo remoto

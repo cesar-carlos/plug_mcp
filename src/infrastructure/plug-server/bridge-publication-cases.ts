@@ -21,10 +21,17 @@ import { caseRowsEqual, caseValue } from "../../application/persona-v2/publicati
 import { queryCaseSqlLimit } from "../../application/persona-v2/query-case-completeness.js";
 import {
   PersonaSourceQueries,
+  sourceParameterContracts,
   type SourceQueryResponse,
   type FederationQueryContext,
 } from "../../application/persona-v2/source-query.js";
 import { queryLimits } from "../../domain/persona-v2/execution-limits.js";
+import { queryTrainingSchema } from "../../application/persona-v2/query-training.js";
+import { parseSourceRestrictions } from "../../application/persona-v2/source-restrictions.js";
+import {
+  bindNamedParams,
+  coerceBoundParams,
+} from "../../application/use-cases/shared/sql-modelo.js";
 import type { PublicationRunEvidence } from "../../domain/persona-v2/publication-run.js";
 import type { CatalogPublication } from "../../domain/persona-v2/catalog.js";
 
@@ -337,6 +344,32 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
     this.check(source.id, test.input.fixtures, pkg.scope.tabelas);
     if (canonicalJson(source) !== canonicalJson(this.targetSource))
       throw new PersonaV2Error("STALE_AUTHORIZATION", "Fonte alterada.");
+    // Pure preflight before any fixture mutation. The normal query path still
+    // repeats its complete authorization, scope and parameter checks.
+    const training = queryTrainingSchema.parse(pkg.training);
+    const sql = test.input.sql ?? pkg.sqlModel;
+    const restrictions = parseSourceRestrictions(source.rowRestrictions);
+    const contracts = sourceParameterContracts(
+      sql,
+      test.input.params,
+      new Map(
+        training.parameters.map((p) => [
+          p.name,
+          {
+            nome: p.name,
+            tipo: p.type,
+            obrigatorio: p.required,
+            descricao: p.meaning,
+          },
+        ]),
+      ),
+      restrictions,
+    );
+    const supplied = {
+      ...test.input.params,
+      ...Object.fromEntries(restrictions.map((r) => [r.parameter, r.value])),
+    };
+    coerceBoundParams(bindNamedParams(sql, supplied, contracts), contracts);
     await this.prepare(test.input.fixtures);
     let terminal = false;
     try {

@@ -21,6 +21,9 @@ afterEach(() => {
 });
 
 it.each([
+  { code: "VALIDATION_ERROR", approved: false, expected: "VALIDATION_ERROR" },
+  { code: "INVALID_SQL", approved: false, expected: "INVALID_SQL" },
+  { code: "COLUNA_FORA_DO_ESCOPO", approved: false, expected: "COLUNA_FORA_DO_ESCOPO" },
   { code: "AGREGACAO_INSEGURA", approved: false, expected: "AGREGACAO_INSEGURA" },
   { code: "INVALID_PLAN", approved: false, expected: "INVALID_PLAN" },
   { code: "BUDGET_EXCEEDED", approved: false, expected: "BUDGET_EXCEEDED" },
@@ -73,6 +76,7 @@ it.each([
       code: entry.expected,
       approved: false,
       repeatAllowed: false,
+      supportId: expect.stringMatching(/^[a-f0-9-]{36}$/),
     });
     if (entry.expected === "OPERATOR_RUN_UNCONFIRMED") {
       expect(JSON.parse(output[0]!)).toMatchObject({

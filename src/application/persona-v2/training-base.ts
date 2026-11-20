@@ -130,7 +130,7 @@ const content = {
     },
     pagination: {
       firstPage: { options: { page: 1, pageSize: 30 } },
-      nextPageExample: { options: { page: 2, pageSize: 20 } },
+      nextPageExample: { options: { page: 2, pageSize: 30 } },
       instructions:
         LIST_PAGINATION_GUIDANCE +
         " CTE: ORDER BY saldo, não s.saldo. Total único: sem page/pageSize.",

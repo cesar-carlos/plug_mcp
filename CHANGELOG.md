@@ -11,6 +11,14 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Paginação de fornecedores por nome aceita ORDER BY qualificado em CTE quando a coluna tem um alias explícito e único na projeção externa.
+
+- Fixed: Exemplo de próxima página no treinamento comum preserva pageSize 30, evitando sobreposição com a primeira página. Regressões cobrem os guias comum, SQL e plug-server e a preservação segura de SQLSTATE/código nativo pelo supportId.
+
+- Fixed: Runner SSH preserva códigos de recusa conhecidos com supportId seguro e valida parâmetros antes de preparar a fixture, evitando mascarar VALIDATION_ERROR como execução não confirmada.
+
+- Fixed: Validador de finalidades reconhece WHERE EXISTS/NOT EXISTS com SELECT 1, mantendo validação das referências correlacionadas e sem ampliar concessões; evita AUTHORIZATION_DENIED indevido na inspeção de exemplos.
+
 - Fixed: Receptor SSH limpa o arquivo temporário de imagem ao encerrar cada tentativa de deploy, preservando diagnóstico, configurações e recursos de recuperação.
 
 - Fixed: Leitura de skill de consulta entrega orientação atual de paginação em queryGuidance, sem depender de obter_treinamento_base nem republicar SQL.

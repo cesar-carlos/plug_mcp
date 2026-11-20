@@ -6,6 +6,12 @@ alwaysApply: false
 
 # Testes
 
+Runner SSH deve preservar códigos conhecidos de erro do domínio com supportId
+local, sem mensagens/detalhes remotos e sem autorizar replay. Regressões de canal
+cobrem VALIDATION_ERROR e frames desconhecidos; parâmetros obrigatórios ausentes
+ou tipos inválidos recusam antes de preparar a fixture. Opcionais/null mantêm
+o contrato; reprovação preventiva não comprova rollback ou limpeza.
+
 Limpeza do receptor SSH de deploy remove apenas o arquivo de transporte da própria
 tentativa. Regressões executam Bash com dependências isoladas e cobrem sucesso,
 upload parcial, falha, sinal e falha da limpeza, preservando status, Compose,

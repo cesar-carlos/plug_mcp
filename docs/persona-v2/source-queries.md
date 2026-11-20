@@ -1,5 +1,13 @@
 # Consultas por fonte — contrato implementado
 
+O validador de finalidades aceita `WHERE EXISTS (SELECT 1 ...)` e `NOT EXISTS`
+como testes de existência, inclusive combinados por AND/OR. Cada campo interno
+ou correlacionado continua sujeito à origem e à finalidade explícita, e a
+correlação exige relacionamento publicado completo. Isso não libera subconsulta
+escalar, projeção de valores no EXISTS, CASE ou ordenação indireta. Exemplos do
+rascunho passam pela mesma validação no inspect, sem executar SQL ou modificar
+publicações/concessões. Testes sintéticos do parser não certificam o motor nativo.
+
 Em resumo paginado com CTE, use aliases únicos da projeção externa no `ORDER BY`,
 sem prefixo: `saldo DESC, fornecedor`, não `s.saldo DESC, s.fornecedor`.
 Preserve o grão, filtros, desempate completo e `options.page/pageSize`; não retire
@@ -159,7 +167,10 @@ Paginação gerenciada exige nomes ou aliases simples projetados no `ORDER BY`.
 Prefira aliases sem prefixo de tabela, especialmente em agregações, DISTINCT e
 CTEs. Expressões, posições numéricas e NULLS FIRST/LAST são recusados antes da
 autorização remota. Ordenação qualificada só é admitida com projeção simples e
-correspondência única. Sem paginação, essas restrições adicionais não se aplicam.
+correspondência única. Em CTE, a coluna qualificada do SELECT externo precisa de alias
+explícito e as saídas precisam ter nomes distintos. Por exemplo, projetar
+`f.CodFornecedor AS codfornecedor` permite ordenar por `f.CodFornecedor`.
+Sem paginação, essas restrições adicionais não se aplicam.
 O MCP não reescreve SQL nem repete chamadas; o consumidor revisa explicitamente
 a consulta. O schema e os guias descrevem o mesmo contrato.
 
@@ -499,7 +510,7 @@ OAuth, não certifica tráfego de conversas e não autoriza repetição.
 
 Os guias por dialeto da persona-v2 usam o contrato MCP de paginação diretamente. Um pedido dos primeiros N termina ao reunir N linhas ordenadas. Truncamento não autoriza avançar e falha de paginação não autoriza trocar para TOP.
 
-queryContract.pagination exemplifica a primeira página e a continuação com o tamanho efetivamente retornado. Sem metadados de paginação, não inferir continuação.
+queryContract.pagination exemplifica a primeira página e a continuação com o tamanho efetivamente retornado. Os exemplos iniciais preservam pageSize 30 nas páginas 1 e 2; não reduzir o tamanho ao avançar, pois isso muda o deslocamento e pode repetir registros. Sem metadados de paginação, não inferir continuação.
 
 Os tópicos sql e knowledge de obter_treinamento_base compartilham queryKnowledgeWorkflow e relationshipPaths. Busca e grafo localizam conhecimento concedido; a execução usa o contrato da publicação.
 

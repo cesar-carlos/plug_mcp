@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { z } from "zod";
+import { ERROR_CODES } from "../src/domain/errors/error-codes.js";
 import { readStablePluginFile } from "../src/infrastructure/plugins/package-read.js";
 import { OperatorChannel } from "../src/infrastructure/persistence/persona-v2/operator-channel.js";
 import {
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
           kind: z.literal("failure"),
           approved: z.literal(false),
           code: z.enum([
+            ...Object.values(ERROR_CODES),
             "STALE_AUTHORIZATION",
             "AUTHORIZATION_DENIED",
             "INVALID_PLAN",
@@ -120,6 +122,9 @@ async function main(): Promise<void> {
           JSON.stringify({
             approved: false,
             code: failure.data.code,
+            supportId: diagnostic.supportId,
+            stage: "remote_failure",
+            ...(diagnostic.lastRequest ? { lastRequest: diagnostic.lastRequest } : {}),
             repeatAllowed: false,
             action:
               "Rodada recusada pelo operador remoto. Confira revisão, casos e vínculo; nenhuma publicação foi realizada.",

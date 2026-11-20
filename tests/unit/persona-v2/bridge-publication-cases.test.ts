@@ -87,9 +87,70 @@ function fixture() {
     control,
     execute,
     operations,
+    adapter,
+    reads,
     run: () => adapter.evaluate(pkg, command, test),
   };
 }
+it.each(["missing", "invalid-type", "explicit-null", "optional", "unexpected", "undeclared"])(
+  "query parameter preflight %s precedes fixture preparation without relaxing the contract",
+  async (mode) => {
+    const f = fixture();
+    const training = {
+      ...queryTraining(f.source.id),
+      sqlModel:
+        "SELECT p.id, p.amount FROM orders p WHERE (:label IS NULL OR p.id > :minimum) ORDER BY p.id",
+      parameters: [
+        ...queryTraining().parameters,
+        {
+          name: "label",
+          type: "string",
+          required: mode !== "optional",
+          meaning: "Synthetic filter",
+        },
+      ],
+    };
+    const pkg = compileQueryTraining(training, f.source, new NodeCryptoAdapter("a".repeat(64)));
+    const test = queryPublicationCaseSchema.parse({
+      name: "Synthetic parameter regression",
+      input: {
+        ...(mode === "undeclared" ? { sql: training.sqlModel.replace(":minimum", ":extra") } : {}),
+        params: {
+          ...(mode === "unexpected" || mode === "undeclared" ? { extra: 9, label: null } : {}),
+          ...(mode === "undeclared"
+            ? {}
+            : { minimum: mode === "invalid-type" ? "not-a-number" : 0 }),
+          ...(mode === "explicit-null" || mode === "invalid-type" ? { label: null } : {}),
+        },
+        fixtures: [{ table: "orders", rows: [] }],
+      },
+      expected: {
+        columns: [
+          { name: "id", type: "integer" },
+          { name: "amount", type: "decimal" },
+        ],
+        rows: [],
+        ordered: true,
+      },
+    });
+    f.execute.mockResolvedValue({ columns: ["id", "amount"], rows: [], truncated: false });
+    if (["missing", "invalid-type", "unexpected", "undeclared"].includes(mode)) {
+      await expect(f.adapter.evaluateQuery(pkg, f.source, test)).rejects.toMatchObject({
+        code: mode === "unexpected" || mode === "undeclared" ? "INVALID_PLAN" : "VALIDATION_ERROR",
+      });
+      expect(f.control.prepare).not.toHaveBeenCalled();
+      expect(f.control.clear).not.toHaveBeenCalled();
+      expect(f.reads.authorize).not.toHaveBeenCalled();
+      expect(f.execute).not.toHaveBeenCalled();
+    } else {
+      expect(await f.adapter.evaluateQuery(pkg, f.source, test)).toBe(true);
+      expect(f.control.prepare).toHaveBeenCalledOnce();
+      expect(f.control.clear).toHaveBeenCalledOnce();
+      expect(f.execute.mock.calls[0]?.[1]).toMatchObject({ label: null });
+    }
+    expect(f.operations.execute).not.toHaveBeenCalled();
+  },
+);
 it("confere linhas e números exatos, limpa antes de concluir", async () => {
   const f = fixture();
   expect(await f.run()).toBe(true);
