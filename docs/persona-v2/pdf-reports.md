@@ -1,8 +1,9 @@
 # Relatórios PDF gerados — implementação em validação
 
-Estado em 20/11/2026: desenvolvimento local autorizado após a
-[prova F0](pdf-reports-f0.md). Não publicado, sem concessões novas e sem aceite
-integral de produção. O plano coordenado do mcp_test_agente separa F0–F7.
+Estado em 20/11/2026: código publicado no destino test-server em `efb4172`,
+após a [prova F0](pdf-reports-f0.md) e os gates técnicos. PDF permanece desabilitado,
+sem concessões novas e sem aceite integral para clientes.
+O plano coordenado do mcp_test_agente separa F0–F7.
 Este documento registra o código atual; não substitui evidência de liberação.
 
 ## Contrato e autoridade
@@ -26,7 +27,37 @@ coleta, renderização, estados incertos, trabalhos vencidos, leases vencidos e 
 dos tetos de oito payloads e 100 mil metadados. Não seleciona IDs, SQL, conteúdo,
 handles ou diagnósticos individuais. Não limpa, cancela nem repete execução.
 Tombstones continuam permanentes; saturação exige decisão operacional, não purge.
-Estas ferramentas estão em validação local; não foram publicadas.
+As ferramentas estão incorporadas à imagem, mas não expostas enquanto PDF estiver
+desabilitado. A publicação do código não altera contratos ou concessões existentes.
+
+### Deploy e rodada nativa da revisão publicada
+
+CI [44849057750](https://github.com/cesar-carlos/plug_mcp/actions/runs/44849057750)
+e deploy [44850063942](https://github.com/cesar-carlos/plug_mcp/actions/runs/44850063942)
+aprovados para `efb4172db195b27602cbce948fbe47e9ee253164`. Servidor e worker saudáveis,
+quatro ciclos do worker concluídos e zero avisos/erros na janela pós-subida;
+`logReviewRequired=false`. Ledger das migrations 0056/0057 confere com seus hashes.
+Flag PDF confirmada `false`; imagem
+`sha256:cafdc4e5c77dce83d2ebe914fe1b98fc4b46120940011861dd3927874836c20d`.
+
+A rodada oficial isolada posterior usou essa mesma imagem de renderer sem rede,
+MCP efb4172, hub 41cc6b1 e agente isolado b304026e. Inventário antes/depois estável,
+sourceSha MCP `4b4b3e6ccd21056b6f1ef33c24e35c78f72ffa9aa0b062206010ba02765c48e0`.
+Passaram nove casos nativos (tabela/gráfico/seções em PostgreSQL, MSSQL e Sybase),
+com 85 casos não selecionados. Os nove PDFs/15 páginas passaram extração e
+inspeção visual; download HTTP autenticado e repetição do requestId preservaram
+o handle e não repetiram SQL. A fixture não certifica o agente instalado na Campo.
+
+Artefatos sintéticos locais: `node_modules/.cache/pdf-efb4172-native-evidence`;
+log `node_modules/.cache/pdf-efb4172-chain.log`. Fixture oficial
+`se7e_persona_ab33d1ac0e48_test`, DSN, motores próprios e renderer foram removidos
+com limpeza verificada, preservando imagens/cache/evidências.
+
+Download dentro do ChatGPT continua pendente: não há endpoint HTTPS de fixture PDF
+com OAuth e identidade sintética preparada. O ingresso operacional com PDF off não
+substitui esse ambiente; não criar túnel público, copiar tokens operacionais ou
+ampliar concessões da Helena para contornar a ausência. PAGE-01..08 e snapshot
+forte continuam separados. A rodada nativa não certifica essas integrações.
 
 ### Evidência das ferramentas de recuperação e operação — 20/11/2026
 
