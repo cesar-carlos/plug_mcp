@@ -70,6 +70,23 @@ it("aceita controle MCP e autoridade hub em bancos separados da mesma fixture", 
   const value = fixture();
   expect(readChainManifest(value.path).hubDatabaseUrl).toBe(value.manifest.hubDatabaseUrl);
 });
+it("vincula renderer PDF somente por container sintético e identidade imutável de imagem", () => {
+  const value = fixture();
+  const pdfRenderer = {
+    container: "plug-mcp-pdf-render-fixture",
+    imageId: `sha256:${"a".repeat(64)}`,
+  };
+  writeFileSync(value.path, JSON.stringify({ ...value.manifest, pdfRenderer }));
+  expect(readChainManifest(value.path).pdfRenderer).toEqual(pdfRenderer);
+  for (const rejected of [
+    { ...pdfRenderer, imageId: "latest" },
+    { ...pdfRenderer, container: "production" },
+    { ...pdfRenderer, sql: "forbidden" },
+  ]) {
+    writeFileSync(value.path, JSON.stringify({ ...value.manifest, pdfRenderer: rejected }));
+    expect(() => readChainManifest(value.path)).toThrow();
+  }
+});
 it.each([
   "postgresql://fixture:synthetic@127.0.0.1:54321/persona_chain_control_test",
   "postgresql://fixture:synthetic@127.0.0.1:54321/operational",

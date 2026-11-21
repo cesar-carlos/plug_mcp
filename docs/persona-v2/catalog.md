@@ -2,6 +2,11 @@
 
 ## Contexto atual na leitura de skills
 
+O contrato opcional [generatedPdf](pdf-reports.md) é fixado na publicação de
+consulta, incluindo colunas, limites, gráficos e quantidade de seções permitida.
+Sua capability por hash não é herdada de anexos JSON/binários ou de contratos
+anteriores. Exibir o contrato no catálogo não habilita o runtime nem amplia acesso.
+
 Para consultas, a resposta também inclui `queryGuidance.pagination` atual, mesmo
 sem uma chamada separada a `obter_treinamento_base`. O `commonTraining` publicado
 continua sendo a referência histórica de versão/hash, não o conteúdo atual do guia.

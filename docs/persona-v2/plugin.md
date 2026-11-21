@@ -7,6 +7,40 @@ por DV2-017; isso não comprova conexão ChatGPT nem libera o aceite integral.
 
 ## Gerações e variantes
 
+### Páginas hospedadas e acesso por visitante
+
+A base comum orienta distinguir retrato estático de página conectada. Não há
+ponte Sites específica implementada neste repositório. Login de uma página não
+cria concessão Se7e, e OAuth da conversa não é credencial reutilizável no frontend.
+Nunca colocar Bearer, SQL privado ou token de serviço em bundle, HTML, URL ou
+localStorage; não expor agente nem inventar endpoint REST de consultas.
+
+A [documentação oficial de Sites](https://learn.chatgpt.com/docs/sites/data-and-connections)
+descreve plugins por conexão e permissões de cada visitante em site privado do
+workspace, com uso de plugins habilitado. O bypass SIWC não fornece identidade
+de visitante nem acesso aos apps dele. A hipótese preferida para avaliar é essa
+delegação gerenciada da plataforma, antes de construir uma ponte própria.
+Isso não comprova disponibilidade do plugin Se7e nesse runtime.
+
+Antes de integrar, comprovar descoberta das tools, vínculo autenticado da conexão
+do visitante, escopo concedido, suporte às respostas/paginação e invalidação de
+cache privado. Cabeçalhos de identidade somente podem ser confiados em ingresso
+verificado da plataforma; isoladamente não substituem Bearer/OAuth nem grants.
+Uma ponte própria exigiria contrato de sessão, origem, consentimento e revogação
+antes da implementação. Nenhuma dessas opções autoriza acesso de serviço amplo.
+
+A matriz PAGE-01..08 coordenada com mcp_test_agente permanece pendente para
+integração/consumo: sessão ausente/expirada/revogada e visitante sem grant;
+troca de fonte/consulta/filial; paginação 30+1/próxima/anterior/reset de filtro;
+falha de atualização com leitura antiga identificada; isolamento e ausência de
+segredos. Testes de entrega do treinamento e budgets só validam orientação.
+Não foi publicado site, gerado bypass, alterado grant ou executada consulta ERP.
+
+O guia de consulta inclui [PDF gerado](pdf-reports.md) como extensão opcional:
+descobrir as três tools e o contrato concedido antes de usar. Elas não integram
+o mínimo obrigatório do pacote, não habilitam o runtime por instalação e não
+ampliam concessões JSON/BLOB. A validação offline não comprova download no cliente.
+
 Antes de montar um pacote, `npm run training:check:persona-v2` verifica offline
 os hashes da base/tópicos, os schemas de entrada, o manifesto e os orçamentos
 de tamanho. Esse comando é executado pelo job documental do CI em Windows e

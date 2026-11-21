@@ -11,6 +11,9 @@ Precedência e índice das rules: [AGENTS.md](../AGENTS.md).
 
 ## Persona-v2
 
+Em validação local, sem feature publicada: [Relatórios PDF](persona-v2/pdf-reports.md)
+e [prova histórica F0](persona-v2/pdf-reports-f0.md).
+
 | Tema                                                          | Referência                                                      |
 | ------------------------------------------------------------- | --------------------------------------------------------------- |
 | Capacidades implementadas e pendências                        | [Estado da refatoração](persona-v2/README.md)                   |

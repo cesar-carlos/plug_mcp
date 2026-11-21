@@ -56,12 +56,14 @@ RUN apk add --no-cache libstdc++ ca-certificates \
 COPY --from=node-base /usr/local/bin/node /usr/local/bin/node
 COPY --chown=mcp:mcp --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=mcp:mcp --from=build /app/dist ./dist
+COPY --chown=mcp:mcp assets/pdf-fonts ./assets/pdf-fonts
 COPY --chown=mcp:mcp --from=build /app/web/dist ./web/dist
 COPY --chown=mcp:mcp drizzle ./drizzle
 COPY --chown=mcp:mcp migrations ./migrations
 COPY --chown=mcp:mcp docs/mcp/error-mapping.md ./docs/mcp/error-mapping.md
 COPY --chown=mcp:mcp docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh && chown mcp:mcp /app
+RUN chmod +x docker-entrypoint.sh && chown mcp:mcp /app \
+  && mkdir -p /run/se7e-pdf && chown mcp:mcp /run/se7e-pdf && chmod 700 /run/se7e-pdf
 USER mcp
 EXPOSE 3333
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

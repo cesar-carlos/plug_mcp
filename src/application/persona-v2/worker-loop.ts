@@ -1,7 +1,13 @@
 import type { LoggerPort } from "../../domain/ports/logger.port.js";
 
 export interface PersonaWorkerJob {
-  stage: "knowledge_review" | "ephemeral_cleanup" | "operation_retention" | "notification_delivery";
+  stage:
+    | "knowledge_review"
+    | "ephemeral_cleanup"
+    | "operation_retention"
+    | "notification_delivery"
+    | "pdf_render"
+    | "pdf_cleanup";
   run(): Promise<void>;
 }
 

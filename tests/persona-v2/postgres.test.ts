@@ -307,6 +307,8 @@ describe("baseline persona-v2 e administração em PostgreSQL real", () => {
       { filename: "0053_training_source_report.sql" },
       { filename: "0054_source_deletion.sql" },
       { filename: "0055_oauth_profile_context.sql" },
+      { filename: "0056_pdf_report_jobs.sql" },
+      { filename: "0057_pdf_persona_metadata_quota.sql" },
     ]);
     await expect(applyMigrations({ databaseUrl: urlFor(freshName) })).rejects.toThrow(
       "Runner legado recusado",

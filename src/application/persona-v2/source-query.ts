@@ -43,6 +43,7 @@ import {
   type QueryLimits,
 } from "../../domain/persona-v2/execution-limits.js";
 import { PERSONA_V2_TRAINING_BASE } from "./training-base.js";
+import { assertPdfReportProjection } from "./pdf-report-projection.js";
 import { parseSourceRestrictions, enforceSourceRestrictions } from "./source-restrictions.js";
 import { DEFAULT_FEDERATION_BUDGET } from "../../domain/persona-v2/federation.js";
 import {
@@ -65,7 +66,7 @@ export interface AttachmentQueryCapture {
   expectedStructure?: ExpectedStructure;
 }
 interface AttachmentQueryContext {
-  format: "json" | "binary";
+  format: "json" | "binary" | "pdf";
   capture: (value: AttachmentQueryCapture) => void;
 }
 
@@ -334,6 +335,20 @@ export class PersonaSourceQueries {
       throw new PersonaV2Error("CAPABILITY_UNAVAILABLE", "Prova de exportação indisponível.");
     return { response, capture };
   }
+  async exportPdf(
+    identity: ConsumerIdentity,
+    input: SourceQueryInput,
+  ): Promise<{ response: SourceQueryResponse; capture: AttachmentQueryCapture }> {
+    let capture: AttachmentQueryCapture | undefined;
+    const response = await this.run(identity, input, false, undefined, {
+      format: "pdf",
+      capture: (value) => {
+        capture = value;
+      },
+    });
+    if (!capture) throw new PersonaV2Error("CAPABILITY_UNAVAILABLE", "Prova PDF indisponível.");
+    return { response, capture };
+  }
   async exportBinary(
     identity: ConsumerIdentity,
     input: SourceQueryInput,
@@ -455,9 +470,13 @@ export class PersonaSourceQueries {
         internal ||
         !evidence.cacheFence ||
         evidence.cacheFence.writePending ||
-        (attachment.format === "binary" && publications.length !== 1) ||
+        (attachment.format !== "json" && publications.length !== 1) ||
         trainings.some((training) =>
-          attachment.format === "binary" ? !training.binaryAttachments : !training.attachments,
+          attachment.format === "binary"
+            ? !training.binaryAttachments
+            : attachment.format === "pdf"
+              ? !training.generatedPdf
+              : !training.attachments,
         ) ||
         publications.some(
           (p) =>
@@ -465,7 +484,9 @@ export class PersonaSourceQueries {
               c.startsWith(
                 attachment.format === "binary"
                   ? "binary-attachment-contract:"
-                  : "attachment-contract:",
+                  : attachment.format === "pdf"
+                    ? "generated-pdf-contract:"
+                    : "attachment-contract:",
               ),
             ),
         ))
@@ -476,6 +497,12 @@ export class PersonaSourceQueries {
       );
     }
     const contracts = new Map<string, ParametroSkill>();
+    if (attachment?.format === "pdf") {
+      const pdf = trainings[0]!.generatedPdf!;
+      limits.maxRows = Math.min(limits.maxRows, pdf.maxRows);
+      limits.pageSize = Math.min(limits.pageSize, limits.maxRows);
+      limits.maxBytes = Math.min(limits.maxBytes, pdf.maxBytes);
+    }
     const definitions = new Map<string, string>();
     const resources = new Map<string, { name: string; type: "table" | "view" }>();
     const fieldContracts = new FieldContractIndex();
@@ -532,6 +559,8 @@ export class PersonaSourceQueries {
     }
     if (attachment?.format === "binary")
       assertBinaryProjection(ast, trainings[0]!.binaryAttachments!);
+    if (attachment?.format === "pdf")
+      assertPdfReportProjection(ast.colunas, trainings[0]!.generatedPdf!);
     const binaryFields = new Set(
       trainings.flatMap((training) =>
         training.binaryAttachments

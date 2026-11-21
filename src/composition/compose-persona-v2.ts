@@ -1,6 +1,11 @@
 import { assertPersonaDeployment } from "../config/persona-deployment.js";
 import pg from "pg";
 import { PersonaAttachments } from "../application/persona-v2/attachments.js";
+import { PersonaPdfReports } from "../application/persona-v2/pdf-reports.js";
+import { PersonaWorkerLoop } from "../application/persona-v2/worker-loop.js";
+import { PostgresPdfReportJobs } from "../infrastructure/persistence/persona-v2/pdf-report-jobs.js";
+import { PdfSocketRenderer } from "../infrastructure/persona-v2/pdf-render-client.js";
+import type { PdfRendererPort } from "../domain/ports/persona-pdf-renderer.port.js";
 import { PostgresPersonaAttachments } from "../infrastructure/persistence/persona-v2/attachments.js";
 import { createClient } from "redis";
 import type { PersonaQueryReuseStore } from "../domain/ports/persona-query-reuse.port.js";
@@ -95,6 +100,7 @@ export const composePersonaV2 = async (
     externalTransport?: ExternalTransport & ExternalActionTransport;
     externalDiscovery?: ExternalDiscoveryTransport;
     notificationTransport?: PersonaNotificationTransport;
+    pdfRenderer?: PdfRendererPort;
   } = {},
 ): Promise<{ app: Express; close: () => Promise<void> }> => {
   assertPersonaDeployment(config);
@@ -105,6 +111,7 @@ export const composePersonaV2 = async (
   const agents = createHubHttpAgents();
   let queryRedis: ReturnType<typeof createClient> | undefined;
   let attachmentStore: PostgresPersonaAttachments | undefined;
+  let pdfLoop: PersonaWorkerLoop | undefined;
   try {
     const client = await pool.connect();
     try {
@@ -258,10 +265,29 @@ export const composePersonaV2 = async (
       externalAdapters,
     );
     const logger = new PinoLoggerAdapter(createPino(config.LOG_LEVEL, false));
+    const pdfReports = config.PERSONA_V2_PDF_ENABLED
+      ? new PersonaPdfReports(
+          consumerCatalog,
+          queries,
+          attachments,
+          new PostgresPdfReportJobs(pool, crypto, config.PUBLIC_BASE_URL),
+          overrides.pdfRenderer ?? new PdfSocketRenderer("/run/se7e-pdf/renderer.sock"),
+          crypto,
+          logger,
+        )
+      : undefined;
+    if (pdfReports) {
+      pdfLoop = new PersonaWorkerLoop(
+        [{ stage: "pdf_render", run: () => pdfReports.processOnce() }],
+        logger,
+      );
+      await pdfLoop.start(1000);
+    }
     return {
       app: createPersonaAdministrationApp({
         logger,
         attachments,
+        pdfReports,
         externalIntegrations,
         integrationManagement: new PersonaIntegrationManagement(
           services,
@@ -359,6 +385,7 @@ export const composePersonaV2 = async (
         },
       }),
       close: async () => {
+        await pdfLoop?.stop();
         attachmentStore?.close();
         if (queryRedis?.isOpen) queryRedis.destroy();
         destroyHubHttpAgents(agents);
@@ -366,6 +393,7 @@ export const composePersonaV2 = async (
       },
     };
   } catch (error) {
+    await pdfLoop?.stop();
     attachmentStore?.close();
     if (queryRedis?.isOpen) queryRedis.destroy();
     destroyHubHttpAgents(agents);

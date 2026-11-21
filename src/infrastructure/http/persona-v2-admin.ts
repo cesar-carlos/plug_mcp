@@ -53,6 +53,7 @@ import { registerPersonaSetupRoutes } from "./persona-v2-setup.js";
 import type { PersonaAdministrativeAuthorization } from "../../application/persona-v2/administrative-authorization.js";
 import type { PersonaDelegatedTokens } from "../../application/persona-v2/delegated-tokens.js";
 import type { PersonaAttachments } from "../../application/persona-v2/attachments.js";
+import type { PersonaPdfReports } from "../../application/persona-v2/pdf-reports.js";
 import { registerPersonaAttachmentRoutes } from "./persona-v2-attachments.js";
 import type { PersonaKnowledgeTraining } from "../../application/persona-v2/knowledge-training.js";
 import { sqlExampleInputSchema } from "../../application/persona-v2/catalog.js";
@@ -64,6 +65,7 @@ import type { StoredPersonaIcon } from "../../domain/persona-v2/persona-icon.js"
 /** Development server for the implemented persona-v2 subset; full acceptance remains blocked. */
 export const createPersonaAdministrationApp = (input: {
   attachments?: PersonaAttachments;
+  pdfReports?: PersonaPdfReports;
   notifications?: PersonaNotifications;
   oauthConnections?: PersonaOAuthConnections;
   externalIntegrations?: PersonaExternalIntegrations;
@@ -178,6 +180,7 @@ export const createPersonaAdministrationApp = (input: {
         input.attachments,
         input.logger,
         input.interactionErrors,
+        input.pdfReports,
       ),
     );
   if (input.oauth && input.consumerCatalog) {
@@ -215,6 +218,7 @@ export const createPersonaAdministrationApp = (input: {
         input.attachments,
         input.logger,
         input.interactionErrors,
+        input.pdfReports,
       ),
     );
   }

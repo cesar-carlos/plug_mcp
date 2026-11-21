@@ -1,0 +1,17 @@
+/** Presentation advice never grants access or promises client UI capabilities. */
+export const DATA_PRESENTATION_GUIDANCE = {
+  hostedPages:
+    "Diferencie página estática com retrato autorizado dos dados de página conectada. OAuth MCP da conversa não autentica visitantes de uma página. Página conectada exige backend autenticado e vínculo verificável de cada visitante à própria concessão; login não concede acesso à persona. Não usar token de serviço para ampliar acesso, nem colocar tokens ou SQL privado em HTML, bundle, localStorage ou URL. Não inventar REST de dados: /mcp/chatgpt é transporte MCP. Sem integração comprovada, apresente tabela/retrato autorizado e informe a limitação; não prometa atualização conectada. Consultas/filtros devem ter contrato fechado, revalidar escopo, publicação e revogação a cada chamada e manter cache privado e readAt original. Não anunciar integração pronta antes dos testes técnicos e de consumo aplicáveis.",
+  fidelity:
+    "Respeite o gráfico pedido quando adequado ou explique a alternativa. Reconcilie valores do gráfico com o retorno. Inclua rótulos, unidades, legenda e alternativa tabular; não dependa só de cor nem use 3D ou eixo truncado para exagerar comparações.",
+  intent:
+    "Respeite o pedido simples: responda diretamente, sem exigir totais ou gráfico. Quando ajudar a decisão, escolha ranking com barras, evolução temporal com linhas, distribuição com histograma, relação com dispersão e composição com poucas categorias com pizza ou barras 100%. ABC usa barras e percentual acumulado, calculado sobre o conjunto completo autorizado; não classifique a carteira pela primeira página.",
+  evidence:
+    "Antes de visualizar, confira fonte, período, escopo, unidade, moeda, grão, completeness e provenance.readAt original. Não invente metadados ausentes. Nulos não são zero; preserve precisão decimal, denominador e arredondamento explícito. Não misture moedas ou unidades sem regra publicada. Identifique resultados parciais e diferenças de horário entre leituras.",
+  volume:
+    "Para grande volume, obtenha resumo no banco com agregação autorizada antes da paginação e detalhe paginado; nunca totalize só a página como carteira. Não carregue tudo para montar gráfico ou dashboard. Total global só quando necessário à análise, sem exigir contagem antes da listagem. Agregados separados usam o mesmo recorte e não prometem snapshot simultâneo.",
+  capabilities:
+    "Confira quais recursos de apresentação o cliente realmente disponibiliza; obter_capacidades do MCP não comprova suporte visual do cliente. Use componentes, páginas interativas ou dashboard somente se disponíveis e úteis; fallback para tabela ou gráfico estático. HTML, React, Apps SDK e Sites não são capacidades garantidas nem ferramentas a instalar. Não exponha credenciais, SQL privado ou dados além do escopo no frontend. Não publique página publicamente nem envie dados a outro serviço sem autorização explícita.",
+  interaction:
+    "Filtros locais atuam apenas no recorte carregado: identifique esse limite. Alterar o filtro global requer nova consulta autorizada e reinicia página 1, sem reaproveitar cursor ou misturar páginas anteriores. Interatividade não implica tempo real. Atualização manual é o padrão; intervalo automático somente se suportado e solicitado. Após falha, não faça retry automático; mantenha a leitura antiga identificada com seu readAt e informe erro/supportId seguro disponível, sem apresentar dados antigos como atuais.",
+};

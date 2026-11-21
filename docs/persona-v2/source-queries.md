@@ -8,14 +8,12 @@ escalar, projeção de valores no EXISTS, CASE ou ordenação indireta. Exemplos
 rascunho passam pela mesma validação no inspect, sem executar SQL ou modificar
 publicações/concessões. Testes sintéticos do parser não certificam o motor nativo.
 
-Em resumo paginado com CTE, use aliases únicos da projeção externa no `ORDER BY`,
-sem prefixo: `saldo DESC, fornecedor`, não `s.saldo DESC, s.fornecedor`.
-Preserve o grão, filtros, desempate completo e `options.page/pageSize`; não retire
-a paginação de um resumo por grupos para contornar a recusa. Um total escalar
-é outro plano: não precisa de paginação nem ordenação. A orientação está na base
-comum e nos tópicos `sql` e `plug-server`. Regressão sintética cobre a recusa
-original, a ordem corrigida, aliases ausentes e posições numéricas. Não amplia
-o contrato publicado nem certifica execução em motor nativo.
+Em resumos paginados com CTE, prefira ordenar pelos aliases únicos do
+`SELECT` externo, por exemplo `ORDER BY saldo DESC, fornecedor`. Preserve os
+filtros, o grão e o desempate da consulta entre páginas. Um total escalar
+que retorna uma única linha dispensa paginação e ordenação. A busca por uma
+coluna física projetada tem um caso específico descrito em
+[Ordenação e navegação com CTE](#ordenação-e-navegação-com-cte).
 
 A instrução de entrada prioriza `obter_contexto_persona` atualizado antes de
 anunciar recorte ou escolher parâmetros. Confirmação exigida pelo perfil deve
@@ -163,16 +161,30 @@ comum, precede a validação de paginação. Ambas permanecem obrigatórias ante
 da autorização remota e do envio de SQL; a prioridade não permite executar
 consulta com paginação inválida.
 
-Paginação gerenciada exige nomes ou aliases simples projetados no `ORDER BY`.
-Prefira aliases sem prefixo de tabela, especialmente em agregações, DISTINCT e
-CTEs. Expressões, posições numéricas e NULLS FIRST/LAST são recusados antes da
-autorização remota. Ordenação qualificada só é admitida com projeção simples e
-correspondência única. Em CTE, a coluna qualificada do SELECT externo precisa de alias
-explícito e as saídas precisam ter nomes distintos. Por exemplo, projetar
-`f.CodFornecedor AS codfornecedor` permite ordenar por `f.CodFornecedor`.
-Sem paginação, essas restrições adicionais não se aplicam.
-O MCP não reescreve SQL nem repete chamadas; o consumidor revisa explicitamente
-a consulta. O schema e os guias descrevem o mesmo contrato.
+### Ordenação e navegação com CTE
+
+Na paginação gerenciada, use nomes ou aliases simples da projeção externa no
+`ORDER BY`. Na busca de fornecedores, `SELECT f.CodFornecedor AS codfornecedor,
+f.RazaoSocial AS nomefornecedor` admite tanto `ORDER BY codfornecedor` quanto
+`ORDER BY f.CodFornecedor`. Para a forma qualificada, o MCP exige que a
+projeção externa contenha apenas colunas simples, sem `DISTINCT`, e que todos
+os nomes de saída sejam distintos. Cada chave qualificada precisa corresponder
+a exatamente uma coluna com alias explícito. Uma chave de outra tabela do
+`JOIN` com o mesmo valor não satisfaz essa correspondência. Expressões,
+posições numéricas e `NULLS FIRST/LAST` no `ORDER BY` são recusados antes do envio.
+
+Ao avançar ou voltar, preserve o SQL, os parâmetros e o tamanho efetivo da
+página. Use os indicadores de próxima e anterior retornados na resposta.
+Ao trocar o filtro, envie o novo valor em `params` e recomece na página 1.
+
+**Homologação de 20/11/2026.** A [regressão do validador do MCP](../../tests/unit/persona-v2/supplier-cte-pagination.test.ts)
+reproduziu o `INVALID_PLAN` antes da correção e passou depois. Em uma execução
+separada, o RPC do agente consultou um SQL Server local com dados sintéticos.
+Com `nomefornecedor = FINGER%` e páginas de 30, retornou 30 fornecedores na
+primeira página e um fornecedor distinto na segunda. A volta reproduziu os
+mesmos 30 IDs na mesma ordem. Na página 1, `BETA%` retornou dois fornecedores,
+`EMPTY%` retornou zero e restaurar `FINGER%` recuperou os 30 IDs iniciais.
+Essa rodada cobriu o MCP e o RPC do agente em etapas separadas, sem acesso à Campo.
 
 `obter_capacidades` descreve a composição do endpoint atual. `authentication`
 é `bearer` em `/mcp` ou `oauth2` em `/mcp/chatgpt`; `oauth` é falso no endpoint

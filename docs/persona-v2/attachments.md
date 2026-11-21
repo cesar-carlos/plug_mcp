@@ -24,6 +24,12 @@ Deploy permanece bloqueado na [matriz de aceite](acceptance.md).
 
 ## Publicação e concessão
 
+[Relatórios PDF gerados](pdf-reports.md) têm fluxo experimental separado,
+desabilitado por padrão, com generatedPdf/capability próprios e jobs cifrados.
+Reutilizam a entrega autenticada deste subsistema, sem converter JSON/BLOB
+existentes nem herdar suas concessões. Arquivos com várias seções revalidam
+todas as capturas e preservam seus horários; não representam snapshot comum.
+
 Indicação reconhecida de tipo binário impede entrega por consulta comum/JSON,
 mesmo quando outros metadados são contraditórios. Isso não comprova um anexo:
 a criação binária continua exigindo metadados positivos e consistentes, namespace

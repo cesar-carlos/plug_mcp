@@ -27,7 +27,7 @@ try {
   await pool.end();
   throw new Error("Banco ou keyring persona-v2 incompatível com o worker.");
 }
-const worker = createPersonaWorker(pool, cipher, logger);
+const worker = createPersonaWorker(pool, cipher, logger, undefined, config.PUBLIC_BASE_URL);
 const health = config.PERSONA_V2_WORKER_HEALTH_PORT
   ? await startPersonaWorkerHealth(worker, config.PERSONA_V2_WORKER_HEALTH_PORT).catch(async () => {
       await pool.end();

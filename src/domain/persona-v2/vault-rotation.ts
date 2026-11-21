@@ -23,6 +23,11 @@ export const PERSONA_VAULT_TARGETS = [
   },
   { table: "persona_attachment_v2", keys: ["handle_hash"], fields: ["payload_enc"] },
   { table: "persona_saved_query_v2", keys: ["id"], fields: ["payload_enc"] },
+  {
+    table: "persona_pdf_job_v2",
+    keys: ["id"],
+    fields: ["request_key_enc", "payload_enc", "result_enc"],
+  },
 ] as const;
 export type VaultTarget = (typeof PERSONA_VAULT_TARGETS)[number];
 export interface VaultRotationJob {

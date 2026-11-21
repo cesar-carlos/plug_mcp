@@ -1,4 +1,7 @@
+import { campoReturnTables } from "./campo-return-fixtures.js";
 import { campoStockManagementTables } from "./campo-stock-management-fixtures.js";
+import { campoCatalogTables } from "./campo-catalog-fixtures.js";
+import { campoFinanceItemTables } from "./campo-finance-item-fixtures.js";
 import { z } from "zod";
 import { campoSalesTables } from "./campo-sales-fixtures.js";
 import {
@@ -7,6 +10,13 @@ import {
 } from "../../src/domain/persona-v2/publication-fixture.js";
 
 export const campoQueryProfileSchema = z.enum([
+  "pagamentos-efetivos",
+  "pontualidade-recebimentos",
+  "itens-detalhados",
+  "itens-resumos",
+  "devolucoes-resumos",
+  "cadastro-produtos",
+  "cadastro-tipos-operacao",
   "estoque-gestao",
   "estoque-locais",
   "estoque-saldos",
@@ -39,6 +49,16 @@ export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
 /** Fixed synthetic schemas matching the curated cases, never inferred from an ERP. */
 export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
   const profile = campoQueryProfileSchema.parse(input);
+  if (profile === "devolucoes-resumos") return campoReturnTables();
+  if (
+    profile === "pagamentos-efetivos" ||
+    profile === "pontualidade-recebimentos" ||
+    profile === "itens-detalhados" ||
+    profile === "itens-resumos"
+  )
+    return campoFinanceItemTables(profile);
+  if (profile === "cadastro-produtos" || profile === "cadastro-tipos-operacao")
+    return campoCatalogTables(profile);
   if (profile === "estoque-gestao") return campoStockManagementTables();
   if (profile === "estoque-locais" || profile === "estoque-saldos") {
     const tables = [

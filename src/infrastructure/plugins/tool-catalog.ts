@@ -1,6 +1,16 @@
 import { createHash } from "node:crypto";
 import type { PluginRuntime } from "./package-schemas.js";
 
+/** Optional runtime surface, not part of the default package's required minimum. */
+export const PLUGIN_OPTIONAL_PDF_TOOLS = [
+  "validar_relatorio_pdf",
+  "localizar_relatorio",
+  "listar_relatorios",
+  "criar_relatorio_pdf",
+  "obter_status_relatorio",
+  "cancelar_relatorio",
+] as const;
+
 /** Training tools are discovered only with the corresponding delegated authority. */
 export const PLUGIN_DELEGATED_TRAINING_TOOLS = [
   "listar_rascunhos",

@@ -106,6 +106,74 @@ const fixture = () => {
     service: new PersonaAttachments(catalog, queries, gateway, memory, crypto),
   };
 };
+
+const pdfTraining = () => ({
+  ...attachmentTraining(),
+  generatedPdf: {
+    schemaVersion: 1 as const,
+    templates: ["table-v1"] as ["table-v1"],
+    columns: ["id", "amount"],
+    maxRows: 30,
+    maxPages: 10,
+    maxBytes: 1048576,
+    ttlMs: 300000,
+  },
+});
+
+it("PDF export cannot inherit JSON capability or dispatch SQL", async () => {
+  const f = fixture();
+  await expect(
+    f.queries.exportPdf(identity, { fonteId: trainingSource.id, params: { minimum: 0 } }),
+  ).rejects.toMatchObject({ code: "AUTHORIZATION_DENIED" });
+  expect(f.lease.execute).not.toHaveBeenCalled();
+});
+
+it("PDF contract pins columns and budgets in a separate capability", () => {
+  const training = pdfTraining();
+  const first = compileQueryTraining(training, trainingSource, crypto);
+  const changed = compileQueryTraining(
+    { ...training, generatedPdf: { ...training.generatedPdf, maxPages: 9 } },
+    trainingSource,
+    crypto,
+  );
+  const capability = (pkg: typeof first) =>
+    pkg.requiredCapabilities.find((c) => c.startsWith("generated-pdf-contract:"));
+  expect(capability(first)).toBeDefined();
+  expect(capability(first)).not.toEqual(capability(changed));
+  expect(first.requiredCapabilities).toContainEqual(expect.stringMatching(/^attachment-contract:/));
+});
+
+it("PDF publication rejects fields without export use and undeclared aliases", () => {
+  const training = pdfTraining();
+  expect(() =>
+    compileQueryTraining({ ...training, columns: queryTraining().columns }, trainingSource, crypto),
+  ).toThrow();
+  expect(() =>
+    compileQueryTraining(
+      { ...training, generatedPdf: { ...training.generatedPdf, columns: ["missing"] } },
+      trainingSource,
+      crypto,
+    ),
+  ).toThrow();
+});
+
+it("PDF capture preserves field guards and reduces upstream row limits", async () => {
+  const f = fixture();
+  f.evidence.publications[0]!.package = compileQueryTraining(pdfTraining(), trainingSource, crypto);
+  const input = { fonteId: trainingSource.id, params: { minimum: 0 }, options: { maxRows: 5000 } };
+  const captured = await f.queries.exportPdf(identity, input);
+  expect(captured.response.rows).toEqual([{ id: 1, amount: "10.25" }]);
+  expect(captured.response.limits?.maxRows).toBe(30);
+  expect(f.lease.execute).toHaveBeenCalledTimes(1);
+  f.lease.execute.mockClear();
+  await expect(
+    f.queries.exportPdf(identity, {
+      ...input,
+      sql: "SELECT id AS other FROM orders WHERE id >= :minimum ORDER BY id",
+    }),
+  ).rejects.toMatchObject({ code: "INVALID_PLAN" });
+  expect(f.lease.execute).not.toHaveBeenCalled();
+});
 const input = { format: "json", query: { skillIds: [trainingSource.id], params: { minimum: 0 } } };
 
 it.each(["create", "read"])(

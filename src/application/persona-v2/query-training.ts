@@ -5,6 +5,8 @@ import {
   binaryAttachmentContractSchema,
 } from "../../domain/persona-v2/attachments.js";
 import { assertBinaryProjection } from "./binary-attachment.js";
+import { generatedPdfContractSchema } from "../../domain/persona-v2/pdf-report.js";
+import { assertPdfReportProjection } from "./pdf-report-projection.js";
 import { pareceSegredoEmTexto } from "../../domain/entities/parece-segredo.js";
 import { PersonaV2Error, type Source } from "../../domain/persona-v2/model.js";
 import { canonicalJson, type QueryPackage } from "../../domain/persona-v2/catalog.js";
@@ -38,6 +40,7 @@ const columnName = z
   .max(100);
 const text = z.string().trim().min(1).max(5000);
 export const queryTrainingSchema = z.strictObject({
+  generatedPdf: generatedPdfContractSchema.optional(),
   semantics: querySemanticsSchema.optional(),
   binaryAttachments: binaryAttachmentContractSchema.optional(),
   attachments: attachmentContractSchema.optional(),
@@ -115,7 +118,7 @@ export const compileQueryTraining = (
   assertQuerySemantics(training);
   assertQueryRelationshipPaths(training);
   if (
-    training.attachments &&
+    (training.attachments || training.generatedPdf) &&
     !training.columns.some((field) => field.uses?.includes("exportacao"))
   ) {
     throw new PersonaV2Error(
@@ -229,6 +232,27 @@ export const compileQueryTraining = (
       })),
   };
   const ast = validateSourceSql(training.sqlModel, training.dialect, scope);
+  if (training.generatedPdf) {
+    if (training.binaryAttachments) {
+      throw new PersonaV2Error("INVALID_PLAN", "PDF gerado não usa contrato de coluna binária.");
+    }
+    assertPdfReportProjection(ast.colunas, training.generatedPdf);
+    if (
+      training.generatedPdf.columns.some(
+        (alias) => !ast.colunas.some((column) => column.alias === alias),
+      )
+    ) {
+      throw new PersonaV2Error(
+        "INVALID_PLAN",
+        "Coluna PDF não pertence à projeção do modelo publicado.",
+      );
+    }
+    assertQueryFieldUses(
+      ast,
+      training.columns,
+      Object.fromEntries(ast.colunas.map((column) => [column.alias, ["exportacao"]])),
+    );
+  }
   if (training.binaryAttachments) {
     const field = training.columns.find(
       (c) =>
@@ -296,6 +320,11 @@ export const compileQueryTraining = (
       hubContractRef: PERSONA_V2_TRAINING_BASE.hubContract.ref,
     },
     requiredCapabilities: [
+      ...(training.generatedPdf
+        ? [
+            `generated-pdf-contract:${crypto.sha256Hex(canonicalJson({ sourceId: source.id, contract: training.generatedPdf, fields: training.columns.filter((c) => c.uses?.includes("exportacao")) }))}`,
+          ]
+        : []),
       ...(training.binaryAttachments
         ? [
             `binary-attachment-contract:${crypto.sha256Hex(canonicalJson({ sourceId: source.id, contract: training.binaryAttachments, fields: training.columns.filter((c) => c.uses?.includes("exportacao")) }))}`,

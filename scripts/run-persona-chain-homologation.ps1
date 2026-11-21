@@ -50,6 +50,11 @@ try {
     $env:PLUG_SERVER_CHECKOUT = $hubPath
     & (Join-Path $PSScriptRoot 'with-project-node.ps1') node node_modules/tsx/dist/cli.mjs scripts/check-training-base.ts
     if ($LASTEXITCODE -ne 0) { throw 'Reviewed hub contract differs; chain fixture was not started. Review base, snapshot and tests together.' }
+    $pdfBinding = (Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json).pdfRenderer
+    if ($pdfBinding) {
+        & (Join-Path $PSScriptRoot 'with-project-node.ps1') npm run build
+        if ($LASTEXITCODE -ne 0) { throw 'PDF fixture requires a fresh compiled MCP renderer.' }
+    }
     $sourceRecord = Join-Path (Get-Location).Path "node_modules/.cache/persona-chain-sources-$([guid]::NewGuid().ToString('N')).json"
     $sourceArguments = @('--hub', $hubPath, '--agent', $agentPath, '--record', $sourceRecord)
     & (Join-Path $PSScriptRoot 'with-project-node.ps1') node scripts/persona-chain-sources.mjs before @sourceArguments

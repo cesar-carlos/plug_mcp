@@ -6,6 +6,8 @@ import { composePersonaV2 } from "../../src/composition/compose-persona-v2.js";
 import { testConfig } from "../../src/config/env.js";
 import { readChainManifest } from "../../scripts/homologation/chain-manifest.js";
 import { PersonaRedisQueryStore } from "../../src/infrastructure/persona-v2/query-reuse-redis.js";
+import { renderPdfReport } from "../../src/infrastructure/persona-v2/pdf-renderer.js";
+import { chainPdfRenderer } from "./persona-chain-pdf-renderer.js";
 
 // Independent process with production v2 composition, no gateway overrides.
 // Only synthetic fixture configuration is loaded; never reads an operational .env.
@@ -106,11 +108,19 @@ try {
       DATABASE_URL: manifest.controlDatabaseUrl,
       PLUG_SERVER_BASE_URL: hub.hubUrl,
       PUBLIC_BASE_URL: canonical,
+      PERSONA_V2_PDF_ENABLED: true,
       ...(instance !== "main"
         ? { PERSONA_V2_REDIS_URL: manifest.redisUrl, PERSONA_V2_QUERY_CACHE_TTL_MS: 60000 }
         : {}),
       LOG_LEVEL: "silent",
     }),
+    // This suite proves native capture/HTTP delivery only. Renderer OS isolation is
+    // certified separately by pdf-renderer-isolation.mjs in a network-none container.
+    {
+      pdfRenderer: manifest.pdfRenderer
+        ? await chainPdfRenderer(manifest.pdfRenderer)
+        : { render: renderPdfReport },
+    },
   );
   server.on("request", runtime.app);
   writeFileSync(join(sessionRoot, `${prefix}-ready.json`), JSON.stringify({ url }));

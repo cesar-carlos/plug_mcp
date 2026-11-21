@@ -49,7 +49,7 @@ export interface AttachmentDescriptor {
   id: string;
   handle: string;
   filename: string;
-  format: "json" | "binary";
+  format: "json" | "binary" | "pdf";
   mimeType: "application/json" | z.infer<typeof binaryMimeSchema>;
   bytes: number;
   rows: number;
@@ -60,6 +60,14 @@ export interface AttachmentDescriptor {
   readAt: string;
   complete: boolean;
   classifications: readonly string[];
+  pdfSections?: readonly {
+    sourceId: string;
+    readAt: string;
+    rows: number;
+    complete: boolean;
+    publications: readonly { id: string; hash: string }[];
+  }[];
+  consistency?: "not_asserted" | "successive_reads";
   provenance?: {
     sourceId: string;
     dialect: string;

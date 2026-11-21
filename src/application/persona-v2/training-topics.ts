@@ -63,6 +63,9 @@ function buildTrainingTopic(
         executionLimits: base.executionLimits,
         fieldUses: base.fieldUses,
         results: base.results,
+        pdfReports: "Leia pdfReports em obter_treinamento_base sem topic.",
+        dataPresentation:
+          "Para gráficos, leia dataPresentation em obter_treinamento_base sem topic.",
       });
     case "knowledge":
       return wrap({
@@ -72,6 +75,8 @@ function buildTrainingTopic(
         library: base.library,
         relationshipPaths: base.relationshipPaths,
         structurePages: base.structurePages,
+        dataPresentation:
+          "Para apresentação de análises, leia dataPresentation em obter_treinamento_base sem topic. Orientação não concede acesso, exportação ou publicação pública; capacidades visuais dependem do cliente.",
       });
     case "operations":
       return wrap({

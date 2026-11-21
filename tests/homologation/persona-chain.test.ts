@@ -1030,6 +1030,102 @@ beforeAll(async () => {
   bearer = await issue();
 });
 for (const dialect of chainEngines) {
+  it.each(["table", "chart", "sections"] as const)(
+    `${dialect}: PDF gerado %s pela cadeia nativa e download sem replay`,
+    async (mode) => {
+      const source = sources.find((s) => s.dialect === dialect)!;
+      const original = localQueryTraining(source.id, dialect);
+      const draft = await post(`/api/admin/personas/${personaId}/skills`, {
+        slug: `pdf-${mode}-${dialect}`,
+        name: `PDF sintético ${dialect}`,
+        kind: "consulta",
+        training: {
+          ...original,
+          columns: original.columns.map((column) => ({
+            ...column,
+            uses: ["projecao", "filtro", "ordenacao", "exportacao"],
+          })),
+          generatedPdf: {
+            schemaVersion: 1,
+            templates: ["table-v1"],
+            columns: ["id", "amount"],
+            maxRows: 30,
+            maxPages: 10,
+            maxBytes: 1048576,
+            ttlMs: 300000,
+            successiveSections: 2,
+            charts: [{ id: "amounts", kind: "bar", category: "id", value: "amount", unit: "BRL" }],
+          },
+        },
+      });
+      expect(draft.status, JSON.stringify(draft.body)).toBe(201);
+      const skillId = draft.body.skill.id as string;
+      const publication = await publish(skillId);
+      const token = await issue([{ ...source, skillId, ...publication }]);
+      const input = {
+        schemaVersion: 1,
+        requestId: randomUUID(),
+        scope: "integral",
+        query: { fonteId: source.id, skillIds: [skillId], params: { minimum: 0 } },
+        layout: {
+          templateId: "table-v1",
+          orientation: "portrait",
+          columns: ["id", "amount"],
+          ...(mode === "chart" ? { chartId: "amounts" } : {}),
+        },
+        ...(mode === "sections"
+          ? {
+              consistency: "successive_reads",
+              additionalSections: [
+                {
+                  scope: "integral",
+                  query: { fonteId: source.id, skillIds: [skillId], params: { minimum: 1 } },
+                  layout: {
+                    templateId: "table-v1",
+                    orientation: "landscape",
+                    columns: ["id", "amount"],
+                  },
+                },
+              ],
+            }
+          : {}),
+      };
+      const before = binarySqlCalls(dialect);
+      const created = await tool("criar_relatorio_pdf", input, token);
+      expect(created.isError, JSON.stringify(created.value)).toBe(false);
+      expect(created.value.state).toBe("captured");
+      let status = created.value;
+      const until = Date.now() + 15000;
+      while (["captured", "rendering"].includes(status.state) && Date.now() < until) {
+        await delay(100);
+        const response = await tool(
+          "obter_status_relatorio",
+          { jobId: created.value.jobId },
+          token,
+        );
+        expect(response.isError, JSON.stringify(response.value)).toBe(false);
+        status = response.value;
+      }
+      expect(status.state, JSON.stringify(status)).toBe("ready");
+      expect(status.descriptor).toMatchObject({
+        format: "pdf",
+        complete: true,
+        sourceId: source.id,
+      });
+      const download = await request(mcpUrl)
+        .get(status.descriptor.downloadPath)
+        .set("Host", new URL(mcpUrl).host)
+        .set("Authorization", `Bearer ${token}`);
+      expect(download.status).toBe(200);
+      expect(Buffer.from(download.body).subarray(0, 5).toString()).toBe("%PDF-");
+      const pdfDirectory = join(sessionRoot, "pdf-reports");
+      mkdirSync(pdfDirectory, { recursive: true });
+      writeFileSync(join(pdfDirectory, `${dialect}-${mode}.pdf`), Buffer.from(download.body));
+      const repeated = await tool("criar_relatorio_pdf", input, token);
+      expect(repeated.value.descriptor.handle).toBe(status.descriptor.handle);
+      expect(binarySqlCalls(dialect) - before).toBe(mode === "sections" ? 2 : 1);
+    },
+  );
   it(`${dialect}: view nativa consulta e pagina sem ampliar a policy técnica`, async () => {
     const source = sources.find((s) => s.dialect === dialect)!;
     const schema = dialect === "postgres" ? "public" : dialect === "mssql" ? "dbo" : "dba";

@@ -388,6 +388,72 @@ O perfil itens-variedade-perdas reutiliza somente três tabelas e 17 campos de i
 
 `-CampoConsulta cadastro-filiais` declara apenas dbo.filial (13 campos) e dbo.municipio (3 campos) da amostra do responsável. Chave da filial é empresa/filial; município é anulável na filial e não há FK sintética obrigatória, permitindo testar ausência de correspondência no INNER JOIN. Códigos são inteiros, demais campos textuais, sem interpretação de regime tributário. Somente MSSQL; não amplia fonte operacional. Perfil e testes locais não comprovam execução do runner, publicação ou acesso da persona.
 
+`-CampoConsulta cadastro-tipos-operacao` declara os seis campos de
+`rascunhos/tipos-de-operacao-de-saida.sql` do catálogo local mcp_test_agente.
+Filial, descrição e indicadores permanecem anuláveis; não assume filial nem
+converte indicador desconhecido em não. `cadastro-produtos` corresponde a
+`rascunhos/produtos.sql`: produto, unidade, grupo e marca, com preço decimal e
+códigos de barras/referência/unidade textuais. Não contém dados reais, sementes,
+FKs ou novas concessões. As chaves são do modelo sintético; não certificam
+constraints operacionais. Antes do runner, conferir tipos e constraints da fonte,
+preparar casos de nulos, ausência de dimensão e isolamento, e usar a guarda da
+conexão executora. Disponibilidade da fixture não aprova o candidato. Clientes,
+itens adicionais, baixas efetivas e caixa ainda exigem perfis/casos específicos;
+vales/troco sem vínculo confirmado e fechamento histórico não são habilitados.
+
+Conferência de metadados ODBC somente leitura em Estacao (16/11/2026) confirmou
+as PKs declaradas nesses dois perfis e os tipos escalares, incluindo unidade
+textual e preço numeric com escala 10. A fixture permite nulos defensivos em
+campos não chave mesmo quando a origem declara NOT NULL (como os indicadores
+de operação); esses casos não comprovam ocorrência de nulos na fonte. Não houve
+leitura de valores nem homologação do runner nessa conferência.
+
+Perfis locais adicionais: `pagamentos-efetivos` usa PagamentoTitulo/ContaPagar;
+`pontualidade-recebimentos` usa RecebimentoTitulo/Recebimento/ContaReceber;
+`itens-detalhados` usa as seis tabelas da amostra de itens, sem ampliar os perfis
+anteriores. Datas usam `datetime2_3`. Metadados ODBC somente leitura de 16/11/2026
+confirmaram as PKs compostas das baixas e o item da venda como varchar; o perfil
+novo preserva `"01"` como texto. A divergência de tipo do perfil antigo
+`itens-gestao` permanece explícita, sem migração automática de casos existentes.
+PKs necessárias às sementes não acrescentam campos ao contrato treinado.
+
+`campoFinanceItemCandidates` gera seis casos **candidatos**, com dados sintéticos,
+para pagamentos (parciais/limites/cancelamentos e valor nulo), pontualidade,
+frequência de desconto, promoções e tributos. Não executa nem aprova casos.
+O pacote privado local `finance-item-candidates-2026-11-16.json` em `.local`
+inclui caminhos das amostras e bloqueios: aliases CamelCase não cabem no schema
+atual de expected.columns em minúsculas, e o runner compara nomes exatamente;
+COUNT_BIG estrela/agregado constante em JOIN pode falhar na guarda de origem.
+Revisar rascunho e casos pelo console; não normalizar silenciosamente resultados
+nem afrouxar validações. Expectativas aritméticas revisadas não comprovam execução
+nativa ou aprovação semântica. Valores nulos defensivos não significam que a
+origem aceita NULL em campos NOT NULL. Casos de outras perguntas, caixa e clientes
+mínimos seguem pendentes; não declarar cobertura das 21 perguntas por esses casos.
+
+PagamentoTitulo continua bloqueado para treinamento: o contrato exige grão não
+vazio e `CodPagamento` não aparece na amostra fornecida. Metadata/PK de fixture
+não autorizam adicionar essa coluna ao treinamento; exigir amostra complementar
+ou declaração explícita do responsável. Empresa/título não identifica uma baixa
+parcial. Não criar grão fictício nem relaxar o schema para cadastrar o candidato.
+
 O perfil `estoque-gestao` contém somente saldoestoque, produto, custoproduto, produtovendido, itemprodutovendido e tipooperacaosaida das amostras curadas. Usa chave de saldo produto/local, custos empresa/filial/produto e itens empresa/venda/item. Não declara vínculo local/filial ou FK inferida. Casos devem separar custo atual, saldo positivo, valores desconhecidos, demanda e confirmação explícita do recorte; a existência do perfil não aprova nem publica consultas.
 
 Validação temporal de 2026-11-14: regressão nativa em SQL Server 2022 descartável, ODBC 5.0.4 e driver 18 preservou 23:59:59.997, midnight, NULL e excluiu o dia seguinte. A execução revelou e corrigiu o bind de NULL como BIGINT usando conversão tipada por texto com estilo126, sem interpolar valores. Container sem volumes removido ao concluir. Os 110 testes MCP direcionados e 58 testes Dart passaram; a aprovação do caso salvo exige ainda nova rodada oficial após implantação compatível.
+
+O perfil local `-CampoConsulta itens-resumos` usa somente ItemProdutoVendido,
+ProdutoVendido e TipoOperacaoSaida, com 23, 6 e 3 colunas respectivamente.
+Atende casos de resumos sem as tabelas auxiliares de `itens-detalhados`,
+que permanece intacto. Manifesto e sementes exigem exatamente as mesmas
+tabelas; cada linha inclui todas as colunas não geradas, mesmo quando nulas.
+Omissões continuam recusadas antes de preparar a fixture. O perfil não aprova
+casos nem altera publicações ou concessões; exige nova rodada isolada.
+
+O perfil `-CampoConsulta devolucoes-resumos` fixa quatro tabelas e 17 colunas
+(8/6/2/1): ItemDevolucaoVenda, DevolucaoVenda, TipoOperacaoDevolucao e
+UnidadeMedida. A chave de item usa ItemDevolucaoVenda textual, nunca
+ItemProdutoVendido. Preserva nulabilidade declarada e horário em datetime2(3).
+Não declara FKs inferidas nem impede sementes sem unidade correspondente,
+necessárias para testar a exclusão por INNER JOIN. Tamanhos varchar e precisão
+numeric da origem não são certificação pelo contrato tipado da fixture.
+Os casos e resultados esperados são separados; o perfil não executa nem publica.
+`campoReturnCandidates()` gera sete candidatos sintéticos: três agrupamentos, três períodos vazios e um filtro explícito de filial. Os valores esperados são calculados independentemente; os SQLs revisados são vinculados no artefato privado por caminho/hash. O filtro de filial no caso não comprova autorização por concessão. Cadastro pelo console e execução isolada permanecem separados.

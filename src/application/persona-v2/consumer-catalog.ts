@@ -1027,6 +1027,7 @@ export class PersonaConsumerCatalog {
         scope: publication.package.scope,
         parameters: training.parameters,
         ...(training.attachments ? { attachments: training.attachments } : {}),
+        ...(training.generatedPdf ? { generatedPdf: training.generatedPdf } : {}),
         ...(training.binaryAttachments ? { binaryAttachments: training.binaryAttachments } : {}),
         rules: training.rules,
         ...(training.semantics ? { semantics: training.semantics } : {}),

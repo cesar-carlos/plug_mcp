@@ -11,6 +11,32 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Prévia PDF sem SQL, recuperação pelo requestId e listagem autorizada antes
+  da paginação, com métricas agregadas somente para operador. Criação e status
+  revalidam autoridade; revogação antes da admissão não produz captura incerta.
+  Testes PostgreSQL isolados e transporte MCP cobrem identidade e ausência de replay.
+
+- Fixed: Revisão PDF preserva status cancelado e diagnóstico seguro por supportId,
+  limita linhas/bytes acumulados entre seções e usa deadline absoluto no IPC.
+  Corrida de cancelamento não reabre captura; formato da medida deve concordar
+  com a unidade do gráfico. Regressões com PostgreSQL e transporte local.
+
+- Fixed: PDFs usam formatação brasileira tipada para datas, horários, medidas,
+  moedas, percentuais e booleanos. Medidas têm duas casas com arredondamento
+  decimal exato; códigos, nulos, fusos e valores capturados são preservados.
+
+- Added: Relatórios PDF v2 em validação local, desabilitados por padrão, com
+  contrato de exportação próprio, captura única por seção, jobs cifrados/idempotentes,
+  cancelamento, renderer isolado e regressões. Fontes Noto Sans incorporadas e
+  gráficos ECharts da mesma captura e até quatro seções por leituras sucessivas.
+  Nove casos da cadeia nativa com renderer Docker passaram, sem certificar
+  snapshot entre seções, pacote final ou download no cliente.
+  Nenhuma concessão existente foi alterada.
+
+- Changed: Base comum orienta apresentação de análises por intenção, agregação
+  antes da paginação, capacidades visuais disponíveis e atualização segura.
+  Guias SQL/knowledge encaminham ao conteúdo completo, com regressões offline.
+
 - Fixed: Paginação de fornecedores por nome aceita ORDER BY qualificado em CTE quando a coluna tem um alias explícito e único na projeção externa.
 
 - Fixed: Exemplo de próxima página no treinamento comum preserva pageSize 30, evitando sobreposição com a primeira página. Regressões cobrem os guias comum, SQL e plug-server e a preservação segura de SQLSTATE/código nativo pelo supportId.
@@ -34,6 +60,14 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 - Fixed: Guia comum inicia listagens sem contagem prévia e usa a última página exibida para próxima/anterior, evitando saltos após voltar.
 
 - Orientação comum de listagens com páginas de 30 ou teto menor, sondagem por metadados e contagem autorizada sem confundir páginas com totais.
+
+- Fixture isolada `devolucoes-resumos` com quatro tabelas, chave textual explícita, nulabilidade e horário preservados; sem publicação automática.
+
+- Fixture local `itens-resumos`: três tabelas exatas para resumos, preservando a recusa de sementes incompletas e o perfil amplo.
+
+- Added: Perfis locais de fixtures para pagamentos efetivos, pontualidade de recebimentos e itens detalhados; seis casos candidatos sintéticos com bloqueios explícitos de aliases/origem, sem execução ou aprovação automática.
+
+- Added: Perfis sintéticos opt-in MSSQL para cadastro de produtos e tipos de operação, com wrappers e regressões de nulos, tipos e isolamento. Não aprovam contratos, constraints da fonte ou concessões.
 
 - Fixed: Instrução inicial prioriza contexto atualizado antes de selecionar recortes e exige confirmação na conversa quando prevista no perfil, sem usar memória de outro chat como escolha. Não introduz gate técnico ou identificação de conversas.
 

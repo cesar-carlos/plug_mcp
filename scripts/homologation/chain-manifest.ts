@@ -15,6 +15,12 @@ const schema = z.object({
   controlDatabaseUrl: z.string().url(),
   hubDatabaseUrl: z.string().url().optional(),
   redisUrl: z.string().url(),
+  pdfRenderer: z
+    .strictObject({
+      container: z.string().regex(/^plug-mcp-pdf-render-[a-z0-9-]{1,50}$/),
+      imageId: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    })
+    .optional(),
   engines: z.object({ postgres: engine, mssql: engine, sybase: engine }),
 });
 export function readChainManifest(path: string): z.infer<typeof schema> {

@@ -27,9 +27,10 @@ export const createAttachmentSchema = z.strictObject({
   query: sourceQuerySchema.extend({ skillIds: sourceQuerySchema.shape.skillIds.unwrap() }),
 });
 export const readAttachmentSchema = z.strictObject({ handle: attachmentHandleSchema });
-interface StoredAttachment {
+export interface StoredAttachment {
   descriptor: Omit<AttachmentDescriptor, "handle" | "uri" | "downloadPath">;
   capture: AttachmentQueryCapture;
+  additionalPdfCaptures?: AttachmentQueryCapture[];
   data: string;
 }
 /** Artifacts are data from an authorized fresh SELECT, never caller-supplied payloads. */
@@ -109,10 +110,26 @@ export class PersonaAttachments {
   }
   private async verify(
     identity: ConsumerIdentity,
-    record: StoredAttachment,
+    record: {
+      capture: AttachmentQueryCapture;
+      additionalPdfCaptures?: AttachmentQueryCapture[];
+      descriptor: Pick<AttachmentDescriptor, "format">;
+    },
     check: () => void,
   ): Promise<void> {
     check();
+    if (record.additionalPdfCaptures) {
+      if (
+        record.descriptor.format !== "pdf" ||
+        record.additionalPdfCaptures.length > 3 ||
+        record.additionalPdfCaptures.some(
+          (capture) => capture.evidence.source.id !== record.capture.evidence.source.id,
+        )
+      )
+        throw new PersonaV2Error("ATTACHMENT_UNAVAILABLE", "Anexo indisponível.");
+      for (const capture of record.additionalPdfCaptures)
+        await this.verify(identity, { capture, descriptor: record.descriptor }, check);
+    }
     const { evidence, resources, expectedStructure, policyFingerprint } = record.capture;
     if (
       !evidence.cacheFence ||
@@ -121,12 +138,16 @@ export class PersonaAttachments {
         (p) =>
           !(record.descriptor.format === "binary"
             ? queryTrainingSchema.parse(p.package.training).binaryAttachments
-            : queryTrainingSchema.parse(p.package.training).attachments) ||
+            : record.descriptor.format === "pdf"
+              ? queryTrainingSchema.parse(p.package.training).generatedPdf
+              : queryTrainingSchema.parse(p.package.training).attachments) ||
           !p.package.requiredCapabilities.some((c) =>
             c.startsWith(
               record.descriptor.format === "binary"
                 ? "binary-attachment-contract:"
-                : "attachment-contract:",
+                : record.descriptor.format === "pdf"
+                  ? "generated-pdf-contract:"
+                  : "attachment-contract:",
             ),
           ),
       )
@@ -162,6 +183,14 @@ export class PersonaAttachments {
     check();
     await this.catalog.revalidateQuery(identity, evidence);
     check();
+  }
+  async verifyPdfCapture(
+    identity: ConsumerIdentity,
+    capture: AttachmentQueryCapture,
+  ): Promise<void> {
+    await this.bounded(capture.evidence.executionLimits.timeoutMs, (check) =>
+      this.verify(identity, { capture, descriptor: { format: "pdf" } }, check),
+    );
   }
   async create(identity: ConsumerIdentity, raw: unknown): Promise<AttachmentDescriptor> {
     const input = createAttachmentSchema.parse(raw);
@@ -297,7 +326,8 @@ export class PersonaAttachments {
         throw new PersonaV2Error("ATTACHMENT_UNAVAILABLE", "Anexo indisponível.");
       }
       const record = JSON.parse(stored) as StoredAttachment;
-      reduce(record.capture.evidence.executionLimits.timeoutMs);
+      const captures = [record.capture, ...(record.additionalPdfCaptures ?? [])];
+      reduce(Math.min(...captures.map((capture) => capture.evidence.executionLimits.timeoutMs)));
       const check = () => {
         budget();
         if (Date.parse(record.descriptor.expiresAt) <= Date.now()) {
@@ -317,11 +347,15 @@ export class PersonaAttachments {
           rows: record.descriptor.rows,
           attachment: { id: record.descriptor.id, bytes: data.byteLength, event: "downloaded" },
         });
+        for (const capture of record.additionalPdfCaptures ?? [])
+          await this.catalog.revalidateQuery(identity, capture.evidence);
         check();
         return {
           descriptor: this.describe(identity, handle, record),
           data,
-          maxResponseBytes: record.capture.evidence.executionLimits.maxBytes,
+          maxResponseBytes: Math.min(
+            ...captures.map((capture) => capture.evidence.executionLimits.maxBytes),
+          ),
         };
       } catch (error) {
         try {

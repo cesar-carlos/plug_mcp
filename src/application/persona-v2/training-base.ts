@@ -1,4 +1,6 @@
 import { LIST_PAGINATION_GUIDANCE } from "./list-pagination-guidance.js";
+import { DATA_PRESENTATION_GUIDANCE } from "./data-presentation-guidance.js";
+import { PDF_REPORT_GUIDANCE } from "./pdf-report-guidance.js";
 import {
   INTERACTION_ERROR_GUIDANCE,
   KNOWLEDGE_GAP_DISCOVERY,
@@ -22,6 +24,8 @@ import {
 
 /** Guidance has no execution authority. This version describes only implemented v2 surfaces. */
 const content = {
+  dataPresentation: DATA_PRESENTATION_GUIDANCE,
+  pdfReports: PDF_REPORT_GUIDANCE,
   dialectExamples: PERSONA_DIALECT_EXAMPLES,
   queryContinuity:
     "Entre páginas, preserve fonte, skills/publicações, SQL, filtros, parâmetros e limites; avance pela página e tamanho efetivos retornados somente com hasNextPage true. Não una recortes ou publicações diferentes como um único total. Páginas não compartilham snapshot garantido. Revogação, rotação de token ou mudança de publicação exige conferir novamente contexto e concessões; leitura anterior da skill não reserva autoridade. Não use outra conexão nem repita uma falha para contornar a recusa. Na resposta, informe origem, completude e limites observados. Use o horário original de provenance.readAt, inclusive em cache; se ausente, diga que não foi informado. Não invente horário, total, causa técnica ou supportId.",
@@ -88,7 +92,7 @@ const content = {
     "Uma consulta local utiliza uma fonte. Cruzamentos exigem skill de cruzamento publicada com dependências e regras de combinação treinadas.",
   ],
   results:
-    "Responda fatos, valores e KPIs somente com resultados efetivamente retornados e regras publicadas. Nunca invente registros nem complete valores ausentes por suposição. Informe fonte, período, filtros relevantes e limitações. Indique provenance.readAt como horário da leitura original. Para reuse.kind cache ou singleflight, preserve esse horário. O período dos lançamentos vem dos filtros de negócio, e o horário de leitura por si só não comprova a última atualização do ERP. Para um SUM sem GROUP BY, pode voltar uma linha com total NULL tanto em recorte vazio como quando todos os valores são nulos. Se a distinção for necessária e os usos publicados permitirem, peça junto COUNT(*) para contar linhas e COUNT(campo) para contar valores presentes no mesmo recorte. Conte vendas somente no grão publicado de venda. Apresente zero monetário quando o valor retornado ou a regra publicada o justificar. Zero linhas só descreve a consulta efetuada; erro e negação de acesso não provam ausência. Leia completeness, pagination e provenance; uma página ou resultado parcial não representa o total. Divergências entre bases exigem explicação conforme treinamento, não escolha arbitrária de um valor.",
+    "Fatos, valores e KPIs exigem resultados retornados e regras publicadas. Não invente registros ou valores. Informe fonte, período, filtros relevantes e limitações. Preserve provenance.readAt original, inclusive em cache/singleflight. Período vem dos filtros; horário de leitura não prova última atualização do ERP. Para um SUM sem GROUP BY, pode voltar uma linha com total NULL tanto em recorte vazio como quando todos os valores são nulos. Se a distinção for necessária e os usos publicados permitirem, peça junto COUNT(*) para contar linhas e COUNT(campo) para contar valores presentes no mesmo recorte. Conte vendas somente no grão publicado de venda. Apresente zero monetário quando o valor retornado ou a regra publicada o justificar. Zero linhas só descreve a consulta efetuada; erro e negação de acesso não provam ausência. Leia completeness, pagination e provenance; uma página ou resultado parcial não representa o total. Divergências entre bases exigem explicação conforme treinamento, não escolha arbitrária de um valor.",
   queryContract: {
     parameters:
       "Envie só marcadores públicos do SELECT escolhido, incluindo os obrigatórios. Opcional usado mas omitido recebe NULL; o predicado continua ativo: confira sua semântica. IN aceita params escalares, com marcadores individuais publicados. Lista incompatível exige informar a lacuna, nunca interpolar valores.",

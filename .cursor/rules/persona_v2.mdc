@@ -16,6 +16,38 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 
 # Persona-v2
 
+Relatórios PDF gerados estão em implementação opt-in, desabilitada por padrão,
+conforme docs/persona-v2/pdf-reports.md. Exigem generatedPdf/capability/exportacao
+próprias, captura única precedida de claim durável e renderer sem rede/credenciais.
+Nunca repetir SQL por falha de job ou polling, nem afirmar snapshot por completude.
+Não reutilizar autoridade JSON/BLOB; prova sintética não libera produção ou cliente.
+Prévia PDF não executa SQL nem reserva autoridade; criar revalida antes da admissão.
+Recuperação usa requestId da mesma conexão, sem recaptura. Listagem filtra autoridade
+antes da paginação e não informa total inacessível. Métricas globais são exclusivas
+do operador, agregadas e somente leitura, sem IDs/conteúdo nem limpeza automática.
+PDF apresenta medidas em pt-BR com duas casas e arredondamento decimal exato;
+formatos por coluna são fechados e publicados, sem inferir medida pelo alias.
+Preservar códigos, nulos, captura original e fuso; não inventar conversão temporal.
+Seções exigem leituras sucessivas explícitas e contrato por publicação, até quatro
+capturas únicas na mesma fonte. Aplicar o menor teto global e revalidar todas no
+download. Falha entre capturas não autoriza replay ou retomada de SQL. Snapshot
+forte e coleta multi-lote dependem de contrato do hub, não de inferência do MCP.
+Estado cancelado mantém somente autoridade cifrada até o TTL, sem handle ou payload,
+com revalidação antes de informar status. Diagnóstico usa enum fechado e preserva
+supportId mesmo se sua persistência falhar. IPC respeita deadline absoluto; linhas
+e bytes capturados são acumulados entre seções, sem confundir teto do PDF final.
+Gráficos PDF selecionam somente chartId publicado, com campos exportáveis e unidade
+fixa; reutilizam captura/tabela sem nova consulta, agregação ou substituição de nulos.
+Renderer usa fontes locais verificadas e pools nativos limitados; dados não podem
+fornecer código, SVG, URLs ou configuração de renderização. Verificação visual
+independente complementa os testes de extração e de autoridade.
+
+Apresentação de dados na base comum e guias SQL/knowledge orienta gráficos por
+intenção, agregado autorizado antes da paginação e fallback conforme capacidades
+reais do cliente. Não exige total antes de listar, não promete tempo real, não
+publica dados implicitamente e preserva proveniência, completude e precisão.
+Regressões offline conferem a orientação entregue; não certificam adesão da IA.
+
 Exemplos de continuação na base comum preservam o tamanho efetivo da página.
 Regressões conferem tamanho e deslocamento entre primeira/próxima nos guias
 comum, SQL e plug-server; trocar filtro reinicia a paginação, sem mudar concessões.

@@ -88,6 +88,14 @@ function sendHttpFailure<T extends { supportId: string }>(
 }
 
 /** Stateless SDK transport: each request captures its own identity; no mutable token/session binding. */
+import {
+  createPdfReportSchema,
+  pdfReportJobSchema,
+  pdfReportLocateSchema,
+  pdfReportListSchema,
+  type PersonaPdfReports,
+} from "../../application/persona-v2/pdf-reports.js";
+
 export const createPersonaV2McpHandler = (
   catalog: PersonaConsumerCatalog,
   publicBaseUrl: string,
@@ -111,6 +119,7 @@ export const createPersonaV2McpHandler = (
   attachments?: PersonaAttachments,
   logger?: LoggerPort,
   interactionErrors?: PersonaInteractionErrors,
+  pdfReports?: PersonaPdfReports,
 ) => {
   const origin = new URL(publicBaseUrl).origin;
   const handle = async (req: Request, res: Response): Promise<void> => {
@@ -783,6 +792,79 @@ export const createPersonaV2McpHandler = (
                 async (input) => run(() => federation.run(requireIdentity(), input, validation)),
               );
           if (queries) {
+            if (pdfReports && attachments) {
+              server.registerTool(
+                "localizar_relatorio",
+                {
+                  description:
+                    "Recupera relatório pelo requestId original da mesma conexão, sem executar SQL ou renovar prazo.",
+                  inputSchema: pdfReportLocateSchema,
+                  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+                },
+                (input) => run(() => pdfReports.locate(requireIdentity(), input)),
+              );
+              server.registerTool(
+                "listar_relatorios",
+                {
+                  description:
+                    "Lista metadados de relatórios vigentes da mesma conexão, filtrando autorização antes de paginar. Não baixa arquivos nem executa SQL.",
+                  inputSchema: pdfReportListSchema,
+                  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+                },
+                (input) => run(() => pdfReports.list(requireIdentity(), input)),
+              );
+              server.registerTool(
+                "validar_relatorio_pdf",
+                {
+                  description:
+                    "Confere contrato, formatos, seções e limites PDF sem executar SQL, criar job ou reservar autorização. Não comprova dados ou renderização.",
+                  inputSchema: createPdfReportSchema,
+                  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+                },
+                (input) => run(() => pdfReports.validate(requireIdentity(), input)),
+              );
+
+              server.registerTool(
+                "criar_relatorio_pdf",
+                {
+                  description:
+                    "Captura consultas frescas autorizadas uma vez por seção e prepara PDF assíncrono. Exige generatedPdf/exportacao próprios; seções adicionais exigem contrato e leituras sucessivas explícitos. Preserve requestId após resposta perdida; nunca repita SQL automaticamente. Integral exige completude positiva, sem prometer snapshot.",
+                  inputSchema: createPdfReportSchema,
+                  annotations: {
+                    readOnlyHint: false,
+                    destructiveHint: false,
+                    idempotentHint: true,
+                    openWorldHint: true,
+                  },
+                },
+                (input) => run(() => pdfReports.create(requireIdentity(), input)),
+              );
+              server.registerTool(
+                "obter_status_relatorio",
+                {
+                  description:
+                    "Confere estado privado e prazo original do relatório. Apenas ready entrega descritor de anexo; não repete consulta nem renova prazo.",
+                  inputSchema: pdfReportJobSchema,
+                  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+                },
+                (input) => run(() => pdfReports.status(requireIdentity(), input)),
+              );
+              server.registerTool(
+                "cancelar_relatorio",
+                {
+                  description:
+                    "Impede entrega do PDF e remove o artefato local. Não promete cancelar SQL já enviado e não autoriza nova execução.",
+                  inputSchema: pdfReportJobSchema,
+                  annotations: {
+                    readOnlyHint: false,
+                    destructiveHint: true,
+                    idempotentHint: true,
+                    openWorldHint: false,
+                  },
+                },
+                (input) => run(() => pdfReports.cancel(requireIdentity(), input)),
+              );
+            }
             if (attachments) {
               server.registerTool(
                 "criar_anexo_consulta",
@@ -919,6 +1001,25 @@ export const createPersonaV2McpHandler = (
                     localQuery: {
                       ...(capabilities.localQuery as Record<string, unknown>),
                       attachments: attachments ? attachments.capabilities() : false,
+                      generatedPdf:
+                        pdfReports && attachments
+                          ? {
+                              implemented: true,
+                              enabled: true,
+                              templates: ["table-v1"],
+                              charts: ["bar", "line", "pie"],
+                              capture: "single_fresh_query",
+                              successiveSections: {
+                                max: 4,
+                                explicitPublishedContract: true,
+                                consistency: "successive_reads",
+                              },
+                              consistency: "not_asserted",
+                              automaticReplay: false,
+                              realEngineAcceptance: false,
+                              clientDownloadAcceptance: false,
+                            }
+                          : false,
                       fieldUses: {
                         ...(
                           capabilities.localQuery as {

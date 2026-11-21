@@ -13,6 +13,7 @@ import { PostgresPersonaEphemeralWorker } from "../persistence/persona-v2/epheme
 import { PostgresPersonaRetentionWorker } from "../persistence/persona-v2/retention-worker.js";
 import { PostgresPersonaOutbox } from "../persistence/persona-v2/outbox-worker.js";
 import { PersonaNotificationHttps } from "./notification-transport.js";
+import { PostgresPdfReportJobs } from "../persistence/persona-v2/pdf-report-jobs.js";
 
 /** Shared by the development entry and isolated process homologation. */
 export function createPersonaWorker(
@@ -20,6 +21,7 @@ export function createPersonaWorker(
   cipher: CryptoPort,
   logger: LoggerPort,
   transport: PersonaNotificationTransport = new PersonaNotificationHttps(),
+  publicBaseUrl?: string,
 ): PersonaWorkerLoop {
   const review = new PersonaReviewWorker(
     new PostgresReviewWorker(pool),
@@ -39,6 +41,21 @@ export function createPersonaWorker(
   const outbox = new PersonaOutboxWorker(new PostgresPersonaOutbox(pool), cipher, transport);
   const loop = new PersonaWorkerLoop(
     [
+      ...(publicBaseUrl
+        ? [
+            {
+              stage: "pdf_cleanup" as const,
+              run: async () => {
+                const expired = await new PostgresPdfReportJobs(
+                  pool,
+                  cipher,
+                  publicBaseUrl,
+                ).expire();
+                if (expired) logger.info("persona pdf cleanup completed", { expired });
+              },
+            },
+          ]
+        : []),
       {
         stage: "knowledge_review",
         run: async () => {

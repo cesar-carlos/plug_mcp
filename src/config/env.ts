@@ -17,6 +17,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   PERSONA_V2_QUERY_CACHE_TTL_MS: z.coerce.number().int().min(0).max(60000).default(0),
   PERSONA_V2_REDIS_URL: z.string().default(""),
+  PERSONA_V2_PDF_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   PERSONA_V2_WORKER_HEALTH_PORT: z.coerce.number().int().min(0).max(65535).default(0),
   PERSONA_V2_OAUTH_ENABLED: z
     .enum(["true", "false"])
