@@ -9,7 +9,7 @@ export const PDF_REPORT_GUIDANCE = {
   formatting:
     "PDF usa padrão brasileiro: dd/mm/aaaa, vírgula decimal, ponto de milhar e duas casas decimais para medidas. columnFormats publicado distingue text, number, currency, percent, date, datetime e boolean; códigos permanecem texto. Não inferir tipo pelo alias. Horários preservam fuso informado; UTC continua identificado. Arredondamento é só apresentação; captura original não muda. Percentual já está em pontos percentuais, sem multiplicação implícita.",
   availability:
-    "PDF gerado exige criar_relatorio_pdf disponível, generatedPdf publicado, capability própria e exportacao concedida. JSON/BLOB não autorizam PDF. Se indisponível, explique a limitação; não prometa arquivo ou botão de download.",
+    "PDF gerado exige criar_relatorio_pdf disponível, generatedPdf publicado, capability própria e exportacao concedida. JSON/BLOB não autorizam PDF. A ferramenta é genérica: reutilize o contrato publicado com novos filtros e períodos, selecionando colunas autorizadas; não exija um novo cadastro para cada relatório. Consulte obter_skill para conferir o contrato disponível. Ausência de permissão PDF não significa token expirado e não justifica pedir reconexão. Se indisponível, explique a limitação; não prometa arquivo ou botão de download.",
   request:
     "Gere requestId novo somente para pedido explícito de nova geração. Confira o mesmo jobId após resposta incerta; não crie outra tentativa nem repita SQL automaticamente. A coleta é fresca e única por seção; somente a renderização é assíncrona. Escolha colunas da projeção publicada e template table-v1, sem HTML, scripts, URLs, títulos ou filtros privados.",
   completeness:

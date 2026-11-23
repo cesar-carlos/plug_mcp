@@ -37,6 +37,14 @@ export function runTestDeployment({ revision, imageId, envFile, run }) {
     "-f",
     "docker-compose.persona-v2.test.yml",
   ];
+  // Read only the explicit destination setting. Never print resolved configuration:
+  // it contains credentials. Invalid settings fail before any service is stopped.
+  const configuration = JSON.parse(run([...compose, "config", "--format", "json"]));
+  const pdfSetting = configuration.services?.server?.environment?.PERSONA_V2_PDF_ENABLED;
+  if (pdfSetting !== "true" && pdfSetting !== "false")
+    throw new Error("Invalid PDF deployment setting.");
+  const pdfEnabled = pdfSetting === "true";
+  if (pdfEnabled) compose.push("-f", "docker-compose.persona-v2.pdf.yml");
   run([...compose, "config", "--quiet"]);
   run([
     ...compose,
@@ -79,6 +87,21 @@ export function runTestDeployment({ revision, imageId, envFile, run }) {
     "never",
     "migrate",
   ]);
+  if (pdfEnabled) {
+    run([
+      ...compose,
+      "up",
+      "--detach",
+      "--no-deps",
+      "--no-build",
+      "--pull",
+      "never",
+      "--wait",
+      "--wait-timeout",
+      "120",
+      "pdf-renderer",
+    ]);
+  }
   run([
     ...compose,
     "up",

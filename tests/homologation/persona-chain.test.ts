@@ -1,3 +1,5 @@
+import { exerciseStockMovement } from "../helpers/persona-chain-stock-movement.js";
+import { manualPublicationTables } from "../../scripts/homologation/manual-publication-tables.js";
 import { exerciseKnowledgeHistoryOAuth } from "../helpers/persona-chain-knowledge-history-oauth.js";
 import { prepareKnowledgeHistoryOAuth } from "../helpers/persona-chain-knowledge-oauth-fixture.js";
 import { recordJourneyTiming } from "../helpers/persona-chain-journey-timing.js";
@@ -104,7 +106,15 @@ writeFileSync(
     ...manifest,
     sessionRoot,
     engines: Object.fromEntries(
-      chainEngines.map((engine) => [engine, { ...manifest.engines[engine], publicationTables }]),
+      chainEngines.map((engine) => [
+        engine,
+        {
+          ...manifest.engines[engine],
+          publicationTables: process.env.PERSONA_CHAIN_STOCK_SQL_DIRECTORY
+            ? manualPublicationTables(engine, false, undefined, "estoque-movimentos")
+            : publicationTables,
+        },
+      ]),
     ),
   }),
 );
@@ -4487,4 +4497,23 @@ for (const dialect of chainEngines) {
     expect(result.isError).toBe(true);
     expect(result.value.error.code).toBe("ACCESS_REVOKED");
   });
+}
+
+if (process.env.PERSONA_CHAIN_STOCK_SQL_DIRECTORY) {
+  for (const engine of ["mssql", "sybase"] as const) {
+    it(engine + ": quatro consultas nativas de movimentos", async () => {
+      const sourceId = sources.find((source) => source.dialect === engine)!.id;
+      await exerciseStockMovement({
+        engine,
+        directory: process.env.PERSONA_CHAIN_STOCK_SQL_DIRECTORY!,
+        sourceId,
+        personaId,
+        sessionRoot,
+        runId: manifest.runId,
+        hubUrl: hub.hubUrl,
+        config,
+        post: async (path, body) => await post(path, body),
+      });
+    });
+  }
 }

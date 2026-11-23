@@ -74,11 +74,14 @@ export async function verifyPersonaDeployment({
     throw new ObservationFailure("INVALID_EXPECTED_IDENTITY");
   for (let attempt = 0; attempt < attempts; attempt++) {
     const containers = [];
+    let pdfEnabled = false;
     for (const name of names) {
       const items = JSON.parse(run(["inspect", name]));
       if (!Array.isArray(items) || items.length !== 1)
         throw new ObservationFailure("CONTAINER_IDENTITY_UNAVAILABLE");
       const item = items[0];
+      if (name === names[0])
+        pdfEnabled = item.Config?.Env?.includes("PERSONA_V2_PDF_ENABLED=true") === true;
       if (
         item.Name !== `/${name}` ||
         item.Image !== imageId ||
@@ -96,6 +99,28 @@ export async function verifyPersonaDeployment({
         service: name === names[0] ? "server" : "worker",
         healthy: item.State.Status === "running" && item.State.Health?.Status === "healthy",
         ...logs,
+      });
+    }
+    if (pdfEnabled) {
+      const name = "se7e-persona-v2-test-pdf-renderer-1";
+      const items = JSON.parse(run(["inspect", name]));
+      const item = Array.isArray(items) && items.length === 1 ? items[0] : undefined;
+      if (
+        !item ||
+        item.Name !== `/${name}` ||
+        item.Image !== imageId ||
+        item.Config?.Entrypoint?.join(" ") !== "node dist/pdf-renderer-main.js" ||
+        item.HostConfig?.NetworkMode !== "none" ||
+        item.HostConfig?.ReadonlyRootfs !== true ||
+        item.RestartCount !== 0 ||
+        item.State?.OOMKilled !== false ||
+        !Number.isFinite(Date.parse(item.State?.StartedAt))
+      )
+        throw new ObservationFailure("PDF_RENDERER_IDENTITY_OR_ISOLATION_MISMATCH");
+      containers.push({
+        service: "pdf-renderer",
+        healthy: item.State.Status === "running" && item.State.Health?.Status === "healthy",
+        ...safeLogSummary(run(["logs", "--since", item.State.StartedAt, "--tail", "1000", name])),
       });
     }
     if (

@@ -119,3 +119,36 @@ it("preserves only a closed renderer reason and discards accompanying private de
     },
   );
 });
+
+it.each(["private SQL failure", null, false, 42])(
+  "does not accept a successful payload carrying an invalid error field (%s)",
+  async (errorField) => {
+    await withServer(
+      (socket) =>
+        socket.end(
+          JSON.stringify({
+            error: errorField,
+            data: Buffer.from("%PDF-fixture").toString("base64"),
+            pages: 1,
+          }),
+        ),
+      async (client, calls) => {
+        await expect(client.render(input, 1000)).rejects.toMatchObject({
+          code: "CAPABILITY_UNAVAILABLE",
+        });
+        expect(calls()).toBe(1);
+      },
+    );
+  },
+);
+
+it("includes the newline delimiter in the request byte budget before connecting", async () => {
+  const base = { ...input, rows: [[""]] };
+  const remaining = 16 * 1024 * 1024 - Buffer.byteLength(JSON.stringify(base));
+  const exactPayload = { ...base, rows: [["a".repeat(remaining)]] };
+  expect(Buffer.byteLength(JSON.stringify(exactPayload))).toBe(16 * 1024 * 1024);
+  const client = new PdfSocketRenderer("invalid-fixture-socket");
+  await expect(client.render(exactPayload, 1000)).rejects.toMatchObject({
+    code: "BUDGET_EXCEEDED",
+  });
+});

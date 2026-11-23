@@ -6,6 +6,7 @@ it.each([
   "estoque-gestao",
   "estoque-locais",
   "estoque-saldos",
+  "estoque-movimentos",
   "cadastro-filiais",
   "pagamentos-efetivos",
   "pontualidade-recebimentos",

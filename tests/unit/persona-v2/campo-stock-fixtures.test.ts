@@ -34,3 +34,14 @@ it.each(["estoque-locais", "estoque-saldos"] as const)(
     );
   },
 );
+
+it("reservas usa decimal anulavel sem ampliar outros recursos da fixture", () => {
+  const tables = campoQueryTables("estoque-saldos");
+  const saldo = tables.find((table) => table.table === "dbo.saldoestoque")!;
+  expect(saldo.columns.find((column) => column.name === "quantidadereserva")).toMatchObject({
+    type: "decimal",
+    nullable: true,
+  });
+  expect(saldo.primaryKey).toEqual(["codlocalarmazenagem", "codproduto"]);
+  expect(saldo.foreignKeys).toEqual([]);
+});

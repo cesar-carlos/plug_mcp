@@ -11,6 +11,25 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Helper de homologação de movimentos normaliza aliases com scanner,
+  preservando literais, identificadores quoted, comentários e parâmetros.
+
+- Fixed: Detecção de deploy inclui alterações isoladas no verificador de runtime.
+  Orientação comum explicita ORDER BY sem qualificador para resumos paginados,
+  com regressão de desempate composto e preservação das recusas de escopo.
+
+- Fixed: Cliente IPC de PDF recusa resposta com campo de erro inválido mesmo
+  quando acompanhada de arquivo e conta o delimitador no teto de bytes antes
+  da conexão. Eventos tardios após término não acumulam ou interpretam conteúdo.
+
+- Fixed: Observação pós-deploy inclui saúde, imagem, isolamento e logs do renderer
+  quando PDF está habilitado, evitando aprovar runtime sem geração disponível.
+  Configuração PDF vazia é recusada; falhas não repetem mutações de deploy.
+
+- Fixed: Deploy de teste preserva o opt-in PDF explícito da configuração do destino,
+  inclui o overlay isolado e aguarda o renderer saudável antes do servidor. Valor
+  inválido interrompe antes de parar serviços; não amplia contratos ou concessões.
+
 - Added: Prévia PDF sem SQL, recuperação pelo requestId e listagem autorizada antes
   da paginação, com métricas agregadas somente para operador. Criação e status
   revalidam autoridade; revogação antes da admissão não produz captura incerta.

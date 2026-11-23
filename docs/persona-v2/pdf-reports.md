@@ -140,6 +140,66 @@ leem necessariamente a cópia de environment JavaScript de uma worker thread.
 
 ## Habilitação experimental
 
+Atualização operacional de 23/11/2026: PDF foi habilitado por solicitação do
+responsável no servidor operacional (destino técnico test-server), mantendo
+efb4172. Servidor, worker e renderer saudáveis; nenhuma concessão ou publicação
+foi alterada. Download no ChatGPT continua sem comprovação.
+
+O deploy passa a ler `PERSONA_V2_TEST_PDF_ENABLED=true` no arquivo privado do
+destino. O padrão é `false`; outros valores são recusados antes de parar serviços.
+Quando habilitado, aplica `docker-compose.persona-v2.pdf.yml` e aguarda o renderer
+da mesma imagem verificada antes de subir servidor/worker. Não imprime configuração
+resolvida, não repete migrações nem aplica rollback automático. A correção do
+procedimento precisa ser publicada antes de o próximo deploy poder preservá-la.
+
+A ferramenta é genérica: não exige um desenvolvimento ou contrato novo para cada
+período, filtro ou relatório. Reutiliza o contrato `generatedPdf` da consulta
+publicada, suas colunas exportáveis e os limites concedidos. Consultar não implica
+exportar; a primeira habilitação de uma consulta requer contrato e concessão
+específicos. Não converter automaticamente todas as consultas ou tokens existentes.
+
+Revisão de integração em 23/11: `obter_capacidades` pela conexão OAuth da Helena
+confirmou `generatedPdf.enabled=true` e build efb4172, sem SQL de negócio. O
+inventário disponível na conversa ainda não expunha tools PDF; isso não comprova
+expiração do token. Descoberta atualizada e download real permanecem pendentes.
+Os contratos PDF e as concessões da Helena não foram alterados nesta revisão.
+Validação local do ajuste: 71 testes de deploy, isolamento, transporte PDF e
+anexos aprovados; lint, documentação e treinamento v2 aprovados. Não equivale a
+CI/deploy do ajuste, teste de navegador ou autorização de exportação.
+
+Revisão adicional: a observação pós-deploy passa a incluir o renderer quando o
+servidor declara PDF ativo. Confere imagem, entrypoint, rede desabilitada, filesystem
+somente leitura, saúde, reinícios/OOM e resumo seguro dos logs. Ausência ou deriva
+impede aprovação; erro registrado também reprova. Configuração vazia é inválida,
+enquanto variável ausente mantém o padrão desabilitado. Regressão sintética
+confirmou que o código anterior aprovava renderer ausente e o novo recusa.
+Esta verificação não gera PDF, consulta ERP ou substitui download real no cliente.
+
+Revisão do transporte IPC: respostas com campo `error` desconhecido/inválido não
+podem ser aceitas como sucesso, mesmo se contiverem bytes de PDF. Motivos seguros
+conhecidos continuam preservados; conteúdo remoto não é exposto. O limite de
+16 MiB inclui o delimitador newline, conferido antes de conectar. Eventos após
+o término são ignorados. Cinco regressões reproduziram as falhas antes da correção;
+testes usam socket local e dados sintéticos, sem ERP ou repetição automática.
+
+A detecção de alterações também inclui o verificador pós-deploy: mudanças isoladas
+em `scripts/verify-persona-deployment.mjs` não podem ser tratadas como documentação
+e ignoradas pela entrega. Alterações somente em seus testes não disparam deploy.
+
+Consolidação local em 23/11: 129 testes aprovados em dez arquivos cobrindo
+transporte/renderer PDF, anexos, deploy/observação e orientação de SQL agregado.
+Lint, tipos, documentação, formatação e orçamento do treinamento v2 aprovados.
+Git Bash exigiu execução fora do sandbox Windows; não foram acessados ERP ou
+produção pelos testes. Evidência local não substitui CI, publicação ou download
+no ChatGPT. Exemplos operacionais de devoluções seguem revisão editorial separada.
+
+Gate completo local de entrega em 23/11: `npm run release:check` aprovado com
+2.806 testes gerais (91 omitidos pela configuração) e 292 testes do console,
+incluindo lint, tipos, treinamento, documentação, formatação e builds.
+Log privado: `node_modules/.cache/pdf-release-20261123-final.log`.
+O destino mantém opt-in PDF explícito em configuração privada com backup;
+esta evidência local não antecipa resultado do CI ou do deploy.
+
 Padrão `PERSONA_V2_PDF_ENABLED=false`. Composição registra as três tools somente
 quando habilitado e mantém capacidades explícitas de aceite nativo/download como
 falsas. O overlay [Docker PDF](../../docker-compose.persona-v2.pdf.yml) é para

@@ -17,7 +17,7 @@ export class PdfSocketRenderer implements PdfRendererPort {
   ): Promise<{ data: Uint8Array; pages: number }> {
     const payload = JSON.stringify(input);
     if (
-      Buffer.byteLength(payload) > 16 * 1024 * 1024 ||
+      Buffer.byteLength(payload) + 1 > 16 * 1024 * 1024 ||
       !Number.isFinite(timeoutMs) ||
       timeoutMs <= 0
     ) {
@@ -45,11 +45,13 @@ export class PdfSocketRenderer implements PdfRendererPort {
       socket.once("connect", () => socket.write(`${payload}\n`));
       socket.once("close", fail);
       socket.on("data", (chunk: Buffer) => {
+        if (settled) return;
         bytes += chunk.length;
         if (bytes > 12 * 1024 * 1024) fail();
         else chunks.push(chunk);
       });
       socket.once("end", () => {
+        if (settled) return;
         try {
           const result = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
             data?: unknown;
@@ -65,6 +67,7 @@ export class PdfSocketRenderer implements PdfRendererPort {
             return;
           }
           if (
+            Object.hasOwn(result, "error") ||
             typeof result.data !== "string" ||
             !Number.isInteger(result.pages) ||
             (result.pages as number) < 1 ||

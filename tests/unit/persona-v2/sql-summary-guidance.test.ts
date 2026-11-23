@@ -17,6 +17,22 @@ const scope = escopoFromSqlModelo(
   ),
 );
 
+it("resumo paginado usa nomes projetados sem qualificador e preserva desempate composto", () => {
+  expect(SQL_SUMMARY_GUIDANCE).toContain("ORDER BY usa aliases sem prefixo de tabela");
+  const projection =
+    "SELECT s.branch_id, s.product_id, SUM(s.net_amount) AS total FROM fixture_sales s GROUP BY s.branch_id, s.product_id";
+  const options = { page: 1, pageSize: 30 };
+  expect(() =>
+    validateSourceSql(`${projection} ORDER BY s.branch_id, s.product_id`, "mssql", scope, options),
+  ).toThrow(/Paginação exige ORDER BY/);
+  expect(() =>
+    validateSourceSql(`${projection} ORDER BY branch_id, product_id`, "mssql", scope, options),
+  ).not.toThrow();
+  expect(() =>
+    validateSourceSql(`${projection} ORDER BY branch_id, secret`, "mssql", scope, options),
+  ).toThrow();
+});
+
 it.each(["mssql", "postgres", "sybase"] as const)(
   "conversão antes de SUM é aceita pelo parser %s no escopo publicado",
   (dialect) => {

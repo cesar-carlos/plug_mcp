@@ -34,6 +34,9 @@ services:
   server:
     <<: *runtime
     command: [server]
+    environment:
+      <<: *runtime-env
+      PERSONA_V2_PDF_ENABLED: ${PERSONA_V2_TEST_PDF_ENABLED-false}
     ports:
       - "127.0.0.1:${PERSONA_V2_TEST_LOCAL_PORT:?Explicit loopback port required}:3333"
   worker:

@@ -26,6 +26,10 @@ const publishes = (files: string): boolean => {
 };
 
 describe("publicação de produção", () => {
+  it("publica mudanças isoladas na verificação pós-deploy, incluindo PDF", () => {
+    expect(publishes("scripts/verify-persona-deployment.mjs\n")).toBe(true);
+    expect(publishes("tests/unit/persona-v2/deployment-observation.test.ts\n")).toBe(false);
+  });
   it("publica quando o commit altera o runtime", () => {
     expect(publishes("README.md\nsrc/main.ts\n")).toBe(true);
     expect(publishes("drizzle/0035_exemplo.sql\n")).toBe(true);

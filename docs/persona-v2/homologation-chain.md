@@ -506,6 +506,20 @@ e registrar os resultados separadamente. Processo encerrado com sucesso ou
 inventário estável não aprova o treinamento, a IA ou qualquer gate de produção.
 Deploy/publicação continuam bloqueados, e HTTPS/ChatGPT permanecem manuais.
 
+### Perfil de movimentos de estoque
+
+O perfil opt-in de homologação `estoque-movimentos` declara a movimentação,
+produto, local, marca e grupo em SQL Server e SQL Anywhere. A data sintética
+é DATE. PostgreSQL preserva as tabelas de fixture genéricas.
+
+A rodada nativa usa `PERSONA_CHAIN_STOCK_SQL_DIRECTORY` para apontar ao diretório
+local das quatro amostras da Campo e seleciona exclusivamente o padrão
+`quatro consultas nativas de movimentos` no launcher padrão da cadeia. Cada
+motor executa quatro casos independentes com o runner de publicação. O
+relatório pertence aos rascunhos da fixture. O teste usa aliases em minúsculas
+normalizados por scanner, preservando literais, comentários e parâmetros,
+para o contrato de resultados e um predicado final civil próprio para SQL Anywhere.
+
 ### Material sintético para a primeira consulta manual
 
 Em cada uma das três fontes desta sessão, o companion prepara a tabela
@@ -637,3 +651,9 @@ posteriores com o resultado. A
 [rodada compilada persistente](validation/2026-10-23-native-desktop-persistent.md)
 registra falhas corrigidas, snapshots e limpeza. Esse bootstrap não substitui
 atualização/recuperação instaladas, testes de interface ou os gates de produção.
+
+### Reservas no perfil de saldo — 23/11/2026
+
+O perfil sintético `estoque-saldos` inclui `dbo.saldoestoque.quantidadereserva` como decimal anulável, conforme a amostra de saldo fornecida pelo responsável. Casos anteriores com registros precisam declarar esse campo como nulo explícito: o executor exige todas as colunas da fixture em cada linha, mesmo anuláveis. Não converter ausência em zero nem alterar o resultado esperado das consultas antigas. A chave local/produto e a ausência de FK inferida foram preservadas.
+
+Cinco testes unitários dos perfis de saldo e movimentos passaram. Na Campo, sete casos foram cadastrados na r18; a tentativa r14 foi recusada por omissão do novo campo nas sementes antigas, corrigida no console. A rodada r18 perdeu o canal SSH antes de relatório final (OPERATOR_RUN_UNCONFIRMED); não há aprovação para publicação. Fixtures locais encerradas oficialmente, inventários estáveis e diagnóstico privado preservado. Nova rodada depende da disponibilidade do operador remoto e da conferência do relatório anterior. Nenhuma consulta no ERP foi feita por essas rodadas.

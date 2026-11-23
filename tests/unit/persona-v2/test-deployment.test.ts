@@ -164,6 +164,7 @@ function deploy(
   state = "exited",
   exitCode = 0,
   runtime = "persona-v2-test-server",
+  pdfSetting: unknown = "false",
 ): { calls: string[][]; failed: boolean } {
   return JSON.parse(
     script(
@@ -173,17 +174,49 @@ function deploy(
     const run=(args)=>{
       calls.push(args); if(calls.length-1===f.failAt) throw Error('fixture');
       if(args[0]==='image') return JSON.stringify([{Id:f.imageId,Os:'linux',Architecture:'amd64',Config:{Entrypoint:['./docker-entrypoint-persona-v2.sh'],Labels:{'io.se7e.runtime':f.runtime},Env:['GIT_SHA='+f.revision]}}]);
+      if(args.includes('--format')) return JSON.stringify({services:{server:{environment:{PERSONA_V2_PDF_ENABLED:f.pdfSetting}}}});
       if(args.includes('ps')) return 'c'.repeat(64);
       if(args[0]==='inspect') return JSON.stringify([{State:{Status:f.state,ExitCode:f.exitCode,OOMKilled:false}}]);
       return '';
     };
     try {module.runTestDeployment({...f,envFile:'/fixture/private.env',run});}catch{failed=true;}
     console.log(JSON.stringify({calls,failed}));`,
-      { revision, imageId, failAt, state, exitCode, runtime },
+      { revision, imageId, failAt, state, exitCode, runtime, pdfSetting },
     ),
   ) as { calls: string[][]; failed: boolean };
 }
 describe("test deployment sequencing", () => {
+  it("preserves PDF opt-in and waits for the isolated renderer before starting the server", () => {
+    const f = deploy(-1, "exited", 0, "persona-v2-test-server", "true");
+    expect(f.failed).toBe(false);
+    const commands = f.calls.map((args) => args.join(" "));
+    expect(commands.at(-2)).toMatch(/up .*--pull never .*--wait .*pdf-renderer$/);
+    expect(commands.at(-1)).toMatch(/up .*server worker$/);
+    expect(
+      f.calls
+        .slice(2)
+        .every(
+          (args) => args[0] !== "compose" || args.includes("docker-compose.persona-v2.pdf.yml"),
+        ),
+    ).toBe(true);
+    const failed = deploy(f.calls.length - 2, "exited", 0, "persona-v2-test-server", "true");
+    expect(failed.failed).toBe(true);
+    expect(failed.calls.at(-1)?.at(-1)).toBe("pdf-renderer");
+  });
+  it.each([null, true, "yes", "", "TRUE"])(
+    "rejects invalid PDF setting %j before mutation",
+    (value) => {
+      const f = deploy(-1, "exited", 0, "persona-v2-test-server", value);
+      expect(f.failed).toBe(true);
+      expect(f.calls).toHaveLength(2);
+    },
+  );
+  it("does not enable PDF implicitly", () => {
+    const f = deploy();
+    expect(f.failed).toBe(false);
+    expect(f.calls.flat()).not.toContain("docker-compose.persona-v2.pdf.yml");
+    expect(f.calls.flat()).not.toContain("pdf-renderer");
+  });
   it("checks image/configuration, stops, migrates once and starts both services without rollback", () => {
     const f = deploy();
     expect(f.failed).toBe(false);
@@ -195,14 +228,17 @@ describe("test deployment sequencing", () => {
     expect(commands.at(-1)).toMatch(/up .*--no-build .*--wait .*server worker$/);
     expect(commands.join("\n")).not.toMatch(/\b(down|rollback|build|pull)\b(?=\s*$)/m);
   });
-  it("stops at every failure without retrying a mutation", () => {
-    const total = deploy().calls.length;
-    for (let i = 0; i < total; i++) {
-      const f = deploy(i);
-      expect(f.failed).toBe(true);
-      expect(f.calls).toHaveLength(i + 1);
-    }
-  });
+  it.each(["false", "true"])(
+    "stops at every failure without retrying a mutation (PDF %s)",
+    (pdfSetting) => {
+      const total = deploy(-1, "exited", 0, "persona-v2-test-server", pdfSetting).calls.length;
+      for (let i = 0; i < total; i++) {
+        const f = deploy(i, "exited", 0, "persona-v2-test-server", pdfSetting);
+        expect(f.failed).toBe(true);
+        expect(f.calls).toHaveLength(i + 1);
+      }
+    },
+  );
   it.each([
     ["running", 0],
     ["exited", 137],

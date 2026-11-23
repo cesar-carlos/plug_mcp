@@ -15,7 +15,8 @@ export function manualPublicationTables(
     throw new Error("Escolha um único perfil de fixture de prazo.");
   if (campoConsulta) {
     const tables = campoQueryTables(campoConsulta);
-    if (dialect === "mssql") return tables;
+    if (dialect === "mssql" || (dialect === "sybase" && campoConsulta === "estoque-movimentos"))
+      return tables;
   }
   if (campoPrazo && (campoPrazos || !["pagar", "receber"].includes(campoPrazo)))
     throw new Error("Escolha um único perfil de fixture de prazo.");

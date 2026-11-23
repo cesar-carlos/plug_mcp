@@ -99,6 +99,9 @@ it.each([undefined, "sql"] as const)(
       );
     const guide = trainingTopic().pdfReports as Record<string, string>;
     expect(guide.availability).toContain("JSON/BLOB não autorizam PDF");
+    expect(guide.availability).toContain("não exija um novo cadastro para cada relatório");
+    expect(guide.availability).toContain("não justifica pedir reconexão");
+    expect(guide.availability).toContain("Consulte obter_skill");
     expect(guide.request).toContain("não crie outra tentativa nem repita SQL");
     expect(guide.completeness).toContain("consistency=not_asserted");
     expect(guide.lifecycle).toContain("polling não renova validade");

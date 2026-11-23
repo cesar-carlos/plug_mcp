@@ -20,6 +20,10 @@ export const campoQueryProfileSchema = z.enum([
   "estoque-gestao",
   "estoque-locais",
   "estoque-saldos",
+  "estoque-movimentos",
+  "estoque-giro",
+  "estoque-alertas",
+  "estoque-atual-vendas",
   "cadastro-filiais",
   "prazo-filial-receber",
   "prazo-filial-pagar",
@@ -60,6 +64,107 @@ export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTa
   if (profile === "cadastro-produtos" || profile === "cadastro-tipos-operacao")
     return campoCatalogTables(profile);
   if (profile === "estoque-gestao") return campoStockManagementTables();
+  if (profile === "estoque-atual-vendas") {
+    const dimensions = campoQueryTables("estoque-saldos")
+      .filter(({ table }) => table !== "dbo.localarmazenagemfilial")
+      .map((table) =>
+        table.table === "dbo.saldoestoque"
+          ? {
+              ...table,
+              columns: table.columns.filter(({ name }) => name !== "quantidadepedidocompra"),
+            }
+          : table,
+      );
+    const movement = campoQueryTables("estoque-giro").find(
+      ({ table }) => table === "dbo.movimentacaoestoque",
+    );
+    if (!movement) throw new Error("Tabela sintética de movimentos indisponível.");
+    return fixtureTablesSchema.parse([...dimensions, movement]);
+  }
+  if (profile === "estoque-giro" || profile === "estoque-alertas") {
+    const requiredTables = new Set(
+      profile === "estoque-giro"
+        ? ["dbo.produto"]
+        : ["dbo.produto", "dbo.saldoestoque", "dbo.localarmazenagem"],
+    );
+    const dimensions = campoQueryTables("estoque-saldos")
+      .filter(({ table }) => requiredTables.has(table))
+      .map((table) => {
+        if (table.table === "dbo.saldoestoque") {
+          return {
+            ...table,
+            columns: table.columns.filter(({ name }) => name !== "quantidadepedidocompra"),
+          };
+        }
+        if (table.table === "dbo.produto" && profile === "estoque-alertas") {
+          return {
+            ...table,
+            columns: [
+              ...table.columns,
+              ...["pontopedido", "estoqueminimo", "estoquemaximo"].map((name) => ({
+                name,
+                type: "decimal",
+                nullable: true,
+              })),
+            ],
+          };
+        }
+        return table;
+      });
+    if (profile === "estoque-alertas") return fixtureTablesSchema.parse(dimensions);
+
+    const movement = campoQueryTables("estoque-movimentos").find(
+      ({ table }) => table === "dbo.movimentacaoestoque",
+    );
+    if (!movement) throw new Error("Tabela sintética de movimentos indisponível.");
+    return fixtureTablesSchema.parse([
+      ...dimensions,
+      {
+        table: "dbo.saldodiarioestoque",
+        primaryKey: ["codproduto", "codlocalarmazenagem", "data"],
+        columns: [
+          { name: "codproduto", type: "integer" },
+          { name: "codlocalarmazenagem", type: "integer" },
+          { name: "data", type: "date" },
+          { name: "saldo", type: "decimal", nullable: true },
+        ],
+      },
+      {
+        ...movement,
+        columns: [
+          ...movement.columns.map((column) =>
+            column.name === "datamovimento"
+              ? { ...column, temporalStorage: "datetime2_3" }
+              : column,
+          ),
+          { name: "origem", type: "string", nullable: true },
+          { name: "codtipomovimentoestoque", type: "integer", nullable: true },
+        ],
+      },
+    ]);
+  }
+  if (profile === "estoque-movimentos") {
+    const dimensions = campoQueryTables("estoque-saldos").filter((table) =>
+      ["dbo.localarmazenagem", "dbo.produto", "dbo.grupoproduto", "dbo.marca"].includes(
+        table.table,
+      ),
+    );
+    return fixtureTablesSchema.parse([
+      {
+        table: "dbo.movimentacaoestoque",
+        primaryKey: ["codempresa", "codmovimentacaoestoque"],
+        columns: [
+          { name: "codempresa", type: "integer" },
+          { name: "codmovimentacaoestoque", type: "integer" },
+          { name: "datamovimento", type: "date" },
+          { name: "codlocalarmazenagem", type: "integer" },
+          { name: "codproduto", type: "integer" },
+          { name: "quantidadeconvertida", type: "decimal" },
+        ],
+      },
+      ...dimensions,
+    ]);
+  }
   if (profile === "estoque-locais" || profile === "estoque-saldos") {
     const tables = [
       {
@@ -87,7 +192,7 @@ export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTa
           columns: [
             { name: "codlocalarmazenagem", type: "integer" },
             { name: "codproduto", type: "integer" },
-            ...["saldoatual", "quantidadepedidocompra"].map((name) => ({
+            ...["saldoatual", "quantidadepedidocompra", "quantidadereserva"].map((name) => ({
               name,
               type: "decimal",
               nullable: true,

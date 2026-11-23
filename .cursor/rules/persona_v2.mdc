@@ -19,6 +19,13 @@ A revisão de consentimento OAuth organiza concessões em grupos recolhíveis, c
 Relatórios PDF gerados estão em implementação opt-in, desabilitada por padrão,
 conforme docs/persona-v2/pdf-reports.md. Exigem generatedPdf/capability/exportacao
 próprias, captura única precedida de claim durável e renderer sem rede/credenciais.
+Deploy de teste preserva opt-in explícito `PERSONA_V2_TEST_PDF_ENABLED` do destino;
+quando ativo, usa overlay PDF e aguarda renderer da imagem verificada antes do MCP.
+Ativação operacional não publica contratos nem amplia concessões existentes.
+Observação pós-deploy com PDF ativo inclui identidade, isolamento, saúde e logs
+do renderer; servidor saudável sozinho não comprova disponibilidade de geração.
+IPC PDF conta o frame completo no teto de bytes e nunca aceita como sucesso
+resposta com campo de erro inválido, mesmo acompanhada de dados do arquivo.
 Nunca repetir SQL por falha de job ou polling, nem afirmar snapshot por completude.
 Não reutilizar autoridade JSON/BLOB; prova sintética não libera produção ou cliente.
 Prévia PDF não executa SQL nem reserva autoridade; criar revalida antes da admissão.

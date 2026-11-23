@@ -36,12 +36,19 @@ function check(change = "none"): {
     const revision='a'.repeat(40),imageId='sha256:'+'b'.repeat(64);
     const run=args=>{
       calls.push(args);
+      if(args[0]==='inspect' && args[1].includes('pdf-renderer')) {
+        if(change==='pdf_missing') return '[]';
+        return JSON.stringify([{Name:'/'+args[1],Image:change==='pdf_image'?'wrong':imageId,
+          Config:{Entrypoint:['node','dist/pdf-renderer-main.js']},
+          HostConfig:{NetworkMode:change==='pdf_network'?'bridge':'none',ReadonlyRootfs:change!=='pdf_writable'},
+          RestartCount:0,State:{Status:'running',OOMKilled:false,Health:{Status:change==='pdf_health'?'unhealthy':'healthy'},StartedAt:'2026-11-08T22:00:00Z'}}]);
+      }
       if(args[0]==='inspect') return JSON.stringify([{Name:'/'+args[1], Image:change==='image'?'wrong':imageId,
-        Config:{Env:['GIT_SHA='+(change==='sha'?'wrong':revision),'PERSONA_V2_DEPLOYMENT=test-server']},
+        Config:{Env:['GIT_SHA='+(change==='sha'?'wrong':revision),'PERSONA_V2_DEPLOYMENT=test-server',...(change.startsWith('pdf')?['PERSONA_V2_PDF_ENABLED=true']:[])]},
         RestartCount:change==='restart'?1:0, State:{Status:'running',OOMKilled:false,Health:{Status:change==='health'?'unhealthy':'healthy'},StartedAt:'2026-11-08T22:00:00Z'}}]);
       return [JSON.stringify({level:40,msg:'private SQL password',supportId:'11111111-1111-4111-8111-111111111111'}),
         ...(change==='cycles'?[]:['review','ephemeral','retention','outbox'].map(j=>JSON.stringify({level:30,msg:'persona '+j+' worker completed'}))),
-        ...(change==='error'?[JSON.stringify({level:50,msg:'private'})]:[])].join('\n');
+        ...(change==='error'||(change==='pdf_error'&&args.at(-1).includes('pdf-renderer'))?[JSON.stringify({level:50,msg:'private'})]:[])].join('\n');
     };
     try{const report=await verifyPersonaDeployment({revision,imageId,run,wait:async()=>{},attempts:2}); console.log(JSON.stringify({passed:true,calls,report}));}
     catch(error){console.log(JSON.stringify({passed:false,calls,diagnostic:observationFailure(error)}));}
@@ -52,6 +59,30 @@ function check(change = "none"): {
     ),
   ) as ReturnType<typeof check>;
 }
+
+it("includes the enabled PDF renderer in post-deploy health and safe logs", () => {
+  const result = check("pdf");
+  expect(result.passed).toBe(true);
+  expect(result.report?.containers).toHaveLength(3);
+  expect(JSON.stringify(result)).not.toMatch(/private|password|SQL/);
+});
+
+it.each(["pdf_missing", "pdf_image", "pdf_network", "pdf_writable", "pdf_health", "pdf_error"])(
+  "refuses a false positive PDF deployment for %s without mutation",
+  (change) => {
+    const result = check(change);
+    expect(result.passed).toBe(false);
+    expect(result.diagnostic?.code).toBe(
+      change === "pdf_health"
+        ? "HEALTH_OR_WORKER_CYCLE_UNCONFIRMED"
+        : change === "pdf_error"
+          ? "RUNTIME_ERRORS_OBSERVED"
+          : "PDF_RENDERER_IDENTITY_OR_ISOLATION_MISMATCH",
+    );
+    expect(result.calls.every((call) => ["inspect", "logs"].includes(call[0]!))).toBe(true);
+    expect(JSON.stringify(result)).not.toMatch(/private|password|SQL/);
+  },
+);
 
 it("confere revisão, imagem e ciclos com logs resumidos sem dados privados", () => {
   const result = check();
