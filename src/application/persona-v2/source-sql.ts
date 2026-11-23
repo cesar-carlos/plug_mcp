@@ -2,6 +2,7 @@ import type { Dialeto } from "../../domain/entities/dialeto.js";
 import type { EscopoSkill } from "../../domain/entities/escopo.js";
 import { exigirPaginacaoEstavel, validarAstNoEscopo } from "../use-cases/shared/validar-escopo.js";
 import { PersonaV2Error } from "../../domain/persona-v2/model.js";
+import { paginationFailure } from "../../domain/errors/pagination-diagnostic.js";
 import { parseSelect, type SqlAstSelect } from "../use-cases/shared/sql-ast.js";
 
 export const validateSourceSql = (
@@ -41,9 +42,14 @@ export const assertSourcePagination = (
       (qualified.length > 0 &&
         (!ast.simplePaginationProjection || new Set(outputs).size !== outputs.length))
     ) {
-      throw new PersonaV2Error(
-        "INVALID_PLAN",
-        "Paginação exige ORDER BY com nomes ou aliases simples da projeção. Use um alias projetado sem prefixo de tabela, expressão, posição numérica ou NULLS FIRST/LAST; mantenha options.page e options.pageSize, sem limite SQL. A consulta não foi enviada; revise explicitamente o SQL, sem repetição automática.",
+      throw paginationFailure(
+        !ast.simplePaginationOrder
+          ? "order_not_simple"
+          : !projected
+            ? "order_not_projected"
+            : new Set(outputs).size !== outputs.length
+              ? "duplicate_projection_alias"
+              : "qualified_order_requires_simple_projection",
       );
     }
   }

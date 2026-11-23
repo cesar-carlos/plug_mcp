@@ -11,6 +11,14 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Recusas de ordenação paginada informam motivo específico seguro e etapa
+  `validar_paginacao`; logs correlacionam publicações, revisões e origem pelo
+  supportId sem SQL, aliases ou parâmetros. Guardas preservadas, com regressões
+  do logger real e dos exemplos ordenados do guia comum.
+
+- Added: Perfil de homologação MSSQL `cadastro-empresas`, com empresa e município,
+  documentos textuais e regressões do launcher; não altera fontes ou concessões.
+
 - Fixed: Helper de homologação de movimentos normaliza aliases com scanner,
   preservando literais, identificadores quoted, comentários e parâmetros.
 

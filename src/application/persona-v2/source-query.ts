@@ -23,6 +23,7 @@ import { assertSourcePagination, validateSourceSql } from "./source-sql.js";
 import { SourceExecutionError } from "../../domain/persona-v2/source-execution-error.js";
 import { recordAggregationContext } from "../../domain/errors/aggregation-diagnostic.js";
 import { recordSqlValidationPublications } from "../../domain/errors/sql-validation-diagnostic.js";
+import { recordPaginationPublications } from "../../domain/errors/pagination-diagnostic.js";
 import { assertFanoutSeguro } from "../use-cases/shared/assert-fanout.js";
 import {
   bindNamedParams,
@@ -585,7 +586,16 @@ export class PersonaSourceQueries {
     }
     // Field authority (including binary projection) takes precedence over pagination.
     // Both checks still complete before remote authorization or SQL dispatch.
-    assertSourcePagination(ast, input.options);
+    try {
+      assertSourcePagination(ast, input.options);
+    } catch (error) {
+      recordPaginationPublications(error, {
+        publicationIds: publications.map((p) => p.id),
+        publicationRevisions: publications.map((p) => p.revision),
+        queryOrigin: input.sql === undefined ? "modelo_publicado" : "sql_fornecido",
+      });
+      throw error;
+    }
     try {
       assertFanoutSeguro(ast, scope);
     } catch (error) {

@@ -506,6 +506,18 @@ e registrar os resultados separadamente. Processo encerrado com sucesso ou
 inventário estável não aprova o treinamento, a IA ou qualquer gate de produção.
 Deploy/publicação continuam bloqueados, e HTTPS/ChatGPT permanecem manuais.
 
+### Perfil de cadastro de empresas
+
+O perfil opt-in `cadastro-empresas` é exclusivo de MSSQL e declara somente
+`dbo.empresa` e `dbo.municipio`. Documentos fiscais são strings para preservar
+zeros e formatação; nomes, documentos e código do município admitem nulos
+sintéticos. Chaves da fixture não comprovam constraints do ERP e nenhuma FK é
+inferida. PostgreSQL e SQL Anywhere mantêm as fixtures genéricas. O companion
+de homologação precisa aceitar explicitamente essas tabelas antes do launcher;
+isso não exige alterar o agente operacional. Casos da publicação devem cobrir
+INNER JOIN com vínculo, município ausente/nulo, documentos textuais e vazio,
+usando o runner existente. Testes locais de schema/launcher não aprovam publicação.
+
 ### Perfil de movimentos de estoque
 
 O perfil opt-in de homologação `estoque-movimentos` declara a movimentação,

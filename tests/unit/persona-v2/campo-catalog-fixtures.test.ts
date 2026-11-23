@@ -2,6 +2,28 @@ import { expect, it } from "vitest";
 import { campoQueryTables } from "../../../scripts/homologation/campo-query-fixtures.js";
 import { manualPublicationTables } from "../../../scripts/homologation/manual-publication-tables.js";
 
+it("cadastro empresas declara somente empresa e município sem inferir vínculos", () => {
+  const tables = campoQueryTables("cadastro-empresas");
+  expect(tables.map((table) => table.table)).toEqual(["dbo.empresa", "dbo.municipio"]);
+  expect(tables[0]!.primaryKey).toEqual(["codempresa"]);
+  expect(Object.fromEntries(tables[0]!.columns.map((c) => [c.name, [c.type, c.nullable]]))).toEqual(
+    {
+      codempresa: ["integer", false],
+      nome: ["string", true],
+      nomefantasia: ["string", true],
+      cnpj_cpf: ["string", true],
+      inscricaoestadual: ["string", true],
+      codmunicipio: ["integer", true],
+    },
+  );
+  expect(tables[1]).toEqual(campoQueryTables("cadastro-filiais")[1]);
+  for (const table of tables) {
+    expect(table.foreignKeys).toEqual([]);
+    expect(table.uniqueKeys).toEqual([]);
+    expect(table).not.toHaveProperty("rows");
+  }
+});
+
 it("cadastro tipos preserva filial e indicadores desconhecidos sem criar vínculos", () => {
   const [table] = campoQueryTables("cadastro-tipos-operacao");
   expect(table!.primaryKey).toEqual(["codempresa", "codtipooperacaosaida"]);
@@ -50,7 +72,7 @@ it("cadastro produtos preserva códigos textuais, preço decimal e dimensões op
   }
 });
 
-it.each(["cadastro-produtos", "cadastro-tipos-operacao"] as const)(
+it.each(["cadastro-produtos", "cadastro-tipos-operacao", "cadastro-empresas"] as const)(
   "%s é opt-in MSSQL e isolado",
   (profile) => {
     expect(manualPublicationTables("mssql", false, undefined, profile)).toEqual(

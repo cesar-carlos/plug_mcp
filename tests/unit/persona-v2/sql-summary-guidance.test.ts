@@ -90,6 +90,8 @@ it.each(SQL_SUMMARY_EXAMPLES)(
   "exemplo SQL Server é aceito no escopo sintético: $purpose",
   ({ sql, dialect }) => {
     expect(validateSourceSql(sql, dialect, scope).sql).toBe(sql);
+    if (/ORDER BY/i.test(sql))
+      expect(() => validateSourceSql(sql, dialect, scope, { page: 1, pageSize: 30 })).not.toThrow();
     expect(sql).not.toMatch(/\b(TOP|LIMIT|OFFSET)\b/i);
     expect(() =>
       validateSourceSql(sql.replaceAll("s.net_amount", "s.secret"), dialect, scope),

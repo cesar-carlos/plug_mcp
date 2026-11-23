@@ -142,6 +142,67 @@ const reusableFixture = () => {
 };
 
 it.each([false, true])(
+  "paginação registra origem/publicação e não despacha (validation=%s)",
+  async (validation) => {
+    for (const supplied of [false, true]) {
+      const f = fixture("mssql");
+      const sql =
+        "SELECT p.id, SUM(p.amount) AS private_total FROM orders p WHERE p.id>:minimum GROUP BY p.id ORDER BY p.id";
+      f.evidence.publications[0]!.package = {
+        ...f.evidence.publications[0]!.package,
+        sqlModel: sql,
+      };
+      let failure: unknown;
+      try {
+        await f.service.run(
+          identity,
+          {
+            ...(supplied ? { sql } : {}),
+            params: { minimum: 927461 },
+            options: { page: 1, pageSize: 30 },
+          },
+          validation,
+        );
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({ code: "INVALID_PLAN" });
+      let output = "";
+      const body = reportPersonaV2ToolError(
+        failure,
+        new PinoLoggerAdapter(
+          pino(
+            {},
+            {
+              write: (line) => {
+                output += line;
+              },
+            },
+          ),
+        ),
+      );
+      expect(JSON.parse(output)).toMatchObject({
+        supportId: body.supportId,
+        errorCode: "INVALID_PLAN",
+        stage: "validar_paginacao",
+        paginationReason: "qualified_order_requires_simple_projection",
+        publicationIds: ["publication"],
+        publicationRevisions: [1],
+        queryOrigin: supplied ? "sql_fornecido" : "modelo_publicado",
+      });
+      expect(body).toMatchObject({
+        retryable: false,
+        details: { paginationReason: "qualified_order_requires_simple_projection" },
+      });
+      expect(body).not.toHaveProperty("publicationIds");
+      expect(output).not.toMatch(/SELECT|private_total|orders|minimum|927461/);
+      expect(f.gateway.authorize).not.toHaveBeenCalled();
+      expect(f.execute).not.toHaveBeenCalled();
+    }
+  },
+);
+
+it.each([false, true])(
   "INVALID_SQL correlaciona publicações autorizadas antes do envio (validation=%s)",
   async (validation) => {
     const f = fixture();

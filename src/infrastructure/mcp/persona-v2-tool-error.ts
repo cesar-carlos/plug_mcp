@@ -1,6 +1,10 @@
 import { safeErrorDetails } from "../../domain/errors/safe-error-details.js";
 import { aggregationDiagnostic } from "../../domain/errors/aggregation-diagnostic.js";
 import { sqlValidationDiagnostic } from "../../domain/errors/sql-validation-diagnostic.js";
+import {
+  paginationDiagnostic,
+  paginationReason,
+} from "../../domain/errors/pagination-diagnostic.js";
 import { hasCleanupFailure } from "../../domain/errors/cleanup-failure.js";
 import { ExternalFailure } from "../../domain/persona-v2/external-failure.js";
 import { FieldUseDenied } from "../../application/persona-v2/query-field-uses.js";
@@ -30,6 +34,14 @@ export function personaV2ToolError(error: unknown): PersonaV2ToolErrorBody {
     return {
       code: error.code,
       message: error.message,
+      ...(paginationReason(error)
+        ? {
+            source: "mcp",
+            stage: "validar_paginacao",
+            retryable: false as const,
+            details: { paginationReason: paginationReason(error)! },
+          }
+        : {}),
       ...(error instanceof ExternalFailure ? { stage: error.stage, details: error.details } : {}),
       ...(error.source
         ? { source: error.source, hint: error.hint, retryable: false as const }
@@ -202,6 +214,7 @@ export function reportPersonaV2ToolError(
     supportId,
     errorCode: body.code,
     ...sqlValidationDiagnostic(error),
+    ...paginationDiagnostic(error),
     ...(hasCleanupFailure(error) ? { cleanupFailed: true } : {}),
     ...(error instanceof FieldUseDenied ? { fieldUseReason: error.reason } : {}),
     ...(error instanceof FieldContractConflict

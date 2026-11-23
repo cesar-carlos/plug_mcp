@@ -452,6 +452,30 @@ amplia. Revalidação antes do dispatch e da entrega impede usar orçamento anti
 
 ## Diagnóstico de erros de tools
 
+Recusas locais de ordenação da paginação em `validar_consulta` e `consultar_dados`
+retornam `INVALID_PLAN`, `source: mcp`, `stage: validar_paginacao`,
+`retryable: false` e `details.paginationReason` fechado: `order_not_simple`,
+`order_not_projected`, `qualified_order_requires_simple_projection` ou
+`duplicate_projection_alias`. A mensagem explica a revisão necessária sem
+copiar identificadores. O log correlacionado pelo supportId acrescenta IDs e
+revisões das publicações autorizadas e a origem do SQL; não registra SQL,
+aliases ou parâmetros. Somente erros criados por essa guarda recebem contexto,
+nunca propriedades livres de exceções. Outras recusas INVALID_PLAN não ganham
+uma causa presumida. Logs históricos sem contexto não permitem atribuição
+retroativa. As guardas permanecem iguais, sem reescrita ou repetição automática.
+Os exemplos ordenados do guia de resumos têm regressão de validação com
+`page: 1` e `pageSize: 30`; isso não certifica execução no motor ou consumo por IA.
+
+Validação local de 23/11/2026: cópia isolada da guarda em `2661b9ab` recusou
+agregado com ordenação qualificada sem motivo; a guarda corrigida preservou
+`INVALID_PLAN` e informou `qualified_order_requires_simple_projection`, sem banco.
+As suítes `pagination-diagnostics`, `source-query` e `sql-summary-guidance`
+passaram 108 testes, incluindo Pino real, contexto forjado e ausência de dispatch.
+`npm run release:check` passou com Node 24.21.0/TypeScript 7.0.2: 2.817 testes
+gerais aprovados, 91 omitidos pela configuração e 292 testes do console aprovados,
+além de lint, formatação, contratos, documentação e builds. Essa evidência não
+substitui o runner dos exemplos publicados nem reconstrói o SQL do evento antigo.
+
 Na recusa do mecanismo SQL durante a execução v2, o evento do supportId registra queryOrigin (modelo_publicado ou sql_fornecido) e publicationIds obtidos das publicações autorizadas. Esses campos são internos. SQL, parâmetros e linhas ficam fora do log.
 
 Falhas locais `INVALID_SQL` em `validar_consulta` e `consultar_dados` registram, pelo mesmo `supportId`, `sqlValidationReason`: `parser_syntax`, `unexpected_end`, `parser_failure_unclassified`, `multiple_statements`, `select_required`, `cte_binding` ou `wildcard_projection`. Recusas locais ainda sem classificação usam `unclassified_validation`. Sintaxe recusada não comprova SQL inválido no motor: pode ser limitação do parser. Exceções internas não são presumidas como erro de sintaxe.

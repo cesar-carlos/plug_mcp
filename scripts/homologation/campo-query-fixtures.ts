@@ -25,6 +25,7 @@ export const campoQueryProfileSchema = z.enum([
   "estoque-alertas",
   "estoque-atual-vendas",
   "cadastro-filiais",
+  "cadastro-empresas",
   "prazo-filial-receber",
   "prazo-filial-pagar",
   "agenda-receber-pagar",
@@ -242,6 +243,24 @@ export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTa
         ? tables.filter((t) => t.table !== "dbo.localarmazenagemfilial")
         : tables,
     );
+  }
+  if (profile === "cadastro-empresas") {
+    return fixtureTablesSchema.parse([
+      {
+        table: "dbo.empresa",
+        columns: [
+          { name: "codempresa", type: "integer" },
+          ...["nome", "nomefantasia", "cnpj_cpf", "inscricaoestadual"].map((name) => ({
+            name,
+            type: "string",
+            nullable: true,
+          })),
+          { name: "codmunicipio", type: "integer", nullable: true },
+        ],
+        primaryKey: ["codempresa"],
+      },
+      ...campoQueryTables("cadastro-filiais").filter(({ table }) => table === "dbo.municipio"),
+    ]);
   }
   if (profile === "cadastro-filiais") {
     return fixtureTablesSchema.parse([

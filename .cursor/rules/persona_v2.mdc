@@ -193,6 +193,12 @@ agregações/DISTINCT/CTEs. Em CTE, cada chave qualificada deve corresponder a
 uma coluna com alias explícito na projeção externa, com nomes de saída únicos. Não reescrever ou repetir SQL automaticamente.
 Progresso lê publicações sequencialmente na conexão da transação PostgreSQL.
 
+Recusas de ordenação da paginação usam motivo fechado e orientação segura por
+supportId, com publicação/revisão e origem obtidas da autoridade já validada.
+Não registrar SQL, aliases ou parâmetros nem aceitar diagnóstico de propriedades
+livres da exceção. Preservar guardas e cobrir logger real, ausência de envio e
+exemplos ordenados do treinamento com opções de paginação.
+
 Formulários de tokens recolhem seções e finalidades sem desmontar campos ou
 alterar concessões. Administração e detalhes do resumo começam fechados;
 expandir/recolher campos é apresentação local, sem requisição ou persistência.
