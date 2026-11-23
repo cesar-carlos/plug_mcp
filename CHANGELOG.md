@@ -11,6 +11,18 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Fixed: Parser aceita maiúsculas em identificadores locais qualificados, mantendo
+  bloqueio de origens entre bancos; regressão cobre EXISTS com tabela CamelCase.
+
+- Added: Contrato explícito de tabela limitada a EXISTS/NOT EXISTS correlacionado,
+  sem grão fictício, com editor, guarda no modelo/exemplos/adaptações e suporte a
+  indicadores CASE com finalidades preservadas. Não habilita JOIN, projeção direta
+  ou operações na tabela limitada; contratos antigos não são ampliados.
+
+- Added: Opt-in de parcelas nas fixtures de vendas, itens e estoque gerencial,
+  com tabela sem chave explicitamente somente leitura, preservação de duplicatas
+  e bloqueio preventivo de DML. Não altera publicações, concessões ou grãos de skills.
+
 - Fixed: Recusas de ordenação paginada informam motivo específico seguro e etapa
   `validar_paginacao`; logs correlacionam publicações, revisões e origem pelo
   supportId sem SQL, aliases ou parâmetros. Guardas preservadas, com regressões

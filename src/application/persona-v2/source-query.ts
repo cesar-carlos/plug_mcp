@@ -24,6 +24,7 @@ import { SourceExecutionError } from "../../domain/persona-v2/source-execution-e
 import { recordAggregationContext } from "../../domain/errors/aggregation-diagnostic.js";
 import { recordSqlValidationPublications } from "../../domain/errors/sql-validation-diagnostic.js";
 import { recordPaginationPublications } from "../../domain/errors/pagination-diagnostic.js";
+import { assertExistenceOnlyTables } from "./query-existence-only.js";
 import { assertFanoutSeguro } from "../use-cases/shared/assert-fanout.js";
 import {
   bindNamedParams,
@@ -512,7 +513,11 @@ export class PersonaSourceQueries {
         throw new PersonaV2Error("INVALID_PLAN", "Pacote incompatível com a fonte.");
       for (const table of training.tables) {
         const key = `table:${table.name}`;
-        const definition = canonicalJson({ grain: table.grain, type: table.resourceType });
+        const definition = canonicalJson({
+          grain: table.grain,
+          type: table.resourceType,
+          ...(table.existenceOnly ? { existenceOnly: true } : {}),
+        });
         if (definitions.has(key) && definitions.get(key) !== definition)
           throw new PersonaV2Error(
             "INVALID_PLAN",
@@ -550,6 +555,10 @@ export class PersonaSourceQueries {
     let ast: ReturnType<typeof validateSourceSql>;
     try {
       ast = validateSourceSql(sql, source.dialect, scope);
+      assertExistenceOnlyTables(
+        ast,
+        trainings.flatMap((training) => training.tables),
+      );
     } catch (error) {
       recordSqlValidationPublications(error, {
         publicationIds: publications.map((p) => p.id),

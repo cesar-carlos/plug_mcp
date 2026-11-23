@@ -450,6 +450,37 @@ reescritos. Alterar limite publicado altera o contrato/hash e exige republicaç�
 e concessão compatível. Delegação compara os tetos efetivos por skill e nunca os
 amplia. Revalidação antes do dispatch e da entrega impede usar orçamento antigo.
 
+A base geral registra a convenção informada pelo responsável: SQL Server usa
+dbo e SQL Anywhere usa dba. O namespace físico do contrato publicado prevalece;
+não fazer substituição global, parametrizar identificadores ou transferir aprovação
+entre motores. Identificadores locais qualificados aceitam maiúsculas, sem permitir
+referências entre bancos.
+
+## Tabelas limitadas a testes de existência
+
+O treinamento admite `tables[].existenceOnly: true` com `grain: []` explícito.
+Demais tabelas continuam exigindo grão não vazio; não declarar empresa/venda
+como chave única de parcelas nem inventar NumeroParcela. O modo integra o hash
+do contrato e não amplia concessões antigas. Misturar contratos conflitantes
+da mesma tabela é recusado. O editor oferece opção específica para esse modo.
+
+Uma tabela limitada só pode aparecer como a única origem física de
+`EXISTS (SELECT 1 ...)` ou `NOT EXISTS (SELECT 1 ...)`, no WHERE ou condição
+de CASE pesquisado. Todas as chaves do relacionamento publicado precisam ser
+garantidas na correlação, inclusive com ancestral visível; OR não pode dispensar
+chaves. JOIN, projeção direta, subconsulta escalar, CTE que exponha linhas,
+agregação, HAVING, ordenação, limite e UNION internos permanecem recusados.
+O resultado externo mantém o grão conhecido e as regras normais de paginação.
+Recortes e finalidades continuam validados antes do envio. CASE exige projeção
+também nos campos usados pelo teste de existência, inclusive nos descendentes.
+Exportar ou reutilizar a saída do indicador para finalidade adicional é recusado
+enquanto a linhagem completa dessa saída não puder ser comprovada.
+
+A guarda é aplicada ao modelo, exemplos e SQL adaptado. O modo não existe no
+contrato DML e não pode produzir identidade física para operações. Fixtures
+de parcelas usam opt-in separado `-CampoParcelas` e companion compatível;
+declaração sem chave não é prova de execução nativa ou aprovação editorial.
+
 ## Diagnóstico de erros de tools
 
 Recusas locais de ordenação da paginação em `validar_consulta` e `consultar_dados`

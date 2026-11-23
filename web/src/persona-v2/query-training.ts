@@ -1,5 +1,12 @@
 import type { Training } from "./model";
 
+export function setQueryExistenceOnly(table: Training["tables"][number], enabled: boolean): void {
+  if (enabled) {
+    table.existenceOnly = true;
+    table.grain = [];
+  } else delete table.existenceOnly;
+}
+
 export type QueryResourceType = NonNullable<Training["tables"][number]["resourceType"]>;
 export type QueryExampleState = NonNullable<NonNullable<Training["examples"]>[number]["state"]>;
 

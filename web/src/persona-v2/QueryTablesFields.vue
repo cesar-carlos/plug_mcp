@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { splitList } from "./console-display";
 import type { Training } from "./model";
-import { queryResourceType } from "./query-training";
+import { queryResourceType, setQueryExistenceOnly } from "./query-training";
 import { addTrainingTable } from "./training-draft";
 
 const training = defineModel<Training>({ required: true });
@@ -20,6 +20,18 @@ const training = defineModel<Training>({ required: true });
       </select></label
     ><label>Significado<input v-model="table.meaning" required /></label
     ><label
+      ><input
+        type="checkbox"
+        :checked="table.existenceOnly === true"
+        @change="setQueryExistenceOnly(table, ($event.target as HTMLInputElement).checked)"
+      />
+      Somente verificar existência (EXISTS), sem grão conhecido</label
+    >
+    <p v-if="table.existenceOnly">
+      Permite apenas EXISTS/NOT EXISTS correlacionado. Não permite listar campos desta tabela, JOIN
+      ou operações. Ao desmarcar, informe o grão real.
+    </p>
+    <label v-if="!table.existenceOnly"
       >Colunas que identificam um registro<input
         :value="table.grain.join(', ')"
         placeholder="id"

@@ -56,6 +56,7 @@ export interface SqlAstTabela {
 }
 
 export interface SqlAstColuna {
+  readonly existenceIndicator?: true;
   readonly refs: readonly SqlAstColumnRef[];
   readonly expr: string;
   readonly alias: string;
@@ -81,6 +82,9 @@ export interface SqlAstColumnRef {
 }
 
 export interface SqlAstSelect {
+  /** Set only from a SELECT 1 directly used as a WHERE existence predicate. */
+  readonly predicateExists?: true;
+  readonly existenceProjection?: true;
   /** Physical scope refs; only standalone ORDER BY output aliases are expanded. */
   readonly scopeRefs?: readonly SqlAstColumnRef[];
   readonly unresolvedFieldUses?: boolean;
@@ -149,7 +153,7 @@ const exprToSql = (node: unknown, database: ParserDatabase): string => {
     return "";
   }
   try {
-    return parser.exprToSQL(node, { database });
+    return parser.exprToSQL(structuredClone(node), { database });
   } catch {
     return "";
   }
@@ -468,9 +472,16 @@ const pushSelectNode = (out: unknown[], node: Record<string, unknown>): void => 
 };
 
 const collectSelectsIn = (node: unknown, out: unknown[]): void => {
-  walkNodes(node, (item) => {
-    pushSelectNode(out, item);
-  });
+  if (Array.isArray(node)) {
+    for (const item of node) collectSelectsIn(item, out);
+    return;
+  }
+  if (!isRecord(node)) return;
+  if (node.type === "select" || (isRecord(node.ast) && node.ast.type === "select")) {
+    pushSelectNode(out, node);
+    return;
+  }
+  for (const value of Object.values(node)) collectSelectsIn(value, out);
 };
 
 // EXISTS with a constant projection only tests row existence. Its WHERE/JOIN
@@ -525,6 +536,28 @@ const collectSubqueryAsts = (select: Record<string, unknown>): unknown[] => {
     collectSelectsIn(on, out);
   }
   return out;
+};
+
+const existencePredicates = (node: unknown, result = new Set<unknown>()): Set<unknown> => {
+  if (!isRecord(node)) return result;
+  if (node.type === "binary_expr" && ["AND", "OR"].includes(String(node.operator).toUpperCase())) {
+    existencePredicates(node.left, result);
+    existencePredicates(node.right, result);
+    return result;
+  }
+  const args = isRecord(node.args) ? asArray(node.args.value) : [];
+  const operand =
+    node.type === "function" && functionName(node.name) === "EXISTS" && args.length === 1
+      ? args[0]
+      : node.type === "unary_expr" && node.operator === "NOT EXISTS"
+        ? node.expr
+        : undefined;
+  const query = isRecord(operand) && isRecord(operand.ast) ? operand.ast : undefined;
+  const columns = query ? asArray(query.columns) : [];
+  const expr = columns.length === 1 && isRecord(columns[0]) ? columns[0].expr : undefined;
+  if (query?.type === "select" && isRecord(expr) && expr.type === "number" && expr.value === 1)
+    result.add(query);
+  return result;
 };
 
 const fromSelectAst = (
@@ -586,10 +619,32 @@ const fromSelectAst = (
       joins.push(parsed.join);
     }
   }
-  const { colunas, temStar, temAgregacao } = parseColumns(ast.columns, database);
+  const predicates = existencePredicates(ast.where);
+  const projectedPredicates = new Set<unknown>();
+  walkNodesSkipNestedSelect(ast.columns, (node) => {
+    if (node.type === "case" && node.expr == null)
+      for (const arg of asArray(node.args))
+        if (isRecord(arg) && arg.type === "when")
+          existencePredicates(arg.cond, projectedPredicates);
+  });
+  const parsedColumns = parseColumns(ast.columns, database);
+  const { temStar, temAgregacao } = parsedColumns;
+  const colunas = parsedColumns.colunas.map((column, index) => {
+    const queries: unknown[] = [];
+    collectSelectsIn(asArray(ast.columns)[index], queries);
+    return queries.some((query) => projectedPredicates.has(query))
+      ? { ...column, existenceIndicator: true as const }
+      : column;
+  });
   const subqueries = [
     ...cteQueries,
-    ...collectSubqueryAsts(ast).map((sub) => fromSelectAst(sub, sql, database, ctes)),
+    ...collectSubqueryAsts(ast).map((sub) => ({
+      ...fromSelectAst(sub, sql, database, ctes),
+      ...(predicates.has(sub) || projectedPredicates.has(sub)
+        ? { predicateExists: true as const }
+        : {}),
+      ...(projectedPredicates.has(sub) ? { existenceProjection: true as const } : {}),
+    })),
   ];
   const setOp = typeof ast.set_op === "string" ? ast.set_op.toLowerCase() : null;
   const setBranches =
@@ -670,7 +725,8 @@ const fromSelectAst = (
   }
   return {
     scopeRefs: [...collectFiltroRefs({ ...ast, orderby: null }), ...orderScopeRefs],
-    unresolvedFieldUses: unresolvedFieldUses || nestedUseQueries.length > 0,
+    unresolvedFieldUses:
+      unresolvedFieldUses || nestedUseQueries.some((query) => !projectedPredicates.has(query)),
     usageRefs: {
       projecao: collectRefsFromNode(ast.columns),
       filtro: [
@@ -932,9 +988,9 @@ const assertReadOnlyAst = (
             (item.db != null &&
               (!allowSchemaQualifiedTables ||
                 typeof item.db !== "string" ||
-                !/^[a-z_][a-z0-9_$]*$/.test(item.db) ||
+                !/^[a-z_][a-z0-9_$]*$/i.test(item.db) ||
                 typeof item.table !== "string" ||
-                !/^[a-z_][a-z0-9_$]*$/.test(item.table) ||
+                !/^[a-z_][a-z0-9_$]*$/i.test(item.table) ||
                 typeof item.as !== "string" ||
                 !/^[a-z_][a-z0-9_$]*$/i.test(item.as))) ||
             (item.expr != null &&

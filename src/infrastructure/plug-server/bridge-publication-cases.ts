@@ -270,6 +270,8 @@ export class BridgePublicationCaseExecutor implements IsolatedPublicationCaseExe
     command: SqlOperationCommand,
     test: OperationCase,
   ): Promise<boolean> {
+    if (this.tables.some((table) => table.readOnlyHeap))
+      throw new PersonaV2Error("INVALID_PLAN", "Fixture sem chave é exclusiva de leitura.");
     this.check(
       pkg.sourceId,
       test.input.fixtures,

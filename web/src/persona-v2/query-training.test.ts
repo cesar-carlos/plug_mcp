@@ -11,9 +11,22 @@ import {
   queryHasPendingName,
   queryResourceType,
   queryRulesFromText,
+  setQueryExistenceOnly,
 } from "./query-training";
 
 describe("regras do formulário de consulta", () => {
+  it("modo EXISTS limpa grão e retorno ao modo normal não inventa identidade", () => {
+    const table: ReturnType<typeof emptyTraining>["tables"][number] = {
+      name: "parcels",
+      meaning: "Parcelas",
+      grain: ["sale"],
+    };
+    setQueryExistenceOnly(table, true);
+    expect(table).toMatchObject({ existenceOnly: true, grain: [] });
+    setQueryExistenceOnly(table, false);
+    expect(table).not.toHaveProperty("existenceOnly");
+    expect(table.grain).toEqual([]);
+  });
   it("conserva tipo de recurso table ou view sem inferir o físico", () => {
     expect(queryResourceType("view")).toBe("view");
     expect(queryResourceType("table")).toBe("table");

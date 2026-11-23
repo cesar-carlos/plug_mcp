@@ -16,7 +16,7 @@ import { queryTraining } from "../../helpers/persona-v2-training.js";
 import { queryPublicationCaseSchema } from "../../../src/domain/persona-v2/publication-fixture.js";
 import type { PublicationFixtureControlPort } from "../../../src/domain/ports/publication-fixture.port.js";
 
-function fixture() {
+function fixture(readOnlyHeap = false) {
   const source = { ...trainingSource, database: "se7e_persona_0123456789ab_test" };
   const crypto = new NodeCryptoAdapter("a".repeat(64));
   const training = operationTraining(source.id);
@@ -71,7 +71,8 @@ function fixture() {
       {
         table: "orders",
         columns: training.tables[0]!.columns.map(({ name, type }) => ({ name, type })),
-        primaryKey: ["id"],
+        primaryKey: readOnlyHeap ? [] : ["id"],
+        ...(readOnlyHeap ? { readOnlyHeap: true } : {}),
       },
     ],
     control,
@@ -92,6 +93,14 @@ function fixture() {
     run: () => adapter.evaluate(pkg, command, test),
   };
 }
+it("heap de leitura bloqueia DML antes de preparar ou enviar", async () => {
+  const f = fixture(true);
+  await expect(f.run()).rejects.toMatchObject({ code: "INVALID_PLAN" });
+  expect(f.control.prepare).not.toHaveBeenCalled();
+  expect(f.operations.verifyCapabilitiesAndPolicy).not.toHaveBeenCalled();
+  expect(f.operations.execute).not.toHaveBeenCalled();
+  expect(f.reads.authorize).not.toHaveBeenCalled();
+});
 it.each(["missing", "invalid-type", "explicit-null", "optional", "unexpected", "undeclared"])(
   "query parameter preflight %s precedes fixture preparation without relaxing the contract",
   async (mode) => {

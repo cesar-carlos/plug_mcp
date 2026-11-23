@@ -87,7 +87,13 @@ export interface Training {
     explanation: string;
     state?: "candidate" | "approved" | "inactive" | "replaced";
   }[];
-  tables: { name: string; meaning: string; grain: string[]; resourceType?: "table" | "view" }[];
+  tables: {
+    name: string;
+    meaning: string;
+    grain: string[];
+    resourceType?: "table" | "view";
+    existenceOnly?: true;
+  }[];
   columns: {
     table: string;
     name: string;

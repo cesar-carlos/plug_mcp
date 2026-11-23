@@ -2,6 +2,42 @@ import { spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { expect, it } from "vitest";
 
+it.each(["vendas-resumo", "estoque-gestao", "estoque-locais", ""])(
+  "parcelas têm opt-in explícito e recusam perfil incompatível: %s",
+  (profile) => {
+    const result = spawnSync(
+      process.platform === "win32" ? "powershell.exe" : "pwsh",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        "scripts/homologation/manual-training-arguments.ps1",
+        "-Manifest",
+        "fixture folder/manifest.json",
+        "-Hub",
+        "hub",
+        "-Agent",
+        "agent",
+        "-Flutter",
+        "flutter.bat",
+        "-Image",
+        `sha256:${"a".repeat(64)}`,
+        "-CampoParcelas",
+        ...(profile ? ["-CampoConsulta", profile] : []),
+      ],
+      { encoding: "utf8" },
+    );
+    expect(result.error).toBeUndefined();
+    if (profile === "vendas-resumo" || profile === "estoque-gestao") {
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout.trim().split(/\r?\n/)).toContain("--campoParcelas");
+    } else {
+      expect(result.status).not.toBe(0);
+      expect(result.stdout).not.toContain("--manifest");
+    }
+  },
+);
+
 it.each([
   "estoque-gestao",
   "estoque-locais",

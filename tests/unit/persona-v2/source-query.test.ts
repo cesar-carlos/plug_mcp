@@ -86,6 +86,51 @@ const fixture = (dialect: typeof trainingSource.dialect = "postgres") => {
   };
 };
 
+it.each([false, true])(
+  "SQL adaptado não amplia tabela limitada a EXISTS (validation=%s)",
+  async (validation) => {
+    const f = fixture();
+    const base = queryTraining();
+    const pkg = compileQueryTraining(
+      {
+        ...base,
+        sqlModel:
+          "SELECT p.id FROM orders p WHERE EXISTS (SELECT 1 FROM parcels x WHERE x.sale=p.id)",
+        tables: [
+          ...base.tables,
+          { name: "parcels", meaning: "Parcelas", grain: [], existenceOnly: true },
+        ],
+        columns: [
+          ...base.columns,
+          { table: "parcels", name: "sale", meaning: "Venda", classification: "livre" },
+        ],
+        relationships: [
+          {
+            from: "parcels",
+            to: "orders",
+            join: "inner",
+            cardinality: "N:1",
+            meaning: "Parcelas",
+            keys: [{ from: "sale", to: "id" }],
+          },
+        ],
+      },
+      f.evidence.source,
+      crypto,
+    );
+    f.evidence.publications[0]!.package = pkg;
+    await expect(
+      f.service.run(
+        identity,
+        { sql: "SELECT x.sale FROM parcels x WHERE x.sale>:minimum", params: { minimum: 0 } },
+        validation,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_PLAN" });
+    expect(f.gateway.authorize).not.toHaveBeenCalled();
+    expect(f.execute).not.toHaveBeenCalled();
+  },
+);
+
 it("COUNT_BIG é enviado intacto ao gateway MSSQL após as revalidações", async () => {
   const f = fixture("mssql");
   const sql = "SELECT COUNT_BIG(*) AS n FROM orders p WHERE p.id>:minimum";

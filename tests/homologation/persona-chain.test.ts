@@ -1239,6 +1239,22 @@ for (const dialect of chainEngines) {
         publications: [{ id: granted.publicationId }],
       });
     }
+    // A conventional owner never rewrites a published physical namespace.
+    const wrongSchema = dialect === "mssql" ? "dba" : "dbo";
+    const beforeWrongNamespace = binarySqlCalls(dialect);
+    const wrongNamespace = await tool(
+      "consultar_dados",
+      {
+        fonteId: source.id,
+        skillIds: [granted.skillId],
+        sql: `SELECT v.tenant_id AS "tenant_id", v.item_id AS "item_id", v.marker AS "marker" FROM ${wrongSchema}.wide_15 v WHERE v.tenant_id > :minimum ORDER BY tenant_id, item_id`,
+        params: { minimum: 0 },
+      },
+      granted.token,
+    );
+    expect(wrongNamespace.isError).toBe(true);
+    expect(wrongNamespace.value.error).toMatchObject({ code: "TABELA_FORA_DO_ESCOPO" });
+    expect(binarySqlCalls(dialect)).toBe(beforeWrongNamespace);
     for (const [name, type] of [
       ["wide_15", "table"],
       ["wide_hidden", "view"],

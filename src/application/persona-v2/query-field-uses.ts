@@ -35,6 +35,7 @@ export function assertQueryFieldUses(
     depth: number,
   ): FieldPolicy[] => {
     if (depth > 64) return refuse();
+    if (column.existenceIndicator) return refuse();
     // A scalar subquery without local refs cannot be safely attributed to a single output.
     if (!column.refs.length && select.subqueries.length) return refuse();
     return column.refs.flatMap((ref) => resolve(ref, select, parents, false, depth + 1));
@@ -94,7 +95,12 @@ export function assertQueryFieldUses(
           0,
         );
         for (const field of resolved)
-          if (!allowedFieldUses(field).includes(use as FieldUse)) refuse("use_not_granted");
+          if (
+            !allowedFieldUses(field).includes(use as FieldUse) ||
+            ((select.existenceProjection || parents.some((parent) => parent.existenceProjection)) &&
+              !allowedFieldUses(field).includes("projecao"))
+          )
+            refuse("use_not_granted");
       }
     }
     for (const child of select.subqueries) visit(child, [select, ...parents]);

@@ -24,6 +24,7 @@ const values = parseArgs({
     campoPrazos: { type: "boolean", default: false },
     campoPrazo: { type: "string" },
     campoConsulta: { type: "string" },
+    campoParcelas: { type: "boolean", default: false },
     minutes: { type: "string", default: "60" },
   },
 }).values;
@@ -37,6 +38,7 @@ const input = z
     campoPrazos: z.boolean(),
     campoPrazo: z.enum(["pagar", "receber"]).optional(),
     campoConsulta: campoQueryProfileSchema.optional(),
+    campoParcelas: z.boolean(),
     minutes: z.coerce.number().int().min(10).max(120),
   })
   .refine(
@@ -44,6 +46,14 @@ const input = z
       [value.campoPrazos, !!value.campoPrazo, !!value.campoConsulta].filter(Boolean).length <= 1,
   )
   .parse(values);
+// Validate profile compatibility before writing a session or starting services.
+manualPublicationTables(
+  "mssql",
+  input.campoPrazos,
+  input.campoPrazo,
+  input.campoConsulta,
+  input.campoParcelas,
+);
 const project = realpathSync(process.cwd());
 const manifest = readChainManifest(realpathSync(input.manifest));
 if (!manifest.hubDatabaseUrl || process.platform !== "win32")
@@ -82,6 +92,7 @@ writeFileSync(
             input.campoPrazos,
             input.campoPrazo,
             input.campoConsulta,
+            input.campoParcelas,
           ),
         },
       ]),

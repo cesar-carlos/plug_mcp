@@ -16,6 +16,8 @@ export const TRAINING_TOPICS = [
   "administration",
   "plug-server",
 ] as const;
+const existenceOnlyGuidance =
+  "existenceOnly:true/grain:[]: só EXISTS/NOT EXISTS SELECT 1 correlacionado (WHERE/CASE), chaves completas. Sem JOIN/projeção direta/limites internos. CASE exige projeção; exportação exige linhagem.";
 export const trainingTopicInputSchema = z.strictObject({
   topic: z.enum(TRAINING_TOPICS).optional(),
 });
@@ -54,6 +56,7 @@ function buildTrainingTopic(
       });
     case "sql":
       return wrap({
+        existenceOnlyTables: "Veja topic knowledge.",
         guidance: SQL_RUNTIME_GUIDANCE,
         queryContinuity: base.queryContinuity,
         queryKnowledgeWorkflow: base.queryKnowledgeWorkflow,
@@ -63,12 +66,12 @@ function buildTrainingTopic(
         executionLimits: base.executionLimits,
         fieldUses: base.fieldUses,
         results: base.results,
-        pdfReports: "Leia pdfReports em obter_treinamento_base sem topic.",
-        dataPresentation:
-          "Para gráficos, leia dataPresentation em obter_treinamento_base sem topic.",
+        pdfReports: "pdfReports em obter_treinamento_base sem topic.",
+        dataPresentation: "dataPresentation em obter_treinamento_base sem topic.",
       });
     case "knowledge":
       return wrap({
+        existenceOnlyTables: existenceOnlyGuidance,
         guidance: KNOWLEDGE_RUNTIME_GUIDANCE,
         queryKnowledgeWorkflow: base.queryKnowledgeWorkflow,
         sharedKnowledge: base.sharedKnowledge,
@@ -76,7 +79,7 @@ function buildTrainingTopic(
         relationshipPaths: base.relationshipPaths,
         structurePages: base.structurePages,
         dataPresentation:
-          "Para apresentação de análises, leia dataPresentation em obter_treinamento_base sem topic. Orientação não concede acesso, exportação ou publicação pública; capacidades visuais dependem do cliente.",
+          "dataPresentation em obter_treinamento_base sem topic. Não concede acesso/exportação/publicação; recursos dependem do cliente.",
       });
     case "operations":
       return wrap({

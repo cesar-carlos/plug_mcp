@@ -95,9 +95,28 @@ describe("finalidades de campos em consultas publicadas", () => {
         "SELECT p.id FROM orders p WHERE EXISTS (SELECT 1 FROM orders q WHERE q.id = p.id UNION SELECT q.amount FROM orders q)",
         "SELECT p.id FROM orders p WHERE p.id = (SELECT q.amount FROM orders q)",
         "SELECT p.id FROM orders p ORDER BY (SELECT q.amount FROM orders q)",
-        "SELECT CASE WHEN EXISTS (SELECT 1 FROM orders q WHERE q.id = p.id) THEN 1 ELSE 0 END AS flag FROM orders p",
       ])
         expect(() => assertQueryFieldUses(parseSelect(sql, dialect), fields), sql).toThrow();
+      const indicator =
+        "SELECT CASE WHEN EXISTS (SELECT 1 FROM orders q WHERE q.id = p.id) THEN 1 ELSE 0 END AS flag FROM orders p";
+      expect(() => assertQueryFieldUses(parseSelect(indicator, dialect), fields)).not.toThrow();
+      expect(() =>
+        assertQueryFieldUses(
+          parseSelect(indicator, dialect),
+          fields.map((field) => ({ ...field, uses: ["filtro"] })),
+        ),
+      ).toThrow();
+      expect(() =>
+        assertQueryFieldUses(parseSelect(indicator, dialect), fields, { flag: ["exportacao"] }),
+      ).toThrow();
+      const mixed = indicator.replace("THEN 1", "THEN p.id");
+      expect(() =>
+        assertQueryFieldUses(
+          parseSelect(mixed, dialect),
+          fields.map((field) => ({ ...field, uses: ["projecao", "filtro", "exportacao"] })),
+          { flag: ["exportacao"] },
+        ),
+      ).toThrow();
     },
   );
   it("finalidade adicional de saída verifica todos os ramos por posição, mesmo com aliases diferentes", () => {

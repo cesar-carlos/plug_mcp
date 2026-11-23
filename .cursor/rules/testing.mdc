@@ -92,6 +92,12 @@ no finally, sem apresentar isso como recuperação de concessão em produção.
 
 ## Isolamento e gates
 
+Fixture sem chave exige `readOnlyHeap: true` e `primaryKey: []` explícitos, sem
+unicidade, FK, triggers, checks ou generated. Apenas consultas podem usar esse
+manifesto; operações recusam antes de preparar a fixture. Preservar duplicatas
+nas sementes e comparação. Opt-in de parcelas não altera perfis anteriores nem
+substitui o grão obrigatório do treinamento ou a comprovação nativa do companion.
+
 A fixture PostgreSQL do runner de publicação aguarda ausência de sessões antes
 do DROP normal, com prazo limitado. Não usar FORCE para encobrir conexões ainda
 fechando ou vazadas; erro de observação/limpeza continua falhando o gate.

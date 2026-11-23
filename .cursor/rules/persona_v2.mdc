@@ -76,10 +76,14 @@ inferir a sintaxe original apenas de parser_syntax e relato da IA.
 
 Contagem sem referência em JOIN não prova origem. Orientação pode sugerir chave não nula do grão publicado sob relação completa N:1/1:1; não escolher dimensão pela unicidade, contornar com SUM(1)/DISTINCT ou prometer EXISTS válido. Preservar guardas, nulos e significado.
 
-Finalidades permitem predicado WHERE EXISTS/NOT EXISTS com SELECT 1 somente com
-referências internas/correlacionadas validadas e relacionamento completo. Não inferir
-permissão para projeção escalar, CASE, ordenação, UNION ou campo pessoal sem uso
-explícito. Regressões preservam recusa de origem desconhecida e concessões exigidas.
+Finalidades permitem WHERE EXISTS/NOT EXISTS e condições de CASE pesquisado com
+SELECT 1, referências internas/correlacionadas validadas e relacionamento completo.
+CASE exige também projeção dos campos do predicado; finalidade adicional da saída
+exige linhagem comprovada. Tabela existenceOnly com grain vazio é exceção explícita
+somente para existência correlacionada: nunca origem externa, JOIN, projeção direta,
+CTE de linhas, agregação, limite ou DML. Demais tabelas mantêm grão obrigatório.
+Contrato inclui a restrição, runtime valida SQL adaptado e perfis não inventam PK.
+Regressões cobrem correlação ancestral, OR incompleto, shadowing e finalidades.
 
 No MSSQL, somente o primeiro argumento de DATEADD/DATEDIFF/DATEDIFF_BIG, com três argumentos e unidade conhecida não qualificada, é datepart. Não remover colunas homônimas dos demais argumentos, filtros, projeções ou JOINs; não estender essa normalização a outros dialetos.
 

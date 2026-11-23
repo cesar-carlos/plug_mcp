@@ -52,7 +52,29 @@ export const campoQueryProfileSchema = z.enum([
 export type CampoQueryProfile = z.infer<typeof campoQueryProfileSchema>;
 
 /** Fixed synthetic schemas matching the curated cases, never inferred from an ERP. */
-export function campoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
+export function campoQueryTables(
+  input: CampoQueryProfile,
+  installments = false,
+): PublicationFixtureTable[] {
+  const tables = baseCampoQueryTables(input);
+  if (!installments) return tables;
+  if (!tables.some(({ table }) => table === "dbo.produtovendido"))
+    throw new Error("Parcelas exigem perfil de consulta com vendas.");
+  return fixtureTablesSchema.parse([
+    ...tables,
+    {
+      table: "dbo.parcelaprodutovendido",
+      primaryKey: [],
+      readOnlyHeap: true,
+      columns: [
+        { name: "codempresa", type: "integer" },
+        { name: "codprodutovendido", type: "integer" },
+        { name: "gerafinanceiro", type: "string", nullable: true },
+      ],
+    },
+  ]);
+}
+function baseCampoQueryTables(input: CampoQueryProfile): PublicationFixtureTable[] {
   const profile = campoQueryProfileSchema.parse(input);
   if (profile === "devolucoes-resumos") return campoReturnTables();
   if (

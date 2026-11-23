@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { querySemanticsSchema, assertQuerySemantics } from "./query-semantics.js";
+import { assertExistenceOnlyTables } from "./query-existence-only.js";
 import {
   attachmentContractSchema,
   binaryAttachmentContractSchema,
@@ -67,12 +68,18 @@ export const queryTrainingSchema = z.strictObject({
     .optional(),
   tables: z
     .array(
-      z.strictObject({
-        name: identifier,
-        resourceType: z.enum(["table", "view"]).default("table"),
-        meaning: text,
-        grain: z.array(columnName).min(1).max(32),
-      }),
+      z
+        .strictObject({
+          name: identifier,
+          resourceType: z.enum(["table", "view"]).default("table"),
+          meaning: text,
+          grain: z.array(columnName).max(32),
+          existenceOnly: z.literal(true).optional(),
+        })
+        .refine(
+          (table) => (table.existenceOnly ? table.grain.length === 0 : table.grain.length > 0),
+          "Grão obrigatório, exceto tabela explicitamente limitada a EXISTS.",
+        ),
     )
     .min(1)
     .max(64),
@@ -209,12 +216,16 @@ export const compileQueryTraining = (
         training.columns.filter((c) => c.table === t.name && executableField(c)).map((c) => c.name),
       ]),
     ),
-    graoPorTabela: Object.fromEntries(training.tables.map((t) => [t.name, t.grain])),
+    graoPorTabela: Object.fromEntries(
+      training.tables.filter((t) => !t.existenceOnly).map((t) => [t.name, t.grain]),
+    ),
     graosConfirmados: Object.fromEntries(
-      training.tables.map((t) => [
-        t.name,
-        { significado: t.meaning, chaves: t.grain, evidencia: "declaracao_usuario" as const },
-      ]),
+      training.tables
+        .filter((t) => !t.existenceOnly)
+        .map((t) => [
+          t.name,
+          { significado: t.meaning, chaves: t.grain, evidencia: "declaracao_usuario" as const },
+        ]),
     ),
     graoResultado: [],
     metricasSaida: [],
@@ -232,6 +243,7 @@ export const compileQueryTraining = (
       })),
   };
   const ast = validateSourceSql(training.sqlModel, training.dialect, scope);
+  assertExistenceOnlyTables(ast, training.tables);
   if (training.generatedPdf) {
     if (training.binaryAttachments) {
       throw new PersonaV2Error("INVALID_PLAN", "PDF gerado não usa contrato de coluna binária.");
@@ -277,11 +289,15 @@ export const compileQueryTraining = (
   enforceSourceRestrictions(ast, scope, restrictions);
   for (const example of training.examples ?? []) {
     const exampleAst = validateSourceSql(example.sql, training.dialect, scope);
+    assertExistenceOnlyTables(exampleAst, training.tables);
     assertQueryFieldUses(exampleAst, training.columns);
     assertFanoutSeguro(exampleAst, scope);
     enforceSourceRestrictions(exampleAst, scope, restrictions);
   }
   const contract = {
+    ...(training.tables.some((t) => t.existenceOnly)
+      ? { existenceOnlyTables: training.tables.filter((t) => t.existenceOnly).map((t) => t.name) }
+      : {}),
     ...(training.semantics ? { semantics: training.semantics } : {}),
     ...(training.sharedKnowledge ? { sharedKnowledge: training.sharedKnowledge } : {}),
     commonTrainingHash: PERSONA_V2_TRAINING_BASE.hash,

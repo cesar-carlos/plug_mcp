@@ -10,11 +10,14 @@ export function manualPublicationTables(
   campoPrazos = false,
   campoPrazo?: "pagar" | "receber",
   campoConsulta?: CampoQueryProfile,
+  campoParcelas = false,
 ): PublicationFixtureTable[] {
+  if (campoParcelas && !campoConsulta) throw new Error("Parcelas exigem perfil de consulta.");
   if ([campoPrazos, !!campoPrazo, !!campoConsulta].filter(Boolean).length > 1)
     throw new Error("Escolha um único perfil de fixture de prazo.");
   if (campoConsulta) {
-    const tables = campoQueryTables(campoConsulta);
+    if (campoParcelas && dialect !== "mssql") return manualPublicationTables(dialect);
+    const tables = campoQueryTables(campoConsulta, campoParcelas);
     if (dialect === "mssql" || (dialect === "sybase" && campoConsulta === "estoque-movimentos"))
       return tables;
   }

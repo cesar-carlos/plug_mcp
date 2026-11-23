@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory = $true)] [string] $CandidateImage,
     [ValidateRange(10, 120)] [int] $Minutes = 60,
     [switch] $CampoPrazos,
+    [switch] $CampoParcelas,
     [ValidateSet('', 'pagar', 'receber')] [string] $CampoPrazo = '',
     [ValidateSet('', 'estoque-gestao', 'estoque-locais', 'estoque-saldos', 'estoque-movimentos', 'estoque-giro', 'estoque-alertas', 'estoque-atual-vendas', 'cadastro-filiais', 'cadastro-empresas', 'pagamentos-efetivos', 'pontualidade-recebimentos', 'itens-detalhados', 'itens-resumos', 'devolucoes-resumos', 'cadastro-produtos', 'cadastro-tipos-operacao', 'prazo-filial-receber', 'prazo-filial-pagar', 'agenda-receber-pagar', 'titulos-receber', 'titulos-pagar', 'vencidos-pagar', 'agenda-pagar', 'saldo-fornecedor', 'horizonte-pagar', 'horizonte-receber', 'atraso-fornecedor', 'cobranca-cliente', 'custo-atual', 'itens-gestao', 'itens-variedade-perdas', 'itens-cestas', 'vendas-distribuicoes', 'vendas-clientes', 'vendas-resumo', 'vendas-vendedor', 'vendas-descontos', 'vendas-municipio')] [string] $CampoConsulta = '',
     [string] $HubCheckout = (Join-Path $PSScriptRoot '../../plug_server'),
@@ -12,6 +13,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (@($CampoPrazos, [bool]$CampoPrazo, [bool]$CampoConsulta).Where({ $_ }).Count -gt 1) { throw 'Escolha um único perfil de fixture de prazo.' }
+if ($CampoParcelas -and $CampoConsulta -notin @('estoque-gestao', 'itens-detalhados', 'itens-resumos', 'itens-gestao', 'itens-variedade-perdas', 'itens-cestas', 'vendas-distribuicoes', 'vendas-clientes', 'vendas-resumo', 'vendas-vendedor', 'vendas-descontos', 'vendas-municipio')) { throw 'Parcelas exigem perfil de consulta com vendas.' }
 $hubPath = (Resolve-Path -LiteralPath $HubCheckout).Path
 $agentPath = (Resolve-Path -LiteralPath $AgentCheckout).Path
 $flutterPath = (Resolve-Path -LiteralPath $Flutter).Path
@@ -43,7 +45,7 @@ try {
     Write-Host "Fixture privada: $manifestPath"
     Write-Host 'Aguarde o endereço do console. Credenciais sintéticas serão gravadas somente no arquivo privado indicado.'
     Write-Host 'Mantenha este terminal aberto; use stop-persona-manual-training.ps1 para encerrar antes do prazo.'
-    $trainingArguments = @(& (Join-Path $PSScriptRoot 'homologation/manual-training-arguments.ps1') -Manifest $manifestPath -Hub $hubPath -Agent $agentPath -Flutter $flutterPath -Image $imageId -Minutes $Minutes -CampoPrazos:$CampoPrazos -CampoPrazo $CampoPrazo -CampoConsulta $CampoConsulta)
+    $trainingArguments = @(& (Join-Path $PSScriptRoot 'homologation/manual-training-arguments.ps1') -Manifest $manifestPath -Hub $hubPath -Agent $agentPath -Flutter $flutterPath -Image $imageId -Minutes $Minutes -CampoPrazos:$CampoPrazos -CampoPrazo $CampoPrazo -CampoConsulta $CampoConsulta -CampoParcelas:$CampoParcelas)
     & (Join-Path $PSScriptRoot 'with-project-node.ps1') node node_modules/tsx/dist/cli.mjs scripts/homologation/manual-training.ts @trainingArguments
     $sessionExit = $LASTEXITCODE
 } finally {

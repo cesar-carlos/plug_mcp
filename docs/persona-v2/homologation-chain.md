@@ -506,6 +506,22 @@ e registrar os resultados separadamente. Processo encerrado com sucesso ou
 inventário estável não aprova o treinamento, a IA ou qualquer gate de produção.
 Deploy/publicação continuam bloqueados, e HTTPS/ChatGPT permanecem manuais.
 
+### Parcelas de venda em fixture somente leitura
+
+O opt-in `-CampoParcelas` junto a `-CampoConsulta` acrescenta somente em MSSQL
+`dbo.parcelaprodutovendido` aos perfis que já declaram `dbo.produtovendido`.
+Sem o opt-in, manifestos e casos anteriores permanecem iguais. A declaração usa
+`readOnlyHeap: true`, `primaryKey: []` e somente `codempresa`, `codprodutovendido`
+(inteiros não nulos) e `gerafinanceiro` (texto anulável). Não inventa identidade
+de parcela, unicidade, FK ou coluna adicional. Casos precisam incluir uma semente
+explícita, inclusive vazia, para a tabela; linhas idênticas são preservadas.
+Heap recusa chaves únicas, FKs, triggers, checks e colunas geradas. O executor
+recusa DML com esse manifesto antes da preparação. Requer companion compatível;
+o schema da fixture não concede acesso nem substitui o grão exigido na skill.
+Não publicar uma tabela de grão desconhecido declarando empresa/venda como única.
+Os testes nativos devem cobrir Sim/Nao mistos, nulos, ausência, fallback S/N,
+isolamento entre empresas e multiplicidade sem multiplicar totais da venda.
+
 ### Perfil de cadastro de empresas
 
 O perfil opt-in `cadastro-empresas` é exclusivo de MSSQL e declara somente
@@ -669,3 +685,13 @@ atualização/recuperação instaladas, testes de interface ou os gates de produ
 O perfil sintético `estoque-saldos` inclui `dbo.saldoestoque.quantidadereserva` como decimal anulável, conforme a amostra de saldo fornecida pelo responsável. Casos anteriores com registros precisam declarar esse campo como nulo explícito: o executor exige todas as colunas da fixture em cada linha, mesmo anuláveis. Não converter ausência em zero nem alterar o resultado esperado das consultas antigas. A chave local/produto e a ausência de FK inferida foram preservadas.
 
 Cinco testes unitários dos perfis de saldo e movimentos passaram. Na Campo, sete casos foram cadastrados na r18; a tentativa r14 foi recusada por omissão do novo campo nas sementes antigas, corrigida no console. A rodada r18 perdeu o canal SSH antes de relatório final (OPERATOR_RUN_UNCONFIRMED); não há aprovação para publicação. Fixtures locais encerradas oficialmente, inventários estáveis e diagnóstico privado preservado. Nova rodada depende da disponibilidade do operador remoto e da conferência do relatório anterior. Nenhuma consulta no ERP foi feita por essas rodadas.
+
+Rodada dirigida de 2026-11-23: os dois casos de view nativa em MSSQL
+16.00.4236 e SQL Anywhere 16.00.0000 passaram com paginação e recusa de namespace
+incompatível (`TABELA_FORA_DO_ESCOPO`), sem incrementar chamadas SQL. Foram 2 casos
+aprovados e 92 não selecionados; não certificam os modelos financeiros nem a
+matriz completa. Fixture própria `a5367ac83f6d`, inventários antes/depois estáveis,
+fonte MCP `53850057beb3cf1a59c78f3eae846c7ad1d12826f766261c065a7400660dbf40`,
+hub base `41cc6b1` e agente base `b304026e` com alterações locais inventariadas.
+Cleanup oficial concluído, diretório e containers da fixture ausentes. Nenhum ERP
+ou concessão operacional foi utilizado.

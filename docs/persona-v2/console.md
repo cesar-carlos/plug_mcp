@@ -2,6 +2,12 @@
 
 ## Navegação e organização visual
 
+O editor de tabelas de consulta permite marcar “Somente verificar existência
+(EXISTS), sem grão conhecido”. A escolha limpa o grão e publica a restrição
+`existenceOnly`; desmarcar exige preencher a identidade real novamente.
+Isso não concede JOIN, projeção direta ou operações. O servidor valida modelo,
+exemplos e adaptações; salvar rascunho não publica nem amplia concessões.
+
 O título da área aparece antes do contexto da persona e do guia, como destino
 do link de pular para o conteúdo. Recolher o guia mantém o diagnóstico e o código
 de atendimento visíveis; o resumo distingue próximo passo, carregamento e falha,

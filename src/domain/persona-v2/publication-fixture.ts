@@ -30,7 +30,8 @@ export const fixtureTableSchema = z
       )
       .min(1)
       .max(100),
-    primaryKey: z.array(fixtureIdentifier).min(1).max(16),
+    primaryKey: z.array(fixtureIdentifier).max(16),
+    readOnlyHeap: z.literal(true).optional(),
     uniqueKeys: z.array(z.array(fixtureIdentifier).min(1).max(16)).max(16).default([]),
     foreignKeys: z
       .array(
@@ -63,6 +64,15 @@ export const fixtureTableSchema = z
     const names = table.columns.map((c) => c.name);
     if (
       new Set(names).size !== names.length ||
+      (table.primaryKey.length === 0) !== (table.readOnlyHeap === true) ||
+      (table.readOnlyHeap === true &&
+        (table.uniqueKeys.length > 0 ||
+          table.foreignKeys.length > 0 ||
+          table.insertAudit ||
+          table.updateAudit ||
+          table.deleteAudit ||
+          table.checks.length > 0 ||
+          table.columns.some((c) => c.generated))) ||
       [table.primaryKey, ...table.uniqueKeys].some(
         (key) => new Set(key).size !== key.length || key.some((c) => !names.includes(c)),
       ) ||
@@ -94,6 +104,7 @@ export const fixtureTablesSchema = z
         const target = tables.slice(0, index).find((t) => t.table === fk.targetTable);
         valid &&=
           !!target &&
+          !target.readOnlyHeap &&
           fk.columns.length === fk.targetColumns.length &&
           new Set(fk.columns).size === fk.columns.length &&
           [target.primaryKey, ...target.uniqueKeys].some(
@@ -118,6 +129,7 @@ export const fixtureTablesSchema = z
         const target = tables.find((t) => t.table === audit.targetTable);
         valid &&=
           !!target &&
+          !target.readOnlyHeap &&
           target !== table &&
           !target.insertAudit &&
           !target.updateAudit &&
