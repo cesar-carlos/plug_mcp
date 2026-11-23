@@ -11,6 +11,10 @@ Itens novos entram em **Unreleased**. Só promove para uma versão quando houver
 
 ## [Unreleased]
 
+- Added: Diagnóstico seguro de 404 OAuth por endpoint e causa enumerados,
+  correlacionado pelo supportId, sem caminhos privados, parâmetros ou credenciais.
+  Regressões HTTP com logger real preservam respostas, autenticação e concessões.
+
 - Fixed: Parser aceita maiúsculas em identificadores locais qualificados, mantendo
   bloqueio de origens entre bancos; regressão cobre EXISTS com tabela CamelCase.
 

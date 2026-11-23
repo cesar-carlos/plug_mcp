@@ -542,6 +542,20 @@ a limpeza não estende validade, remove concessões ou muda revogações.
 
 Falha técnica ao resolver o Bearer no MCP retorna 503 sem WWW-Authenticate; o cliente preserva a conexão.
 Falhas OAuth e de download usam X-Support-Id com metadados seguros. Indisponibilidade temporária não pede reconexão. A listagem administrativa aceita supportId exato dentro da persona, inclusive após vencer o texto.
+
+Nos 404 OAuth, o log HTTP conserva `route: oauth` e acrescenta `oauthEndpoint`
+por catálogo fechado (metadados do recurso/servidor, authorize, authenticate,
+consent, token, revoke ou unknown). Caminhos variáveis de metadados recebem
+somente a categoria `protected_resource_other` ou `authorization_server_other`.
+Não registra caminho bruto, query, corpo, cookies, códigos ou tokens.
+`oauthNotFoundCause` distingue `handler_not_found` (nenhum handler correspondente),
+`method_not_expected` (método diferente do contrato, HEAD aceito para GET) e
+`resource_unavailable` (handler respondeu 404). Isso não identifica a configuração
+que ausentou um handler, nem comprova expiração, revogação ou necessidade de reconexão.
+O supportId do servidor permanece no header e log; IDs recebidos não o substituem.
+Logs históricos sem esses campos não permitem reconstruir a URL recusada.
+Regressões em `tests/unit/persona-v2/http-diagnostics.test.ts` usam HTTP e logger
+Pino reais com entradas sintéticas, sem chamadas OAuth externas ou alteração de concessões.
 Recusas HTTP MCP antes da ferramenta conservam o mesmo supportId no corpo,
 no header X-Support-Id e nos logs de protocolo e HTTP. IDs enviados pelo cliente
 não substituem esse identificador gerado pelo servidor.

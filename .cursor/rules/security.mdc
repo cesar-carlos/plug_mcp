@@ -22,6 +22,9 @@ Recusas na autenticação MCP registram modo Bearer/OAuth, etapa, motivo enumera
 e tipo de challenge pelo supportId. Nunca registrar credenciais, hashes delas,
 URLs privadas ou mensagens nativas. Falha temporária retorna 503 sem challenge;
 access expirado orienta refresh. Motivo desconhecido não comprova reconexão necessária.
+404 OAuth registra endpoint e causa por categorias fechadas, nunca caminho bruto,
+query, corpo ou headers. Diferenciar ausência de handler, método inesperado e
+recurso indisponível sem inferir expiração/revogação. Preservar supportId do servidor.
 
 OAuth v2 habilitado com allowlist vazia permite descoberta pública, sem autorizar
 clientes, consumir códigos/refresh ou entregar dados. Cadastro posterior exige

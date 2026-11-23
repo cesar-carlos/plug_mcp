@@ -27,6 +27,29 @@ function routeLabel(req: Request): string {
   return "http.other";
 }
 
+/** Closed labels only: paths, queries, headers and bodies must never enter logs. */
+function oauthEndpoint(path: string): { endpoint: string; method?: "GET" | "POST" } {
+  const normalized = path.replace(/\/$/, "").toLowerCase();
+  const endpoints: Record<string, [string, "GET" | "POST"]> = {
+    "/.well-known/oauth-protected-resource/mcp/chatgpt": ["protected_resource", "GET"],
+    "/.well-known/oauth-protected-resource": ["protected_resource_root", "GET"],
+    "/.well-known/oauth-authorization-server": ["authorization_server", "GET"],
+    "/.well-known/openid-configuration": ["openid_configuration", "GET"],
+    "/oauth/persona-v2/authorize": ["authorize", "GET"],
+    "/oauth/persona-v2/authenticate": ["authenticate", "POST"],
+    "/oauth/persona-v2/consent": ["consent", "POST"],
+    "/oauth/persona-v2/token": ["token", "POST"],
+    "/oauth/persona-v2/revoke": ["revoke", "POST"],
+  };
+  const known = endpoints[normalized];
+  if (known) return { endpoint: known[0], method: known[1] };
+  if (normalized.startsWith("/.well-known/oauth-protected-resource/"))
+    return { endpoint: "protected_resource_other" };
+  if (normalized.startsWith("/.well-known/oauth-authorization-server/"))
+    return { endpoint: "authorization_server_other" };
+  return { endpoint: "unknown" };
+}
+
 /** Only fixed route labels, generated IDs and numeric transport metadata enter logs. */
 export function adminRequestDiagnostics(
   logger?: LoggerPort,
@@ -34,6 +57,7 @@ export function adminRequestDiagnostics(
   return (req, res, next) => {
     const requestId = randomUUID();
     const route = routeLabel(req);
+    const oauth = route === "oauth" ? oauthEndpoint(req.path) : undefined;
     const administrative = /^\/api\/admin(?:\/|$)/i.test(req.path);
     const limitBytes = isTokenWritePath(req.path, req.method) ? TOKEN_JSON_BYTES : ADMIN_JSON_BYTES;
     res.setHeader("X-Request-ID", requestId);
@@ -91,6 +115,18 @@ export function adminRequestDiagnostics(
               ? "access_rejected"
               : "request_failed",
         status: res.statusCode,
+        ...(res.statusCode === 404 && oauth
+          ? {
+              oauthEndpoint: oauth.endpoint,
+              oauthNotFoundCause: req.route
+                ? "resource_unavailable"
+                : oauth.method &&
+                    req.method !== oauth.method &&
+                    !(oauth.method === "GET" && req.method === "HEAD")
+                  ? "method_not_expected"
+                  : "handler_not_found",
+            }
+          : {}),
         limitBytes,
       });
     });

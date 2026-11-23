@@ -3,6 +3,63 @@ import request from "supertest";
 import pino from "pino";
 import { expect, it } from "vitest";
 import { adminRequestDiagnostics } from "../../../src/infrastructure/http/persona-admin-diagnostics.js";
+
+it.each([
+  [
+    "/.well-known/oauth-protected-resource/mcp/chatgpt",
+    "GET",
+    "protected_resource",
+    "handler_not_found",
+  ],
+  ["/.well-known/oauth-protected-resource", "GET", "protected_resource_root", "handler_not_found"],
+  [
+    "/.well-known/oauth-protected-resource/private-path",
+    "GET",
+    "protected_resource_other",
+    "handler_not_found",
+  ],
+  [
+    "/.well-known/oauth-authorization-server",
+    "POST",
+    "authorization_server",
+    "method_not_expected",
+  ],
+  ["/oauth/persona-v2/token", "GET", "token", "method_not_expected"],
+  ["/oauth/private-path", "GET", "unknown", "handler_not_found"],
+  ["/oauth/persona-v2/revoke", "POST", "revoke", "resource_unavailable"],
+])("404 OAuth sanitizado %s %s", async (path, method, endpoint, cause) => {
+  let log = "";
+  const logger = new PinoLoggerAdapter(
+    pino(
+      {},
+      {
+        write: (line) => {
+          log += line;
+        },
+      },
+    ),
+  );
+  const app = express();
+  app.use(adminRequestDiagnostics(logger));
+  app.post("/oauth/persona-v2/revoke", (_req, res) => res.status(404).end());
+  const call = method === "POST" ? request(app).post(path) : request(app).get(path);
+  const response = await call
+    .query({ code: "private-code", token: "private-token" })
+    .set("Authorization", "Bearer private-secret")
+    .set("Cookie", "session=private-cookie")
+    .set("X-Support-Id", "private-client-id")
+    .send({ secret: "private-body" });
+  expect(response.status).toBe(404);
+  expect(JSON.parse(log)).toMatchObject({
+    route: "oauth",
+    status: 404,
+    supportId: response.headers["x-support-id"],
+    oauthEndpoint: endpoint,
+    oauthNotFoundCause: cause,
+  });
+  expect(response.headers["x-support-id"]).toMatch(/^[a-f0-9-]{36}$/);
+  expect(log).not.toMatch(/private|Bearer|session=|secret/);
+});
 import { PinoLoggerAdapter } from "../../../src/infrastructure/logging/pino-logger.adapter.js";
 import { createPersonaV2McpHandler } from "../../../src/infrastructure/mcp/persona-v2-http.js";
 import { personaMcpParserError } from "../../../src/infrastructure/mcp/persona-v2-protocol-error.js";
